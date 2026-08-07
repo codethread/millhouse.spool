@@ -1,0 +1,48 @@
+{:paths []
+ :aliases
+ {:test {:extra-paths ["test"
+                       "spools/chime/src"
+                       "spools/cron/src"
+                       "spools/workflow/src"
+                       "spools/code-executor/src"
+                       "spools/shell-executor/src"
+                       "../skein-src/test"]
+         :extra-deps {io.millstrand/millstrand {:local/root "../skein-src"}}
+         :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
+         :main-opts ["-m" "millhouse.test-runner"]}
+  :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
+           :main-opts ["-m" "cljfmt.main" "check"
+                       "spools/workflow/src" "spools/code-executor/src"
+                       "spools/shell-executor/src" "scripts" "test"]}
+  :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
+               :main-opts ["-m" "cljfmt.main" "fix"
+                           "spools/workflow/src" "spools/code-executor/src"
+                           "spools/shell-executor/src" "scripts" "test"]}
+  :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
+                   :main-opts ["-m" "clj-kondo.main" "--lint"
+                               "spools/workflow/src" "spools/code-executor/src"
+                               "spools/shell-executor/src" "scripts" "test"]}
+  :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
+                :main-opts ["-m" "noahtheduke.splint" "--output" "clj-kondo"
+                            "spools/workflow/src" "spools/code-executor/src"
+                            "spools/shell-executor/src" "scripts" "test"]}
+  :lint/conventions {:extra-paths ["scripts"
+                                   "spools/chime/src"
+                                   "spools/cron/src"
+                                   "spools/workflow/src"
+                                   "spools/code-executor/src"
+                                   "spools/shell-executor/src"]
+                     :extra-deps {io.millstrand/millstrand {:local/root "../skein-src"}
+                                  clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
+                     :main-opts ["-m" "quality.conventions-check"]}
+  :reflect-check {:extra-paths ["scripts"
+                                "spools/chime/src"
+                                "spools/cron/src"
+                                "spools/workflow/src"
+                                "spools/code-executor/src"
+                                "spools/shell-executor/src"]
+                  :extra-deps {io.millstrand/millstrand {:local/root "../skein-src"}}
+                  :main-opts ["-m" "quality.reflect-check"]}
+  :api-docs {:extra-deps {io.github.borkdude/quickdoc {:git/tag "v0.2.6"
+                                                        :git/sha "ce86780"}}
+             :main-opts ["scripts/generate_api_docs.clj"]}}}

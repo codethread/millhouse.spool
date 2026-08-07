@@ -1,0 +1,54 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: millhouse.spool
+      - uses: actions/checkout@v4
+        with:
+          repository: codethread/millstrand
+          ref: aed95c22bbdb1fe5a916886e8ebda787d370173d
+          path: skein-src
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: latest
+      - name: Format
+        working-directory: millhouse.spool
+        run: make fmt-check
+      - name: clj-kondo
+        working-directory: millhouse.spool
+        run: make lint-clj
+      - name: Splint
+        working-directory: millhouse.spool
+        run: make lint-splint
+      - name: Conventions
+        working-directory: millhouse.spool
+        run: make lint-conventions
+      - name: Reflection warnings
+        working-directory: millhouse.spool
+        run: make reflect-check
+      - name: API docs
+        working-directory: millhouse.spool
+        run: make docs-check
+      - name: Tests
+        working-directory: millhouse.spool
+        run: make test
+        env:
+          MILLSTRAND_TEST_AWAIT_SCALE: '3'

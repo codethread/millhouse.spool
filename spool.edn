@@ -1,0 +1,6 @@
+{:spool/format 1
+ :roots {millhouse.spools/workflow {:root "spools/workflow"}
+         millhouse.spools/chime {:root "spools/chime"}
+         millhouse.spools/cron {:root "spools/cron"}
+         millhouse.spools.executors/code {:root "spools/code-executor"}
+         millhouse.spools.executors/shell {:root "spools/shell-executor"}}}

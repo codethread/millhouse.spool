@@ -1,0 +1,65 @@
+{;; with-weaver-world binds [ctx opts] as
+ ;; let-shaped vectors; kondo cannot expand these custom macros, so lint their
+ ;; binding forms as let to resolve the bound symbols.
+ :lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest
+           millstrand.api.lifecycle.alpha/defreconcile clojure.core/def
+           millstrand.api.lifecycle.alpha/defresource clojure.core/def
+           millstrand.api.lifecycle.alpha/defseed clojure.core/def
+           millstrand.test.alpha/with-weaver-world clojure.core/let
+           ;; defworkflow defines a Var from (name doc opts definition); def's
+           ;; shape resolves the name without kondo expanding the macro.
+           millhouse.spools.workflow/defworkflow clojure.core/def}
+ :hooks {:analyze-call {clojure.core/ns hooks.project-rules/ns-docstring
+                        ns hooks.project-rules/ns-docstring
+                        clojure.core/def hooks.project-rules/no-spool-module-atom
+                        def hooks.project-rules/no-spool-module-atom
+                        clojure.core/defonce hooks.project-rules/no-spool-module-atom
+                        defonce hooks.project-rules/no-spool-module-atom
+                        clojure.core/let hooks.project-rules/no-fn-keys-destructure
+                        let hooks.project-rules/no-fn-keys-destructure
+                        clojure.core/fn hooks.project-rules/no-fn-keys-destructure
+                        fn hooks.project-rules/no-fn-keys-destructure
+                        clojure.core/defn hooks.project-rules/no-fn-keys-destructure
+                        defn hooks.project-rules/no-fn-keys-destructure
+                        millstrand.api.millstrand.alpha/defop hooks.project-rules/defop
+                        millstrand.api.millstrand.alpha/defquery hooks.project-rules/defquery
+                        millhouse.spools.workflow/defexecutor hooks.project-rules/defexecutor
+                        millstrand.macros.queries/defquery hooks.project-rules/defquery
+                        millstrand.macros.ops/defop hooks.project-rules/defop
+                        millstrand.macros.rules/defrule hooks.project-rules/defrule}}
+ :linters {:project/ns-docstring {:level :error}
+           :project/no-spool-module-atom {:level :error}
+           :project/no-fn-keys-destructure {:level :error}
+           ;; This require is consumed only by syntax-quoted authoring forms in
+           ;; eval; kondo cannot resolve that runtime alias.
+           :unused-namespace {:exclude [millstrand.api.millstrand.alpha]}
+           ;; These test-local private vars are workflow constructors and chime
+           ;; rule handlers referenced only by fully-qualified quoted symbol
+           ;; (register-workflow!/defrule!), which kondo cannot track — they are
+           ;; used, not dead.
+           :unused-private-var
+           {:exclude [millhouse.spools.workflow-test/toastie-serve-workflow
+                      millhouse.spools.workflow-test/pr-fix-ci-workflow
+                      millhouse.spools.workflow-test/pr-review-round-workflow
+                      millhouse.spools.workflow-test/pr-fix-and-push-workflow
+                      millhouse.spools.workflow-test/pr-merge-workflow
+                      millhouse.spools.workflow-test/empty-continuation-workflow
+                      millhouse.spools.workflow-test/routed-continuation-workflow
+                      millhouse.spools.workflow-test/loopy-revision-workflow
+                      millhouse.spools.workflow-test/registry-second-stage
+                      millhouse.spools.workflow-test/registry-alt-second-stage
+                      millhouse.spools.workflow-test/downstream-stage-workflow
+                      millhouse.spools.workflow-test/introspect-stage-b-workflow
+                      millhouse.spools.workflow-test/bad-defaults-definition
+                      millhouse.spools.workflow-test/bad-spec-definition
+                      millhouse.spools.workflow-test/unknown-input-definition
+                      millhouse.spools.workflow-test/revisable-definition
+                      millhouse.spools.workflow-test/revisable-definition-v2
+                      millhouse.spools.workflow-test/live-var-definition
+                      millhouse.spools.workflow-test/exploding-constructor
+                      millhouse.spools.workflow-test/malformed-constructor
+                      millhouse.spools.workflow-test/call-only-bound-card
+                      millhouse.spools.workflow-test/legacy-bound-card
+                      millhouse.spools.workflow-test/defer-caller
+                      millhouse.chime-test/throwing-rule
+                      millhouse.chime-test/invalid-notification-rule]}}}
