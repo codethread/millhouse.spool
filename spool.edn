@@ -1,0 +1,5 @@
+{:spool/format 1
+ :roots {millstrand.spools/chime {:root "spools/chime"}
+         millstrand.spools/cron {:root "spools/cron"}
+         millstrand.spools.executors/code {:root "spools/code-executor"}
+         millstrand.spools.executors/shell {:root "spools/shell-executor"}}}
