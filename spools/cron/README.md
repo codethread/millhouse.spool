@@ -1,8 +1,8 @@
-# Millstrand Cron Spool
+# Millhouse Cron spool
 
 ## Overview
 
-`millstrand.spools.cron` is a userland recurrence layer over the weaver's durable
+`millhouse.spools.cron` is a userland recurrence layer over the weaver's durable
 scheduler wake primitive. It registers named jobs that fire on a fixed interval
 with optional uniform jitter. Each job owns one durable scheduler wake keyed
 `cron/<id>`.
@@ -21,7 +21,7 @@ job table, an in-flight latch, the failure log, and a jitter RNG. That state
 lives on the active runtime through `millstrand.api.runtime.alpha/spool-state`, so
 separate runtimes in one JVM do not share jobs or failures.
 
-Cron itself spawns no external processes and ships no jobs. Because real jobs often escalate capability, cron stays behind explicit spool approval. Its shipped source loads through `:millstrand/source-root`, not the production classpath.
+Cron itself spawns no external processes and ships no jobs. Because real jobs often escalate capability, cron stays behind explicit spool approval through the `millhouse/spools` Git family, not the production classpath.
 
 For recipes, see the [cookbook](./cron.cookbook.md): registering
 interval+jitter jobs, keeping job startup out of broad config tests,
@@ -29,12 +29,7 @@ coordinating many weavers, inspecting status, and testing offloaded jobs.
 
 ## Dependency information
 
-Cron has no spool prerequisites. Approve the shipped root from the selected workspace's `spools.edn`:
-
-```clojure
-;; spools.edn
-{:spools {millstrand.spools/cron {:millstrand/source-root "spools/cron"}}}
-```
+Cron has no spool prerequisites. Approve `millhouse.spools/cron` through the [repository family entry](../../README.md#consumption).
 
 ## Activation
 
@@ -46,8 +41,8 @@ Activate it from trusted startup config after syncing approved roots:
 
 (def runtime (current/runtime))
 (runtime/module! runtime :cron
-  {:ns 'millstrand.spools.cron
-   :spools ['millstrand.spools/cron]
+  {:ns 'millhouse.spools.cron
+   :spools ['millhouse.spools/cron]
    :required? true})
 ```
 
@@ -69,7 +64,7 @@ After owner-complete publication, Cron's lifecycle effect compares the effective
 For code and tests that already hold a runtime, `register!` is the explicit-runtime seam for a live job with a fully-qualified `:handler` symbol:
 
 ```clojure
-(require '[millstrand.spools.cron :as cron])
+(require '[millhouse.spools.cron :as cron])
 
 (cron/register! runtime
   {:id :nightly-report
@@ -105,7 +100,7 @@ once, so job authors must make `:handler` idempotent or otherwise
 duplicate-tolerant.
 
 When a `cron/<id>` wake is delivered, scheduler invokes
-`millstrand.spools.cron/fire-wake` on the weaver's shared event lane. That handler
+`millhouse.spools.cron/fire-wake` on the weaver's shared event lane. That handler
 does only the cadence work:
 
 1. Decode the job id from the wake payload.

@@ -2,9 +2,9 @@
   "Test copied domain authoring forms through contribution collection."
   (:require [clojure.test :refer [deftest is]]
             [millstrand.core.weaver.module-graph :as module-graph]
-            [millstrand.spools.chime :as chime]
-            [millstrand.spools.cron :as cron]
-            [millstrand.spools.workflow :as workflow]))
+            [millhouse.spools.chime :as chime]
+            [millhouse.spools.cron :as cron]
+            [millhouse.spools.workflow :as workflow]))
 
 (def ^:private test-ns (the-ns 'millhouse.authoring-forms-test))
 

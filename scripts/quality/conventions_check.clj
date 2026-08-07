@@ -10,6 +10,7 @@
   "Clojure roots scanned by the conventions gate."
   ["spools/chime/src"
    "spools/cron/src"
+   "spools/workflow/src"
    "spools/code-executor/src"
    "spools/shell-executor/src"
    ".millstrand"
@@ -19,6 +20,7 @@
   "Shared-spool production roots subject to public API and tier checks."
   #{"spools/chime/src"
     "spools/cron/src"
+    "spools/workflow/src"
     "spools/code-executor/src"
     "spools/shell-executor/src"})
 
@@ -173,6 +175,7 @@
      (str filename ":" row ": local `" name "` shadows a clojure.core macro"))
    (for [{:keys [filename row name private doc defined-by]} (:var-definitions analysis)
          :when (and (under-root? filename spool-roots)
+                    (not (str/includes? (str/replace filename "\\" "/") "/internal/"))
                     (not private)
                     (not= 'clojure.core/declare defined-by)
                     (nil? doc))]

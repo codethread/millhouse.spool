@@ -1,6 +1,6 @@
 # Millstrand Shell Executor Spool — Cookbook
 
-Composition recipes for `millstrand.spools.executors.shell`: how to let a workflow run a shell check as a gate and get pass / fail back on the gate itself, and *why* the executor is shaped the way it is.
+Composition recipes for `millhouse.spools.executors.shell`: how to let a workflow run a shell check as a gate and get pass / fail back on the gate itself, and *why* the executor is shaped the way it is.
 
 This is the **how/why** half of the shell executor docs. The other two halves are:
 
@@ -21,7 +21,7 @@ Every recipe has the same four parts:
 1. **Situation** — the shape of problem you're staring at.
 2. **Composition** — which primitives combine, and how.
 3. **Snippet** — a complete, runnable form (assume
-   `(require '[millstrand.spools.workflow :as workflow])`).
+   `(require '[millhouse.spools.workflow :as workflow])`).
 4. **Why this shape** — the reasoning: why these primitives, what the attribute
    conventions buy you, and what the alternative would cost.
 
@@ -36,7 +36,7 @@ Each recipe cites the honest source it was distilled from — the shell-executor
 **Composition.** Model the check as an ordinary `workflow/gate` with waiter `:shell`, carrying the command as `shell/argv`. The shell executor watches for the gate to become ready, runs `test -s <path>` directly, and — on exit 0 — closes the gate through `workflow/complete!`. A non-zero exit stamps `gate/error` and leaves the gate ready.
 
 ```clojure
-(require '[millstrand.spools.workflow :as workflow])
+(require '[millhouse.spools.workflow :as workflow])
 
 (def release
   (workflow/workflow
@@ -72,7 +72,7 @@ Each recipe cites the honest source it was distilled from — the shell-executor
   and a bounded output tail land on the gate as `shell/exit-code` /
   `shell/output`. The check is part of the workflow's own audit trail.
 
-Honest source: the worked example in [`executors/shell.md`](./README.md#worked-example), and the happy-path gate test in ``test/millstrand/spools/executors/shell_test.clj``.
+Honest source: the worked example in [`executors/shell.md`](./README.md#worked-example), and the happy-path gate test in ``test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -83,7 +83,7 @@ Honest source: the worked example in [`executors/shell.md`](./README.md#worked-e
 **Composition.** The shell executor runs `shell/argv` directly with **no** implicit shell, by design. When you genuinely want shell semantics, ask for them explicitly: make `sh` the program and pass the script as `-c`. The gate is otherwise identical.
 
 ```clojure
-(require '[millstrand.spools.workflow :as workflow])
+(require '[millhouse.spools.workflow :as workflow])
 
 (workflow/gate :lint-outputs "Every generated doc is non-empty" :shell
                :depends-on [:generate]
@@ -110,7 +110,7 @@ Honest source: the worked example in [`executors/shell.md`](./README.md#worked-e
   captured output tail, and the gate stays ready and discoverable rather than
   advancing the workflow.
 
-Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-request-attributes), and the `sh -c` command tests in ``test/millstrand/spools/executors/shell_test.clj``.
+Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-request-attributes), and the `sh -c` command tests in ``test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -121,7 +121,7 @@ Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-requ
 **Composition.** No new primitive: chain the two gates with `depends-on`. Author the subagent gate as usual, then a `:shell` gate that `:depends-on` it. The subagent gate closes when the subagent executor delivers the run result; only then does the `:shell` gate become ready, and the shell executor runs the deterministic check.
 
 ```clojure
-(require '[millstrand.spools.workflow :as workflow])
+(require '[millhouse.spools.workflow :as workflow])
 
 (def implement-and-verify
   (workflow/workflow
@@ -158,7 +158,7 @@ Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-requ
 Honest source: the `depends-on` gate chaining in [`workflow.md`,
 "Gates"](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/workflow.md#3-definition-layer), the subagent-executor `:subagent` contract in
 [`agent-harness.spool/agent-run/subagent.md`][subagent-contract], and the dependent `:shell` gate
-test in ``test/millstrand/spools/executors/shell_test.clj``.
+test in ``test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -204,7 +204,7 @@ test in ``test/millstrand/spools/executors/shell_test.clj``.
   surfaces through `stalled-shell-gates` and through `await!` (which reads the
   registered `:shell` executor) — a graph fact, not a dropped result.
 
-Honest source: the recovery and attention sections in [`executors/shell.md`](./README.md#failure-and-recovery), and the failure / recovery tests in ``test/millstrand/spools/executors/shell_test.clj``.
+Honest source: the recovery and attention sections in [`executors/shell.md`](./README.md#failure-and-recovery), and the failure / recovery tests in ``test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 

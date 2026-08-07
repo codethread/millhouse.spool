@@ -8,7 +8,7 @@
            millstrand.test.alpha/with-weaver-world clojure.core/let
            ;; defworkflow defines a Var from (name doc opts definition); def's
            ;; shape resolves the name without kondo expanding the macro.
-           millstrand.spools.workflow/defworkflow clojure.core/def}
+           millhouse.spools.workflow/defworkflow clojure.core/def}
  :hooks {:analyze-call {clojure.core/ns hooks.project-rules/ns-docstring
                         ns hooks.project-rules/ns-docstring
                         clojure.core/def hooks.project-rules/no-spool-module-atom
@@ -23,7 +23,7 @@
                         defn hooks.project-rules/no-fn-keys-destructure
                         millstrand.api.millstrand.alpha/defop hooks.project-rules/defop
                         millstrand.api.millstrand.alpha/defquery hooks.project-rules/defquery
-                        millstrand.spools.workflow/defexecutor hooks.project-rules/defexecutor
+                        millhouse.spools.workflow/defexecutor hooks.project-rules/defexecutor
                         millstrand.macros.queries/defquery hooks.project-rules/defquery
                         millstrand.macros.ops/defop hooks.project-rules/defop
                         millstrand.macros.rules/defrule hooks.project-rules/defrule}}
@@ -38,28 +38,28 @@
            ;; (register-workflow!/defrule!), which kondo cannot track — they are
            ;; used, not dead.
            :unused-private-var
-           {:exclude [millstrand.spools.workflow-test/toastie-serve-workflow
-                      millstrand.spools.workflow-test/pr-fix-ci-workflow
-                      millstrand.spools.workflow-test/pr-review-round-workflow
-                      millstrand.spools.workflow-test/pr-fix-and-push-workflow
-                      millstrand.spools.workflow-test/pr-merge-workflow
-                      millstrand.spools.workflow-test/empty-continuation-workflow
-                      millstrand.spools.workflow-test/routed-continuation-workflow
-                      millstrand.spools.workflow-test/loopy-revision-workflow
-                      millstrand.spools.workflow-test/registry-second-stage
-                      millstrand.spools.workflow-test/registry-alt-second-stage
-                      millstrand.spools.workflow-test/downstream-stage-workflow
-                      millstrand.spools.workflow-test/introspect-stage-b-workflow
-                      millstrand.spools.workflow-test/bad-defaults-definition
-                      millstrand.spools.workflow-test/bad-spec-definition
-                      millstrand.spools.workflow-test/unknown-input-definition
-                      millstrand.spools.workflow-test/revisable-definition
-                      millstrand.spools.workflow-test/revisable-definition-v2
-                      millstrand.spools.workflow-test/live-var-definition
-                      millstrand.spools.workflow-test/exploding-constructor
-                      millstrand.spools.workflow-test/malformed-constructor
-                      millstrand.spools.workflow-test/call-only-bound-card
-                      millstrand.spools.workflow-test/legacy-bound-card
-                      millstrand.spools.workflow-test/defer-caller
-                      millstrand.chime-test/throwing-rule
-                      millstrand.chime-test/invalid-notification-rule]}}}
+           {:exclude [millhouse.spools.workflow-test/toastie-serve-workflow
+                      millhouse.spools.workflow-test/pr-fix-ci-workflow
+                      millhouse.spools.workflow-test/pr-review-round-workflow
+                      millhouse.spools.workflow-test/pr-fix-and-push-workflow
+                      millhouse.spools.workflow-test/pr-merge-workflow
+                      millhouse.spools.workflow-test/empty-continuation-workflow
+                      millhouse.spools.workflow-test/routed-continuation-workflow
+                      millhouse.spools.workflow-test/loopy-revision-workflow
+                      millhouse.spools.workflow-test/registry-second-stage
+                      millhouse.spools.workflow-test/registry-alt-second-stage
+                      millhouse.spools.workflow-test/downstream-stage-workflow
+                      millhouse.spools.workflow-test/introspect-stage-b-workflow
+                      millhouse.spools.workflow-test/bad-defaults-definition
+                      millhouse.spools.workflow-test/bad-spec-definition
+                      millhouse.spools.workflow-test/unknown-input-definition
+                      millhouse.spools.workflow-test/revisable-definition
+                      millhouse.spools.workflow-test/revisable-definition-v2
+                      millhouse.spools.workflow-test/live-var-definition
+                      millhouse.spools.workflow-test/exploding-constructor
+                      millhouse.spools.workflow-test/malformed-constructor
+                      millhouse.spools.workflow-test/call-only-bound-card
+                      millhouse.spools.workflow-test/legacy-bound-card
+                      millhouse.spools.workflow-test/defer-caller
+                      millhouse.chime-test/throwing-rule
+                      millhouse.chime-test/invalid-notification-rule]}}}

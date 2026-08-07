@@ -1,4 +1,4 @@
-# Millstrand Shell Executor Spool
+# Millhouse shell executor spool
 
 > This is the **contract** doc: the `shell/*` gate-attribute vocabulary, the
 > inherited `gate/error` failure stamp, pass / fail semantics, recovery, and the
@@ -12,7 +12,7 @@
 
 ## Overview
 
-`millstrand.spools.executors.shell` is the executor for workflow gates whose waiter is `:shell`. It watches ready workflow gates, runs the gate's `shell/argv` command directly on a spool-owned worker pool, and closes the gate through `millstrand.spools.workflow/complete!` on a zero exit. A non-zero exit, a timeout, a spawn error, or an invalid argv stamps a loud, distinct `gate/error` and leaves the gate ready and stamped rather than masquerading as a completed run.
+`millhouse.spools.executors.shell` is the executor for workflow gates whose waiter is `:shell`. It watches ready workflow gates, runs the gate's `shell/argv` command directly on a spool-owned worker pool, and closes the gate through `millhouse.spools.workflow/complete!` on a zero exit. A non-zero exit, a timeout, a spawn error, or an invalid argv stamps a loud, distinct `gate/error` and leaves the gate ready and stamped rather than masquerading as a completed run.
 
 The shell executor is a subagent-executor sibling minus everything agent-run-specific. The workflow engine stays executor-agnostic: authors declare an ordinary `(workflow/gate ... :shell ...)` with `shell/*` attributes, and the shell executor is the small adapter that knows both the gate contract and process execution. Because the failure detail lives on the gate itself, there is no separate run strand, no `delegates` edge, and no session or harness vocabulary — the whole outcome is on the gate.
 
@@ -25,14 +25,14 @@ The shell executor has its own root and depends on the workflow spool. Approve b
          '[millstrand.api.runtime.alpha :as runtime])
 
 (def runtime (current/runtime))
-(runtime/module! runtime :millstrand/spools-workflow
-  {:ns 'millstrand.spools.workflow
-   :spools ['millstrand.spools/workflow]})
-(runtime/module! runtime :millstrand/spools-shell
-  {:ns 'millstrand.spools.executors.shell
-   :spools ['millstrand.spools.executors/shell
-            'millstrand.spools/workflow]
-   :after [:millstrand/spools-workflow]})
+(runtime/module! runtime :millhouse/spools-workflow
+  {:ns 'millhouse.spools.workflow
+   :spools ['millhouse.spools/workflow]})
+(runtime/module! runtime :millhouse/spools-shell
+  {:ns 'millhouse.spools.executors.shell
+   :spools ['millhouse.spools.executors/shell
+            'millhouse.spools/workflow]
+   :after [:millhouse/spools-workflow]})
 ```
 
 Reconciliation runs an initial gate scan, so any durable ready `:shell` gate is dispatched at load time. Gate scans serialize on a runtime-owned monitor: independent weaver runtimes in one JVM scan independently and never block each other.
@@ -41,7 +41,7 @@ Reconciliation runs an initial gate scan, so any durable ready `:shell` gate is 
 
 All `shell/*` values are plain JSON `TEXT` on the gate strand, authored in the trusted workflow definition (pour-time params supply only the data the definition interpolates).
 
-The contract is spec-backed: the executor consults the named specs `:shell/argv`, `:shell/cwd`, and `:shell/timeout-secs` — registered under the attribute names themselves — and their combined request contract `:millstrand.spools.executors.shell/request` before any process spawns. The request spec is declared on the executor's registry entry, so `strand workflow executors` projects the contract, a copyable attribute template, and the printed form graph without reading this spool's source; an invalid request stamps `gate/error` with the spec identity and its explain text.
+The contract is spec-backed: the executor consults the named specs `:shell/argv`, `:shell/cwd`, and `:shell/timeout-secs` — registered under the attribute names themselves — and their combined request contract `:millhouse.spools.executors.shell/request` before any process spawns. The request spec is declared on the executor's registry entry, so `strand workflow executors` projects the contract, a copyable attribute template, and the printed form graph without reading this spool's source; an invalid request stamps `gate/error` with the spec identity and its explain text.
 
 | Attribute | Required | Meaning |
 |---|---|---|
@@ -66,7 +66,7 @@ The **pass** outcome rides the ordinary workflow vocabulary only: the shell exec
 ## Worked example
 
 ```clojure
-(require '[millstrand.spools.workflow :as workflow])
+(require '[millhouse.spools.workflow :as workflow])
 
 (def build-and-check
   (workflow/workflow
@@ -111,12 +111,12 @@ The spool also registers the `stalled-shell-gates` named query for coordinator i
 
 ## See also
 
-- [`millstrand.spools.workflow`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/workflow.md) — workflow gates, `complete!`, and the
+- [`millhouse.spools.workflow`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/workflow.md) — workflow gates, `complete!`, and the
   `register-executor!` registry the shell executor plugs into.
 - [`ct.spools.executors.subagent`][subagent-contract] — the external, agent-run-backed sibling that
   fulfils `:subagent` gates; the shell executor is the same shape without the run engine.
 - [`executors/shell.cookbook.md`](./shell.cookbook.md) — worked composition recipes.
-- ``test/millstrand/spools/executors/shell_test.clj`` —
+- ``test/millhouse/spools/executors/shell_test.clj`` —
   executable contract tests.
 
 [subagent-contract]: https://github.com/codethread/agent-harness.spool/blob/d28bfb35b5fc1891a7a318e06886aa446722241d/agent-run/subagent.md

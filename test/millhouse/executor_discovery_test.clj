@@ -2,20 +2,20 @@
   "Test request-contract projection for the copied workflow executors."
   (:require [clojure.test :refer [deftest is testing]]
             [millstrand.spools.test-support :as test-support :refer [with-runtime]]
-            [millstrand.spools.workflow.cli :as cli]))
+            [millhouse.spools.workflow.cli :as cli]))
 
 (defn- activate-executors! [runtime]
   (test-support/activate-spool!
-   runtime :millstrand/spools-workflow 'millstrand.spools.workflow)
+   runtime :millhouse/spools-workflow 'millhouse.spools.workflow)
   (test-support/activate-spool!
-   runtime :millstrand/spools-workflow-cli 'millstrand.spools.workflow.cli
-   :after [:millstrand/spools-workflow])
+   runtime :millhouse/spools-workflow-cli 'millhouse.spools.workflow.cli
+   :after [:millhouse/spools-workflow])
   (test-support/activate-spool!
-   runtime :millstrand/spools-shell 'millstrand.spools.executors.shell
-   :after [:millstrand/spools-workflow])
+   runtime :millhouse/spools-shell 'millhouse.spools.executors.shell
+   :after [:millhouse/spools-workflow])
   (test-support/activate-spool!
-   runtime :millstrand/spools-code 'millstrand.spools.executors.code
-   :after [:millstrand/spools-workflow]))
+   runtime :millhouse/spools-code 'millhouse.spools.executors.code
+   :after [:millhouse/spools-workflow]))
 
 (defn- request-keys [request kind]
   (mapv #(get % "key") (get-in request [:contract kind])))

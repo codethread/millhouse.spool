@@ -1,24 +1,18 @@
-# Millstrand Chime Spool
+# Millhouse Chime spool
 
 ## Overview
 
-`millstrand.spools.chime` is a local notification engine for Millstrand graph events. It watches strand mutations, evaluates small user-registered rules, and sends matching notices through a user-bound local notifier command.
+`millhouse.spools.chime` is a local notification engine for Millstrand graph events. It watches strand mutations, evaluates small user-registered rules, and sends matching notices through a user-bound local notifier command.
 
 Chime knows nothing about any particular workflow or attribute vocabulary: it ships **no rules and no notifier**. A workspace's trusted config decides what deserves attention (rules) and each developer decides how to be told (notifier). It owns only runtime-local weaver-lifetime state: the notifier binding, rules, deduplication memory, batch scan memory, and recent failures are kept on the active runtime and isolated from other runtimes in the same JVM.
 
-Chime spawns a user-configured local process with the user's authority. Its code still loads as an approved spool, through the shipped source-root coordinate rather than the production classpath.
+Chime spawns a user-configured local process with the user's authority. Its code loads through the approved `millhouse/spools` Git family rather than the production classpath.
 
 For composition recipes — binding a notifier, writing rules that fire on an attribute transition or on readiness, and debugging when the notifications go quiet — see the [cookbook](./chime.cookbook.md).
 
 ## Loading
 
-Approve the shipped root from the selected workspace's `spools.edn`:
-
-```clojure
-{:spools {millstrand.spools/chime {:millstrand/source-root "spools/chime"}}}
-```
-
-Activate it from trusted startup config after syncing approved roots:
+Approve `millhouse.spools/chime` through the [repository family entry](../../README.md#consumption), then activate it from trusted startup config after syncing approved roots:
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
@@ -26,8 +20,8 @@ Activate it from trusted startup config after syncing approved roots:
 
 (def runtime (current/runtime))
 (runtime/module! runtime :chime
-  {:ns 'millstrand.spools.chime
-   :spools ['millstrand.spools/chime]
+  {:ns 'millhouse.spools.chime
+   :spools ['millhouse.spools/chime]
    :required? true})
 ```
 
@@ -41,7 +35,7 @@ The module's `defresource` maintains the graph-event handler, registration barri
 Bind the notifier with plain data:
 
 ```clojure
-(require '[millstrand.spools.chime :as chime])
+(require '[millhouse.spools.chime :as chime])
 
 (chime/set-notifier! {:argv ["my-notify"]})
 (chime/notifier)
@@ -75,7 +69,7 @@ Worked example — notify when a strand that parents other work is closed:
   "Workspace notification rules."
   (:require [millstrand.api.current.alpha :as current]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.spools.chime :as chime]))
+            [millhouse.spools.chime :as chime]))
 
 (chime/defrule parent-completed
   "Notify when a strand with parent-of children reaches closed."

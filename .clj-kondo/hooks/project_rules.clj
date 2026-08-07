@@ -16,7 +16,7 @@
 (defn- spool-file? [filename]
   (boolean
    (and filename
-        (re-find #"(?:^|/)spools/[^/]+/src/millstrand/spools/"
+        (re-find #"(?:^|/)spools/[^/]+/src/millhouse/spools/"
                  (str/replace filename "\\" "/")))))
 
 (defn ns-docstring

@@ -1,6 +1,6 @@
 # Millstrand Cron Spool — Cookbook
 
-Composition recipes for `millstrand.spools.cron`: how to put spool-owned work on a
+Composition recipes for `millhouse.spools.cron`: how to put spool-owned work on a
 durable cadence, and why each shape is the right one.
 
 This is the how/why half of the cron docs. The other two halves are:
@@ -20,7 +20,7 @@ Every recipe has four parts:
 1. **Situation** — the problem shape.
 2. **Composition** — which pieces combine, and how.
 3. **Snippet** — a complete form, assuming
-   `(require '[millstrand.spools.cron :as cron])`.
+   `(require '[millhouse.spools.cron :as cron])`.
 4. **Why this shape** — the tradeoff behind the recipe.
 
 The core idea: cron owns recurrence, your job owns the work. Cron stores a
@@ -40,7 +40,7 @@ weavers or many jobs do not fire on the same tick.
 
 ```clojure
 (ns my.jobs
-  (:require [millstrand.spools.cron :as cron]
+  (:require [millhouse.spools.cron :as cron]
             [millstrand.api.current.alpha :as current]))
 
 (defn emit-report
@@ -74,7 +74,7 @@ weavers or many jobs do not fire on the same tick.
 Honest source: the job shape in [`cron/README.md`](./README.md) and
 `register-persists-wake-lists-and-unregisters` /
 `fires-records-result-and-continues-cadence` in
-[`test/millstrand/spools/cron/runtime_test.clj`](../../test/millstrand/spools/cron/runtime_test.clj).
+[`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj).
 
 ---
 
@@ -98,11 +98,11 @@ that test to touch the real world.
    :handler     'report-job/report-tick})
 
 ;; init.clj — cron owns the registry kind before the job contributes.
-(runtime/module! runtime :millstrand/spools-cron
-  {:ns 'millstrand.spools.cron :spools ['millstrand.spools/cron]
+(runtime/module! runtime :millhouse/spools-cron
+  {:ns 'millhouse.spools.cron :spools ['millhouse.spools/cron]
    :required? true})
 (runtime/module! runtime :report-job
-  {:file "report_job.clj" :after [:millstrand/spools-cron]
+  {:file "report_job.clj" :after [:millhouse/spools-cron]
    :required? true})
 ```
 
@@ -171,7 +171,7 @@ any later external call.
 
 Honest source: this repo's `:nvd-scan` job in
 [`.millstrand/jobs/nvd_scan.clj`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/jobs/nvd_scan.clj) and its lock/finding tests in
-[`test/millstrand/ct/nvd_scan_test.clj`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/test/millstrand/ct/nvd_scan_test.clj).
+[`test/millhouse/ct/nvd_scan_test.clj`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/test/millhouse/ct/nvd_scan_test.clj).
 
 ---
 
@@ -185,7 +185,7 @@ finishes, so `test-alpha/await-quiescent!` alone is not enough.
 wait for the event lane, then wait for cron's execution executor to go idle.
 
 ```clojure
-(require '[millstrand.spools.cron :as cron]
+(require '[millhouse.spools.cron :as cron]
          '[millstrand.test.alpha :as test-alpha])
 
 (test-alpha/advance! runtime java.time.Duration/ofMinutes 10)
@@ -205,7 +205,7 @@ wait for the event lane, then wait for cron's execution executor to go idle.
   latch.
 - **No sleeps or wall waits.** Manual clock advancement releases the scheduler wake, and cron's await uses that same runtime clock for its timeout and polling.
 
-Honest source: `fires-records-result-and-continues-cadence`, failure cases in [`test/millstrand/spools/cron/runtime_test.clj`](../../test/millstrand/spools/cron/runtime_test.clj), and the restart/lane checks in [`test/millstrand/e2e/cron/lifecycle_test.clj`](../../test/millstrand/e2e/cron/lifecycle_test.clj).
+Honest source: `fires-records-result-and-continues-cadence`, failure cases in [`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj), and the restart/lane checks in [`test/millhouse/e2e/cron/lifecycle_test.clj`](../../test/millhouse/e2e/cron/lifecycle_test.clj).
 
 ---
 
@@ -242,7 +242,7 @@ wakes for next-fire timing.
 
 Honest source: the status and failure shapes in [`cron/README.md`](./README.md)
 and `records-run-failure-without-stopping-cadence` in
-[`test/millstrand/spools/cron/runtime_test.clj`](../../test/millstrand/spools/cron/runtime_test.clj).
+[`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj).
 
 ---
 
