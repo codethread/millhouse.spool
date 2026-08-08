@@ -1,5 +1,10 @@
 # Agents
 
+## Quality checks
+
+- Run `make quality` before completing changes; it covers formatting, linting, conventions, reflection, docs, and the test suite.
+- Use the focused `make` targets while iterating (`fmt-check`, `lint`, `reflect-check`, `docs-check`, `test`); `clojure -M:test --serial` is the diagnostic fallback for parallel test failures.
+
 <!-- mill:millstrand-prime -->
 ## Millstrand / strand
 
