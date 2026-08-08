@@ -1,6 +1,6 @@
 # Millhouse spools
 
-Millhouse is the experimental arm of Millstrand. It carries five spools copied from the main repository under the `millhouse.spools.*` namespace family. Their in-tree originals remain in place for the consumer cutover.
+Millhouse is the experimental arm of Millstrand. It owns the five external spools extracted from Millstrand under the `millhouse.spools.*` namespace family.
 
 Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 
