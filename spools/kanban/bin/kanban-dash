@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+workspace=${MILLSTRAND_WORKSPACE:?mill bin run did not provide MILLSTRAND_WORKSPACE}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+family_dir=$(dirname "$script_dir")
+package_dir="$family_dir/scripts/agent-dash"
+binary="$package_dir/kanban-dash"
+
+if [ ! -x "$binary" ]; then
+  printf '%s\n' 'kanban-dash is not built; run: mill bin build kanban-dash' >&2
+  exit 2
+fi
+
+exec "$binary" --workspace "$workspace" "$@"

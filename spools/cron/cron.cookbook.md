@@ -153,7 +153,7 @@ any later external call.
   (run-scan!
     {:run-cmd run-command
      :raise-card! (fn [card]
-                    ((requiring-resolve 'ct.spools.kanban/add!)
+                    ((requiring-resolve 'millhouse.spools.kanban/add!)
                      runtime (:title card)
                      {"--body" (:body card) "--priority" "p1"}))}))
 ```

@@ -13,7 +13,11 @@
    {:source "spools/code-executor/src/millhouse/spools/executors/code.clj"
     :outfile "spools/code-executor/code.api.md"}
    {:source "spools/shell-executor/src/millhouse/spools/executors/shell.clj"
-    :outfile "spools/shell-executor/shell.api.md"}])
+    :outfile "spools/shell-executor/shell.api.md"}
+   {:source "spools/kanban/src/millhouse/spools/kanban.clj"
+    :outfile "spools/kanban/kanban.api.md"}
+   {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
+    :outfile "spools/kanban/kanban.peering.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
   (quickdoc/quickdoc

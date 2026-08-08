@@ -12,7 +12,9 @@
                        "spools/code-executor/src"
                        "spools/code-executor/test"
                        "spools/shell-executor/src"
-                       "spools/shell-executor/test"]
+                       "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
          :main-opts ["-m" "millhouse.test-runner"]}
   :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
@@ -21,28 +23,36 @@
                        "spools/shell-executor/src" "scripts" "test"
                        "spools/chime/test" "spools/cron/test"
                        "spools/workflow/test" "spools/code-executor/test"
-                       "spools/shell-executor/test"]}
+                       "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]}
   :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
                :main-opts ["-m" "cljfmt.main" "fix"
                            "spools/workflow/src" "spools/code-executor/src"
                            "spools/shell-executor/src" "scripts" "test"
                            "spools/chime/test" "spools/cron/test"
                            "spools/workflow/test" "spools/code-executor/test"
-                           "spools/shell-executor/test"]}
+                           "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]}
   :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
                    :main-opts ["-m" "clj-kondo.main" "--lint"
                                "spools/workflow/src" "spools/code-executor/src"
                                "spools/shell-executor/src" "scripts" "test"
                                "spools/chime/test" "spools/cron/test"
                                "spools/workflow/test" "spools/code-executor/test"
-                               "spools/shell-executor/test"]}
+                               "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]}
   :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
                 :main-opts ["-m" "noahtheduke.splint" "--output" "clj-kondo"
                             "spools/workflow/src" "spools/code-executor/src"
                             "spools/shell-executor/src" "scripts" "test"
                             "spools/chime/test" "spools/cron/test"
                             "spools/workflow/test" "spools/code-executor/test"
-                            "spools/shell-executor/test"]}
+                            "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]}
   :lint/conventions {:extra-paths ["scripts"
                                    "spools/chime/src"
                                    "spools/cron/src"
@@ -53,7 +63,9 @@
                                    "spools/cron/test"
                                    "spools/workflow/test"
                                    "spools/code-executor/test"
-                                   "spools/shell-executor/test"]
+                                   "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]
                      :extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
                      :main-opts ["-m" "quality.conventions-check"]}
   :reflect-check {:extra-paths ["scripts"
@@ -66,7 +78,9 @@
                                 "spools/cron/test"
                                 "spools/workflow/test"
                                 "spools/code-executor/test"
-                                "spools/shell-executor/test"]
+                                "spools/shell-executor/test"
+                       "spools/kanban/src"
+                       "spools/kanban/test"]
                   :main-opts ["-m" "quality.reflect-check"]}
   :api-docs {:extra-deps {io.github.borkdude/quickdoc {:git/tag "v0.2.6"
                                                         :git/sha "ce86780"}}

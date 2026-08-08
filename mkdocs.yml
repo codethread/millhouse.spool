@@ -62,3 +62,8 @@ nav:
           - Contract: spools/shell-executor/README.md
           - Cookbook: spools/shell-executor/shell.cookbook.md
           - API: spools/shell-executor/shell.api.md
+      - Kanban:
+          - Contract: spools/kanban/README.md
+          - Cookbook: spools/kanban/kanban.cookbook.md
+          - API: spools/kanban/kanban.api.md
+          - Peering API: spools/kanban/kanban.peering.api.md

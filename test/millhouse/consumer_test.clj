@@ -1,5 +1,5 @@
 (ns millhouse.consumer-test
-  "Exercise the five-root family through a disposable consumer workspace."
+  "Exercise the six-root family through a disposable consumer workspace."
   (:require [clojure.test :refer [deftest is]]
             [millstrand.test.alpha :as test-alpha]))
 
@@ -14,7 +14,8 @@
    'millhouse.spools/chime "spools/chime"
    'millhouse.spools/cron "spools/cron"
    'millhouse.spools.executors/code "spools/code-executor"
-   'millhouse.spools.executors/shell "spools/shell-executor"})
+   'millhouse.spools.executors/shell "spools/shell-executor"
+   'millhouse.spools/kanban "spools/kanban"})
 
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
@@ -48,6 +49,10 @@
       :spools ['millhouse.spools.executors/shell
                'millhouse.spools/workflow]
       :after [:millhouse/workflow]
+      :required? true})
+   (runtime/module! rt :millhouse/kanban
+     {:ns 'millhouse.spools.kanban
+      :spools ['millhouse.spools/kanban]
       :required? true})")
 
 (deftest family-syncs-and-activates-all-roots
@@ -70,5 +75,6 @@
                :millhouse/chime
                :millhouse/cron
                :millhouse/code-executor
-               :millhouse/shell-executor}
+               :millhouse/shell-executor
+               :millhouse/kanban}
              (set (keys outcomes)))))))

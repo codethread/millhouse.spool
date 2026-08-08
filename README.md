@@ -1,6 +1,6 @@
 # Millhouse spools
 
-Millhouse is the experimental arm of Millstrand. It owns the five external spools extracted from Millstrand under the `millhouse.spools.*` namespace family.
+Millhouse is the experimental arm of Millstrand. It owns the six external spools extracted from Millstrand under the `millhouse.spools.*` namespace family.
 
 Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 
@@ -11,6 +11,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 | `spools/cron` | `millhouse.spools.cron` | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md) |
 | `spools/code-executor` | `millhouse.spools.executors.code` | [contract](spools/code-executor/README.md) · [cookbook](spools/code-executor/code.cookbook.md) · [API](spools/code-executor/code.api.md) |
 | `spools/shell-executor` | `millhouse.spools.executors.shell` | [contract](spools/shell-executor/README.md) · [cookbook](spools/shell-executor/shell.cookbook.md) · [API](spools/shell-executor/shell.api.md) |
+| `spools/kanban` | `millhouse.spools.kanban` | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md) · [peering API](spools/kanban/kanban.peering.api.md) |
 
 Each entry is an independent root with its own `deps.edn`, `src`, and spool-owned `test` tree. Repository-level consumer, discovery, integration, and shared test-support code remains under the top-level `test` tree. The executor roots require this family's Workflow root and must activate after it.
 
@@ -27,7 +28,8 @@ Millhouse is untagged work in progress. Consumers pin one commit and select the 
            millhouse.spools/chime "spools/chime"
            millhouse.spools/cron "spools/cron"
            millhouse.spools.executors/code "spools/code-executor"
-           millhouse.spools.executors/shell "spools/shell-executor"}}}}
+           millhouse.spools.executors/shell "spools/shell-executor"
+           millhouse.spools/kanban "spools/kanban"}}}}
 ```
 
 There is no `:git/tag` until this family publishes a release marker. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
