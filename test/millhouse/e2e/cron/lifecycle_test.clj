@@ -21,16 +21,12 @@
   results join via `cron/await-quiescent!` — no `Thread/sleep` or wall waits
   (`.V3`). Handlers are resolved by fully qualified symbol, so their fire and
   latch signals live in namespace state the tests reset between runs."
-  (:require [clojure.java.io :as io]
-            [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is]]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.scheduler.alpha :as scheduler]
-            [millstrand.core.weaver.dispatch :as dispatch]
-            [millstrand.core.db :as db]
-            [millstrand.core.db-test :as db-test]
-            [millstrand.core.weaver.runtime :as weaver-runtime]
+            [millstrand.api.weaver.alpha :as weaver]
             [millhouse.spools.cron :as cron]
-            [millstrand.spools.test-support :as test-support]
+            [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.time Duration Instant]))
 
@@ -64,15 +60,8 @@
   [rt key]
   (first (filter #(= key (:key %)) (scheduler/pending rt))))
 
-(defn- marker-event []
-  {:event/type :test/marker
-   :event/id (str (random-uuid))
-   :event/at "2026-07-10T00:00:00Z"
-   :event/source :test})
-
 (deftest cron-cadence-survives-weaver-restart-and-fires-on-rearm
-  (let [db-file (db-test/temp-db-file)
-        world (test-support/temp-world)
+  (let [root (test-support/temp-dir "millhouse-cron-restart")
         interval-ms (* 60 60 1000)
         job {:id :survivor :interval-ms interval-ms :jitter-ms 0
              :handler 'millhouse.e2e.cron.lifecycle-test/record-run}
@@ -82,45 +71,36 @@
         seed-at (Instant/ofEpochSecond 4102444800)
         seed-ms (.toEpochMilli seed-at)]
     (try
-      ;; First weaver registers the cron job; its cron/<id> wake is durably
-      ;; pending before the weaver stops.
-      (let [rt1 (weaver-runtime/start! db-file {:world world :publish? false})]
-        (try
-          (test-alpha/set-clock! rt1 (test-alpha/manual-clock (Instant/ofEpochSecond 0)))
-          (cron/register! rt1 job)
-          (is (some? (cron-wake rt1 "cron/survivor"))
-              "the cron wake is durably pending in the first weaver")
-          (finally
-            (weaver-runtime/stop! rt1))))
-      ;; The wake instant arrives while the weaver is down: seed the durable
-      ;; cron/<id> row so a fresh weaver finds it overdue, mirroring
-      ;; millstrand.e2e.scheduler.lifecycle-test's restart seed.
-      (db/schedule-wake! (db/datasource db-file)
-                         {:key "cron/survivor" :wake-at seed-at
-                          :handler 'millhouse.spools.cron/fire-wake
-                          :payload {:job "survivor"}})
+      ;; First weaver registers a wake exactly at seed-at. The explicit world
+      ;; root retains its SQLite store after the disposable runtime stops.
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{rt1 :runtime}]
+         (test-alpha/set-clock!
+          rt1 (test-alpha/manual-clock (.minusMillis seed-at interval-ms)))
+         (cron/register! rt1 job)
+         (is (= seed-ms (:wake_at (cron-wake rt1 "cron/survivor")))
+             "the cron wake is durably pending in the first weaver")))
       ;; A fresh weaver adopts the durable wake via the startup-config path:
       ;; re-running the identical register! with no in-memory config preserves
       ;; the pending wake (.A4) rather than resetting its countdown.
-      (let [rt2 (weaver-runtime/start! db-file {:world world :publish? false})]
-        (try
-          (test-alpha/set-clock! rt2 (test-alpha/manual-clock (.plusSeconds seed-at 1)))
-          (cron/register! rt2 job)
-          (is (= seed-ms (:wake_at (cron-wake rt2 "cron/survivor")))
-              "the equal config tuple adopts the overdue wake instead of resetting it")
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{rt2 :runtime}]
+         (test-alpha/set-clock! rt2 (test-alpha/manual-clock (.plusSeconds seed-at 1)))
+         (cron/register! rt2 job)
+         (is (= seed-ms (:wake_at (cron-wake rt2 "cron/survivor")))
+             "the equal config tuple adopts the overdue wake instead of resetting it")
           ;; Release the overdue fire deterministically off the manual clock.
-          (let [fired-at-ms (.toEpochMilli (test-alpha/advance! rt2 (Duration/ofSeconds 2)))]
-            (test-alpha/await-quiescent! rt2 {:timeout-ms (test-support/await-budget-ms)})
-            (cron/await-quiescent! rt2)
-            (is (= :fired (:last-result (first (cron/jobs rt2))))
-                "the adopted wake fired and recorded its result after restart")
-            (is (= (+ fired-at-ms interval-ms) (:wake_at (cron-wake rt2 "cron/survivor")))
-                "the next cron wake is re-armed at the fire instant + interval"))
-          (finally
-            (weaver-runtime/stop! rt2))))
+         (let [fired-at-ms (.toEpochMilli (test-alpha/advance! rt2 (Duration/ofSeconds 2)))]
+           (test-alpha/await-quiescent! rt2 {:timeout-ms (test-support/await-budget-ms)})
+           (cron/await-quiescent! rt2 {:timeout-ms (test-support/await-budget-ms)})
+           (is (= :fired (:last-result (first (cron/jobs rt2))))
+               "the adopted wake fired and recorded its result after restart")
+           (is (= (+ fired-at-ms interval-ms) (:wake_at (cron-wake rt2 "cron/survivor")))
+               "the next cron wake is re-armed at the fire instant + interval"))))
       (finally
-        (db-test/delete-sqlite-family! db-file)
-        (test-support/delete-tree! (io/file (:config-dir world)))))))
+        (test-support/delete-tree! root)))))
 
 (deftest blocking-run-does-not-hold-the-event-lane
   (test-support/with-runtime
@@ -129,7 +109,7 @@
       (reset! run-release (promise))
       (reset! marker-fired (promise))
       (test-alpha/set-clock! rt (test-alpha/manual-clock (Instant/ofEpochSecond 0)))
-      (events/register-handler! rt :marker #{:test/marker}
+      (events/register-handler! rt :marker #{:strand/added}
                                 'millhouse.e2e.cron.lifecycle-test/marker-handler {})
       (cron/register! rt {:id :blocker :interval-ms 1000 :jitter-ms 0
                           :handler 'millhouse.e2e.cron.lifecycle-test/blocking-run})
@@ -144,10 +124,10 @@
       (is (not (realized? @run-release))
           "the job body is still blocked mid-run")
       ;; A subsequent event still dispatches while the cron job blocks off-lane.
-      (dispatch/enqueue! rt (marker-event))
+      (weaver/add! rt {:title "lane marker"})
       (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
       (is (deref @marker-fired (test-support/await-budget-ms) false)
           "a new event dispatches on the lane while the cron job is blocked")
       ;; Release and join before teardown so the executor thread is idle.
       (deliver @run-release true)
-      (cron/await-quiescent! rt))))
+      (cron/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)}))))

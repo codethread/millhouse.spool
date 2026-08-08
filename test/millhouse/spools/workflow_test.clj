@@ -6,13 +6,14 @@
             [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.batch.alpha :as batch]
+            [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.spools.test-support :as test-support :refer [assert-state-shape with-runtime]]
+            [millhouse.test-support :as test-support :refer [assert-state-shape with-runtime]]
             [millhouse.spools.workflow :as workflow]
             [millhouse.spools.workflow.internal.registry :as wf-registry]
             [millstrand.test.alpha :as test-alpha])
@@ -222,7 +223,7 @@
 
 ;; binding keys ride workflow/context across routed loop rounds: map keys come
 ;; back keywordized and are written with their full ns/name form
-;; (millstrand.core.db/json-key), so keyword keys round-trip faithfully. Simple keyword
+;; The runtime's JSON key encoding preserves qualified keywords on round-trip.
 ;; keys stay the convention here; bind-attrs maps them onto the canonical
 ;; string attribute vocabulary.
 (def ^:private github-pr-bindings
@@ -3831,9 +3832,10 @@
       (start-at-defer! "race-1")
       (let [attempts (mapv (fn [target]
                              (future
-                               (try {:ok (workflow/defer! "race-1" target
-                                                          {:feature "raced"})}
-                                    (catch clojure.lang.ExceptionInfo e {:err e}))))
+                               (current/with-runtime rt
+                                 (try {:ok (workflow/defer! "race-1" target
+                                                            {:feature "raced"})}
+                                      (catch clojure.lang.ExceptionInfo e {:err e})))))
                            [:wt-devflow :wt-spike])
             ;; bounded: a regression that deadlocks the guard must fail this test
             ;; rather than hang the suite, so the deref gives up and cancels

@@ -12,10 +12,8 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.core.db-test :as db-test]
-            [millstrand.core.weaver.runtime :as weaver-runtime]
             [millhouse.spools.chime :as chime]
-            [millstrand.spools.test-support :as test-support]
+            [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- with-chime [f]
@@ -65,30 +63,20 @@
 ;; --- test rules over a neutral attribute vocabulary ------------------------
 
 (deftest chime-rules-are-owned-by-runtime
-  (let [db-a (db-test/temp-db-file)
-        db-b (db-test/temp-db-file)
-        config-a (test-support/temp-config-dir {:prefix "millstrand-chime-config"})
-        config-b (test-support/temp-config-dir {:prefix "millstrand-chime-config"})]
-    (try
-      (let [rt-a (weaver-runtime/start! db-a {:world (test-support/test-world (.getCanonicalPath config-a))
-                                              :publish? false})
-            rt-b (weaver-runtime/start! db-b {:world (test-support/test-world (.getCanonicalPath config-b))
-                                              :publish? false})]
-        (try
-          (weaver-runtime/with-runtime-binding rt-a
-            #(chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule))
-          (weaver-runtime/with-runtime-binding rt-b
-            #(chime/register! :needs-human 'millhouse.chime-test/needs-human-ready-rule))
-          (is (= [:phase-failed]
-                 (weaver-runtime/with-runtime-binding rt-a #(mapv :key (chime/rules)))))
-          (is (= [:needs-human]
-                 (weaver-runtime/with-runtime-binding rt-b #(mapv :key (chime/rules)))))
-          (finally
-            (weaver-runtime/stop! rt-a)
-            (weaver-runtime/stop! rt-b))))
-      (finally
-        (db-test/delete-sqlite-family! db-a)
-        (db-test/delete-sqlite-family! db-b)))))
+  (test-alpha/run-with-weaver-world
+   {:name "millstrand-chime-config-a"}
+   (fn [{rt-a :runtime}]
+     (test-alpha/run-with-weaver-world
+      {:name "millstrand-chime-config-b"}
+      (fn [{rt-b :runtime}]
+        (current/with-runtime rt-a
+          (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule))
+        (current/with-runtime rt-b
+          (chime/register! :needs-human 'millhouse.chime-test/needs-human-ready-rule))
+        (is (= [:phase-failed]
+               (current/with-runtime rt-a (mapv :key (chime/rules)))))
+        (is (= [:needs-human]
+               (current/with-runtime rt-b (mapv :key (chime/rules))))))))))
 
 (defn- test-attr [strand k]
   (let [attrs (:attributes strand)]
@@ -226,44 +214,32 @@
           (is (eventually #(file-contains? out-file "Plan complete: plan p"))))))))
 
 (deftest restart-baselines-durable-matches-before-notifying-new-ones
-  (let [db-file (db-test/temp-db-file)
-        first-config (test-support/temp-config-dir {:prefix "millstrand-chime-restart-first"})
-        second-config (test-support/temp-config-dir {:prefix "millstrand-chime-restart-second"})]
+  (let [root (test-support/temp-dir "millstrand-chime-restart")]
     (try
-      (let [first-rt (weaver-runtime/start!
-                      db-file
-                      {:world (test-support/test-world (.getCanonicalPath first-config))
-                       :publish? false})]
-        (try
-          (weaver-runtime/with-runtime-binding
-            first-rt
-            #(weaver/add! first-rt {:title "historical failure"
-                                    :attributes {"phase" "failed"}}))
-          (finally
-            (weaver-runtime/stop! first-rt))))
-      (let [second-rt (weaver-runtime/start!
-                       db-file
-                       {:world (test-support/test-world (.getCanonicalPath second-config))
-                        :publish? false})]
-        (try
-          (weaver-runtime/with-runtime-binding
-            second-rt
-            (fn []
-              (test-support/activate-spool! second-rt :millhouse/spools-chime 'millhouse.spools.chime)
-              (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
-              (let [out-file (bind-file-notifier! second-config)]
-                (weaver/add! second-rt {:title "unrelated mutation"})
-                (test-alpha/await-quiescent! second-rt {:timeout-ms (test-support/await-budget-ms)})
-                (await-notifier-threads!)
-                (is (not (file-contains? out-file "historical failure")))
-                (weaver/add! second-rt {:title "new failure"
-                                        :attributes {"phase" "failed"}})
-                (eventually #(file-contains? out-file "new failure"))
-                (is (not (file-contains? out-file "historical failure"))))))
-          (finally
-            (weaver-runtime/stop! second-rt))))
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{first-rt :runtime}]
+         (current/with-runtime first-rt
+           (weaver/add! first-rt {:title "historical failure"
+                                  :attributes {"phase" "failed"}}))))
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{second-rt :runtime config-dir :config-dir}]
+         (current/with-runtime
+           second-rt
+           (test-support/activate-spool! second-rt :millhouse/spools-chime 'millhouse.spools.chime)
+           (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
+           (let [out-file (bind-file-notifier! (io/file config-dir))]
+             (weaver/add! second-rt {:title "unrelated mutation"})
+             (test-alpha/await-quiescent! second-rt {:timeout-ms (test-support/await-budget-ms)})
+             (await-notifier-threads!)
+             (is (not (file-contains? out-file "historical failure")))
+             (weaver/add! second-rt {:title "new failure"
+                                     :attributes {"phase" "failed"}})
+             (eventually #(file-contains? out-file "new failure"))
+             (is (not (file-contains? out-file "historical failure")))))))
       (finally
-        (db-test/delete-sqlite-family! db-file)))))
+        (test-support/delete-tree! root)))))
 
 (deftest mutation-committing-during-registration-notifies
   (with-chime

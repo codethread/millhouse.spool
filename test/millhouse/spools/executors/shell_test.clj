@@ -4,7 +4,7 @@
             [clojure.test :refer [deftest is]]
             [millhouse.spools.executors.shell :as shell]
             [millhouse.spools.workflow :as workflow]
-            [millstrand.spools.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha])

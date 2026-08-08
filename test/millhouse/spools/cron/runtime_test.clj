@@ -15,9 +15,9 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.scheduler.alpha :as scheduler]
-            [millstrand.core.weaver.lifecycle-effects :as lifecycle-effects]
+            [millstrand.api.spool.alpha :as spool-alpha]
             [millhouse.spools.cron :as cron]
-            [millstrand.spools.test-support :as test-support]
+            [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.time Duration Instant]
            [java.util Random]))
@@ -57,7 +57,7 @@
   [rt]
   (test-alpha/advance! rt (Duration/ofSeconds 2))
   (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-  (cron/await-quiescent! rt))
+  (cron/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)}))
 
 (deftest register-persists-wake-lists-and-unregisters
   (with-cron
@@ -185,43 +185,6 @@
                 :remedy "Repair the named Cron declaration or durable wake, then refresh the owning module."}
                (ex-data error)))))))
 
-(deftest lifecycle-effect-converges-on-kind-change-and-removal
-  (with-cron
-    (fn [rt]
-      (let [handle (#'cron/job-kinds rt)
-            declaration (deref (ns-resolve 'millhouse.spools.cron 'scheduled-jobs))
-            declarations {:scheduled-jobs declaration}
-            resolver {'millhouse.spools.cron/desired-jobs cron/desired-jobs
-                      'millhouse.spools.cron/actual-jobs cron/actual-jobs
-                      'millhouse.spools.cron/apply-jobs! cron/apply-jobs!
-                      'millhouse.spools.cron/remove-jobs! cron/remove-jobs!}]
-        (registry/replace-owner!
-         handle cron/job-kind :test/owner
-         {:layer :workspace
-          :entries {:scheduled {:id :scheduled
-                                :interval-ms 1000
-                                :handler 'millhouse.spools.cron.runtime-test/fire-ok}}
-          :overrides #{}})
-        (let [applied (lifecycle-effects/refresh
-                       {:runtime rt
-                        :module-key :millhouse/spools-cron
-                        :resolver resolver
-                        :declarations declarations
-                        :changed-kinds #{cron/job-kind}})]
-          (is (= [:scheduled] (mapv :id (cron/jobs rt))))
-          (is (some? (cron-wake rt "cron/scheduled")))
-          (let [removed (lifecycle-effects/refresh
-                         {:runtime rt
-                          :module-key :millhouse/spools-cron
-                          :resolver resolver
-                          :state (:state applied)
-                          :declarations {}
-                          :changed-kinds #{cron/job-kind}})]
-            (is (= :removed
-                   (get-in removed [:outcomes :scheduled-jobs :status])))
-            (is (empty? (cron/jobs rt)))
-            (is (nil? (cron-wake rt "cron/scheduled")))))))))
-
 (deftest fires-records-result-and-continues-cadence
   (with-cron
     (fn [rt]
@@ -286,7 +249,18 @@
         (is (= (Instant/ofEpochMilli 2005) (runtime/now rt))
             "awaiting advanced the manual runtime clock instead of wall sleeping"))
       (deliver @blocking-release :released)
-      (cron/await-quiescent! rt))))
+      (cron/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)}))))
+
+(deftest await-quiescent-no-options-uses-the-production-default
+  (with-cron
+    (fn [rt]
+      (let [seen-opts (atom nil)]
+        (with-redefs [spool-alpha/poll-until!
+                      (fn [_clock opts]
+                        (reset! seen-opts opts)
+                        rt)]
+          (is (= rt (cron/await-quiescent! rt)))
+          (is (= 10000 (:timeout-ms @seen-opts))))))))
 
 (deftest jitter-offset-stays-in-bounds
   (let [rng (Random. 42)

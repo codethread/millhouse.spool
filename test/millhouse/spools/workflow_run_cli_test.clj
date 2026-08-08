@@ -7,9 +7,10 @@
             [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.cli.alpha :as cli-alpha]
+            [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.spools.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millhouse.spools.workflow :as workflow]
             [millhouse.spools.workflow.cli :as cli]
             [millhouse.spools.workflow.internal.runs :as runs]
@@ -729,16 +730,17 @@
 
 (deftest concurrent-workers-cannot-both-close-one-ready-step
   (with-runtime
-    {:publish? true}
     (fn [rt _]
       (activate-cli! rt)
       (register! :solo)
       (let [start (started "run-contended" :solo)
             step (first (ready-ids start))
             attempts (mapv (fn [_]
-                             (future (try {:ok (verb "complete" "run-contended" :step step)}
-                                          (catch clojure.lang.ExceptionInfo e
-                                            {:reason (:reason (ex-data e))}))))
+                             (future
+                               (current/with-runtime rt
+                                 (try {:ok (verb "complete" "run-contended" :step step)}
+                                      (catch clojure.lang.ExceptionInfo e
+                                        {:reason (:reason (ex-data e))})))))
                            (range 4))
             results (mapv deref attempts)]
         (is (= 1 (count (filter :ok results))) "exactly one close wins")

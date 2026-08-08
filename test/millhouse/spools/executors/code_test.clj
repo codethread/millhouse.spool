@@ -6,7 +6,7 @@
             [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.spools.executors.code :as code]
-            [millstrand.spools.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millhouse.spools.workflow :as workflow]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.io File]

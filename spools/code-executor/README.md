@@ -35,7 +35,7 @@ Reconciliation scans durable ready gates immediately.
 | Attribute | Required | Meaning |
 |---|---|---|
 | `workflow/gate` = `"code"` | yes | Selects this executor. |
-| `code/fn` | yes | Fully qualified symbol naming the Var to invoke. Strings, unqualified symbols, closures, and unresolved Vars fail loudly. |
+| `code/fn` | yes | String spelling a fully qualified symbol naming the Var to invoke. Symbols, unqualified names, closures, and unresolved Vars fail loudly. |
 | `code/params` | yes | JSON object poured with the gate. Missing or non-object values fail loudly. |
 | `code/timeout-secs` | no | Positive-integer wall-clock bound. Invalid values fail loudly. |
 

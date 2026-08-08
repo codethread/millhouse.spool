@@ -1,7 +1,7 @@
 (ns millhouse.executor-discovery-test
   "Test request-contract projection for the copied workflow executors."
   (:require [clojure.test :refer [deftest is testing]]
-            [millstrand.spools.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millhouse.spools.workflow.cli :as cli]))
 
 (defn- activate-executors! [runtime]

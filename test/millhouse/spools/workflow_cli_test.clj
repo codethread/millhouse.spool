@@ -9,7 +9,7 @@
             [millstrand.api.cli.alpha :as cli-alpha]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.spools.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millhouse.spools.workflow :as workflow]
             [millhouse.spools.workflow.cli :as cli]
             [millhouse.spools.workflow.internal.registry :as wf-registry]
