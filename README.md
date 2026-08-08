@@ -2,6 +2,8 @@
 
 Millhouse is the experimental arm of Millstrand. It carries five spools copied from the main repository under the `millhouse.spools.*` namespace family. Their in-tree originals remain in place for the consumer cutover.
 
+Read the [public documentation](https://codethread.github.io/millhouse.spool/).
+
 | Root | Namespace | Documentation |
 | --- | --- | --- |
 | `spools/workflow` | `millhouse.spools.workflow` | [contract](spools/workflow/README.md) · [cookbook](spools/workflow/workflow.cookbook.md) · [API](spools/workflow/workflow.api.md) |

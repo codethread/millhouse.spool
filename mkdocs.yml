@@ -1,6 +1,6 @@
 site_name: Millhouse Docs
 site_description: Documentation for Millhouse spools
-site_url: ""
+site_url: https://codethread.github.io/millhouse.spool/
 docs_dir: .mkdocs
 site_dir: site
 
