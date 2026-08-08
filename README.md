@@ -12,7 +12,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 | `spools/code-executor` | `millhouse.spools.executors.code` | [contract](spools/code-executor/README.md) · [cookbook](spools/code-executor/code.cookbook.md) · [API](spools/code-executor/code.api.md) |
 | `spools/shell-executor` | `millhouse.spools.executors.shell` | [contract](spools/shell-executor/README.md) · [cookbook](spools/shell-executor/shell.cookbook.md) · [API](spools/shell-executor/shell.api.md) |
 
-Each entry is an independent root with its own `deps.edn` and `src` tree. The executor roots require this family's Workflow root and must activate after it.
+Each entry is an independent root with its own `deps.edn`, `src`, and spool-owned `test` tree. Repository-level consumer, discovery, integration, and shared test-support code remains under the top-level `test` tree. The executor roots require this family's Workflow root and must activate after it.
 
 ## Consumption
 
@@ -31,3 +31,16 @@ Millhouse is untagged work in progress. Consumers pin one commit and select the 
 ```
 
 There is no `:git/tag` until this family publishes a release marker. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
+
+## Testing
+
+The default suite requires namespaces serially, then runs them concurrently with isolated output and summaries:
+
+```text
+clojure -M:test
+clojure -M:test --serial
+clojure -M:test millhouse.spools.workflow-test
+clojure -M:test --stress 10
+```
+
+Focused runs are serial. Stress mode launches each parallel iteration in a fresh JVM so loaded fixture namespaces and other JVM-global state cannot leak between repetitions. Namespaces proven to require JVM-global isolation belong in the runner's documented serial island.

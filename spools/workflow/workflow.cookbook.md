@@ -248,7 +248,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
   bookkeeping strand (contract [§4, "Procedure join auto-close"](./README.md#4-run-lifecycle)).
 - **One definition, many call sites.** The same `review` can be `call`-ed by a proposal stage and a spec stage with different `:artifact` params; a CI-round sub-flow can be recomposed by every stage that pushes commits. That is the point of `call` over duplication.
 
-Honest source: the `call` inlining test in `test/millhouse/spools/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `ct.spools.devflow`'s `:agent-review-proposal` call.
+Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `ct.spools.devflow`'s `:agent-review-proposal` call.
 
 ---
 
@@ -298,7 +298,7 @@ The target receives only its defaults plus the explicit params passed to `defer!
 
 Use `call` instead when the author already knows the target. Use checkpoint `:next` when choosing a route should abandon the current stage rather than return to it.
 
-Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `test/millhouse/spools/workflow_test.clj`.
+Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `spools/workflow/test/millhouse/spools/workflow_test.clj`.
 
 ---
 
@@ -329,7 +329,7 @@ The selected routine pours below the existing root. The defer join closes when t
 
 An empty or fully conditioned-out target closes the join in the fill transaction. If that was the last outstanding work, `defer!` returns `{:ready [] :done true}`.
 
-Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `test/millhouse/spools/workflow_test.clj`.
+Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `spools/workflow/test/millhouse/spools/workflow_test.clj`.
 
 ---
 
@@ -391,7 +391,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   verdict) into a route. Parallelism falls out of edge absence; branching lives
   in checkpoint choices.
 
-Honest source: the forge-agnostic PR flow in `test/millhouse/spools/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:subagent` gate that `ct.spools.executors.subagent` fulfills.
+Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:subagent` gate that `ct.spools.executors.subagent` fulfills.
 
 ---
 
@@ -472,7 +472,7 @@ Honest source: the forge-agnostic PR flow in `test/millhouse/spools/workflow_tes
   (`"workflow/instruction"`) at build time keeps them faithful across the JSON
   layer (contract [§3, "Tool bindings"](./README.md#3-definition-layer)).
 
-Honest source: the `github-pr-bindings` / `bind-attrs` reference in `test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
+Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
 
 ---
 

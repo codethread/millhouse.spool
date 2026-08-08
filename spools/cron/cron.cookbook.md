@@ -74,7 +74,7 @@ weavers or many jobs do not fire on the same tick.
 Honest source: the job shape in [`cron/README.md`](./README.md) and
 `register-persists-wake-lists-and-unregisters` /
 `fires-records-result-and-continues-cadence` in
-[`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj).
+[`spools/cron/test/millhouse/spools/cron/runtime_test.clj`](./test/millhouse/spools/cron/runtime_test.clj).
 
 ---
 
@@ -205,7 +205,7 @@ wait for the event lane, then wait for cron's execution executor to go idle.
   latch.
 - **No sleeps or wall waits.** Manual clock advancement releases the scheduler wake, and cron's await uses that same runtime clock for its timeout and polling.
 
-Honest source: `fires-records-result-and-continues-cadence`, failure cases in [`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj), and the restart/lane checks in [`test/millhouse/e2e/cron/lifecycle_test.clj`](../../test/millhouse/e2e/cron/lifecycle_test.clj).
+Honest source: `fires-records-result-and-continues-cadence`, failure cases in [`spools/cron/test/millhouse/spools/cron/runtime_test.clj`](./test/millhouse/spools/cron/runtime_test.clj), and the restart/lane checks in [`test/millhouse/e2e/cron/lifecycle_test.clj`](../../test/millhouse/e2e/cron/lifecycle_test.clj).
 
 ---
 
@@ -242,7 +242,7 @@ wakes for next-fire timing.
 
 Honest source: the status and failure shapes in [`cron/README.md`](./README.md)
 and `records-run-failure-without-stopping-cadence` in
-[`test/millhouse/spools/cron/runtime_test.clj`](../../test/millhouse/spools/cron/runtime_test.clj).
+[`spools/cron/test/millhouse/spools/cron/runtime_test.clj`](./test/millhouse/spools/cron/runtime_test.clj).
 
 ---
 

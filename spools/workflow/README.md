@@ -198,7 +198,7 @@ The engine never executes; the driving agent interprets ready-step data. So a wo
   canonical string attribute vocabulary (`"workflow/instruction"`) when
   building step attributes.
 
-The pull-request model in `test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`) is the reference for this pattern: GitHub bindings shipped as defaults, GitLab swapped in as a partial user override, identical definitions. A weaver-side action registry (resolving action-ref names over the socket for CLI-grade drivers) is a possible future layer; it is intentionally not built yet.
+The pull-request model in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`) is the reference for this pattern: GitHub bindings shipped as defaults, GitLab swapped in as a partial user override, identical definitions. A weaver-side action registry (resolving action-ref names over the socket for CLI-grade drivers) is a possible future layer; it is intentionally not built yet.
 
 ## 4. Run lifecycle
 
@@ -779,7 +779,7 @@ Worked, runnable compositions live in the companion [`workflow.cookbook.md`](./w
 - forge-agnostic tool bindings;
 - fan-out over a collection with a chained `:loop`.
 
-The test suite in [`test/millhouse/spools/workflow_test.clj`](../../test/millhouse/spools/workflow_test.clj) drives every documented behavior against a real weaver and doubles as an executable reference.
+The test suite in [`spools/workflow/test/millhouse/spools/workflow_test.clj`](./test/millhouse/spools/workflow_test.clj) drives every documented behavior against a real weaver and doubles as an executable reference.
 
 ## 9. See also
 

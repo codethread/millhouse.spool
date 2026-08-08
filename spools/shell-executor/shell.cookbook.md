@@ -72,7 +72,7 @@ Each recipe cites the honest source it was distilled from — the shell-executor
   and a bounded output tail land on the gate as `shell/exit-code` /
   `shell/output`. The check is part of the workflow's own audit trail.
 
-Honest source: the worked example in [`executors/shell.md`](./README.md#worked-example), and the happy-path gate test in ``test/millhouse/spools/executors/shell_test.clj``.
+Honest source: the worked example in [`executors/shell.md`](./README.md#worked-example), and the happy-path gate test in ``spools/shell-executor/test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -110,7 +110,7 @@ Honest source: the worked example in [`executors/shell.md`](./README.md#worked-e
   captured output tail, and the gate stays ready and discoverable rather than
   advancing the workflow.
 
-Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-request-attributes), and the `sh -c` command tests in ``test/millhouse/spools/executors/shell_test.clj``.
+Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-request-attributes), and the `sh -c` command tests in ``spools/shell-executor/test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -158,7 +158,7 @@ Honest source: the argv contract in [`executors/shell.md`](./README.md#gate-requ
 Honest source: the `depends-on` gate chaining in [`workflow.md`,
 "Gates"](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/workflow.md#3-definition-layer), the subagent-executor `:subagent` contract in
 [`agent-harness.spool/agent-run/subagent.md`][subagent-contract], and the dependent `:shell` gate
-test in ``test/millhouse/spools/executors/shell_test.clj``.
+test in ``spools/shell-executor/test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
@@ -204,7 +204,7 @@ test in ``test/millhouse/spools/executors/shell_test.clj``.
   surfaces through `stalled-shell-gates` and through `await!` (which reads the
   registered `:shell` executor) — a graph fact, not a dropped result.
 
-Honest source: the recovery and attention sections in [`executors/shell.md`](./README.md#failure-and-recovery), and the failure / recovery tests in ``test/millhouse/spools/executors/shell_test.clj``.
+Honest source: the recovery and attention sections in [`executors/shell.md`](./README.md#failure-and-recovery), and the failure / recovery tests in ``spools/shell-executor/test/millhouse/spools/executors/shell_test.clj``.
 
 ---
 
