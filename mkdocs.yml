@@ -1,0 +1,64 @@
+site_name: Millhouse Docs
+site_description: Documentation for Millhouse spools
+site_url: ""
+docs_dir: .mkdocs
+site_dir: site
+
+repo_url: https://github.com/codethread/millhouse.spool
+repo_name: codethread/millhouse.spool
+
+# The staged collection projects repository Markdown into MkDocs. This hook
+# changes links to repository files outside that collection into source links,
+# letting the strict build reserve warnings for broken documentation links.
+hooks:
+  - scripts/mkdocs_hooks.py
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - md_in_html
+  - gfm_admonition
+
+nav:
+  - Home: index.md
+  - Spools:
+      - Workflow:
+          - Contract: spools/workflow/README.md
+          - Cookbook: spools/workflow/workflow.cookbook.md
+          - API: spools/workflow/workflow.api.md
+      - Chime:
+          - Contract: spools/chime/README.md
+          - Cookbook: spools/chime/chime.cookbook.md
+          - API: spools/chime/chime.api.md
+      - Cron:
+          - Contract: spools/cron/README.md
+          - Cookbook: spools/cron/cron.cookbook.md
+          - API: spools/cron/cron.api.md
+      - Code executor:
+          - Contract: spools/code-executor/README.md
+          - Cookbook: spools/code-executor/code.cookbook.md
+          - API: spools/code-executor/code.api.md
+      - Shell executor:
+          - Contract: spools/shell-executor/README.md
+          - Cookbook: spools/shell-executor/shell.cookbook.md
+          - API: spools/shell-executor/shell.api.md
