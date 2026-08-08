@@ -20,5 +20,8 @@
   [& _]
   (run! require test-namespaces)
   (let [{:keys [fail error]} (apply test/run-tests test-namespaces)]
+    ;; Chime's concurrency proofs use futures.  Release their executor threads
+    ;; after the runner has reported every suite so a successful process exits.
+    (shutdown-agents)
     (when (pos? (+ fail error))
       (System/exit 1))))

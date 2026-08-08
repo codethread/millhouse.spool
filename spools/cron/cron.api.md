@@ -67,8 +67,9 @@ Block until every offloaded cron job on `runtime` has finished, then return
   latch atom until the count reaches zero or the budget expires on the runtime
   Clock, throwing loudly on timeout (TEN-003), mirroring the event-lane join in
   `millstrand.test.alpha/await-quiescent!`. `opts` accepts `:timeout-ms` (a
-  positive integer); unknown keys are rejected loudly. The default budget comes
-  from `millstrand.spools.test-support/await-budget-ms`.
+  positive integer); unknown keys are rejected loudly. The production default
+  budget is 10000 milliseconds; tests that need scaling pass an explicit
+  budget.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L267-L295">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/defjob">`defjob`</a>

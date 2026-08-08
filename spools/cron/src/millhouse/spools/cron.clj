@@ -275,14 +275,14 @@
   latch atom until the count reaches zero or the budget expires on the runtime
   Clock, throwing loudly on timeout (TEN-003), mirroring the event-lane join in
   `millstrand.test.alpha/await-quiescent!`. `opts` accepts `:timeout-ms` (a
-  positive integer); unknown keys are rejected loudly. The default budget comes
-  from `millstrand.spools.test-support/await-budget-ms`."
+  positive integer); unknown keys are rejected loudly. The production default
+  budget is 10000 milliseconds; tests that need scaling pass an explicit
+  budget."
   ([runtime] (await-quiescent! runtime {}))
   ([runtime {:keys [timeout-ms] :as opts}]
    (reject-unknown-keys! "await-quiescent!" #{:timeout-ms} opts)
    (let [counter (in-flight-count runtime)
-         timeout-ms (or timeout-ms
-                        ((requiring-resolve 'millstrand.spools.test-support/await-budget-ms)))]
+         timeout-ms (or timeout-ms 10000)]
      (require-valid! ::timeout-ms timeout-ms
                      "await-quiescent! :timeout-ms must be a positive integer")
      (poll-until!
