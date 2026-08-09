@@ -114,3 +114,13 @@
                   :spools ['codethread/ralph 'millhouse.spools/workflow]
                   :after [:millhouse/spools-workflow]
                   :required? true})
+
+(runtime/module! runtime :millstrand/spools-subagent
+                 {:ns 'ct.spools.executors.subagent
+                  :spools ['ct.spools/agent-run
+                           'millhouse.spools/workflow]
+                  :after [:millstrand/spools-agent-run
+                          :millhouse/spools-workflow
+                          :codethread/agents
+                          :devflow/kanban-adapter]
+                  :required? true})
