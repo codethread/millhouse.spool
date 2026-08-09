@@ -1,5 +1,9 @@
 # Millhouse spools
 
+<p align="center">
+	<img width="460" src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaGZqMDBldmZ6anp0NjcybmQ2Y2s0OHlrbXhibWp1OWlvNjRiMzMzdCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/bYpgM8bi7QV3i/giphy.gif">
+</p>
+
 Millhouse is the experimental arm of Millstrand. It owns the six external spools extracted from Millstrand under the `millhouse.spools.*` namespace family.
 
 Read the [public documentation](https://codethread.github.io/millhouse.spool/).
