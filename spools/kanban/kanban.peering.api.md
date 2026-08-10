@@ -60,7 +60,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
   baseline. Its own lifecycle reset removes receivers; this close therefore
   preserves the established process-lifetime receiver behavior while static
   peering operations retract with their module owner.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L717-L725">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L715-L723">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peering-receiver">`kanban-peering-receiver`</a>
 
@@ -68,7 +68,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
 
 
 Own guarded Guild receiver registration for the peering module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L728-L731">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L725-L728">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peers-op">`kanban-peers-op`</a>
 ``` clojure
@@ -77,7 +77,7 @@ Own guarded Guild receiver registration for the peering module lifetime.
 Function.
 
 List sibling weavers and whether each accepts peered kanban cards.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L687-L692">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L686-L691">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-send-op">`kanban-send-op`</a>
 ``` clojure
@@ -86,7 +86,7 @@ List sibling weavers and whether each accepts peered kanban cards.
 Function.
 
 Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L695-L700">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L693-L698">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/open-peering!">`open-peering!`</a>
 ``` clojure
@@ -95,7 +95,7 @@ Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
 Function.
 
 Register the guarded `kanban.send.v1` receiver through Guild's supported seam.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L702-L715">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L700-L713">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/send-op">`send-op`</a>
 ``` clojure

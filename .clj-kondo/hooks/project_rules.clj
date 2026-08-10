@@ -68,8 +68,10 @@
   are still checked, mirroring the macro's real `(def name docstring query-def)`
   expansion."
   [{:keys [node]}]
-  (let [[_ name-node docstring-node opts-node query-node] (:children node)
+  (let [[form-node name-node docstring-node opts-node query-node] (:children node)
         used (api/list-node (list (api/token-node 'do)
+                                  (api/list-node
+                                   (list (api/token-node 'identity) form-node))
                                   (api/list-node
                                    (list (api/token-node 'identity) opts-node))
                                   query-node))
@@ -84,25 +86,62 @@
   `(defn <name>-op docstring argv body...)` wrapped in a `do` that also evaluates
   opts so its symbols are still checked, mirroring the macro's real expansion."
   [{:keys [node]}]
-  (let [[_ name-node docstring-node opts-node argv-node & body] (:children node)
-        handler-node (api/token-node (symbol (str (api/sexpr name-node) "-op")))
+  (let [[form-node name-node docstring-node opts-node argv-node & body] (:children node)
+        handler-node (with-meta
+                       (api/token-node (symbol (str (api/sexpr name-node) "-op")))
+                       (meta name-node))
         defn-node (api/list-node (list* (api/token-node 'defn) handler-node docstring-node argv-node body))
         used (api/list-node (list (api/token-node 'do)
+                                  (api/list-node
+                                   (list (api/token-node 'identity) form-node))
                                   (api/list-node
                                    (list (api/token-node 'identity) opts-node))
                                   defn-node))]
     {:node (with-meta used (meta node))}))
 
+(defn defpattern
+  "Analyze a function-shaped authoring form as a defn of its named handler.
+
+  This covers `defpattern` (and the same-shaped core `defhook`/`defhandler`
+  forms): `(form name doc opts argv & body)` becomes a `defn`, while opts are
+  still evaluated so symbols within them remain checked."
+  [{:keys [node]}]
+  (let [[form-node name-node docstring-node opts-node argv-node & body] (:children node)
+        defn-node (api/list-node
+                   (list* (api/token-node 'defn)
+                          name-node docstring-node argv-node body))
+        used (api/list-node
+              (list (api/token-node 'do)
+                    (api/list-node (list (api/token-node 'identity) form-node))
+                    (api/list-node (list (api/token-node 'identity) opts-node))
+                    defn-node))]
+    {:node (with-meta used (meta node))}))
+
+(defn defbin
+  "Analyze `defbin` as a var definition while checking its options."
+  [{:keys [node]}]
+  (let [[form-node name-node docstring-node opts-node] (:children node)
+        used (api/list-node
+              (list (api/token-node 'do)
+                    (api/list-node (list (api/token-node 'identity) form-node))
+                    (api/list-node (list (api/token-node 'identity) opts-node))))
+        def-node (api/list-node
+                  (list (api/token-node 'def) name-node docstring-node used))]
+    {:node (with-meta def-node (meta node))}))
+
 (defn defexecutor
   "Analyze `defexecutor` as a defn of the `<name>-stalled?` handler var."
   [{:keys [node]}]
-  (let [[_ name-node docstring-node opts-node argv-node & body] (:children node)
-        handler-node (api/token-node (symbol (str (api/sexpr name-node) "-stalled?")))
+  (let [[form-node name-node docstring-node opts-node argv-node & body] (:children node)
+        handler-node (with-meta
+                       (api/token-node (symbol (str (api/sexpr name-node) "-stalled?")))
+                       (meta name-node))
         defn-node (api/list-node
                    (list* (api/token-node 'defn)
                           handler-node docstring-node argv-node body))
         used (api/list-node
               (list (api/token-node 'do)
+                    (api/list-node (list (api/token-node 'identity) form-node))
                     (api/list-node (list (api/token-node 'identity) opts-node))
                     defn-node))]
     {:node (with-meta used (meta node))}))
@@ -115,7 +154,13 @@
   `(defn <name>-rule docstring argv body...)`, mirroring the macro's real
   expansion."
   [{:keys [node]}]
-  (let [[_ name-node docstring-node argv-node & body] (:children node)
-        handler-node (api/token-node (symbol (str (api/sexpr name-node) "-rule")))
-        defn-node (api/list-node (list* (api/token-node 'defn) handler-node docstring-node argv-node body))]
-    {:node (with-meta defn-node (meta node))}))
+  (let [[form-node name-node docstring-node argv-node & body] (:children node)
+        handler-node (with-meta
+                       (api/token-node (symbol (str (api/sexpr name-node) "-rule")))
+                       (meta name-node))
+        defn-node (api/list-node (list* (api/token-node 'defn) handler-node docstring-node argv-node body))
+        used (api/list-node
+              (list (api/token-node 'do)
+                    (api/list-node (list (api/token-node 'identity) form-node))
+                    defn-node))]
+    {:node (with-meta used (meta node))}))

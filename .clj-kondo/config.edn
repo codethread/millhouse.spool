@@ -23,6 +23,10 @@
                         defn hooks.project-rules/no-fn-keys-destructure
                         millstrand.api.millstrand.alpha/defop hooks.project-rules/defop
                         millstrand.api.millstrand.alpha/defquery hooks.project-rules/defquery
+                        millstrand.api.millstrand.alpha/defpattern hooks.project-rules/defpattern
+                        millstrand.api.millstrand.alpha/defhook hooks.project-rules/defpattern
+                        millstrand.api.millstrand.alpha/defhandler hooks.project-rules/defpattern
+                        millstrand.api.millstrand.alpha/defbin hooks.project-rules/defbin
                         millhouse.spools.workflow/defexecutor hooks.project-rules/defexecutor
                         millstrand.macros.queries/defquery hooks.project-rules/defquery
                         millstrand.macros.ops/defop hooks.project-rules/defop
