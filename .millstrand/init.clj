@@ -13,6 +13,10 @@
                  {:ns 'millstrand.spools.batteries
                   :spools ['millstrand.spools/batteries]})
 
+(runtime/module! runtime :module-adapters
+                 {:file "adapters/help.clj"
+                  :after [:millstrand/spools-batteries]})
+
 ;; --- Workflow and shell provider surfaces ----------------------------------
 (runtime/module! runtime :millhouse/spools-workflow
                  {:ns 'millhouse.spools.workflow
