@@ -3,8 +3,9 @@
 
   The workflow asks whether the consumer is greenfield or brownfield before it
   gives configuration instructions. Both routes import the complete resolved
-  classpath once, validate provenance and cache hygiene, and hand back the
-  local quality command for the consumer rather than guessing one."
+  classpath once, make explicit bootstrap the sole Kondo import owner, validate
+  provenance and cache hygiene, and hand back the local quality command for the
+  consumer rather than guessing one."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
@@ -45,9 +46,16 @@
     worktree workspace)))
 
 (def ^:private validate-kondo-command
-  "Check formatting and reject tracked clj-kondo cache files after import."
+  "Check the LSP import boundary, formatting, provenance, and cache hygiene."
   ["sh" "-c"
    (str "set -eu\n"
+        "test -f .lsp/config.edn\n"
+        "clojure -e '"
+        "(require '[clojure.edn :as edn]) "
+        "(let [config (edn/read-string (slurp \".lsp/config.edn\"))] "
+        "(when (not= false (:copy-kondo-configs? config)) "
+        "(binding [*out* *err*] (println \".lsp/config.edn must set :copy-kondo-configs? false\")) "
+        "(System/exit 1)))'\n"
         "git diff --check\n"
         "git check-ignore -q --no-index .clj-kondo/.cache/\n"
         "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
@@ -68,9 +76,12 @@
    (format
     "|In `%s`, establish the greenfield Kondo boundary: create a minimal
      |`.clj-kondo/config.edn` only when it is absent, and ensure
-     |`.clj-kondo/.cache/` is ignored by the repository configuration. Do not
+     |`.clj-kondo/.cache/` is ignored by the repository configuration. Merge
+     |`:copy-kondo-configs? false` into `.lsp/config.edn`, creating that file only
+     |when absent and preserving every other existing LSP setting. Do not
      |pre-create producer mappings or hooks; those come from the resolved
-     |dependency exports. Record the exact files changed."
+     |dependency exports. Record the exact files changed and the resulting LSP
+     |setting."
     worktree)))
 
 (defn- brownfield-instruction
@@ -80,11 +91,13 @@
     "|In `%s`, establish the brownfield Kondo boundary: inventory the existing
      |`.clj-kondo` config, imports, hooks, and
     |ignore rules before editing, and ensure `.clj-kondo/.cache/` is ignored by
-    |the repository configuration. Merge only missing local settings and keep
-     |one producer-owned source for each imported mapping. Remove no existing
-     |consumer rule without recording why, and do not duplicate a producer hook
-     |or replace it with a consumer remap. Record the inventory, merge, and any
-     |unresolved overlap for handover."
+     |the repository configuration. Merge `:copy-kondo-configs? false` into
+     |`.lsp/config.edn` without overwriting any other existing LSP setting. Merge
+     |only missing local settings and keep one producer-owned source for each
+     |imported mapping. Remove no existing consumer rule without recording why,
+     |and do not duplicate a producer hook or replace it with a consumer remap.
+     |Record the inventory, merge, resulting LSP setting, and any unresolved
+     |overlap for handover."
     worktree)))
 
 (defn- validate-instruction
@@ -95,9 +108,16 @@
      |classpath and producer `clj-kondo.exports` resources. Confirm every
      |Millstrand and installed sibling spool export has one provenance source,
      |no duplicate config or hook mapping, no overlapping consumer-owned remap,
-     |no generated self-import, and no tracked `.clj-kondo/.cache` file. Record
-     |the producer path for each imported mapping and run the supplied hygiene
-     |gate."
+     |and no tracked `.clj-kondo/.cache` file. Identify the consumer repository's
+     |own producer namespace and import coordinates from its project metadata and
+     |producer exports, then confirm those coordinates are absent from
+     |`.clj-kondo/imports`; reject only that repository-relative self-import.
+     |Legitimate Millhouse and other producer imports in a consumer are expected
+     |and must not be rejected. Record the self-import result before import,
+     |immediately after import, and after quality. Confirm `.lsp/config.edn`
+     |exists and records `:copy-kondo-configs? false`, proving explicit bootstrap
+     |remains the sole import owner. Record the producer path for each imported
+     |mapping, the exact LSP setting, and run the supplied hygiene gate."
     worktree)))
 
 (defn- quality-discovery-instruction
@@ -118,9 +138,11 @@
     "|Leave a precise local handover for worktree `%s` and workspace `%s`:
      |record greenfield/brownfield mode, files changed, every imported
      |producer/provenance path, duplicate and overlap decisions, cache hygiene,
-     |the discovered quality commands and results, and any pending local action.
-     |Keep local-checkout coordinates intact and do not stop, restart, push, land,
-     |or create a release."
+     |the exact `.lsp/config.edn` `:copy-kondo-configs? false` setting, the
+     |consumer self-import result before/during/after quality, the discovered
+     |quality commands and results, and any pending local action. Keep
+     |local-checkout coordinates intact and do not stop, restart, push, land, or
+     |create a release."
     worktree workspace)))
 
 (defn- shared-steps
@@ -163,7 +185,10 @@
 
   Both routes import all resolved dependency exports once, validate provenance,
   duplicate mappings, and cache hygiene, discover local quality checks, and
-  leave a precise handover. The agent-owned import runs `strand --workspace
+  leave a precise handover. Both route preparations merge
+  `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
+  LSP settings, so explicit bootstrap remains the sole import owner. The
+  agent-owned import runs `strand --workspace
   <workspace> spool status`, derives every installed root's classpath from its
   `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
   path while preserving explicit `[]`. It combines those directories with the

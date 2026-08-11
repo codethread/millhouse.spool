@@ -52,7 +52,11 @@
                                  params)]
         (is (str/includes? prepare-instruction (name mode)))
         (is (str/includes? prepare-instruction ".clj-kondo/.cache/"))
-        (is (str/includes? prepare-instruction "repository configuration")))
+        (is (str/includes? prepare-instruction "repository configuration"))
+        (is (str/includes? prepare-instruction ".lsp/config.edn"))
+        (is (str/includes? prepare-instruction ":copy-kondo-configs? false"))
+        (is (str/includes? prepare-instruction "other existing LSP setting"))
+        (is (str/includes? prepare-instruction "resulting LSP setting")))
       (is (= [":prepare"] (mapv str (:depends-on copy))))
       (is (nil? (get-in copy [:attributes "workflow/gate"])))
       (is (nil? (get-in copy [:attributes "shell/argv"])))
@@ -82,6 +86,10 @@
                          "git check-ignore -q --no-index .clj-kondo/.cache/"))
       (is (str/includes? validate-command
                          "git ls-files '.clj-kondo/.cache/**'"))
+      (is (str/includes? validate-command "test -f .lsp/config.edn"))
+      (is (str/includes? validate-command ":copy-kondo-configs? false"))
+      (is (not (str/includes? validate-command
+                              "millhouse.spools")))
       (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
                           params)
                          "provenance"))
@@ -91,12 +99,47 @@
       (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
                           params)
                          "tracked `.clj-kondo/.cache`"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         ".lsp/config.edn"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "sole import owner"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "consumer repository's"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "repository-relative self-import"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "Legitimate Millhouse"))
       (is (str/includes? ((get-in quality [:attributes "workflow/instruction"])
                           params)
                          "discover"))
       (is (str/includes? ((get-in handover [:attributes "workflow/instruction"])
                           params)
                          "precise local handover")))))
+
+(deftest both-routes-require-no-self-import-before-during-and-after-quality
+  (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
+                          #'bootstrap/bootstrap-kondo-brownfield]]
+    (let [definition (definition definition-var)
+          validate (step definition :validate)
+          handover (step definition :handover)
+          validate-command (nth (get-in validate [:attributes "shell/argv"]) 2)
+          handover-instruction ((get-in handover [:attributes "workflow/instruction"])
+                                params)]
+      (is (not (str/includes? validate-command
+                              ".clj-kondo/imports/millhouse.spools")))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "before import"))
+      (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])
+                          params)
+                         "immediately after import"))
+      (is (str/includes? handover-instruction
+                         "consumer self-import result before/during/after quality")))))
 
 (deftest bootstrap-does-not-fix-a-repository-quality-command
   (let [compiled (workflow/compile (definition #'bootstrap/bootstrap-kondo-greenfield)

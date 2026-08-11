@@ -95,6 +95,7 @@
 (deftest repository-kondo-config-keeps-producer-ownership
   (let [root (io/file (repository-root))
         config-text (slurp (io/file root ".clj-kondo/config.edn"))
+        lsp-config (edn/read-string (slurp (io/file root ".lsp/config.edn")))
         project-hooks (slurp (io/file root ".clj-kondo/hooks/project_rules.clj"))
         config (edn/read-string config-text)
         config-paths (:config-paths config)
@@ -108,6 +109,7 @@
                         config-text)))
       (is (not (str/includes? project-hooks (str "(defn " form)))))
     (is (not (re-find #"millstrand\.macros\.(queries|ops|rules)" config-text)))
+    (is (false? (:copy-kondo-configs? lsp-config)))
     (is (.isFile (io/file root ".clj-kondo/imports/io.millstrand/millstrand/config.edn")))
     (is (not (.exists self-imports)))))
 
