@@ -83,6 +83,11 @@
                            "BASE/resources/clj-kondo.exports/io.millstrand/millstrand/"))
         (is (str/includes? instruction "installed spool root normally"))
         (is (str/includes? instruction "Never search upward, guess `BASE`"))
+        (is (str/includes? instruction "exact family/root coordinate"))
+        (is (str/includes? instruction "failing path"))
+        (is (str/includes? instruction "permitted corrective invariant"))
+        (is (str/includes? instruction "readable regular `BASE/deps.edn`"))
+        (is (str/includes? instruction "Never silently fall back"))
         (is (str/includes? instruction
                            "absent `:paths` defaults to the `src` path"))
         (is (str/includes? instruction "explicit `:paths []` remains empty"))

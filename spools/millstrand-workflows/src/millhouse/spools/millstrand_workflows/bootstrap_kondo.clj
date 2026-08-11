@@ -54,7 +54,12 @@
      |derivation. The plain consumer `clojure -Spath` alone is
      |insufficient and must be explicitly rejected, including when the consumer
      |`deps.edn` has `:paths []`. Fail loudly when the installed-spool contribution
-     |is empty.
+     |is empty. Every failure above must report the exact family/root coordinate,
+     |status, `sync.root`, declaration, derived `BASE`, and failing path as
+     |applicable, plus the permitted corrective invariant: a synced root; a
+     |relative non-escaping declaration that reconstructs `sync.root`; a readable
+     |regular `BASE/deps.edn` containing valid EDN; the required export path; or at
+     |least one installed-spool classpath directory. Never silently fall back.
      |Run exactly one command with the resolved classpath:
      |`clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel
      |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
@@ -216,11 +221,13 @@
   declared paths, including `resources`, to the classpath. Require the
   Millstrand core export at
   `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/` and fail loudly
-  for an absent or unreconcilable base, missing base deps, or missing export;
-  do not search upward or guess. The installed source-root spool is still
-  resolved normally. It combines those directories with the consumer
-  classpath and records the exact roots and classpath, including each base
-  derivation, before one
+  for an absent or unreconcilable base, a `BASE/deps.edn` that is missing, not a
+  readable regular file, or invalid EDN, or a missing export; do not search
+  upward or guess. Failures report the exact coordinate, source-root values,
+  failing path, and permitted corrective invariant. The installed source-root
+  spool is still resolved normally. It combines those directories with the
+  consumer classpath and records the exact roots and classpath, including each
+  base derivation, before one
   `clj-kondo --lint RESOLVED_CLASSPATH
   --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
   consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
