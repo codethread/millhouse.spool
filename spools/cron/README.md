@@ -1,165 +1,40 @@
 # Millhouse Cron spool
 
-## Overview
+`millhouse.spools.cron` publishes fixed-interval jobs over Millstrand's durable scheduler, with optional jitter and reloadable handlers.
 
-`millhouse.spools.cron` is a userland recurrence layer over the weaver's durable
-scheduler wake primitive. It registers named jobs that fire on a fixed interval
-with optional uniform jitter. Each job owns one durable scheduler wake keyed
-`cron/<id>`.
-
-Cron owns no timing loop and no clock pump. The scheduler decides when a job is
-due and is the single timing view. Cron's job listing is a status projection: it
-shows registered jobs, their config, and recent results. To inspect when a job
-will next fire, read the scheduler's pending wakes.
-
-A caller registers a job by fully-qualified `:handler` symbol resolving to
-`(fn [runtime] ..)`. Cron resolves that symbol when the wake fires, so reloads
-can update job code without replacing the pending wake.
-
-Cron keeps only runtime-local weaver-lifetime state: an execution executor, the
-job table, an in-flight latch, the failure log, and a jitter RNG. That state
-lives on the active runtime through `millstrand.api.runtime.alpha/spool-state`, so
-separate runtimes in one JVM do not share jobs or failures.
-
-Cron itself spawns no external processes and ships no jobs. Because real jobs often escalate capability, cron stays behind explicit spool approval through the `millhouse/spools` Git family, not the production classpath.
-
-### Published clj-kondo support
-
-This spool owns `millhouse.spools.cron/defjob`, so its public clj-kondo export is
-published from this root at
-`resources/clj-kondo.exports/millhouse.spools/cron/config.edn`. The export maps
-`defjob` to `clojure.core/def`: the macro collects declaration data rather than
-defining a Var, but its ID, options, and job forms are all analyzed as ordinary
-data expressions. No hook is needed for this shape. A consumer dependency must
-include this root's `resources` path so clj-kondo can discover the export.
-
-The export and its contract test live with this owner. If `defjob` changes its
-argument shape, revisit whether the `:lint-as` mapping still analyzes every
-declaration position before adding a hook.
-
-For recipes, see the [cookbook](./cron.cookbook.md): registering
-interval+jitter jobs, keeping job startup out of broad config tests,
-coordinating many weavers, inspecting status, and testing offloaded jobs.
-
-## Dependency information
-
-Cron has no spool prerequisites. Approve `millhouse.spools/cron` through the [repository family entry](../../README.md#consumption).
-
-## Activation
-
-Activate it from trusted startup config after syncing approved roots:
+## 1. Activation
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
 
 (def runtime (current/runtime))
-(runtime/module! runtime :cron
+(runtime/module! runtime :millhouse/cron
   {:ns 'millhouse.spools.cron
    :spools ['millhouse.spools/cron]
    :required? true})
 ```
 
-The module collects an open jobs-kind declaration and a desired-state lifecycle effect. Trusted config contributes jobs from dependent modules, so the repo decides what runs on a cadence. Publication of any owner's Cron jobs triggers the effect, including when Cron's own source declaration is unchanged.
+Activation publishes Cron's job declaration kind and reconciliation lifecycle. Cron contributes no jobs itself.
 
-## Registering jobs
+## 2. Jobs
 
-Module authors normally use `defjob`. The form collects replayable declaration data and schedules nothing during source evaluation:
+`defjob` is the module authoring form. It collects a job declaration under the current module owner and schedules nothing during source evaluation. Its generated API entry owns the complete job shape, options, and focused example.
 
-```clojure
-(cron/defjob :nightly-report
-  {:interval-ms (* 24 60 60 1000)
-   :jitter-ms (* 60 60 1000)
-   :handler 'my.jobs/emit-report})
-```
+Owner-complete publication drives the job lifecycle:
 
-After owner-complete publication, Cron's lifecycle effect compares the effective job registry with the managed job table. It preserves unchanged wakes, reschedules changed jobs, and cancels omitted jobs. Removing the Cron module cancels all jobs through the retained lifecycle declaration.
+- a new declaration arms its `cron/<id>` scheduler wake;
+- an unchanged interval, jitter, and handler preserves the pending wake;
+- changing any of those values starts a new countdown from now;
+- omitting a declaration cancels its wake;
+- a missing wake is re-armed while its declaration remains effective.
 
-For code and tests that already hold a runtime, `register!` is the explicit-runtime seam for a live job with a fully-qualified `:handler` symbol:
+Handlers receive the active runtime and must tolerate at-least-once delivery. `register!` is the lower-level explicit-runtime seam for trusted code and tests; its complete execution, status, failure, and quiescence contract lives in the generated API.
 
-```clojure
-(require '[millhouse.spools.cron :as cron])
+## 3. Millstrand state and APIs
 
-(cron/register! runtime
-  {:id :nightly-report
-   :interval-ms (* 24 60 60 1000)     ; base period between fires
-   :jitter-ms (* 60 60 1000)          ; each fire offset uniformly in [-1h, +1h]
-   :handler 'my.jobs/emit-report})    ; (fn [runtime] ..) run on each fire
-```
-
-- `:id` is the durable job identity. Cron stores the cadence in scheduler key
-  `cron/<id>`.
-- `:interval-ms` is the base period between fires.
-- `:jitter-ms` is optional and defaults to `0`. Each fire is offset uniformly in
-  `[-jitter, +jitter]`.
-- `:handler` runs for every delivered wake. Its return value is recorded as
-  `:last-result`; a thrown exception is recorded in `recent-failures` and does
-  not stop the cadence.
-
-Re-registering the same `:id` preserves the pending wake when the
-cadence-defining tuple `[interval-ms jitter-ms handler]` is unchanged. This is the
-normal reload path: config re-runs, the in-memory job table is repopulated, and
-the existing durable countdown remains in place. A changed interval, jitter, or
-`:handler` symbol replaces the wake and starts the next countdown from now.
-
-Cron no longer has a first-fire seed hook. The first fire, and every later fire,
-is represented by the durable scheduler wake. If code needs a different
-next-fire instant, change the registration cadence or schedule through the
-scheduler primitive directly in userland.
-
-## Delivery contract
-
-Cron delivery is at-least-once. A due scheduler wake may be delivered more than
-once, so job authors must make `:handler` idempotent or otherwise
-duplicate-tolerant.
-
-When a `cron/<id>` wake is delivered, scheduler invokes
-`millhouse.spools.cron/fire-wake` on the weaver's shared event lane. That handler
-does only the cadence work:
-
-1. Decode the job id from the wake payload.
-2. Look up the in-memory job config. If the job was unregistered, return without
-   rescheduling.
-3. Persist the next `cron/<id>` wake before running the job body.
-4. Hand the job body to cron's execution executor.
-5. Return so the scheduler completes the delivered wake.
-
-This is the wake-delivery/job-completion split. A wake is considered delivered
-when the next wake has been persisted and the job body has been handed off. The
-job body's success or failure is cron status, not scheduler timing state. A
-thrown job records a failure and the cadence continues.
-
-A duplicate delivery follows the same path. It replaces the next pending
-`cron/<id>` wake with a fresh `now + interval + jitter` wake and offloads the job
-body again. This is expected under the at-least-once contract; write handlers so
-the second run is harmless.
-
-## Awaiting offloaded jobs
-
-`cron/await-quiescent!` waits for cron's offloaded jobs after the event lane has settled. Its timeout and five-millisecond polling interval use the runtime Clock. A manual clock therefore advances the await without a wall-clock sleep, and a timeout is deterministic in tests.
-
-## Inspecting and removing
-
-```clojure
-(cron/jobs runtime)             ; job status: id, interval, jitter, handler, last result/error
-(cron/recent-failures runtime)  ; recorded :run and :offload failures
-(cron/unregister! runtime :nightly-report)
-```
-
-`jobs` does not expose the next fire time. Read
-`millstrand.api.scheduler.alpha/pending` for the pending `cron/<id>` wake when you
-need timing. That keeps the scheduler as the single timing surface.
-
-Job execution failures are recorded, not swallowed (TEN-003): a job whose
-`:handler` throws stays registered, keeps its cadence, and records the error in
-`recent-failures` and on the job status.
-
-## See also
-
-- [`../../README.md`](../../README.md) — the spool index.
-- [`../chime/README.md`](../chime/README.md) — the sibling notification engine
-  this spool mirrors for local-root layout, runtime-owned state, and loud failure
-  recording.
-- [`https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/docs/spools/writing-shared-spools.md`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/docs/spools/writing-shared-spools.md) —
-  runtime-owned state, versioned spool-state, and injectable side-effect
-  boundaries.
+| Surface | Identity | Consumer contract |
+| --- | --- | --- |
+| Job authoring | `defjob` → `:millhouse.spools.cron/jobs` | Publishes one owner-partitioned desired job declaration. |
+| Durable timing | Scheduler wake `cron/<id>` | Holds the authoritative next-fire time and dispatches `millhouse.spools.cron/fire-wake`. |
+| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/cron/config.edn` | Maps `defjob` to `clojure.core/def`; the Cron root must expose its `resources` path. |

@@ -4,21 +4,21 @@
 	<img width="460" src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaGZqMDBldmZ6anp0NjcybmQ2Y2s0OHlrbXhibWp1OWlvNjRiMzMzdCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/bYpgM8bi7QV3i/giphy.gif">
 </p>
 
-Millhouse is the experimental arm of Millstrand. It owns the seven external spools extracted from Millstrand under the `millhouse.spools.*` namespace family.
+Millhouse is the experimental arm of [Millstrand](https://codethread.github.io/millstrand/). It exposes spools under the `millhouse.spools.*` namespace.
+
+> Stable candidates will be merged back to `millstrand`.
 
 Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 
-| Root | Namespace | Documentation |
-| --- | --- | --- |
-| `spools/workflow` | `millhouse.spools.workflow` | [contract](spools/workflow/README.md) · [cookbook](spools/workflow/workflow.cookbook.md) · [API](spools/workflow/workflow.api.md) |
-| `spools/chime` | `millhouse.spools.chime` | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md) |
-| `spools/cron` | `millhouse.spools.cron` | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md) |
-| `spools/code-executor` | `millhouse.spools.executors.code` | [contract](spools/code-executor/README.md) · [cookbook](spools/code-executor/code.cookbook.md) · [API](spools/code-executor/code.api.md) |
-| `spools/shell-executor` | `millhouse.spools.executors.shell` | [contract](spools/shell-executor/README.md) · [cookbook](spools/shell-executor/shell.cookbook.md) · [API](spools/shell-executor/shell.api.md) |
-| `spools/kanban` | `millhouse.spools.kanban` | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md) · [peering API](spools/kanban/kanban.peering.api.md) |
-| `spools/millstrand-workflows` | `millhouse.spools.millstrand-workflows` | [contract](spools/millstrand-workflows/README.md) · [cookbook](spools/millstrand-workflows/millstrand-workflows.cookbook.md) · [API](spools/millstrand-workflows/millstrand-workflows.api.md) |
-
-Each entry is an independent root with its own `deps.edn`, `src`, and spool-owned `test` tree. Repository-level consumer, discovery, integration, and shared test-support code remains under the top-level `test` tree. The executor roots require this family's Workflow root and must activate after it.
+| Spool                                                                                                   | Info                                                                                                                                         | Links                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Workflow](spools/workflow/README.md) (`millhouse.spools.workflow`)                                     | Define durable, Clojure-native workflows that agents can drive step by step, including human or external-system gates and routing decisions. | [contract](spools/workflow/README.md) · [cookbook](spools/workflow/workflow.cookbook.md) · [API](spools/workflow/workflow.api.md)                                                             |
+| [Workflow Code executor](spools/code-executor/README.md) (`millhouse.spools.executors.code`)            | Let a workflow gate invoke trusted Clojure functions inside the weaver, with timeouts and explicit recovery.                                 | [contract](spools/code-executor/README.md) · [cookbook](spools/code-executor/code.cookbook.md) · [API](spools/code-executor/code.api.md)                                                      |
+| [Workflow Shell executor](spools/shell-executor/README.md) (`millhouse.spools.executors.shell`)         | Let a workflow gate run a process with bounded output, timeouts, and durable failure details.                                                | [contract](spools/shell-executor/README.md) · [cookbook](spools/shell-executor/shell.cookbook.md) · [API](spools/shell-executor/shell.api.md)                                                 |
+| [Millstrand workflows](spools/millstrand-workflows/README.md) (`millhouse.spools.millstrand-workflows`) | Reuse guided workflows for publishing clj-kondo support and adopting or updating approved spool families.                                    | [contract](spools/millstrand-workflows/README.md) · [cookbook](spools/millstrand-workflows/millstrand-workflows.cookbook.md) · [API](spools/millstrand-workflows/millstrand-workflows.api.md) |
+| [Chime](spools/chime/README.md) (`millhouse.spools.chime`)                                              | Turn meaningful graph events into local notifications with workspace-owned rules and your preferred notifier.                                | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md)                                                                            |
+| [Cron](spools/cron/README.md) (`millhouse.spools.cron`)                                                 | Run durable, interval-based jobs through Millstrand's scheduler, with optional jitter and reloadable handlers.                               | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md)                                                                                 |
+| [Kanban](spools/kanban/README.md) (`millhouse.spools.kanban`)                                           | Manage user–agent work as a shared board with priorities, handoffs, task dependencies, review, and optional peer-to-peer card transfer.      | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md) · [peering API](spools/kanban/kanban.peering.api.md)                  |
 
 ## Consumption
 
@@ -39,16 +39,3 @@ Millhouse is untagged work in progress. Consumers pin one commit and select the 
 ```
 
 There is no `:git/tag` until this family publishes a release marker. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
-
-## Testing
-
-The default suite requires namespaces serially, then runs them concurrently with isolated output and summaries:
-
-```text
-clojure -M:test
-clojure -M:test --serial
-clojure -M:test millhouse.spools.workflow-test
-clojure -M:test --stress 10
-```
-
-Focused runs are serial. Stress mode launches each parallel iteration in a fresh JVM so loaded fixture namespaces and other JVM-global state cannot leak between repetitions. Namespaces proven to require JVM-global isolation belong in the runner's documented serial island.
