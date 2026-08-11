@@ -23,6 +23,20 @@ separate runtimes in one JVM do not share jobs or failures.
 
 Cron itself spawns no external processes and ships no jobs. Because real jobs often escalate capability, cron stays behind explicit spool approval through the `millhouse/spools` Git family, not the production classpath.
 
+### Published clj-kondo support
+
+This spool owns `millhouse.spools.cron/defjob`, so its public clj-kondo export is
+published from this root at
+`resources/clj-kondo.exports/millhouse.spools/cron/config.edn`. The export maps
+`defjob` to `clojure.core/def`: the macro collects declaration data rather than
+defining a Var, but its ID, options, and job forms are all analyzed as ordinary
+data expressions. No hook is needed for this shape. A consumer dependency must
+include this root's `resources` path so clj-kondo can discover the export.
+
+The export and its contract test live with this owner. If `defjob` changes its
+argument shape, revisit whether the `:lint-as` mapping still analyzes every
+declaration position before adding a hook.
+
 For recipes, see the [cookbook](./cron.cookbook.md): registering
 interval+jitter jobs, keeping job startup out of broad config tests,
 coordinating many weavers, inspecting status, and testing offloaded jobs.

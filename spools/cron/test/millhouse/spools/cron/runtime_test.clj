@@ -11,7 +11,9 @@
   `cron/await-quiescent!` joins the offloaded job body — no `Thread/sleep` or
   wall waits
   (`PLAN-cron-on-scheduler-001.V3`). Cron registers no pump of its own."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.scheduler.alpha :as scheduler]
@@ -26,6 +28,18 @@
 (defn fire-ok [_runtime] :ok)
 (defn fire-other [_runtime] :other)
 (defn fire-throw [_runtime] (throw (ex-info "boom" {:why :test})))
+
+(deftest cron-exported-kondo-contract-is-published-by-cron-root
+  (testing "Cron publishes resources from its owning root"
+    (is (some #(= "resources" %)
+              (:paths (edn/read-string (slurp "spools/cron/deps.edn")))))
+    (let [config-file (io/file
+                       "spools/cron/resources/clj-kondo.exports/millhouse.spools/cron/config.edn")
+          config-data (edn/read-string (slurp config-file))]
+      (is (.isFile config-file))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.cron/defjob])))
+      (is (nil? (:hooks config-data))))))
 
 (def ^:private blocking-started (atom (promise)))
 (def ^:private blocking-release (atom (promise)))
