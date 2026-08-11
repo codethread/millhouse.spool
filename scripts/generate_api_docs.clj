@@ -18,12 +18,13 @@
     :outfile "spools/kanban/kanban.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
     :outfile "spools/kanban/kanban.peering.api.md"}
-   {:source "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
+   {:source ["spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
+             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj"]
     :outfile "spools/millstrand-workflows/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
   (quickdoc/quickdoc
-   {:source-paths [source]
+   {:source-paths (if (vector? source) source [source])
     :outfile outfile
     :github/repo github-repo
     :git/branch git-branch

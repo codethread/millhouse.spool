@@ -1,11 +1,12 @@
 # Millhouse Millstrand-workflows spool
 
-`millhouse.spools.millstrand-workflows` publishes the repeatable workflow
-obligations around reusable Millstrand and clj-kondo spool support. Its first
-workflow, `publish-spool-kondo`, is a reviewable publisher checklist for a root
-that owns macros. It does not inspect a source tree or claim automatic macro
-discovery: the caller supplies the owning root, public namespace, spool key, and
-every macro-to-hook mapping.
+`millhouse.spools.millstrand-workflows` publishes repeatable workflows around
+reusable Millstrand and clj-kondo spool support. `publish-spool-kondo` is a
+reviewable publisher checklist for a root that owns macros, while `bump-spool`
+is the portable consumer workflow for updating pinned spool dependencies and
+refreshing the selected runtime. Neither workflow performs filesystem edits or
+runtime cutover itself: callers supply the explicit context and record each
+instruction's result.
 
 ## Identity and activation
 
@@ -53,6 +54,26 @@ The workflow walks these obligations in order:
 A macro shape change requires a reviewed export hook, focused tests, and
 documentation in the same change. The workflow supplies instructions and action
 references; a publisher performs and records the filesystem and quality work.
+
+## `bump-spool`
+
+Resolve `bump-spool` from the same activated module and provide the exact
+consumer worktree and Millstrand workspace:
+
+```clojure
+{:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
+ :worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"
+ :direct-user-request false
+ :quality-argv ["make" "quality"]}
+```
+
+The workflow confirms the selected world, coordinates each requested bump,
+imports all dependency clj-kondo exports in one classpath invocation, reviews
+and commits the copied configuration, and runs the consumer's quality command.
+It refreshes the selected runtime after quality passes. Runtime stop/start
+cutover is conditional on an explicit direct-user request; otherwise the final
+step hands over the pending generation without stopping or restarting anything.
 
 ## See also
 
