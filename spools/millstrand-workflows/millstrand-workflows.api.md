@@ -79,7 +79,7 @@ Validate a consumer against its explicitly approved local Millstrand checkout.
 
 
 Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L271-L279">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L271-L284">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-spool">millhouse.spools.millstrand-workflows.bump-spool</a>

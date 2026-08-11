@@ -276,4 +276,9 @@
    "Bump pinned Millstrand"
    (workflow/call :bump-spool
                   :bump-spool
-                  {})))
+                  {:bumps (fn [{:keys [bumps]}] bumps)
+                   :worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [workspace]}] workspace)
+                   :direct-user-request (fn [{:keys [direct-user-request]}]
+                                          direct-user-request)
+                   :quality-argv (fn [{:keys [quality-argv]}] quality-argv)})))

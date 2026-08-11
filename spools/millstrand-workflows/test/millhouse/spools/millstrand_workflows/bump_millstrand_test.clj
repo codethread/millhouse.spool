@@ -94,8 +94,33 @@
                         :after [:millhouse/workflow]})
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :bump-millstrand-pinned)
+              params (assoc params
+                            :bumps [{:family "io.millstrand/millstrand"
+                                     :version "v12"}]
+                            :worktree "/srv/consumer"
+                            :workspace "/srv/consumer/.millstrand"
+                            :direct-user-request true
+                            :quality-argv ["just" "quality"])
               payload (workflow/compile (:value resolved) params)
-              refs (set (map :ref (:strands payload)))]
+              strands (into {} (map (juxt :ref identity) (:strands payload)))
+              refs (set (keys strands))
+              bump-instruction (get-in strands
+                                       [:bump-spool--bump-spool-1 :attributes
+                                        "workflow/instruction"])
+              select-instruction (get-in strands
+                                         [:bump-spool--select-world :attributes
+                                          "workflow/instruction"])
+              quality (get strands :bump-spool--quality)
+              cutover (get strands :bump-spool--cutover)
+              handover (get strands :bump-spool--handover-pending-generation)]
           (is (= #{:continue} (:entrypoints resolved)))
           (is (contains? refs :bump-spool--copy-configs))
-          (is (contains? refs :bump-spool--handover-pending-generation)))))))
+          (is (str/includes? select-instruction "/srv/consumer"))
+          (is (str/includes? select-instruction "/srv/consumer/.millstrand"))
+          (is (str/includes? bump-instruction
+                             "io.millstrand/millstrand"))
+          (is (str/includes? bump-instruction "--to v12"))
+          (is (= ["just" "quality"]
+                 (get-in quality [:attributes "shell/argv"])))
+          (is (some? cutover))
+          (is (nil? handover)))))))
