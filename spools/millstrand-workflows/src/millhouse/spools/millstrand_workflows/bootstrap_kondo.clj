@@ -180,15 +180,21 @@
                         :depends-on [:select-world]
                         :choices [{:key :greenfield
                                    :label "Greenfield"
-                                   :description "Create the minimal local Kondo boundary before importing producer exports."
+                                   :description (fmt/reflow
+                                                 "|Create the minimal local Kondo boundary before importing
+                                                  |producer exports.")
                                    :next :bootstrap-kondo-greenfield}
                                   {:key :brownfield
                                    :label "Brownfield"
-                                   :description "Inventory and safely merge the existing Kondo boundary before importing producer exports."
+                                   :description (fmt/reflow
+                                                 "|Inventory and safely merge the existing Kondo boundary
+                                                  |before importing producer exports.")
                                    :next :bootstrap-kondo-brownfield}
                                   {:key :unsupported
                                    :label "Stop"
-                                   :description "Stop when the consumer's configuration ownership cannot be established."}])))
+                                   :description (fmt/reflow
+                                                 "|Stop when the consumer's configuration ownership cannot
+                                                  |be established.")}])))
 
 (workflow/defworkflow bootstrap-kondo-greenfield
   "Establish a greenfield Kondo boundary and import Millstrand exports."

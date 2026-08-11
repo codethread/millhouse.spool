@@ -98,11 +98,14 @@
              :direct-user-request false
              :deps-file "deps.edn"}
    :param-docs {:families
-                "Exactly `[\"io.millstrand/millstrand\"]`; pinned coordinates use the automatic remote default-branch HEAD SHA bump."
+                (fmt/reflow
+                 "|Exactly `[\"io.millstrand/millstrand\"]`; pinned coordinates use the
+                  |automatic remote default-branch HEAD SHA bump.")
                 :worktree "Exact consumer worktree in which inspection and validation run."
                 :workspace "Exact Millstrand workspace selected for this consumer."
                 :direct-user-request
-                "True only when the direct user requested runtime cutover."
+                (fmt/reflow
+                 "|True only when the direct user requested runtime cutover.")
                 :deps-file "The deps.edn path relative to worktree; defaults to deps.edn."}}
   (workflow/workflow
    "Bump Millstrand"
@@ -118,15 +121,21 @@
                         :depends-on [:inspect-deps]
                         :choices [{:key :local-checkout
                                    :label "Use local checkout"
-                                   :description "The coordinate resolves to a local sibling; preserve it and decide explicitly whether to continue."
+                                   :description (fmt/reflow
+                                                 "|The coordinate resolves to a local sibling; preserve it
+                                                  |and decide explicitly whether to continue.")
                                    :next :bump-millstrand-local}
                                   {:key :git-sha-pinned
                                    :label "Use Git/SHA pin"
-                                   :description "The coordinate is Git/SHA-pinned; delegate the family-only remote default-branch HEAD SHA bump."
+                                   :description (fmt/reflow
+                                                 "|The coordinate is Git/SHA-pinned; delegate the family-only
+                                                  |remote default-branch HEAD SHA bump.")
                                    :next :bump-millstrand-pinned}
                                   {:key :unsupported
                                    :label "Stop"
-                                   :description "The coordinate is neither an accepted local checkout nor a Git/SHA pin; stop for repair."}])))
+                                   :description (fmt/reflow
+                                                 "|The coordinate is neither an accepted local checkout nor a
+                                                  |Git/SHA pin; stop for repair.")}])))
 
 (workflow/defworkflow bump-millstrand-local
   "Require an explicit decision before validating a local Millstrand checkout."
@@ -139,11 +148,15 @@
                         :kind :agent
                         :choices [{:key :move-forward
                                    :label "Move forward"
-                                   :description "Keep the local coordinate and use the shared Kondo bootstrap."
+                                   :description (fmt/reflow
+                                                 "|Keep the local coordinate and use the shared Kondo
+                                                  |bootstrap.")
                                    :next :bump-millstrand-local-validate}
                                   {:key :stop
                                    :label "Stop"
-                                   :description "Do not validate or alter the consumer until a local-checkout decision is supplied."}])))
+                                   :description (fmt/reflow
+                                                 "|Do not validate or alter the consumer until a local-checkout
+                                                  |decision is supplied.")}])))
 
 (workflow/defworkflow bump-millstrand-local-validate
   "Bootstrap Kondo for an explicitly approved local Millstrand checkout."

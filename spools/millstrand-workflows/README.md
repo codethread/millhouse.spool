@@ -1,17 +1,8 @@
 # Millhouse Millstrand-workflows spool
 
-`millhouse.spools.millstrand-workflows` publishes repeatable workflows around
-Millstrand and clj-kondo support. `publish-spool-kondo` covers producer-owned
-exports, `bootstrap-kondo` handles first-time consumer adoption, and
-`bump-spool` updates pinned spool families before reusing that bootstrap path.
-These workflows describe and record work; they do not choose branches, edit
-consumer repositories on the caller's behalf, push, land, or restart runtimes.
+`millhouse.spools.millstrand-workflows` publishes repeatable workflows around Millstrand and clj-kondo support. `publish-spool-kondo` covers producer-owned exports, `bootstrap-kondo` handles first-time consumer adoption, and `bump-spool` updates pinned spool families before reusing that bootstrap path. These workflows describe and record work; they do not choose branches, edit consumer repositories on the caller's behalf, push, land, or restart runtimes.
 
-`bump-millstrand` inspects the consumer's exact `deps.edn` coordinate first. A
-local sibling coordinate stays local and requires an explicit decision before
-bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`, which asks
-Millstrand for the remote default-branch HEAD SHA automatically. A local coordinate never
-receives an invented SHA.
+`bump-millstrand` inspects the consumer's exact `deps.edn` coordinate first. A local sibling coordinate stays local and requires an explicit decision before bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`, which asks Millstrand for the remote default-branch HEAD SHA automatically. A local coordinate never receives an invented SHA.
 
 ## Identity and activation
 
@@ -36,11 +27,7 @@ Activate it after the Workflow spool:
 
 ## `publish-spool-kondo`
 
-Resolve the registered workflow and start it with the owning root, public
-namespace, spool key, and explicit macro-to-hook mappings. It verifies one
-producer source, publishes resources on the root classpath, reviews external
-imports and overlapping remaps, tests the exported contract, updates docs, and
-checks `git diff --check`, clean status, and cache hygiene.
+Resolve the registered workflow and start it with the owning root, public namespace, spool key, and explicit macro-to-hook mappings. It verifies one producer source, publishes resources on the root classpath, reviews external imports and overlapping remaps, tests the exported contract, updates docs, and checks `git diff --check`, clean status, and cache hygiene.
 
 ## `bootstrap-kondo`
 
@@ -51,24 +38,13 @@ Start it with the exact consumer worktree and Millstrand workspace:
  :workspace "/abs/path/to/consumer-worktree/.millstrand"}
 ```
 
-The first checkpoint asks `greenfield` versus `brownfield` before route work.
-Greenfield creates a minimal `.clj-kondo/config.edn` only when absent and
-ensures `.clj-kondo/.cache/` is ignored by repository configuration. Brownfield
-inventories existing config, imports, hooks, and ignore rules, then ensures
-`.clj-kondo/.cache/` is ignored by repository configuration before merging safely without duplicating
-producer-owned hooks or replacing them with consumer remaps.
+The first checkpoint asks `greenfield` versus `brownfield` before route work. Greenfield creates a minimal `.clj-kondo/config.edn` only when absent and ensures `.clj-kondo/.cache/` is ignored by repository configuration. Brownfield inventories existing config, imports, hooks, and ignore rules, then ensures `.clj-kondo/.cache/` is ignored by repository configuration before merging safely without duplicating producer-owned hooks or replacing them with consumer remaps.
 
-Both routes run one full resolved-classpath
-`clj-kondo --lint "$(clojure -Spath)" --dependencies --parallel --copy-configs --skip-lint`
-import. They record provenance for Millstrand and every installed sibling spool,
-reject duplicate or overlapping mappings, check cache hygiene, let the agent
-discover the consumer's appropriate local quality checks, and leave a precise
-local handover. No fixed repository quality command is assumed.
+Both routes run one full resolved-classpath `clj-kondo --lint "$(clojure -Spath)" --dependencies --parallel --copy-configs --skip-lint` import. They record provenance for Millstrand and every installed sibling spool, reject duplicate or overlapping mappings, check cache hygiene, let the agent discover the consumer's appropriate local quality checks, and leave a precise local handover. No fixed repository quality command is assumed.
 
 ## `bump-spool`
 
-Provide family names only; versions and SHAs are intentionally not request
-parameters:
+Provide family names only; versions and SHAs are intentionally not request parameters:
 
 ```clojure
 {:families ["io.millstrand/millstrand" "millhouse/spools"]
@@ -83,12 +59,7 @@ For each family, the workflow emits:
 strand --workspace <workspace> spool bump <family> --latest sha
 ```
 
-An already-current coordinate is recorded and accepted. The workflow then
-calls `bootstrap-kondo`, including its greenfield/brownfield choice, one full
-classpath import, provenance/duplicate/cache validation, local quality-check
-discovery, and handover. Runtime refresh and cutover retain the explicit
-direct-user boundary; ordinary agent and nested calls never stop or restart a
-runtime.
+An already-current coordinate is recorded and accepted. The workflow then calls `bootstrap-kondo`, including its greenfield/brownfield choice, one full classpath import, provenance/duplicate/cache validation, local quality-check discovery, and handover. Runtime refresh and cutover retain the explicit direct-user boundary; ordinary agent and nested calls never stop or restart a runtime.
 
 ## `bump-millstrand`
 
@@ -102,17 +73,10 @@ Use exactly one Millstrand family:
  :deps-file "deps.edn"}
 ```
 
-After inspecting `deps-file`, choose `:local-checkout` or `:git-sha-pinned`.
-The local route preserves the checkout and calls `bootstrap-kondo`; the pinned
-route calls `bump-spool`, which uses the same automatic remote default-branch HEAD
-SHA resolution behind `--latest sha`.
-Neither route invents a SHA or assumes a fixed quality command.
+After inspecting `deps-file`, choose `:local-checkout` or `:git-sha-pinned`. The local route preserves the checkout and calls `bootstrap-kondo`; the pinned route calls `bump-spool`, which uses the same automatic remote default-branch HEAD SHA resolution behind `--latest sha`. Neither route invents a SHA or assumes a fixed quality command.
 
 ## See also
 
-- [`millstrand-workflows.cookbook.md`](./millstrand-workflows.cookbook.md) —
-  recipes for producer publication and consumer adoption.
-- [`millstrand-workflows.api.md`](./millstrand-workflows.api.md) — generated API
-  documentation.
-- [`../workflow/README.md`](../workflow/README.md) — the Workflow spool that
-  executes registered definitions.
+- [`millstrand-workflows.cookbook.md`](./millstrand-workflows.cookbook.md) — recipes for producer publication and consumer adoption.
+- [`millstrand-workflows.api.md`](./millstrand-workflows.api.md) — generated API documentation.
+- [`../workflow/README.md`](../workflow/README.md) — the Workflow spool that executes registered definitions.
