@@ -75,11 +75,6 @@
                   :after [:millstrand/spools-agent-run
                           :millstrand/spools-delegation]
                   :required? true})
-(runtime/module! runtime :codethread/spool-bump
-                 {:ns 'ct.spools.codethread.spool-bump
-                  :spools ['codethread/spool-bump 'millhouse.spools/workflow]
-                  :after [:millhouse/spools-workflow]
-                  :required? true})
 (runtime/module! runtime :codethread/devflow-setup
                  {:ns 'ct.spools.codethread.devflow-setup
                   :spools ['codethread/devflow-setup]
