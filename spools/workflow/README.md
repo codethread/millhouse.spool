@@ -16,6 +16,23 @@ This is userland spool code, not a separate scheduler or persistence system. Wor
 
 Core primitives: `workflow`, `defworkflow`, `step`, `gate`, `checkpoint`, `call`, `defer`, `bind-defers`, `compile`, `pour!`, `wisp!`, and `explain`.
 
+### Published clj-kondo support
+
+This spool owns `millhouse.spools.workflow/defworkflow` and
+`millhouse.spools.workflow/defexecutor`, so its public clj-kondo export is
+published from this root at
+`resources/clj-kondo.exports/millhouse.spools/workflow/`. The export maps
+both macros to `clojure.core/def` and installs hooks that expose the generated
+definition Var and `<name>-stalled?` handler, including their analyzed bodies
+and explicit options. A consumer dependency must include this root's
+`resources` path; `io/resource` should resolve both `config.edn` and the hook
+before linting either macro.
+
+The export, hook, and consumer-classpath contract test live with this owner.
+When either macro changes shape, update them together. The
+`millhouse.spools.millstrand-workflows/publish-spool-kondo` workflow is the
+explicit guide for publishing analogous support from other macro-owning roots.
+
 The generic runtime API is `start!`, `ready`, `ready-step`, `ready-gates`, `ready-checkpoint`, `complete!`, `choose!`, `defer!`, `advance!`, `choice-detail`, `choice-details`, and `done?`, keyed by `workflow/run-id`. Workflows can be registered under stable names with `register-workflow!`/`unregister-workflow!`/`workflow-definition`/`workflows`/`resolve-workflow` (see [§5](#5-checkpoints-and-routing)), and read back with `catalog`/`definition-view` or the opt-in `workflow list`/`workflow show` CLI (see [§5b](#5b-registry-discovery)); registered gate executors are read back with `executors`/`executor-catalog` or `workflow executors`. That same opt-in module publishes the generic worker verbs `workflow start`/`ready`/`choices`/`complete`/`choose`/`next`/`defer`/`await` over the run lifecycle (see [§5c](#5c-driving-a-run)). Higher-level spools such as `ct.spools.devflow` should define opinionated workflow definitions and thin convenience wrappers around this namespace.
 
 Every run-mutating op (`start!`, `complete!`, `choose!`, `defer!`, `advance!`) returns one `{:ready [step-view ...] :done boolean}` map: `:ready` is the run's ready step views (as `ready` would return them) and `:done` is its done-ness, so an empty `:ready` never leaves a caller guessing whether the run finished or merely stalled. The pure queries `ready`/`ready-step` still return step views directly.

@@ -1,6 +1,6 @@
 {:paths []
  :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
-                                  :git/sha "7bf540b73e5cf6d38933b842db8f0978c66382c2"}}
+                                  :git/sha "fb6c9057d594bfa4b5ea8531b9774b5e9a23a4b4"}}
  :aliases
  {:test {:extra-paths ["test"
                        "spools/chime/src"
@@ -9,12 +9,15 @@
                        "spools/cron/test"
                        "spools/workflow/src"
                        "spools/workflow/test"
+                       "spools/workflow/resources"
                        "spools/code-executor/src"
                        "spools/code-executor/test"
                        "spools/shell-executor/src"
                        "spools/shell-executor/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]
+                       "spools/kanban/test"
+                       "spools/millstrand-workflows/src"
+                       "spools/millstrand-workflows/test"]
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
          :main-opts ["-m" "millhouse.test-runner"]}
   :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
@@ -25,7 +28,9 @@
                        "spools/workflow/test" "spools/code-executor/test"
                        "spools/shell-executor/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]}
+                       "spools/kanban/test"
+                       "spools/millstrand-workflows/src"
+                       "spools/millstrand-workflows/test"]}
   :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
                :main-opts ["-m" "cljfmt.main" "fix"
                            "spools/workflow/src" "spools/code-executor/src"
@@ -34,7 +39,9 @@
                            "spools/workflow/test" "spools/code-executor/test"
                            "spools/shell-executor/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]}
+                       "spools/kanban/test"
+                       "spools/millstrand-workflows/src"
+                       "spools/millstrand-workflows/test"]}
   :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
                    :main-opts ["-m" "clj-kondo.main" "--lint"
                                "spools/workflow/src" "spools/code-executor/src"
@@ -43,7 +50,9 @@
                                "spools/workflow/test" "spools/code-executor/test"
                                "spools/shell-executor/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]}
+                       "spools/kanban/test"
+                       "spools/millstrand-workflows/src"
+                       "spools/millstrand-workflows/test"]}
   :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
                 :main-opts ["-m" "noahtheduke.splint" "--output" "clj-kondo"
                             "spools/workflow/src" "spools/code-executor/src"
@@ -52,7 +61,9 @@
                             "spools/workflow/test" "spools/code-executor/test"
                             "spools/shell-executor/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]}
+                       "spools/kanban/test"
+                       "spools/millstrand-workflows/src"
+                       "spools/millstrand-workflows/test"]}
   :lint/conventions {:extra-paths ["scripts"
                                    "spools/chime/src"
                                    "spools/cron/src"
@@ -64,6 +75,8 @@
                                    "spools/workflow/test"
                                    "spools/code-executor/test"
                                    "spools/shell-executor/test"
+                                   "spools/millstrand-workflows/src"
+                                   "spools/millstrand-workflows/test"
                        "spools/kanban/src"
                        "spools/kanban/test"]
                      :extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
@@ -79,6 +92,8 @@
                                 "spools/workflow/test"
                                 "spools/code-executor/test"
                                 "spools/shell-executor/test"
+                                "spools/millstrand-workflows/src"
+                                "spools/millstrand-workflows/test"
                        "spools/kanban/src"
                        "spools/kanban/test"]
                   :main-opts ["-m" "quality.reflect-check"]}

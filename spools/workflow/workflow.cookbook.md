@@ -25,6 +25,28 @@ Every recipe has the same four parts, so you can skim to the one that matches yo
 
 Each recipe cites the honest source it was distilled from — a shipped spool, the repo's own config, or the test suite — so you can read the load-bearing version.
 
+## Recipe: Publish clj-kondo support from the macro owner
+
+When a spool exposes a macro, publish its clj-kondo export from that same spool
+root. Keep `src` and `resources` on the root's `deps.edn` `:paths`, put the
+explicit config under `resources/clj-kondo.exports/<spool-coordinate>/`, and
+place any hook source under that export tree. Verify the resource from a clean
+consumer classpath with `io/resource`, then assert that the config maps each
+macro to the intended analysis form and hook namespace.
+
+For example, this Workflow root owns `defworkflow` and `defexecutor` and publishes:
+
+```text
+spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow/
+├── config.edn
+└── hooks/millhouse/spools/workflow.clj_kondo
+```
+
+Ownership matters: a spool that merely uses another spool's macro must not
+re-export that macro's clj-kondo contract. Use the explicit
+`millhouse.spools.millstrand-workflows/publish-spool-kondo` workflow to guide a
+publisher through root ownership, export, hook, test, and documentation checks.
+
 ---
 
 ## Recipe: A linear stage with human sign-off and a revise loop

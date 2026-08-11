@@ -1,0 +1,199 @@
+(ns millhouse.spools.millstrand-workflows
+  "Publisher-side workflows for reusable Millstrand and clj-kondo spool support.
+
+  This namespace deliberately describes the publisher's obligations instead of
+  trying to inspect a source tree. A publisher supplies the macro forms and
+  their exported hook namespaces; the workflow turns those facts into an
+  explicit, reviewable sequence of classpath, export, test, and documentation
+  work."
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
+            [millhouse.spools.workflow :as workflow]
+            [millstrand.api.format.alpha :as format-alpha]
+            [millstrand.api.runtime.alpha :as runtime]))
+
+(defn- non-blank-string?
+  "Return true when `value` is a non-blank string."
+  [value]
+  (and (string? value) (not (str/blank? value))))
+
+(s/def ::spool-root non-blank-string?)
+(s/def ::namespace (s/and non-blank-string? #(re-matches #"[A-Za-z][A-Za-z0-9_.-]*" %)))
+(s/def ::spool-key (s/and non-blank-string? #(re-matches #"[^/\s]+/[^/\s]+" %)))
+(s/def ::macro (s/and non-blank-string? #(re-matches #"[^/\s]+/[^/\s]+" %)))
+(s/def ::hook (s/and non-blank-string? #(re-matches #"[^/\s]+/[^/\s]+" %)))
+(s/def ::macro-form (s/keys :req-un [::macro ::hook]))
+(s/def ::macro-forms
+  (s/and (s/coll-of ::macro-form :kind vector? :min-count 1)
+         #(apply distinct? (map :macro %))))
+(s/def ::publish-params
+  (s/keys :req-un [::spool-root ::namespace ::spool-key ::macro-forms]))
+
+(defn- macro-summary
+  "Render the explicitly supplied macro-to-hook mappings for instructions."
+  [{:keys [macro-forms]}]
+  (str/join ", " (map (fn [{:keys [macro hook]}]
+                        (str "`" macro "` -> `" hook "`"))
+                      macro-forms)))
+
+(defn- root-instruction
+  [{:keys [spool-root namespace spool-key]}]
+  (format-alpha/reflow
+   (format
+    "|Inspect `%s` as the owning root for namespace `%s` and spool key `%s`.
+     |Confirm that the root, rather than a consumer project, owns every macro
+     |listed in the parameters. Record the source files and public macro forms
+     |that this publication is responsible for. Do not infer macro ownership by
+     |scanning the repository."
+    spool-root namespace spool-key)))
+
+(defn- classpath-instruction
+  [{:keys [spool-root]}]
+  (format-alpha/reflow
+   (format
+    "|In `%s/deps.edn`, keep both `src` and `resources` on the root's `:paths`.
+     |Verify from a clean consumer classpath that the exported resource path is
+     |reachable through `io/resource`. A source-only path is not publication."
+    spool-root)))
+
+(defn- export-instruction
+  [{:keys [spool-root] :as params}]
+  (format-alpha/reflow
+   (format
+    "|Create or update the export under `%s/resources/clj-kondo.exports/`.
+     |Its config must name the macro analysis entries for %s. Keep the mapping
+     |complete and explicit: every macro form gets its corresponding hook, and
+     |the config is reviewed as a public compatibility surface. There is no
+     |automatic macro discovery step."
+    spool-root (macro-summary params))))
+
+(defn- hook-instruction
+  [{:keys [macro-forms]}]
+  (format-alpha/reflow
+   (format
+    "|Implement and export the hook functions for %s. Each hook should rewrite
+     |only the syntax shape of its named macro (for example, a def-like form or
+     |a let-shaped binding) so clj-kondo can analyze the body. Add a hook when a
+     |macro shape changes; do not make the hook scan or guess other macros."
+    (macro-summary {:macro-forms macro-forms}))))
+
+(defn- test-instruction
+  [{:keys [spool-root namespace]}]
+  (format-alpha/reflow
+   (format
+    "|From the repository root, run the focused tests for `%s`, then lint the
+     |exported source from a clean classpath. Exercise `%s` through each public
+     |macro shape and assert that the exported config and hook resources resolve
+     |without a project-local `.clj-kondo` override. Repeat the relevant quality
+     |checks after any export or hook change."
+    spool-root namespace)))
+
+(defn- docs-instruction
+  [{:keys [spool-root namespace macro-forms]}]
+  (format-alpha/reflow
+   (format
+    "|Update `%s/README.md` and its cookbook/API companion with the namespace
+     |`%s`, spool key, activation recipe, resource path, and the explicit macro
+     |mapping %s. Document the test command and the maintenance rule: a changed
+     |macro shape requires a reviewed export hook, tests, and documentation."
+    spool-root namespace (macro-summary {:macro-forms macro-forms}))))
+
+(workflow/defworkflow publish-spool-kondo
+  "Publish clj-kondo support for a macro-owning spool root.
+
+  The caller names the owning root, public namespace, spool key, and every
+  macro-to-hook mapping. The workflow then walks the obligations in order:
+  verify root ownership, publish resources on the root classpath, publish the
+  explicit clj-kondo export and hooks, test the exported contract, and document
+  the public surface. It does not discover macros automatically or perform
+  filesystem edits itself; each step is an agent-facing instruction."
+  {:entrypoints #{:start}
+   :param-spec ::publish-params
+   :defaults {}
+   :example {:spool-root "spools/example-macros"
+             :namespace "example.macros"
+             :spool-key "example/macros"
+             :macro-forms [{:macro "example.macros/defwidget"
+                            :hook "hooks.example/defwidget"}]}
+   :param-docs {:spool-root "Owning spool root containing source and resources."
+                :namespace "Public namespace that owns the macro forms."
+                :spool-key "Approved spool coordinate for the owning root."
+                :macro-forms
+                "Vector of explicit macro and exported-hook mappings; no discovery is implied."}}
+  (workflow/workflow
+   (fn [{:keys [namespace]}]
+     (str "Publish clj-kondo support for " namespace))
+   {:attributes {"workflow/family" "millstrand-workflows"
+                 "millstrand-workflows/obligations"
+                 ["root-classpath" "kondo-export" "kondo-hooks" "tests" "docs"]}}
+   (workflow/step :inspect-spool-root
+                  "Inspect the macro-owning spool root"
+                  :self
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.root"
+                   "workflow/instruction" root-instruction})
+   (workflow/step :publish-root-classpath
+                  "Publish resources on the spool root classpath"
+                  :self
+                  :depends-on [:inspect-spool-root]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.classpath"
+                   "workflow/instruction" classpath-instruction})
+   (workflow/step :publish-kondo-export
+                  "Publish the explicit clj-kondo export"
+                  :self
+                  :depends-on [:publish-root-classpath]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.kondo-export"
+                   "workflow/instruction" export-instruction})
+   (workflow/step :publish-kondo-hooks
+                  "Publish hooks for each macro shape"
+                  :self
+                  :depends-on [:publish-kondo-export]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.kondo-hooks"
+                   "workflow/instruction" hook-instruction})
+   (workflow/step :test-kondo-export
+                  "Test the exported clj-kondo contract"
+                  :self
+                  :depends-on [:publish-kondo-hooks]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.tests"
+                   "workflow/instruction" test-instruction})
+   (workflow/step :document-kondo-export
+                  "Document the exported macro contract"
+                  :self
+                  :depends-on [:test-kondo-export]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.docs"
+                   "workflow/instruction" docs-instruction})))
+
+;; The bump workflow lives in its own namespace so its focused contract can
+;; remain isolated. The activated spool namespace is the module owner, though.
+;; Collect the child Var here so the owner-complete module contribution includes
+;; both public definitions; publication resolves the child through the spool
+;; classloader after source collection, regardless of JVM load order.
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-spool
+ 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-local
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-local-validate
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local-validate)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-pinned
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-pinned)

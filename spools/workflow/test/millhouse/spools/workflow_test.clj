@@ -2,7 +2,8 @@
   "Tests for the millhouse.spools.workflow userland workflow engine: contract
   explain, compile semantics (calls, conditions, loops, splicing), and the
   run-driving surface (start!/complete!/choose!, gates, checkpoints, bonds)."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.batch.alpha :as batch]
@@ -21,6 +22,34 @@
 
 (defn- failure-reason [f]
   (:reason (ex-data (try (f) (catch clojure.lang.ExceptionInfo e e)))))
+
+(deftest workflow-exported-kondo-contract-is-on-consumer-classpath
+  (testing "the Workflow root publishes resources"
+    (is (some #(= "resources" %)
+              (:paths (edn/read-string (slurp "spools/workflow/deps.edn")))))
+    (is (not-any? #(= "resources" %)
+                  (:paths (edn/read-string
+                           (slurp "spools/millstrand-workflows/deps.edn"))))))
+  (testing "a consumer resolves the Workflow-owned export and hook"
+    (let [config (io/resource
+                  "clj-kondo.exports/millhouse.spools/workflow/config.edn")
+          hook (io/resource
+                "clj-kondo.exports/millhouse.spools/workflow/hooks/millhouse/spools/workflow.clj_kondo")
+          config-data (some-> config slurp edn/read-string)]
+      (is config)
+      (is hook)
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.workflow/defworkflow])))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.workflow/defexecutor])))
+      (is (= 'hooks.millhouse.spools.workflow/defworkflow
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.workflow/defworkflow])))
+      (is (= 'hooks.millhouse.spools.workflow/defexecutor
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.workflow/defexecutor]))))))
 
 (deftest workflow-module-declares-workflow-attr-namespace
   (with-runtime

@@ -199,7 +199,11 @@
         ;; requires its `:call` entrypoint. Every definition map, including one
         ;; reached through a raw value or symbol, applies its `:defaults` and
         ;; judges the params it is expanded with through `:param-spec`.
-        params (->> (merge params (or (:params call-step) {}))
+        ;; Call-site values use the same render grammar as step metadata, so a
+        ;; caller can explicitly project its resolved params into a callee
+        ;; instead of relying on the ambient parent map being inherited.
+        call-params (render (or (:params call-step) {}) params)
+        params (->> (merge params call-params)
                     (defs/definition-params target)
                     (defs/validate-params! target))
         workflow (procedure-workflow procedure params)
