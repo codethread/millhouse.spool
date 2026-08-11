@@ -8,6 +8,13 @@ refreshing the selected runtime. Neither workflow performs filesystem edits or
 runtime cutover itself: callers supply the explicit context and record each
 instruction's result.
 
+`bump-millstrand` is the Millstrand-specific entrypoint. It first asks the
+caller to inspect the consumer's exact `deps.edn` coordinate. A local sibling
+coordinate is preserved and requires an explicit local-checkout decision before
+the consumer clj-kondo import/validation path runs; a Git/SHA coordinate routes
+to the registered `bump-spool` workflow with the Millstrand request. A local
+coordinate never receives an invented SHA.
+
 ## Identity and activation
 
 - Root: `spools/millstrand-workflows`
@@ -74,6 +81,29 @@ and commits the copied configuration, and runs the consumer's quality command.
 It refreshes the selected runtime after quality passes. Runtime stop/start
 cutover is conditional on an explicit direct-user request; otherwise the final
 step hands over the pending generation without stopping or restarting anything.
+
+## `bump-millstrand`
+
+Start it with exactly one Millstrand request and the same explicit consumer
+world used by `bump-spool`:
+
+```clojure
+{:bumps [{:family "io.millstrand/millstrand" :version "latest"}]
+ :worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"
+ :direct-user-request false
+ :deps-file "deps.edn"
+ :quality-argv ["make" "quality"]}
+```
+
+The workflow records an agent classification choice after inspecting
+`deps-file`. The local branch records a second `:move-forward`/`:stop` choice,
+keeps the local checkout unchanged, imports all resolved clj-kondo exports, and
+runs dependency validation plus the consumer quality command. The pinned branch
+calls registered `bump-spool`, which performs the requested bump and continues
+through its config, quality, and runtime-generation result. Runtime stop/start
+remains conditional on `:direct-user-request`; no agent or nested call grants
+that authority.
 
 ## See also
 

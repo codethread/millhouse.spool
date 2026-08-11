@@ -30,6 +30,58 @@ Publish clj-kondo support for a macro-owning spool root.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj#L101-L169">Source</a></sub></p>
 
 -----
+# <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
+
+
+The local-aware consumer workflow for updating Millstrand.
+
+  The workflow does not guess whether a consumer dependency is local or
+  pinned. It asks the caller to inspect the selected deps.edn and records that
+  classification as a checkpoint choice. A local checkout needs a second
+  explicit decision before validation; a pinned checkout delegates to the
+  registered bump-spool workflow.
+
+
+
+
+## <a name="millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand">`bump-millstrand`</a>
+
+
+
+
+Inspect a consumer Millstrand coordinate and choose its honest update path.
+
+  A local sibling coordinate is never converted into a guessed SHA. The
+  classification and local-checkout decision are recorded as checkpoints. A
+  Git/SHA-pinned coordinate routes to the registered bump-spool workflow with
+  the single Millstrand request supplied by the caller.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L103-L166">Source</a></sub></p>
+
+## <a name="millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local">`bump-millstrand-local`</a>
+
+
+
+
+Require an explicit decision before validating a local Millstrand checkout.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L168-L183">Source</a></sub></p>
+
+## <a name="millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local-validate">`bump-millstrand-local-validate`</a>
+
+
+
+
+Validate a consumer against its explicitly approved local Millstrand checkout.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L185-L269">Source</a></sub></p>
+
+## <a name="millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-pinned">`bump-millstrand-pinned`</a>
+
+
+
+
+Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L271-L279">Source</a></sub></p>
+
+-----
 # <a name="millhouse.spools.millstrand-workflows.bump-spool">millhouse.spools.millstrand-workflows.bump-spool</a>
 
 

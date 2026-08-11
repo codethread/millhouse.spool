@@ -19,7 +19,8 @@
    {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
     :outfile "spools/kanban/kanban.peering.api.md"}
    {:source ["spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj"]
+             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj"
+             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"]
     :outfile "spools/millstrand-workflows/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
