@@ -1,6 +1,10 @@
 (ns millhouse.consumer-test
   "Exercise the six-root family through a disposable consumer workspace."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.java.shell :as sh]
+            [clojure.test :refer [deftest is testing]]
+            [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- repository-root []
@@ -86,3 +90,157 @@
                :millhouse/kanban
                :millhouse/millstrand-workflows}
              (set (keys outcomes)))))))
+
+(def ^:private portable-consumer-deps
+  "The domain roots own their resources, so each is a distinct consumer dep."
+  {'millhouse/spools.workflow "spools/workflow"
+   'millhouse/spools.code-executor "spools/code-executor"
+   'millhouse/spools.chime "spools/chime"
+   'millhouse/spools.cron "spools/cron"})
+
+(def ^:private portable-consumer-source
+  "A consumer source exercising every imported authoring-form family."
+  "(ns consumer.forms
+     \"A portable consumer's authoring forms.\"
+     (:require [millstrand.api.millstrand.alpha :as millstrand]
+               [millhouse.spools.workflow :as workflow]
+               [millhouse.spools.chime :as chime]
+               [millhouse.spools.cron :as cron]))
+
+   (defn sample-job-handler [_] nil)
+
+   (millstrand/defop sample-op
+     \"A sample operation.\"
+     {:arg-spec {:op \"sample-op\"
+                 :doc \"Run the sample operation.\"
+                 :hook-class :read
+                 :deadline-class :standard}}
+     [_]
+     nil)
+
+   (millstrand/defquery sample-query
+     \"A sample query.\"
+     {}
+     [:= [:attr :sample] true])
+
+   (millstrand/defpattern sample-pattern
+     \"A sample pattern.\"
+     {:spec ::sample-pattern}
+     [_]
+     nil)
+
+   (millstrand/defhook sample-hook
+     \"A sample hook.\"
+     {:types #{:strand/add-before-commit}}
+     [_]
+     nil)
+
+   (millstrand/defhandler sample-handler
+     \"A sample event handler.\"
+     {:types #{:strand/added}}
+     [_]
+     nil)
+
+   (millstrand/defbin sample-bin
+     \"A sample executable.\"
+     {:executable \"sample-bin\"})
+
+   (workflow/defworkflow sample-workflow
+     \"A sample workflow.\"
+     {:entrypoints #{:start} :defaults {}}
+     (workflow/workflow
+       (fn [_] \"done\")
+       (workflow/step :done \"Done\" :self)))
+
+   (workflow/defexecutor sample-executor
+     \"A sample executor.\"
+     {}
+     [_]
+     nil)
+
+   (chime/defrule sample-rule
+     \"A sample Chime rule.\"
+     [_]
+     nil)
+
+   (cron/defjob :sample-job
+     {:interval-ms 1000
+      :handler 'consumer.forms/sample-job-handler})")
+
+(defn- write-file! [^java.io.File file content]
+  (.mkdirs (.getParentFile file))
+  (spit file content)
+  file)
+
+(defn- portable-consumer-deps-edn [root millstrand-dep]
+  {:paths ["src"]
+   :deps (merge {'io.millstrand/millstrand millstrand-dep}
+                (into {}
+                      (map (fn [[lib root-name]]
+                             [lib {:local/root (.getPath (io/file root root-name))}])
+                           portable-consumer-deps)))})
+
+(defn- portable-consumer-bin! [dir]
+  (doto (write-file!
+         (io/file dir "clj-kondo")
+         (str "#!/bin/sh\n"
+              "exec clojure -Sdeps '{:deps {clj-kondo/clj-kondo "
+              "{:mvn/version \"2025.06.05\"}}}' -M -m clj-kondo.main \"$@\"\n"))
+    (.setExecutable true)))
+
+(defn- shell-env-with-bin [bin-dir]
+  (let [path (or (System/getenv "PATH") "")]
+    (assoc (into {} (System/getenv)) "PATH" (str (.getPath bin-dir) ":" path))))
+
+(defn- run-consumer-command [dir bin-dir command]
+  (sh/sh "sh" "-c" command
+         :dir (.getPath dir)
+         :env (shell-env-with-bin bin-dir)))
+
+(defn- kondo-files [dir]
+  (mapv #(.getPath ^java.io.File %)
+        (file-seq (io/file dir ".clj-kondo"))))
+
+(deftest portable-consumer-imports-and-lints-published-forms
+  (testing "a temp Tools.deps consumer imports and lints owner exports"
+    (let [root (io/file (repository-root))
+          root-deps (edn/read-string (slurp (io/file root "deps.edn")))
+          millstrand-dep (get-in root-deps [:deps 'io.millstrand/millstrand])
+          consumer (test-support/temp-dir "millhouse-portable-consumer")
+          bin-dir (io/file consumer "bin")
+          kondo-config (io/file consumer ".clj-kondo/config.edn")
+          deps-file (io/file consumer "deps.edn")
+          source-file (io/file consumer "src/consumer/forms.clj")]
+      (try
+        (is (= "fb6c9057d594bfa4b5ea8531b9774b5e9a23a4b4"
+               (:git/sha millstrand-dep)))
+        (portable-consumer-bin! bin-dir)
+        (write-file! kondo-config "{}")
+        (write-file! deps-file
+                     (pr-str (portable-consumer-deps-edn root millstrand-dep)))
+        (write-file! source-file portable-consumer-source)
+        (let [import-result
+              (run-consumer-command
+               consumer bin-dir
+               "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel --copy-configs --skip-lint")
+              expected-imports
+              ["io.millstrand/millstrand/config.edn"
+               "io.millstrand/millstrand/hooks/millstrand.clj"
+               "millhouse.spools/workflow/config.edn"
+               "millhouse.spools/workflow/hooks/millhouse/spools/workflow.clj_kondo"
+               "millhouse.spools/chime/config.edn"
+               "millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo"
+               "millhouse.spools/cron/config.edn"]
+              lint-result (run-consumer-command consumer bin-dir
+                                                "clj-kondo --lint src --parallel")]
+          (is (zero? (:exit import-result))
+              (str "dependency import failed:\n" (:err import-result)))
+          (doseq [relative-path expected-imports]
+            (is (.isFile (io/file consumer ".clj-kondo/imports" relative-path))
+                (str "missing copied import: " relative-path
+                     "; import output: " (:out import-result)
+                     "; actual: " (kondo-files consumer))))
+          (is (zero? (:exit lint-result))
+              (str "consumer lint failed:\n" (:out lint-result) (:err lint-result))))
+        (finally
+          (test-support/delete-tree! consumer))))))

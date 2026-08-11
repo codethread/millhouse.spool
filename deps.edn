@@ -1,6 +1,6 @@
 {:paths []
  :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
-                                  :git/sha "7bf540b73e5cf6d38933b842db8f0978c66382c2"}}
+                                  :git/sha "fb6c9057d594bfa4b5ea8531b9774b5e9a23a4b4"}}
  :aliases
  {:test {:extra-paths ["test"
                        "spools/chime/src"
