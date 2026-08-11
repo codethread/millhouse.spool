@@ -44,34 +44,6 @@
                   :spools ['ct.spools/delegation 'ct.spools/agent-run]
                   :after [:millstrand/spools-agent-run]
                   :required? true})
-(runtime/module! runtime :millstrand/spools-harness-core
-                 {:ns 'ct.spools.harness-core
-                  :spools ['ct.spools/harness-core]
-                  :after [:millstrand/spools-agent-run]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-claude-harness
-                 {:ns 'ct.spools.claude-harness
-                  :spools ['ct.spools/claude-harness 'ct.spools/harness-core]
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-codex-harness
-                 {:ns 'ct.spools.codex-harness
-                  :spools ['ct.spools/codex-harness 'ct.spools/harness-core]
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-pi-harness
-                 {:ns 'ct.spools.pi-harness
-                  :spools ['ct.spools/pi-harness 'ct.spools/harness-core]
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-agent-cli
-                 {:ns 'ct.spools.agent-cli
-                  :spools ['ct.spools/agent-cli 'ct.spools/harness-core]
-                  :after [:millstrand/spools-harness-core
-                          :millstrand/spools-claude-harness
-                          :millstrand/spools-codex-harness
-                          :millstrand/spools-pi-harness]
-                  :required? true})
 
 ;; --- external Kanban + Devflow adapter -------------------------------------
 (runtime/module! runtime :devflow
