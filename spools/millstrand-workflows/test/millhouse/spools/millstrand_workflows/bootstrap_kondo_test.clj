@@ -1,6 +1,7 @@
 (ns millhouse.spools.millstrand-workflows.bootstrap-kondo-test
   "Contract tests for first-time Millstrand Kondo adoption."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
@@ -15,6 +16,11 @@
 
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
+
+(defn- validation-command []
+  (let [definition (definition #'bootstrap/bootstrap-kondo-greenfield)
+        validate (step definition :validate)]
+    (get-in validate [:attributes "shell/argv"])))
 
 (deftest params-require-explicit-local-world
   (is (s/valid? ::bootstrap/bootstrap-kondo-params params))
@@ -142,6 +148,28 @@
                          "immediately after import"))
       (is (str/includes? handover-instruction
                          "consumer self-import result before/during/after quality")))))
+
+(deftest validation-command-is-shell-safe-and-reports-observed-lsp-value
+  (let [directory (.toFile
+                   (java.nio.file.Files/createTempDirectory
+                    "millhouse-bootstrap-kondo-test-"
+                    (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try
+      (let [lsp-directory (io/file directory ".lsp")]
+        (is (.mkdirs lsp-directory))
+        (spit (io/file lsp-directory "config.edn")
+              "{:copy-kondo-configs? true}")
+        (let [process (.start (doto (ProcessBuilder. ^java.util.List
+                                     (validation-command))
+                                (.directory directory)
+                                (.redirectErrorStream true)))
+              output (slurp (.getInputStream process))]
+          (is (= 1 (.waitFor process)))
+          (is (str/includes? output
+                             ":copy-kondo-configs? false; observed true"))))
+      (finally
+        (doseq [file (reverse (file-seq directory))]
+          (io/delete-file file true))))))
 
 (deftest bootstrap-does-not-fix-a-repository-quality-command
   (let [compiled (workflow/compile (definition #'bootstrap/bootstrap-kondo-greenfield)
