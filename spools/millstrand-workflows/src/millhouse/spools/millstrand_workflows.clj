@@ -177,3 +177,23 @@
  workflow/definition-kind
  :bump-spool
  'millhouse.spools.millstrand-workflows.bump-spool/bump-spool)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-local
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-local-validate
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local-validate)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-millstrand-pinned
+ 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-pinned)

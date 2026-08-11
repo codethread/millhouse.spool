@@ -67,3 +67,30 @@ runtime. Keep `:direct-user-request` false for ordinary agent, scheduled, or
 nested calls: those runs end with a pending-generation handover and never stop
 or restart a runtime. A direct user may authorize the final cutover only after
 the refreshed generation has been recorded.
+
+## Bump Millstrand with local-coordinate handling
+
+Use the Millstrand-specific wrapper when the consumer may be developing against
+a sibling checkout:
+
+```clojure
+{:bumps [{:family "io.millstrand/millstrand" :version "latest"}]
+ :worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"
+ :direct-user-request false
+ :deps-file "deps.edn"
+ :quality-argv ["make" "quality"]}
+```
+
+First inspect the exact `deps-file` and choose `:local-checkout` or
+`:git-sha-pinned`. For a local sibling such as `../millstrand` or
+`../skein-src`, choose `:move-forward` explicitly if validation should proceed;
+choose `:stop` otherwise. The local path preserves the coordinate and runs the
+single full-classpath clj-kondo import, dependency validation, and quality
+boundary. It never invents a SHA.
+
+For a Git/SHA-pinned coordinate, the pinned continuation calls registered
+`bump-spool` with this one Millstrand request, then inherits its reviewed config,
+quality, refresh, and pending-generation/cutover result. Keep
+`:direct-user-request` false unless the direct user has actually authorized a
+runtime cutover; local or pinned classification does not grant restart authority.
