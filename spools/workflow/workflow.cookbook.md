@@ -34,7 +34,7 @@ place any hook source under that export tree. Verify the resource from a clean
 consumer classpath with `io/resource`, then assert that the config maps each
 macro to the intended analysis form and hook namespace.
 
-For example, this Workflow root owns `defworkflow` and publishes:
+For example, this Workflow root owns `defworkflow` and `defexecutor` and publishes:
 
 ```text
 spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow/
