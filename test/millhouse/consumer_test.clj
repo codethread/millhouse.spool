@@ -102,12 +102,35 @@
   "A consumer source exercising every imported authoring-form family."
   "(ns consumer.forms
      \"A portable consumer's authoring forms.\"
-     (:require [millstrand.api.millstrand.alpha :as millstrand]
+     (:require [millstrand.api.lifecycle.alpha :as lifecycle]
+               [millstrand.api.millstrand.alpha :as millstrand]
+               [millstrand.test.alpha :as test-alpha]
                [millhouse.spools.workflow :as workflow]
                [millhouse.spools.chime :as chime]
                [millhouse.spools.cron :as cron]))
 
    (defn sample-job-handler [_] nil)
+
+   (defn sample-lifecycle-call [_] nil)
+
+   (lifecycle/defseed sample-seed
+     \"A sample seed.\"
+     {:apply 'consumer.forms/sample-lifecycle-call})
+
+   (lifecycle/defresource sample-resource
+     \"A sample resource.\"
+     {:open 'consumer.forms/sample-lifecycle-call
+      :close 'consumer.forms/sample-lifecycle-call})
+
+   (lifecycle/defreconcile sample-reconcile
+     \"A sample reconciliation.\"
+     {:read-desired 'consumer.forms/sample-lifecycle-call
+      :read-actual 'consumer.forms/sample-lifecycle-call
+      :apply 'consumer.forms/sample-lifecycle-call
+      :on-removed 'consumer.forms/sample-lifecycle-call})
+
+   (test-alpha/with-weaver-world [ctx {}]
+     (str ctx))
 
    (millstrand/defop sample-op
      \"A sample operation.\"
