@@ -4,7 +4,8 @@
   Chime ships no rules, so these tests register their own small rules over a
   neutral attribute vocabulary; the parent-completed rule mirrors the worked
   example in spools/chime/README.md."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.events.alpha :as events]
@@ -15,6 +16,25 @@
             [millhouse.spools.chime :as chime]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
+
+(deftest chime-exported-kondo-contract-is-published-by-owner
+  (testing "the Chime root publishes resources"
+    (is (some #(= "resources" %)
+              (:paths (edn/read-string (slurp "spools/chime/deps.edn"))))))
+  (testing "the owner export names the handler hook"
+    (let [config-file (io/file
+                       "spools/chime/resources/clj-kondo.exports/millhouse.spools/chime/config.edn")
+          hook-file (io/file
+                     "spools/chime/resources/clj-kondo.exports/millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo")
+          config-data (edn/read-string (slurp config-file))]
+      (is (.isFile config-file))
+      (is (.isFile hook-file))
+      (is (= 'clojure.core/defn
+             (get-in config-data [:lint-as 'millhouse.spools.chime/defrule])))
+      (is (= 'hooks.millhouse.spools.chime/defrule
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.chime/defrule]))))))
 
 (defn- with-chime [f]
   (test-support/with-runtime
