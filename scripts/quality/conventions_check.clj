@@ -13,6 +13,7 @@
    "spools/workflow/src"
    "spools/code-executor/src"
    "spools/shell-executor/src"
+   "spools/millstrand-workflows/src"
    ".millstrand"
    "test"])
 
@@ -22,7 +23,8 @@
     "spools/cron/src"
     "spools/workflow/src"
     "spools/code-executor/src"
-    "spools/shell-executor/src"})
+    "spools/shell-executor/src"
+    "spools/millstrand-workflows/src"})
 
 (def ^:private core-macro-names
   (->> (ns-publics 'clojure.core)

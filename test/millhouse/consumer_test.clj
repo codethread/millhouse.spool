@@ -15,7 +15,8 @@
    'millhouse.spools/cron "spools/cron"
    'millhouse.spools.executors/code "spools/code-executor"
    'millhouse.spools.executors/shell "spools/shell-executor"
-   'millhouse.spools/kanban "spools/kanban"})
+   'millhouse.spools/kanban "spools/kanban"
+   'millhouse.spools/millstrand-workflows "spools/millstrand-workflows"})
 
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
@@ -53,6 +54,12 @@
    (runtime/module! rt :millhouse/kanban
      {:ns 'millhouse.spools.kanban
       :spools ['millhouse.spools/kanban]
+      :required? true})
+   (runtime/module! rt :millhouse/millstrand-workflows
+     {:ns 'millhouse.spools.millstrand-workflows
+      :spools ['millhouse.spools/millstrand-workflows
+               'millhouse.spools/workflow]
+      :after [:millhouse/workflow]
       :required? true})")
 
 (deftest family-syncs-and-activates-all-roots
@@ -76,5 +83,6 @@
                :millhouse/cron
                :millhouse/code-executor
                :millhouse/shell-executor
-               :millhouse/kanban}
+               :millhouse/kanban
+               :millhouse/millstrand-workflows}
              (set (keys outcomes)))))))
