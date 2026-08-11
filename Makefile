@@ -16,7 +16,7 @@ docs-site:
 	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs build --strict
 
 docs-serve:
-	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs serve --dev-addr 127.0.0.1:8000
+	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs serve --dev-addr 0.0.0.0:8000
 
 docs-check:
 	$(MAKE) api-docs
