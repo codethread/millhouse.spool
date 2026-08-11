@@ -3,8 +3,9 @@
 
   The workflow asks whether the consumer is greenfield or brownfield before it
   gives configuration instructions. Both routes import the complete resolved
-  classpath once, validate provenance and cache hygiene, and hand back the
-  local quality command for the consumer rather than guessing one."
+  classpath once, make explicit bootstrap the sole Kondo import owner, validate
+  provenance and cache hygiene, and hand back the local quality command for the
+  consumer rather than guessing one."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
@@ -22,17 +23,42 @@
 (s/def ::bootstrap-kondo-params
   (s/keys :req-un [::worktree ::workspace]))
 
-(def ^:private copy-configs-command
-  "Import every resolved dependency export in one classpath invocation."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
-        " --copy-configs --skip-lint\n")])
+(defn- copy-configs-instruction
+  [{:keys [worktree workspace]}]
+  (fmt/reflow
+   (format
+    "|In `%s`, read the live resolved world before importing by running
+     |`strand --workspace %s spool status` and inspecting its structured output.
+     |Treat every intended installed root reported by that status as required:
+     |fail loudly if any root is unresolved or missing. For each resolved root,
+     |record its exact identity and reported `sync.root`, read that root's
+     |`deps.edn`, and resolve its `:paths` relative to `sync.root`. Match the
+     |runtime: absent `:paths` defaults to the `src` path, while explicit
+     |`:paths []` remains empty. Do not guess paths. Combine those actual root
+     |directories with the consumer Clojure classpath, and record the exact roots
+     |and final classpath. The plain consumer `clojure -Spath` alone is
+     |insufficient and must be explicitly rejected, including when the consumer
+     |`deps.edn` has `:paths []`. Fail loudly when the installed-spool contribution
+     |is empty.
+     |Run exactly one command with the resolved classpath:
+     |`clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel
+     |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
+    worktree workspace)))
 
 (def ^:private validate-kondo-command
-  "Check formatting and reject tracked clj-kondo cache files after import."
+  "Check the LSP import boundary, formatting, provenance, and cache hygiene."
   ["sh" "-c"
    (str "set -eu\n"
+        "test -f .lsp/config.edn\n"
+        "clojure -e '"
+        "(require (symbol \"clojure.edn\")) "
+        "(let [config (clojure.edn/read-string (slurp \".lsp/config.edn\")) "
+        "observed (:copy-kondo-configs? config)] "
+        "(when (not= false observed) "
+        "(binding [*out* *err*] "
+        "(println \".lsp/config.edn must set :copy-kondo-configs? false; observed\" "
+        "(pr-str observed))) "
+        "(System/exit 1)))'\n"
         "git diff --check\n"
         "git check-ignore -q --no-index .clj-kondo/.cache/\n"
         "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
@@ -53,9 +79,12 @@
    (format
     "|In `%s`, establish the greenfield Kondo boundary: create a minimal
      |`.clj-kondo/config.edn` only when it is absent, and ensure
-     |`.clj-kondo/.cache/` is ignored by the repository configuration. Do not
+     |`.clj-kondo/.cache/` is ignored by the repository configuration. Merge
+     |`:copy-kondo-configs? false` into `.lsp/config.edn`, creating that file only
+     |when absent and preserving every other existing LSP setting. Do not
      |pre-create producer mappings or hooks; those come from the resolved
-     |dependency exports. Record the exact files changed."
+     |dependency exports. Record the exact files changed and the resulting LSP
+     |setting."
     worktree)))
 
 (defn- brownfield-instruction
@@ -63,13 +92,15 @@
   (fmt/reflow
    (format
     "|In `%s`, establish the brownfield Kondo boundary: inventory the existing
-     |`.clj-kondo` config, imports, hooks, and
-    |ignore rules before editing, and ensure `.clj-kondo/.cache/` is ignored by
-    |the repository configuration. Merge only missing local settings and keep
-     |one producer-owned source for each imported mapping. Remove no existing
-     |consumer rule without recording why, and do not duplicate a producer hook
-     |or replace it with a consumer remap. Record the inventory, merge, and any
-     |unresolved overlap for handover."
+     |`.clj-kondo` config, imports, hooks, and ignore rules before editing, and
+     |ensure `.clj-kondo/.cache/` is ignored by
+     |the repository configuration. Merge `:copy-kondo-configs? false` into
+     |`.lsp/config.edn` without overwriting any other existing LSP setting. Merge
+     |only missing local settings and keep one producer-owned source for each
+     |imported mapping. Remove no existing consumer rule without recording why,
+     |and do not duplicate a producer hook or replace it with a consumer remap.
+     |Record the inventory, merge, resulting LSP setting, and any unresolved
+     |overlap for handover."
     worktree)))
 
 (defn- validate-instruction
@@ -80,9 +111,16 @@
      |classpath and producer `clj-kondo.exports` resources. Confirm every
      |Millstrand and installed sibling spool export has one provenance source,
      |no duplicate config or hook mapping, no overlapping consumer-owned remap,
-     |no generated self-import, and no tracked `.clj-kondo/.cache` file. Record
-     |the producer path for each imported mapping and run the supplied hygiene
-     |gate."
+     |and no tracked `.clj-kondo/.cache` file. Identify the consumer repository's
+     |own producer namespace and import coordinates from its project metadata and
+     |producer exports, then confirm those coordinates are absent from
+     |`.clj-kondo/imports`; reject only that repository-relative self-import.
+     |Legitimate Millhouse and other producer imports in a consumer are expected
+     |and must not be rejected. Record the self-import result before import,
+     |immediately after import, and after quality. Confirm `.lsp/config.edn`
+     |exists and records `:copy-kondo-configs? false`, proving explicit bootstrap
+     |remains the sole import owner. Record the producer path for each imported
+     |mapping, the exact LSP setting, and run the supplied hygiene gate."
     worktree)))
 
 (defn- quality-discovery-instruction
@@ -103,30 +141,23 @@
     "|Leave a precise local handover for worktree `%s` and workspace `%s`:
      |record greenfield/brownfield mode, files changed, every imported
      |producer/provenance path, duplicate and overlap decisions, cache hygiene,
-     |the discovered quality commands and results, and any pending local action.
-     |Keep local-checkout coordinates intact and do not stop, restart, push, land,
-     |or create a release."
+     |the exact `.lsp/config.edn` `:copy-kondo-configs? false` setting, the
+     |consumer self-import result before/during/after quality, the discovered
+     |quality commands and results, and any pending local action. Keep
+     |local-checkout coordinates intact and do not stop, restart, push, land, or
+     |create a release."
     worktree workspace)))
 
 (defn- shared-steps
   "Return the steps shared by greenfield and brownfield bootstrap routes."
   []
-  [(workflow/gate :copy-configs
-                  "Import all resolved dependency clj-kondo configs"
-                  :shell
+  [(workflow/step :copy-configs
+                  "Resolve installed spool classpaths and import Kondo configs"
+                  :self
                   :depends-on [:prepare]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.copy"
-                   "shell/argv" copy-configs-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|Run exactly one full resolved-classpath import in the
-                     |selected worktree: `clj-kondo --lint \"$(clojure -Spath)\"
-                     |--dependencies --parallel --copy-configs --skip-lint`.
-                     |This must copy Millstrand and every installed sibling spool
-                     |export in one invocation; do not run one import per spool.")})
+                   "workflow/instruction" copy-configs-instruction})
    (workflow/gate :validate
                   "Validate Kondo provenance, duplicates, and cache hygiene"
                   :shell
@@ -157,8 +188,19 @@
 
   Both routes import all resolved dependency exports once, validate provenance,
   duplicate mappings, and cache hygiene, discover local quality checks, and
-  leave a precise handover. No repository hosting or release operation is part
-  of this workflow."
+  leave a precise handover. Both route preparations merge
+  `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
+  LSP settings, so explicit bootstrap remains the sole import owner. The
+  agent-owned import runs `strand --workspace
+  <workspace> spool status`, derives every installed root's classpath from its
+  `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
+  path while preserving explicit `[]`. It combines those directories with the
+  consumer classpath and records the exact roots and classpath before one
+  `clj-kondo --lint RESOLVED_CLASSPATH
+  --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
+  consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
+  installed-spool contribution fail loudly. No repository hosting or release
+  operation is part of this workflow."
   {:entrypoints #{:start :call}
    :param-spec ::bootstrap-kondo-params
    :defaults {}
