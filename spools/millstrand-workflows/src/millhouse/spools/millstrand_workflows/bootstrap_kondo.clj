@@ -22,12 +22,27 @@
 (s/def ::bootstrap-kondo-params
   (s/keys :req-un [::worktree ::workspace]))
 
-(def ^:private copy-configs-command
-  "Import every resolved dependency export in one classpath invocation."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
-        " --copy-configs --skip-lint\n")])
+(defn- copy-configs-instruction
+  [{:keys [worktree workspace]}]
+  (fmt/reflow
+   (format
+    "|In `%s`, read the live resolved world before importing by running
+     |`strand --workspace %s spool status` and inspecting its structured output.
+     |Treat every intended installed root reported by that status as required:
+     |fail loudly if any root is unresolved or missing. For each resolved root,
+     |record its exact identity and reported `sync.root`, read that root's
+     |`deps.edn`, and resolve its `:paths` relative to `sync.root`. Match the
+     |runtime: absent `:paths` defaults to the `src` path, while explicit
+     |`:paths []` remains empty. Do not guess paths. Combine those actual root
+     |directories with the consumer Clojure classpath, and record the exact roots
+     |and final classpath. The plain consumer `clojure -Spath` alone is
+     |insufficient and must be explicitly rejected, including when the consumer
+     |`deps.edn` has `:paths []`. Fail loudly when the installed-spool contribution
+     |is empty.
+     |Run exactly one command with the resolved classpath:
+     |`clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel
+     |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
+    worktree workspace)))
 
 (def ^:private validate-kondo-command
   "Check formatting and reject tracked clj-kondo cache files after import."
@@ -111,22 +126,13 @@
 (defn- shared-steps
   "Return the steps shared by greenfield and brownfield bootstrap routes."
   []
-  [(workflow/gate :copy-configs
-                  "Import all resolved dependency clj-kondo configs"
-                  :shell
+  [(workflow/step :copy-configs
+                  "Resolve installed spool classpaths and import Kondo configs"
+                  :self
                   :depends-on [:prepare]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.copy"
-                   "shell/argv" copy-configs-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|Run exactly one full resolved-classpath import in the
-                     |selected worktree: `clj-kondo --lint \"$(clojure -Spath)\"
-                     |--dependencies --parallel --copy-configs --skip-lint`.
-                     |This must copy Millstrand and every installed sibling spool
-                     |export in one invocation; do not run one import per spool.")})
+                   "workflow/instruction" copy-configs-instruction})
    (workflow/gate :validate
                   "Validate Kondo provenance, duplicates, and cache hygiene"
                   :shell
@@ -157,8 +163,16 @@
 
   Both routes import all resolved dependency exports once, validate provenance,
   duplicate mappings, and cache hygiene, discover local quality checks, and
-  leave a precise handover. No repository hosting or release operation is part
-  of this workflow."
+  leave a precise handover. The agent-owned import runs `strand --workspace
+  <workspace> spool status`, derives every installed root's classpath from its
+  `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
+  path while preserving explicit `[]`. It combines those directories with the
+  consumer classpath and records the exact roots and classpath before one
+  `clj-kondo --lint RESOLVED_CLASSPATH
+  --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
+  consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
+  installed-spool contribution fail loudly. No repository hosting or release
+  operation is part of this workflow."
   {:entrypoints #{:start :call}
    :param-spec ::bootstrap-kondo-params
    :defaults {}

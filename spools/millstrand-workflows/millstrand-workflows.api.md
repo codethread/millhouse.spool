@@ -52,9 +52,17 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
 
   Both routes import all resolved dependency exports once, validate provenance,
   duplicate mappings, and cache hygiene, discover local quality checks, and
-  leave a precise handover. No repository hosting or release operation is part
-  of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L155-L197">Source</a></sub></p>
+  leave a precise handover. The agent-owned import runs `strand --workspace
+  <workspace> spool status`, derives every installed root's classpath from its
+  `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
+  path while preserving explicit `[]`. It combines those directories with the
+  consumer classpath and records the exact roots and classpath before one
+  `clj-kondo --lint RESOLVED_CLASSPATH
+  --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
+  consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
+  installed-spool contribution fail loudly. No repository hosting or release
+  operation is part of this workflow.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L161-L211">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -62,7 +70,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
 
 
 Inventory and merge an existing Kondo boundary before importing exports.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L213-L225">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L227-L239">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -70,7 +78,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
 
 Establish a greenfield Kondo boundary and import Millstrand exports.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L199-L211">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L213-L225">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
