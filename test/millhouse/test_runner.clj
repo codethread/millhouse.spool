@@ -20,6 +20,7 @@
     millhouse.spools.executors.shell-test
     millhouse.spools.kanban-test
     millhouse.spools.millstrand-workflows-test
+    millhouse.spools.millstrand-workflows.bootstrap-kondo-test
     millhouse.spools.millstrand-workflows.bump-spool-test
     millhouse.spools.millstrand-workflows.bump-millstrand-test])
 

@@ -3,6 +3,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [millhouse.spools.millstrand-workflows.bootstrap-kondo]
             [millhouse.spools.millstrand-workflows.bump-millstrand :as bump]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -10,12 +11,11 @@
             [millstrand.test.alpha :as t]))
 
 (def ^:private params
-  {:bumps [{:family "io.millstrand/millstrand" :version "latest"}]
+  {:families ["io.millstrand/millstrand"]
    :worktree "/tmp/consumer"
    :workspace "/tmp/consumer/.millstrand"
    :direct-user-request false
-   :deps-file "deps.edn"
-   :quality-argv ["make" "quality"]})
+   :deps-file "deps.edn"})
 
 (def ^:private project-root
   (.getCanonicalPath (java.io.File. ".")))
@@ -33,15 +33,18 @@
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
 
-(deftest params-are-one-explicit-millstrand-request
+(deftest params-are-one-explicit-millstrand-family
   (is (s/valid? ::bump/millstrand-bump-params params))
   (is (not (s/valid?
             ::bump/millstrand-bump-params
-            (assoc params :bumps [{:family "millhouse/spools" :version "latest"}]))))
+            (assoc params :families ["millhouse/spools"]))))
   (is (not (s/valid?
             ::bump/millstrand-bump-params
-            (assoc params :bumps [{:family "io.millstrand/millstrand"
-                                   :version "v0"}])))))
+            (assoc params :families
+                   ["io.millstrand/millstrand" "millhouse/spools"]))))
+  (is (not (s/valid?
+            ::bump/millstrand-bump-params
+            (assoc params :families [])))))
 
 (deftest classification-and-local-decision-are-explicit
   (let [main (definition #'bump/bump-millstrand)
@@ -61,27 +64,23 @@
     (is (nil? (get-in local-choices ["stop" "next"])))
     (is (str/includes?
          (get-in local-choices ["move-forward" "description"])
-         "clj-kondo"))))
+         "bootstrap"))))
 
-(deftest local-path-imports-and-validates-before-quality
+(deftest local-path-calls-shared-bootstrap-before-refresh
   (let [local (definition #'bump/bump-millstrand-local-validate)
-        copy (step local :copy-configs)
-        validate (step local :validate-kondo)
-        quality (step local :quality)
+        bootstrap-call (step local :bootstrap-kondo)
+        refresh (step local :refresh-runtime)
         compiled (workflow/compile local params)
         refs (set (map :ref (:strands compiled)))]
-    (is (= [:copy-configs]
-           (:depends-on validate)))
-    (is (= [:validate-kondo] (:depends-on quality)))
+    (is (= #'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
+           (:procedure bootstrap-call)))
+    (is (= [:bootstrap-kondo] (:depends-on refresh)))
+    (is (contains? refs :bootstrap-kondo--select-world))
+    (is (contains? refs :bootstrap-kondo--adoption-mode))
     (is (contains? refs :handover-pending-generation))
-    (is (not (contains? refs :cutover)))
-    (is (= "/tmp/consumer"
-           ((get-in copy [:attributes "shell/cwd"]) params)))
-    (is (str/includes?
-         (get-in validate [:attributes "workflow/instruction"])
-         "validation"))))
+    (is (not-any? #(str/includes? (name %) "quality") refs))))
 
-(deftest pinned-path-calls-registered-bump-spool
+(deftest pinned-path-uses-automatic-latest-sha-and-bootstrap
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
@@ -94,33 +93,13 @@
                         :after [:millhouse/workflow]})
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :bump-millstrand-pinned)
-              params (assoc params
-                            :bumps [{:family "io.millstrand/millstrand"
-                                     :version "v12"}]
-                            :worktree "/srv/consumer"
-                            :workspace "/srv/consumer/.millstrand"
-                            :direct-user-request true
-                            :quality-argv ["just" "quality"])
               payload (workflow/compile (:value resolved) params)
               strands (into {} (map (juxt :ref identity) (:strands payload)))
-              refs (set (keys strands))
               bump-instruction (get-in strands
                                        [:bump-spool--bump-spool-1 :attributes
-                                        "workflow/instruction"])
-              select-instruction (get-in strands
-                                         [:bump-spool--select-world :attributes
-                                          "workflow/instruction"])
-              quality (get strands :bump-spool--quality)
-              cutover (get strands :bump-spool--cutover)
-              handover (get strands :bump-spool--handover-pending-generation)]
+                                        "workflow/instruction"])]
           (is (= #{:continue} (:entrypoints resolved)))
-          (is (contains? refs :bump-spool--copy-configs))
-          (is (str/includes? select-instruction "/srv/consumer"))
-          (is (str/includes? select-instruction "/srv/consumer/.millstrand"))
           (is (str/includes? bump-instruction
-                             "io.millstrand/millstrand"))
-          (is (str/includes? bump-instruction "--to v12"))
-          (is (= ["just" "quality"]
-                 (get-in quality [:attributes "shell/argv"])))
-          (is (some? cutover))
-          (is (nil? handover)))))))
+                             "strand --workspace /tmp/consumer/.millstrand spool bump io.millstrand/millstrand --latest sha"))
+          (is (str/includes? bump-instruction "already current"))
+          (is (contains? (set (keys strands)) :bump-spool--bootstrap-kondo--select-world)))))))

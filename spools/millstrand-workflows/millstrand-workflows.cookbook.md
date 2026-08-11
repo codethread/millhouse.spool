@@ -2,86 +2,59 @@
 
 ## Publish one macro-owning root
 
-Start `publish-spool-kondo` with the owning root's public identity and an
-explicit vector of macro-to-hook mappings:
+Start `publish-spool-kondo` with the owning root's public identity and an explicit vector of macro-to-hook mappings. Keep the producer's `resources/clj-kondo.exports/<coordinate>/` directory on its classpath and use that directory as the one source for each mapping. Review external imports separately, remove generated self-imports, reject overlapping consumer remaps and tracked `.clj-kondo/.cache` files, then run focused tests and update the contract/cookbook/API docs.
+
+## Bootstrap Kondo in a consumer
+
+Start `bootstrap-kondo` with explicit paths:
 
 ```clojure
-{:spool-root "spools/example-macros"
- :namespace "example.macros"
- :spool-key "example/macros"
- :macro-forms [{:macro "example.macros/defwidget"
-                :hook "hooks.example/defwidget"}
-               {:macro "example.macros/defpanel"
-                :hook "hooks.example/defpanel"}]}
+{:worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"}
 ```
 
-The root should have this shape:
+Answer the first checkpoint before changing the route:
+
+- `greenfield`: create `.clj-kondo/config.edn` only if absent and ensure `.clj-kondo/.cache/` is ignored by repository configuration. Leave producer mappings to dependency exports.
+- `brownfield`: inventory the existing config, imported configs, hooks, and ignore rules, then ensure `.clj-kondo/.cache/` is ignored by repository configuration. Merge only missing local settings, preserve existing ownership, and never duplicate a producer-owned hook or replace it with a consumer remap.
+
+Both routes then run exactly one full resolved-classpath import:
 
 ```text
-spools/example-macros/
-├── deps.edn                         # :paths includes src and resources
-├── resources/
-│   └── clj-kondo.exports/
-│       └── example.macros/
-│           └── config.edn
-└── src/
-    └── example/macros.clj
+clj-kondo --lint "$(clojure -Spath)" --dependencies --parallel --copy-configs --skip-lint
 ```
 
-The export config names the macro shapes and hook namespaces. Keep hook source under the exported resource tree when it is library-specific, and test the resource through `io/resource` from a clean consumer classpath. Use one producer resource directory as the source for each mapping. A consumer's project `.clj-kondo/config.edn` is for local overrides; it must not remap a producer export or replace the published root contract.
+Validate every imported Millstrand and installed sibling spool export against its producer `clj-kondo.exports` path. Record one provenance source per config and hook, reject duplicate or overlapping mappings and generated self-imports, and ensure no tracked `.clj-kondo/.cache` file exists. Inspect the consumer's own Makefile, docs, scripts, and CI configuration to discover appropriate local quality checks; record the commands and results rather than assuming `make quality` or a CI service. Finish with a handover containing paths, mode, provenance, duplicate decisions, cache status, quality results, and pending local work.
 
-Review external imports separately from the producer export. Compare the source and resolved config to inspect import drift, remove generated self-imports, and reject any tracked `.clj-kondo/.cache` file. Finish the publication with `git diff --check` and an empty `git status --short`.
+## Bump spool families
 
-## Shape changes
-
-When a macro's binding or body shape changes, update the matching hook and export
-mapping together. Run the focused root test, clj-kondo against a consumer that
-sees the root as a dependency, and the repository quality checks. Then update the
-contract and generated API documentation so the mapping remains discoverable.
-
-Do not add a repository scan that guesses macro names. The mapping is intentionally
-authored because it is the compatibility contract between a macro owner and its
-consumers.
-
-## Bump a pinned spool in a consumer
-
-Start `bump-spool` from the same activated module with one request per spool
-family and the exact consumer paths:
+Use family names only:
 
 ```clojure
-{:bumps [{:family "io.millstrand/millstrand" :version "v12"}
-         {:family "millhouse/spools" :version "latest"}]
+{:families ["io.millstrand/millstrand" "millhouse/spools"]
  :worktree "/abs/path/to/consumer-worktree"
  :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false
- :quality-argv ["make" "quality"]}
+ :direct-user-request false}
 ```
 
-The ordered workflow confirms the selected worktree and workspace, runs each explicit `strand --workspace ... spool bump`, imports the complete resolved classpath's clj-kondo exports once, and asks the caller to review and commit the copied configuration. The review covers one producer source, external imports, overlapping consumer remaps, import drift, and tracked cache files. A clean final Git status is required before the workflow refreshes the selected runtime. Keep `:direct-user-request` false for ordinary agent, scheduled, or nested calls: those runs end with a pending-generation handover and never stop or restart a runtime. A direct user may authorize the final cutover only after the refreshed generation has been recorded.
+Each family emits the explicit command below, which asks Millstrand to resolve and record the remote default-branch HEAD SHA:
+
+```text
+strand --workspace <workspace> spool bump <family> --latest sha
+```
+
+If the family is already current, record that outcome and continue. After all family requests, reuse `bootstrap-kondo` so Kondo adoption, provenance, duplicates, cache hygiene, local quality discovery, and handover stay identical for first-time and bump workflows. Keep `:direct-user-request` false for agent, scheduled, or nested calls; only a direct user may authorize runtime cutover.
 
 ## Bump Millstrand with local-coordinate handling
 
-Use the Millstrand-specific wrapper when the consumer may be developing against
-a sibling checkout:
+Use exactly one Millstrand family:
 
 ```clojure
-{:bumps [{:family "io.millstrand/millstrand" :version "latest"}]
+{:families ["io.millstrand/millstrand"]
  :worktree "/abs/path/to/consumer-worktree"
  :workspace "/abs/path/to/consumer-worktree/.millstrand"
  :direct-user-request false
- :deps-file "deps.edn"
- :quality-argv ["make" "quality"]}
+ :deps-file "deps.edn"}
 ```
 
-First inspect the exact `deps-file` and choose `:local-checkout` or
-`:git-sha-pinned`. For a local sibling such as `../millstrand` or
-`../skein-src`, choose `:move-forward` explicitly if validation should proceed;
-choose `:stop` otherwise. The local path preserves the coordinate and runs the
-single full-classpath clj-kondo import, dependency validation, and quality
-boundary. It never invents a SHA.
-
-For a Git/SHA-pinned coordinate, the pinned continuation calls registered
-`bump-spool` with this one Millstrand request, then inherits its reviewed config,
-quality, refresh, and pending-generation/cutover result. Keep
-`:direct-user-request` false unless the direct user has actually authorized a
-runtime cutover; local or pinned classification does not grant restart authority.
+Inspect the exact `deps-file` and choose `:local-checkout` or `:git-sha-pinned`. For a sibling checkout such as `../millstrand` or `../skein-src`, choose `:move-forward` only after confirming the local path; bootstrap then preserves it and never invents a SHA. For a Git/SHA pin, the continuation calls `bump-spool` with the family only, so it automatically emits `strand --workspace <workspace> spool bump io.millstrand/millstrand --latest sha`.
