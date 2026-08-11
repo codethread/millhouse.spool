@@ -36,6 +36,29 @@
            ((get-in (step :copy-configs) [:attributes "shell/cwd"])
             {:worktree "/tmp/consumer"})))))
 
+(deftest import-review-checks-drift-and-cache-hygiene
+  (let [review (step :inspect-import-drift)
+        argv (get-in review [:attributes "shell/argv"])
+        instruction ((get-in review [:attributes "workflow/instruction"])
+                     {:worktree "/tmp/consumer"})]
+    (is (= ["sh" "-c"] (subvec argv 0 2)))
+    (is (str/includes? (nth argv 2) "git diff --check"))
+    (is (str/includes? (nth argv 2) "git ls-files '.clj-kondo/.cache/**'"))
+    (is (str/includes? instruction "one producer source"))
+    (is (str/includes? instruction "external"))
+    (is (str/includes? instruction "overlaps"))
+    (is (str/includes? instruction "import drift"))
+    (is (str/includes? instruction "self-imports"))))
+
+(deftest final-status-gate-requires-clean-worktree
+  (let [gate (step :verify-clean-status)
+        argv (get-in gate [:attributes "shell/argv"])
+        instruction (get-in gate [:attributes "workflow/instruction"])]
+    (is (= ["sh" "-c"] (subvec argv 0 2)))
+    (is (str/includes? (nth argv 2) "git status --short"))
+    (is (= [:quality] (:depends-on gate)))
+    (is (str/includes? instruction "tracked `.clj-kondo/.cache`"))))
+
 (deftest quality-boundary-uses-resolved-argv
   (let [params {:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
                 :worktree "/tmp/consumer"

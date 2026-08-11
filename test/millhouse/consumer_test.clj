@@ -3,6 +3,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
@@ -90,6 +91,25 @@
                :millhouse/kanban
                :millhouse/millstrand-workflows}
              (set (keys outcomes)))))))
+
+(deftest repository-kondo-config-keeps-producer-ownership
+  (let [root (io/file (repository-root))
+        config-text (slurp (io/file root ".clj-kondo/config.edn"))
+        project-hooks (slurp (io/file root ".clj-kondo/hooks/project_rules.clj"))
+        config (edn/read-string config-text)
+        config-paths (:config-paths config)
+        self-imports (io/file root ".clj-kondo/imports/millhouse.spools")]
+    (is (= ["../spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow"
+            "../spools/chime/resources/clj-kondo.exports/millhouse.spools/chime"
+            "../spools/cron/resources/clj-kondo.exports/millhouse.spools/cron"]
+           config-paths))
+    (doseq [form '[defop defquery defpattern defhook defhandler defbin]]
+      (is (not (re-find (re-pattern (str "millstrand.api.millstrand.alpha/" form))
+                        config-text)))
+      (is (not (str/includes? project-hooks (str "(defn " form)))))
+    (is (not (re-find #"millstrand\.macros\.(queries|ops|rules)" config-text)))
+    (is (.isFile (io/file root ".clj-kondo/imports/io.millstrand/millstrand/config.edn")))
+    (is (not (.exists self-imports)))))
 
 (def ^:private portable-consumer-deps
   "The domain roots own their resources, so each is a distinct consumer dep."

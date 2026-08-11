@@ -28,11 +28,9 @@ spools/example-macros/
     └── example/macros.clj
 ```
 
-The export config names the macro shapes and hook namespaces. Keep hook source
-under the exported resource tree when it is library-specific, and test the
-resource through `io/resource` from a clean consumer classpath. A consumer's
-project `.clj-kondo/config.edn` is for local overrides; it is not a substitute
-for publishing the root export.
+The export config names the macro shapes and hook namespaces. Keep hook source under the exported resource tree when it is library-specific, and test the resource through `io/resource` from a clean consumer classpath. Use one producer resource directory as the source for each mapping. A consumer's project `.clj-kondo/config.edn` is for local overrides; it must not remap a producer export or replace the published root contract.
+
+Review external imports separately from the producer export. Compare the source and resolved config to inspect import drift, remove generated self-imports, and reject any tracked `.clj-kondo/.cache` file. Finish the publication with `git diff --check` and an empty `git status --short`.
 
 ## Shape changes
 
@@ -59,14 +57,7 @@ family and the exact consumer paths:
  :quality-argv ["make" "quality"]}
 ```
 
-The ordered workflow confirms the selected worktree and workspace, runs each
-explicit `strand --workspace ... spool bump`, imports the complete resolved
-classpath's clj-kondo exports once, and asks the caller to review and commit the
-copied configuration. It then runs `quality-argv` and refreshes the selected
-runtime. Keep `:direct-user-request` false for ordinary agent, scheduled, or
-nested calls: those runs end with a pending-generation handover and never stop
-or restart a runtime. A direct user may authorize the final cutover only after
-the refreshed generation has been recorded.
+The ordered workflow confirms the selected worktree and workspace, runs each explicit `strand --workspace ... spool bump`, imports the complete resolved classpath's clj-kondo exports once, and asks the caller to review and commit the copied configuration. The review covers one producer source, external imports, overlapping consumer remaps, import drift, and tracked cache files. A clean final Git status is required before the workflow refreshes the selected runtime. Keep `:direct-user-request` false for ordinary agent, scheduled, or nested calls: those runs end with a pending-generation handover and never stop or restart a runtime. A direct user may authorize the final cutover only after the refreshed generation has been recorded.
 
 ## Bump Millstrand with local-coordinate handling
 

@@ -55,6 +55,30 @@
         "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
         " --copy-configs --skip-lint\n")])
 
+(def ^:private import-drift-command
+  "Check import diff formatting and reject tracked clj-kondo cache files."
+  ["sh" "-c"
+   (str "set -eu\n"
+        "git diff --check\n"
+        "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
+
+(def ^:private final-status-command
+  "Require the selected worktree to be clean after the reviewed commit."
+  ["sh" "-c"
+   (str "set -eu\n"
+        "test -z \"$(git status --short)\"\n")])
+
+(defn- import-review-instruction
+  [{:keys [worktree]}]
+  (fmt/reflow
+   (format
+    "|In `%s`, inspect the complete `.clj-kondo` diff against the producer
+     |resources. Confirm one producer source for each mapping, review external
+     |dependency imports, and remove any consumer remap that overlaps an
+     |imported export. Compare the resolved exports with the source to inspect
+     |import drift. Keep generated self-imports out of the commit."
+    worktree)))
+
 (workflow/defworkflow bump-spool
   "Bump a pinned spool in a selected consumer worktree and refresh its runtime.
 
@@ -156,11 +180,22 @@
                      |--dependencies --parallel --copy-configs --skip-lint`
                      |command in the selected worktree. It must resolve the
                      |complete classpath and copy every dependency export in one
-                     |invocation; do not run one import per spool.")})
+                     |invocation; do not run one import per spool. Keep each
+                     |mapping sourced from one producer resource directory.")})
+   (workflow/gate :inspect-import-drift
+                  "Check imported config drift and cache hygiene"
+                  :shell
+                  :depends-on [:copy-configs]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.bump-spool.kondo.drift"
+                   "shell/argv" import-drift-command
+                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
+                   "shell/timeout-secs" 300
+                   "workflow/instruction" import-review-instruction})
    (workflow/step :inspect-and-commit
                   "Inspect and commit copied clj-kondo configuration"
                   :self
-                  :depends-on [:copy-configs]
+                  :depends-on [:inspect-import-drift]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.kondo.review"
                    "workflow/instruction"
@@ -168,9 +203,10 @@
                      (fmt/reflow
                       (format
                        "|In `%s`, inspect the complete diff under `.clj-kondo`.
-                        |Confirm it contains only the dependency configs/hooks
-                        |needed by the resolved classpath, remove unrelated or
-                        |generated state, and commit the reviewed config change.
+                        |Confirm it contains only reviewed external dependency
+                        |configs/hooks needed by the resolved classpath. Remove
+                        |overlapping consumer remaps, generated self-imports, and
+                        |unrelated state, then commit the reviewed config change.
                         |Do not commit an uninspected copy."
                        worktree)))})
    (workflow/gate :quality
@@ -191,10 +227,25 @@
                         |check blocks runtime refresh and cutover; fix the change
                         |and retry."
                        (pr-str quality-argv))))})
+   (workflow/gate :verify-clean-status
+                  "Verify clean final Git status"
+                  :shell
+                  :depends-on [:quality]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.bump-spool.git.clean"
+                   "shell/argv" final-status-command
+                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
+                   "shell/timeout-secs" 300
+                   "workflow/instruction"
+                   (fmt/reflow
+                    "|After the reviewed import commit and quality run, require
+                     |`git status --short` to be empty. Also confirm `git diff
+                     |--check` is clean and no tracked `.clj-kondo/.cache` file
+                     |exists before handing over the runtime generation.")})
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
                   :self
-                  :depends-on [:quality]
+                  :depends-on [:verify-clean-status]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.refresh"
                    "workflow/instruction"

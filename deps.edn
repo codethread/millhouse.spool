@@ -43,7 +43,7 @@
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]}
   :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
-                   :main-opts ["-m" "clj-kondo.main" "--lint"
+                   :main-opts ["-m" "clj-kondo.main" "--cache-dir" ".clj-kondo/.cache" "--lint"
                                "spools/workflow/src" "spools/code-executor/src"
                                "spools/shell-executor/src" "scripts" "test"
                                "spools/chime/test" "spools/cron/test"
