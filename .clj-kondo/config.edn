@@ -1,7 +1,7 @@
-{:lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest
-           ;; defworkflow defines a Var from (name doc opts definition); def's
-           ;; shape resolves the name without kondo expanding the macro.
-           millhouse.spools.workflow/defworkflow clojure.core/def}
+{:config-paths ["../spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow"
+                "../spools/chime/resources/clj-kondo.exports/millhouse.spools/chime"
+                "../spools/cron/resources/clj-kondo.exports/millhouse.spools/cron"]
+ :lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest}
  :hooks {:analyze-call {clojure.core/ns hooks.project-rules/ns-docstring
                         ns hooks.project-rules/ns-docstring
                         clojure.core/def hooks.project-rules/no-spool-module-atom
@@ -13,23 +13,10 @@
                         clojure.core/fn hooks.project-rules/no-fn-keys-destructure
                         fn hooks.project-rules/no-fn-keys-destructure
                         clojure.core/defn hooks.project-rules/no-fn-keys-destructure
-                        defn hooks.project-rules/no-fn-keys-destructure
-                        millstrand.api.millstrand.alpha/defop hooks.project-rules/defop
-                        millstrand.api.millstrand.alpha/defquery hooks.project-rules/defquery
-                        millstrand.api.millstrand.alpha/defpattern hooks.project-rules/defpattern
-                        millstrand.api.millstrand.alpha/defhook hooks.project-rules/defpattern
-                        millstrand.api.millstrand.alpha/defhandler hooks.project-rules/defpattern
-                        millstrand.api.millstrand.alpha/defbin hooks.project-rules/defbin
-                        millhouse.spools.workflow/defexecutor hooks.project-rules/defexecutor
-                        millstrand.macros.queries/defquery hooks.project-rules/defquery
-                        millstrand.macros.ops/defop hooks.project-rules/defop
-                        millstrand.macros.rules/defrule hooks.project-rules/defrule}}
+                        defn hooks.project-rules/no-fn-keys-destructure}}
  :linters {:project/ns-docstring {:level :error}
            :project/no-spool-module-atom {:level :error}
            :project/no-fn-keys-destructure {:level :error}
-           ;; This require is consumed only by syntax-quoted authoring forms in
-           ;; eval; kondo cannot resolve that runtime alias.
-           :unused-namespace {:exclude [millstrand.api.millstrand.alpha]}
            ;; These test-local private vars are workflow constructors and chime
            ;; rule handlers referenced only by fully-qualified quoted symbol
            ;; (register-workflow!/defrule!), which kondo cannot track — they are

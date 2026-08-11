@@ -57,14 +57,30 @@
                   :publish-root-classpath
                   :publish-kondo-export
                   :publish-kondo-hooks
+                  :review-import-boundary
                   :test-kondo-export
-                  :document-kondo-export]
+                  :document-kondo-export
+                  :verify-clean-status]
                  ids))
           (is (= "millstrand-workflows.publish.kondo-export"
                  (get-in (step definition :publish-kondo-export)
                          [:attributes "workflow/action-ref"])))
-          (is (= :publish-kondo-hooks
+          (is (= :review-import-boundary
                  (first (:depends-on (step definition :test-kondo-export)))))
+          (let [review (get-in (step definition :review-import-boundary)
+                               [:attributes "workflow/instruction"])]
+            (is (re-find #"one source" review))
+            (is (re-find #"external dependency imports" review))
+            (is (re-find #"overlaps" review))
+            (is (re-find #"import drift" review))
+            (is (re-find #"tracked `\.clj-kondo/\.cache`" review)))
+          (is (= :document-kondo-export
+                 (first (:depends-on (step definition :verify-clean-status)))))
+          (let [clean-status (get-in (step definition :verify-clean-status)
+                                     [:attributes "workflow/instruction"])]
+            (is (re-find #"git diff --check" (clean-status params)))
+            (is (re-find #"git status --short" (clean-status params)))
+            (is (re-find #"tracked `\.clj-kondo/\.cache`" (clean-status params))))
           (is (re-find #"no automatic macro discovery"
                        ((get-in (step definition :publish-kondo-export)
                                 [:attributes "workflow/instruction"])

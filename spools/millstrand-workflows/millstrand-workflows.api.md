@@ -27,7 +27,7 @@ Publish clj-kondo support for a macro-owning spool root.
   explicit clj-kondo export and hooks, test the exported contract, and document
   the public surface. It does not discover macros automatically or perform
   filesystem edits itself; each step is an agent-facing instruction.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj#L101-L169">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj#L112-L201">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
@@ -106,4 +106,4 @@ Bump a pinned spool in a selected consumer worktree and refresh its runtime.
   configs, then runs the consumer's ordinary quality boundary. Runtime
   cutover is offered only when the invocation records a direct user request;
   other invocations stop at a pending-generation handover.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L58-L237">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L82-L288">Source</a></sub></p>

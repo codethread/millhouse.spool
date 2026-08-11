@@ -51,12 +51,15 @@ Resolve the registered workflow and start it with a complete parameter map:
 
 The workflow walks these obligations in order:
 
-1. Confirm the named root owns the listed macro forms.
+1. Confirm one producer source owns the listed macro forms.
 2. Keep `resources` on that root's classpath and verify the resource resolves.
 3. Add the explicit `clj-kondo.exports` config for each macro and hook.
 4. Implement hooks that model the named macro syntax shapes.
-5. Test the exported config and hooks from a clean consumer classpath.
-6. Update the contract, cookbook, and generated API documentation.
+5. Review external imports, inspect import drift, and reject overlapping consumer remaps.
+6. Check that no generated self-import or tracked `.clj-kondo/.cache` file is present.
+7. Test the exported config and hooks from a clean consumer classpath.
+8. Update the contract, cookbook, and generated API documentation.
+9. Finish with `git diff --check` and an empty `git status --short`.
 
 A macro shape change requires a reviewed export hook, focused tests, and
 documentation in the same change. The workflow supplies instructions and action
@@ -75,12 +78,7 @@ consumer worktree and Millstrand workspace:
  :quality-argv ["make" "quality"]}
 ```
 
-The workflow confirms the selected world, coordinates each requested bump,
-imports all dependency clj-kondo exports in one classpath invocation, reviews
-and commits the copied configuration, and runs the consumer's quality command.
-It refreshes the selected runtime after quality passes. Runtime stop/start
-cutover is conditional on an explicit direct-user request; otherwise the final
-step hands over the pending generation without stopping or restarting anything.
+The workflow confirms the selected world, coordinates each requested bump, and imports all dependency clj-kondo exports in one classpath invocation. The review then checks one producer source, reviewed external imports, overlapping consumer remaps, import drift, and tracked cache files before committing the copied configuration. It runs the consumer's quality command and requires a clean final Git status before refreshing the selected runtime. Runtime stop/start cutover is conditional on an explicit direct-user request; otherwise the final step hands over the pending generation without stopping or restarting anything.
 
 ## `bump-millstrand`
 

@@ -41,10 +41,10 @@
   (format-alpha/reflow
    (format
     "|Inspect `%s` as the owning root for namespace `%s` and spool key `%s`.
-     |Confirm that the root, rather than a consumer project, owns every macro
-     |listed in the parameters. Record the source files and public macro forms
-     |that this publication is responsible for. Do not infer macro ownership by
-     |scanning the repository."
+     |Confirm that one producer source owns every macro listed in the parameters.
+     |Record the source files and public macro forms that this publication is
+     |responsible for. Do not infer ownership by scanning consumer remaps or
+     |generated imports."
     spool-root namespace spool-key)))
 
 (defn- classpath-instruction
@@ -83,9 +83,10 @@
    (format
     "|From the repository root, run the focused tests for `%s`, then lint the
      |exported source from a clean classpath. Exercise `%s` through each public
-     |macro shape and assert that the exported config and hook resources resolve
-     |without a project-local `.clj-kondo` override. Repeat the relevant quality
-     |checks after any export or hook change."
+     |macro shape and assert that the producer config and hook resources resolve
+     |directly, without a generated self-import or overlapping consumer remap.
+     |Review external imports and inspect source/export drift before repeating
+     |the relevant quality checks."
     spool-root namespace)))
 
 (defn- docs-instruction
@@ -97,6 +98,16 @@
      |mapping %s. Document the test command and the maintenance rule: a changed
      |macro shape requires a reviewed export hook, tests, and documentation."
     spool-root namespace (macro-summary {:macro-forms macro-forms}))))
+
+(defn- final-status-instruction
+  [{:keys [spool-root]}]
+  (format-alpha/reflow
+   (format
+    "|After the reviewed publication is committed, run `git diff --check` and
+     |`git status --short` from the selected checkout. Confirm that no tracked
+     |`.clj-kondo/.cache` file exists and that the final status is empty. The
+     |producer export under `%s/resources` is the only source of its mapping."
+    spool-root)))
 
 (workflow/defworkflow publish-spool-kondo
   "Publish clj-kondo support for a macro-owning spool root.
@@ -125,7 +136,8 @@
      (str "Publish clj-kondo support for " namespace))
    {:attributes {"workflow/family" "millstrand-workflows"
                  "millstrand-workflows/obligations"
-                 ["root-classpath" "kondo-export" "kondo-hooks" "tests" "docs"]}}
+                 ["one-producer-source" "root-classpath" "kondo-export"
+                  "kondo-hooks" "import-review" "tests" "docs" "clean-status"]}}
    (workflow/step :inspect-spool-root
                   "Inspect the macro-owning spool root"
                   :self
@@ -153,10 +165,23 @@
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.publish.kondo-hooks"
                    "workflow/instruction" hook-instruction})
+   (workflow/step :review-import-boundary
+                  "Review external imports and consumer remaps"
+                  :self
+                  :depends-on [:publish-kondo-hooks]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.import-review"
+                   "workflow/instruction"
+                   (format-alpha/reflow
+                    "|Use the producer resource directory as the one source for
+                     |this export. Review external dependency imports separately,
+                     |inspect import drift, and reject any consumer config remap
+                     |that overlaps the producer mapping. Remove generated
+                     |self-imports and any tracked `.clj-kondo/.cache` file.")})
    (workflow/step :test-kondo-export
                   "Test the exported clj-kondo contract"
                   :self
-                  :depends-on [:publish-kondo-hooks]
+                  :depends-on [:review-import-boundary]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.publish.tests"
                    "workflow/instruction" test-instruction})
@@ -166,7 +191,14 @@
                   :depends-on [:test-kondo-export]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.publish.docs"
-                   "workflow/instruction" docs-instruction})))
+                   "workflow/instruction" docs-instruction})
+   (workflow/step :verify-clean-status
+                  "Verify clean final Git status"
+                  :self
+                  :depends-on [:document-kondo-export]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.publish.clean-status"
+                   "workflow/instruction" final-status-instruction})))
 
 ;; The bump workflow lives in its own namespace so its focused contract can
 ;; remain isolated. The activated spool namespace is the module owner, though.
