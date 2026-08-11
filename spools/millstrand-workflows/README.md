@@ -10,7 +10,7 @@ consumer repositories on the caller's behalf, push, land, or restart runtimes.
 `bump-millstrand` inspects the consumer's exact `deps.edn` coordinate first. A
 local sibling coordinate stays local and requires an explicit decision before
 bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`, which asks
-Millstrand for the latest peeled SHA automatically. A local coordinate never
+Millstrand for the remote default-branch HEAD SHA automatically. A local coordinate never
 receives an invented SHA.
 
 ## Identity and activation
@@ -53,8 +53,9 @@ Start it with the exact consumer worktree and Millstrand workspace:
 
 The first checkpoint asks `greenfield` versus `brownfield` before route work.
 Greenfield creates a minimal `.clj-kondo/config.edn` only when absent and
-ensures `.clj-kondo/.cache/` is ignored. Brownfield inventories existing config,
-imports, hooks, and ignore rules, then merges safely without duplicating
+ensures `.clj-kondo/.cache/` is ignored by repository configuration. Brownfield
+inventories existing config, imports, hooks, and ignore rules, then ensures
+`.clj-kondo/.cache/` is ignored by repository configuration before merging safely without duplicating
 producer-owned hooks or replacing them with consumer remaps.
 
 Both routes run one full resolved-classpath
@@ -103,7 +104,8 @@ Use exactly one Millstrand family:
 
 After inspecting `deps-file`, choose `:local-checkout` or `:git-sha-pinned`.
 The local route preserves the checkout and calls `bootstrap-kondo`; the pinned
-route calls `bump-spool`, which uses the same automatic `--latest sha` default.
+route calls `bump-spool`, which uses the same automatic remote default-branch HEAD
+SHA resolution behind `--latest sha`.
 Neither route invents a SHA or assumes a fixed quality command.
 
 ## See also

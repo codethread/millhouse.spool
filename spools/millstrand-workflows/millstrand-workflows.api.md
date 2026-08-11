@@ -54,7 +54,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   duplicate mappings, and cache hygiene, discover local quality checks, and
   leave a precise handover. No repository hosting or release operation is part
   of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L152-L188">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L155-L191">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -62,7 +62,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
 
 
 Inventory and merge an existing Kondo boundary before importing exports.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L204-L216">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L207-L219">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -70,7 +70,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
 
 Establish a greenfield Kondo boundary and import Millstrand exports.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L190-L202">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L193-L205">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
@@ -80,8 +80,8 @@ The local-aware consumer workflow for updating Millstrand.
 
   The workflow asks the caller to inspect the selected coordinate. A local
   checkout stays local and uses the shared Kondo bootstrap; a pinned checkout
-  delegates to bump-spool, whose family-only contract requests the latest
-  peeled SHA automatically.
+  delegates to bump-spool, whose family-only contract requests the remote
+  default-branch HEAD SHA automatically.
 
 
 
@@ -94,7 +94,7 @@ The local-aware consumer workflow for updating Millstrand.
 Inspect a consumer Millstrand coordinate and choose its honest update path.
 
   A local sibling coordinate is never converted into a guessed SHA. A pinned
-  coordinate delegates to bump-spool, which requests the latest peeled SHA and
+  coordinate delegates to bump-spool, which requests the remote default-branch HEAD SHA and
   then calls the shared Kondo bootstrap.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj#L86-L129">Source</a></sub></p>
 
@@ -129,7 +129,7 @@ Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.
 The portable consumer workflow for bumping pinned Millstrand spool families.
 
   This workflow assumes that its caller has selected the worktree and workspace
-  in which the change is allowed. It requests the latest peeled SHA for each
+  in which the change is allowed. It requests the remote default-branch HEAD SHA for each
   family, tolerates an already-current coordinate, then reuses the shared Kondo
   bootstrap before handing over the refreshed runtime.
 
@@ -141,11 +141,11 @@ The portable consumer workflow for bumping pinned Millstrand spool families.
 
 
 
-Bump selected spool families to their latest peeled SHA and bootstrap Kondo.
+Bump selected spool families to their remote default-branch HEAD SHA and bootstrap Kondo.
 
   The caller supplies exact consumer paths and family names. Each bump uses
   `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
   and accepted. The shared bootstrap workflow then handles greenfield or
   brownfield Kondo adoption, local quality discovery, and handover. Runtime
   cutover is offered only for a direct user request.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L37-L154">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L37-L155">Source</a></sub></p>

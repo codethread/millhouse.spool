@@ -21,11 +21,12 @@ Start `bootstrap-kondo` with explicit paths:
 
 Answer the first checkpoint before changing the route:
 
-- `greenfield`: create `.clj-kondo/config.edn` only if absent and add
-  `.clj-kondo/.cache/` to the consumer's ignore rules. Leave producer mappings
+- `greenfield`: create `.clj-kondo/config.edn` only if absent and ensure
+  `.clj-kondo/.cache/` is ignored by repository configuration. Leave producer mappings
   to dependency exports.
 - `brownfield`: inventory the existing config, imported configs, hooks, and
-  ignore rules. Merge only missing local settings, preserve existing ownership,
+  ignore rules, then ensure `.clj-kondo/.cache/` is ignored by repository
+  configuration. Merge only missing local settings, preserve existing ownership,
   and never duplicate a producer-owned hook or replace it with a consumer
   remap.
 
@@ -57,7 +58,7 @@ Use family names only:
 ```
 
 Each family emits the explicit command below, which asks Millstrand to resolve
-and record the latest peeled SHA:
+and record the remote default-branch HEAD SHA:
 
 ```text
 strand --workspace <workspace> spool bump <family> --latest sha

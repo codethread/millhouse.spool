@@ -34,6 +34,7 @@
   ["sh" "-c"
    (str "set -eu\n"
         "git diff --check\n"
+        "git check-ignore -q --no-index .clj-kondo/.cache/\n"
         "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
 
 (defn- select-world-instruction
@@ -52,7 +53,7 @@
    (format
     "|In `%s`, establish the greenfield Kondo boundary: create a minimal
      |`.clj-kondo/config.edn` only when it is absent, and ensure
-     |`.clj-kondo/.cache/` is ignored by the consumer's Git ignore file. Do not
+     |`.clj-kondo/.cache/` is ignored by the repository configuration. Do not
      |pre-create producer mappings or hooks; those come from the resolved
      |dependency exports. Record the exact files changed."
     worktree)))
@@ -61,8 +62,10 @@
   [{:keys [worktree]}]
   (fmt/reflow
    (format
-    "|In `%s`, inventory the existing `.clj-kondo` config, imports, hooks, and
-     |ignore rules before editing. Merge only missing local settings and keep
+    "|In `%s`, establish the brownfield Kondo boundary: inventory the existing
+     |`.clj-kondo` config, imports, hooks, and
+    |ignore rules before editing, and ensure `.clj-kondo/.cache/` is ignored by
+    |the repository configuration. Merge only missing local settings and keep
      |one producer-owned source for each imported mapping. Remove no existing
      |consumer rule without recording why, and do not duplicate a producer hook
      |or replace it with a consumer remap. Record the inventory, merge, and any

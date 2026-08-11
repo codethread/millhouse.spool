@@ -47,12 +47,20 @@
           validate (step definition :validate)
           quality (step definition :discover-quality)
           handover (step definition :handover)
-          command (nth (get-in copy [:attributes "shell/argv"]) 2)]
-      (is (str/includes? (get-in prepare [:attributes "workflow/instruction"])
-                         (name mode)))
+          command (nth (get-in copy [:attributes "shell/argv"]) 2)
+          validate-command (nth (get-in validate [:attributes "shell/argv"]) 2)]
+      (let [prepare-instruction ((get-in prepare [:attributes "workflow/instruction"])
+                                 params)]
+        (is (str/includes? prepare-instruction (name mode)))
+        (is (str/includes? prepare-instruction ".clj-kondo/.cache/"))
+        (is (str/includes? prepare-instruction "repository configuration")))
       (is (= [":prepare"] (mapv str (:depends-on copy))))
       (is (str/includes? command "clj-kondo --lint \"$(clojure -Spath)\""))
       (is (str/includes? command "--dependencies --parallel --copy-configs --skip-lint"))
+      (is (str/includes? validate-command
+                         "git check-ignore -q --no-index .clj-kondo/.cache/"))
+      (is (str/includes? validate-command
+                         "git ls-files '.clj-kondo/.cache/**'"))
       (is (= "/tmp/consumer"
              ((get-in copy [:attributes "shell/cwd"]) params)))
       (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])

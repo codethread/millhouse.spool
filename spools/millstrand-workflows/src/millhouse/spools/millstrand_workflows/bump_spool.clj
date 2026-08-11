@@ -2,7 +2,7 @@
   "The portable consumer workflow for bumping pinned Millstrand spool families.
 
   This workflow assumes that its caller has selected the worktree and workspace
-  in which the change is allowed. It requests the latest peeled SHA for each
+  in which the change is allowed. It requests the remote default-branch HEAD SHA for each
   family, tolerates an already-current coordinate, then reuses the shared Kondo
   bootstrap before handing over the refreshed runtime."
   (:require [clojure.spec.alpha :as s]
@@ -35,7 +35,7 @@
   (s/keys :req-un [::families ::worktree ::workspace ::direct-user-request]))
 
 (workflow/defworkflow bump-spool
-  "Bump selected spool families to their latest peeled SHA and bootstrap Kondo.
+  "Bump selected spool families to their remote default-branch HEAD SHA and bootstrap Kondo.
 
   The caller supplies exact consumer paths and family names. Each bump uses
   `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
@@ -52,7 +52,7 @@
    :param-docs {:families
                 (fmt/reflow
                  "|One family name per requested spool. Every family is bumped to
-                  |the latest peeled Git SHA; the CLI's already-current result is
+                  |the remote default-branch HEAD Git SHA; the CLI's already-current result is
                   |accepted and recorded.")
                 :worktree
                 "Exact consumer worktree in which the bump and bootstrap run."
@@ -88,7 +88,7 @@
                        worktree workspace)))})
    (workflow/step :bump-spool
                   (fn [{:keys [item]}]
-                    (str "Request latest SHA for " item))
+                    (str "Request remote default-branch HEAD SHA for " item))
                   :self
                   :depends-on [:select-world]
                   :loop {:each :families :chain true}
@@ -101,13 +101,14 @@
                        "|From worktree `%s`, run exactly `strand --workspace %s
                         |spool bump %s --latest sha`. The explicit workspace is
                         |mandatory. Record the previous coordinate and resulting
-                        |peeled SHA. If the CLI reports that the coordinate is
+                        |remote default-branch HEAD SHA. If the CLI reports that the coordinate is
                         |already current, record that outcome and continue."
                        worktree workspace item)))})
    (workflow/call :bootstrap-kondo
                   #'bootstrap/bootstrap-kondo
                   {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [workspace]}] workspace)})
+                   :workspace (fn [{:keys [workspace]}] workspace)}
+                  :depends-on [:bump-spool])
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
                   :self

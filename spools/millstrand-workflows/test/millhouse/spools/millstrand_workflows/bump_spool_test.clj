@@ -25,7 +25,7 @@
                                "io.millstrand/millstrand"]))))
     (is (not (s/valid? ::bump/spool-bump-params (dissoc valid :workspace))))))
 
-(deftest bump-instruction-requests-latest-peeled-sha
+(deftest bump-instruction-requests-remote-default-branch-head-sha
   (let [instruction (get-in (step :bump-spool) [:attributes "workflow/instruction"])
         text (instruction {:item "io.millstrand/millstrand"
                            :worktree "/tmp/consumer"
@@ -33,7 +33,7 @@
     (is (str/includes? text
                        "strand --workspace /tmp/consumer/.millstrand spool bump io.millstrand/millstrand --latest sha"))
     (is (str/includes? text "already current"))
-    (is (str/includes? text "peeled SHA"))
+    (is (str/includes? text "remote default-branch HEAD SHA"))
     (is (not (str/includes? text "--to")))))
 
 (deftest bump-loop-is-family-only-and-reuses-bootstrap
@@ -42,8 +42,21 @@
     (is (= {:each :families :chain true} (:loop bump-step)))
     (is (= #'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
            (:procedure bootstrap-call)))
+    (is (= [:bump-spool] (:depends-on bootstrap-call)))
     (is (= [:bootstrap-kondo]
            (:depends-on (step :refresh-runtime))))))
+
+(deftest compiled-bootstrap-cannot-begin-before-bump-loop-terminal
+  (let [params {:families ["io.millstrand/millstrand"]
+                :worktree "/tmp/consumer"
+                :workspace "/tmp/consumer/.millstrand"
+                :direct-user-request false}
+        payload (workflow/compile (definition) params)
+        edges (set (map (juxt :from :to :type) (:edges payload)))]
+    (is (contains? edges
+                   [:bootstrap-kondo--select-world
+                    :bump-spool-1
+                    "depends-on"]))))
 
 (deftest runtime-cutover-has-an-explicit-direct-user-boundary
   (is (= [:= :direct-user-request true]

@@ -3,8 +3,8 @@
 
   The workflow asks the caller to inspect the selected coordinate. A local
   checkout stays local and uses the shared Kondo bootstrap; a pinned checkout
-  delegates to bump-spool, whose family-only contract requests the latest
-  peeled SHA automatically."
+  delegates to bump-spool, whose family-only contract requests the remote
+  default-branch HEAD SHA automatically."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
@@ -87,7 +87,7 @@
   "Inspect a consumer Millstrand coordinate and choose its honest update path.
 
   A local sibling coordinate is never converted into a guessed SHA. A pinned
-  coordinate delegates to bump-spool, which requests the latest peeled SHA and
+  coordinate delegates to bump-spool, which requests the remote default-branch HEAD SHA and
   then calls the shared Kondo bootstrap."
   {:entrypoints #{:start}
    :param-spec ::millstrand-bump-params
@@ -98,7 +98,7 @@
              :direct-user-request false
              :deps-file "deps.edn"}
    :param-docs {:families
-                "Exactly `[\"io.millstrand/millstrand\"]`; pinned coordinates use the automatic latest-SHA bump."
+                "Exactly `[\"io.millstrand/millstrand\"]`; pinned coordinates use the automatic remote default-branch HEAD SHA bump."
                 :worktree "Exact consumer worktree in which inspection and validation run."
                 :workspace "Exact Millstrand workspace selected for this consumer."
                 :direct-user-request
@@ -122,7 +122,7 @@
                                    :next :bump-millstrand-local}
                                   {:key :git-sha-pinned
                                    :label "Use Git/SHA pin"
-                                   :description "The coordinate is Git/SHA-pinned; delegate the family-only latest-SHA bump."
+                                   :description "The coordinate is Git/SHA-pinned; delegate the family-only remote default-branch HEAD SHA bump."
                                    :next :bump-millstrand-pinned}
                                   {:key :unsupported
                                    :label "Stop"
