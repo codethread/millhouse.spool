@@ -18,16 +18,18 @@ Core primitives: `workflow`, `defworkflow`, `step`, `gate`, `checkpoint`, `call`
 
 ### Published clj-kondo support
 
-This spool owns `millhouse.spools.workflow/defworkflow`, so its public clj-kondo
-export is published from this root at
+This spool owns `millhouse.spools.workflow/defworkflow` and
+`millhouse.spools.workflow/defexecutor`, so its public clj-kondo export is
+published from this root at
 `resources/clj-kondo.exports/millhouse.spools/workflow/`. The export maps
-`millhouse.spools.workflow/defworkflow` to `clojure.core/def` and installs the
-`hooks.millhouse.spools.workflow/defworkflow` hook. A consumer dependency must
-include this root's `resources` path; `io/resource` should resolve both
-`config.edn` and the hook before linting a `defworkflow` form.
+both macros to `clojure.core/def` and installs hooks that expose the generated
+definition Var and `<name>-stalled?` handler, including their analyzed bodies
+and explicit options. A consumer dependency must include this root's
+`resources` path; `io/resource` should resolve both `config.edn` and the hook
+before linting either macro.
 
 The export, hook, and consumer-classpath contract test live with this owner.
-When `defworkflow` changes shape, update them together. The
+When either macro changes shape, update them together. The
 `millhouse.spools.millstrand-workflows/publish-spool-kondo` workflow is the
 explicit guide for publishing analogous support from other macro-owning roots.
 

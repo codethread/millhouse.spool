@@ -40,10 +40,16 @@
       (is hook)
       (is (= 'clojure.core/def
              (get-in config-data [:lint-as 'millhouse.spools.workflow/defworkflow])))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.workflow/defexecutor])))
       (is (= 'hooks.millhouse.spools.workflow/defworkflow
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.workflow/defworkflow]))))))
+                      'millhouse.spools.workflow/defworkflow])))
+      (is (= 'hooks.millhouse.spools.workflow/defexecutor
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.workflow/defexecutor]))))))
 
 (deftest workflow-module-declares-workflow-attr-namespace
   (with-runtime
