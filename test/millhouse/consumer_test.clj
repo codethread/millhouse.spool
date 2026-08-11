@@ -111,12 +111,9 @@
     (is (.isFile (io/file root ".clj-kondo/imports/io.millstrand/millstrand/config.edn")))
     (is (not (.exists self-imports)))))
 
-(def ^:private portable-consumer-deps
-  "The domain roots own their resources, so each is a distinct consumer dep."
-  {'millhouse/spools.workflow "spools/workflow"
-   'millhouse/spools.code-executor "spools/code-executor"
-   'millhouse/spools.chime "spools/chime"
-   'millhouse/spools.cron "spools/cron"})
+(def ^:private resolved-spool-roots
+  "Installed spool roots that status must contribute to a consumer classpath."
+  ["spools/workflow" "spools/chime" "spools/cron"])
 
 (def ^:private portable-consumer-source
   "A consumer source exercising every imported authoring-form family."
@@ -215,13 +212,20 @@
   (spit file content)
   file)
 
-(defn- portable-consumer-deps-edn [root millstrand-dep]
-  {:paths ["src"]
-   :deps (merge {'io.millstrand/millstrand millstrand-dep}
-                (into {}
-                      (map (fn [[lib root-name]]
-                             [lib {:local/root (.getPath (io/file root root-name))}])
-                           portable-consumer-deps)))})
+(defn- portable-consumer-deps-edn [millstrand-dep]
+  {:paths []
+   :deps {'io.millstrand/millstrand millstrand-dep}})
+
+(defn- resolved-spool-classpath [root]
+  (->> resolved-spool-roots
+       (mapcat (fn [root-name]
+                 (let [root-dir (io/file root root-name)
+                       deps (edn/read-string (slurp (io/file root-dir "deps.edn")))]
+                   (map #(.getCanonicalPath (io/file root-dir %))
+                        (if (contains? deps :paths)
+                          (:paths deps)
+                          ["src"])))))
+       (str/join java.io.File/pathSeparator)))
 
 (defn- portable-consumer-bin! [dir]
   (doto (write-file!
@@ -253,19 +257,23 @@
           bin-dir (io/file consumer "bin")
           kondo-config (io/file consumer ".clj-kondo/config.edn")
           deps-file (io/file consumer "deps.edn")
-          source-file (io/file consumer "src/consumer/forms.clj")]
+          source-file (io/file consumer "src/consumer/forms.clj")
+          spool-classpath (resolved-spool-classpath root)]
       (try
         (is (= "fb6c9057d594bfa4b5ea8531b9774b5e9a23a4b4"
                (:git/sha millstrand-dep)))
         (portable-consumer-bin! bin-dir)
         (write-file! kondo-config "{}")
         (write-file! deps-file
-                     (pr-str (portable-consumer-deps-edn root millstrand-dep)))
+                     (pr-str (portable-consumer-deps-edn millstrand-dep)))
         (write-file! source-file portable-consumer-source)
         (let [import-result
               (run-consumer-command
                consumer bin-dir
-               "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel --copy-configs --skip-lint")
+               (str "clj-kondo --lint \"" spool-classpath
+                    java.io.File/pathSeparator
+                    "$(clojure -Spath)\" --dependencies --parallel"
+                    " --copy-configs --skip-lint"))
               expected-imports
               ["io.millstrand/millstrand/config.edn"
                "io.millstrand/millstrand/hooks/millstrand.clj"
