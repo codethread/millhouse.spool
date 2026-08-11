@@ -1,12 +1,14 @@
 (ns millhouse.spools.millstrand-workflows.bump-spool
-  "The portable consumer workflow for bumping a pinned Millstrand spool.
+  "The portable consumer workflow for bumping pinned Millstrand spool families.
 
   This workflow assumes that its caller has selected the worktree and workspace
-  in which the change is allowed. It describes the work; it does not choose a
-  branch, land a change, or infer permission to restart a runtime."
+  in which the change is allowed. It requests the latest peeled SHA for each
+  family, tolerates an already-current coordinate, then reuses the shared Kondo
+  bootstrap before handing over the refreshed runtime."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
+            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
             [millhouse.spools.workflow :as workflow]))
 
 (defn- non-blank-string?
@@ -15,116 +17,56 @@
   (and (string? value)
        (not (str/blank? value))))
 
-(defn- spool-version?
-  "Return true for the latest release or an annotated positive vN release."
-  [value]
-  (and (string? value)
-       (or (= "latest" value)
-           (boolean (re-matches #"v[1-9][0-9]*" value)))))
-
 (defn- unique-families?
   "Return true when a request names each spool family at most once."
-  [bumps]
-  (let [families (map :family bumps)]
-    (= (count families)
-       (count (distinct families)))))
+  [families]
+  (= (count families)
+     (count (distinct families))))
 
 (s/def ::non-blank-string non-blank-string?)
 (s/def ::family ::non-blank-string)
-(s/def ::version spool-version?)
-(s/def ::bump (s/keys :req-un [::family ::version]))
-(s/def ::bumps
-  (s/and (s/coll-of ::bump :kind vector? :min-count 1)
+(s/def ::families
+  (s/and (s/coll-of ::family :kind vector? :min-count 1)
          unique-families?))
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
 (s/def ::direct-user-request boolean?)
-(s/def ::quality-argv
-  (s/coll-of ::non-blank-string :kind vector? :min-count 1))
 (s/def ::spool-bump-params
-  (s/keys :req-un [::bumps ::worktree ::workspace ::direct-user-request]
-          :opt-un [::quality-argv]))
-
-(def ^:private copy-configs-command
-  "The one dependency-config import command used by the workflow.
-
-  `clojure -Spath` is evaluated in the selected worktree, so every resolved
-  dependency export is considered in one clj-kondo invocation."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
-        " --copy-configs --skip-lint\n")])
-
-(def ^:private import-drift-command
-  "Check import diff formatting and reject tracked clj-kondo cache files."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "git diff --check\n"
-        "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
-
-(def ^:private final-status-command
-  "Require the selected worktree to be clean after the reviewed commit."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "test -z \"$(git status --short)\"\n")])
-
-(defn- import-review-instruction
-  [{:keys [worktree]}]
-  (fmt/reflow
-   (format
-    "|In `%s`, inspect the complete `.clj-kondo` diff against the producer
-     |resources. Confirm one producer source for each mapping, review external
-     |dependency imports, and remove any consumer remap that overlaps an
-     |imported export. Compare the resolved exports with the source to inspect
-     |import drift. Keep generated self-imports out of the commit."
-    worktree)))
+  (s/keys :req-un [::families ::worktree ::workspace ::direct-user-request]))
 
 (workflow/defworkflow bump-spool
-  "Bump a pinned spool in a selected consumer worktree and refresh its runtime.
+  "Bump selected spool families to their latest peeled SHA and bootstrap Kondo.
 
-  The caller supplies the exact worktree and Millstrand workspace. The workflow
-  imports dependency clj-kondo exports once, reviews and commits those copied
-  configs, then runs the consumer's ordinary quality boundary. Runtime
-  cutover is offered only when the invocation records a direct user request;
-  other invocations stop at a pending-generation handover."
+  The caller supplies exact consumer paths and family names. Each bump uses
+  `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
+  and accepted. The shared bootstrap workflow then handles greenfield or
+  brownfield Kondo adoption, local quality discovery, and handover. Runtime
+  cutover is offered only for a direct user request."
   {:entrypoints #{:start :call}
    :param-spec ::spool-bump-params
-   :defaults {:quality-argv ["make" "quality"]}
-   :example {:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
+   :defaults {}
+   :example {:families ["io.millstrand/millstrand"]
              :worktree "/abs/path/to/consumer-worktree"
              :workspace "/abs/path/to/consumer-worktree/.millstrand"
-             :direct-user-request false
-             :quality-argv ["make" "quality"]}
-   :param-docs {:bumps
+             :direct-user-request false}
+   :param-docs {:families
                 (fmt/reflow
-                 "|One {family, version} record per requested spool family. `version`
-                  |is `latest` or an annotated positive `vN` release marker; the
-                  |bump operation records the resulting peeled SHA.")
+                 "|One family name per requested spool. Every family is bumped to
+                  |the latest peeled Git SHA; the CLI's already-current result is
+                  |accepted and recorded.")
                 :worktree
-                (fmt/reflow
-                 "|Exact consumer worktree in which the bump, config import, review,
-                  |commit, and quality checks run. Do not substitute the process's
-                  |current directory.")
+                "Exact consumer worktree in which the bump and bootstrap run."
                 :workspace
-                (fmt/reflow
-                 "|Exact Millstrand workspace selected for the bump. It is passed to
-                  |every `strand` command so the consumer's coordination world is
-                  |never inferred from ambient state.")
+                "Exact Millstrand workspace passed to every strand command."
                 :direct-user-request
                 (fmt/reflow
-                 "|True only when the user directly requested runtime cutover. False
-                  |ends at an explicit pending-generation handover and never grants
-                  |permission to stop or restart a runtime.")
-                :quality-argv
-                (fmt/reflow
-                 "|The consumer's ordinary quality command as an argv vector. It
-                  |defaults to `[\"make\" \"quality\"]`; callers for other consumer
-                  |projects must supply their own command.")}}
+                 "|True only when the direct user requested runtime cutover. It
+                  |never follows from an agent, scheduled, or nested call.")}}
   (workflow/workflow
-   (fn [{:keys [bumps]}]
-     (str "Bump consumer spools: " (str/join ", " (map :family bumps))))
+   (fn [{:keys [families]}]
+     (str "Bump consumer spools: " (str/join ", " families)))
    {:attributes {"workflow/family" "bump-spool"
-                 "bump-spool/requests" (fn [{:keys [bumps]}] bumps)
+                 "bump-spool/families" (fn [{:keys [families]}] families)
                  "bump-spool/worktree" (fn [{:keys [worktree]}] worktree)
                  "bump-spool/workspace" (fn [{:keys [workspace]}] workspace)
                  "bump-spool/direct-user-request"
@@ -146,106 +88,30 @@
                        worktree workspace)))})
    (workflow/step :bump-spool
                   (fn [{:keys [item]}]
-                    (str "Request spool bump for " (:family item)
-                         " to " (:version item)))
+                    (str "Request latest SHA for " item))
                   :self
                   :depends-on [:select-world]
-                  :loop {:each :bumps :chain true}
+                  :loop {:each :families :chain true}
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.coordinate.bump"
                    "workflow/instruction"
                    (fn [{:keys [item worktree workspace]}]
-                     (let [{:keys [family version]} item]
-                       (fmt/reflow
-                        (format
-                         "|From worktree `%s`, run `strand --workspace %s spool bump
-                          |%s%s`. The explicit workspace is mandatory. Record the
-                          |old tag/SHA and new tag/SHA in the change notes."
-                         worktree workspace family
-                         (if (= "latest" version)
-                           ""
-                           (str " --to " version))))))})
-   (workflow/gate :copy-configs
-                  "Import all resolved dependency clj-kondo configs"
-                  :shell
-                  :depends-on [:bump-spool]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.kondo.copy"
-                   "shell/argv" copy-configs-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|Run the single `clj-kondo --lint \"$(clojure -Spath)\"
-                     |--dependencies --parallel --copy-configs --skip-lint`
-                     |command in the selected worktree. It must resolve the
-                     |complete classpath and copy every dependency export in one
-                     |invocation; do not run one import per spool. Keep each
-                     |mapping sourced from one producer resource directory.")})
-   (workflow/gate :inspect-import-drift
-                  "Check imported config drift and cache hygiene"
-                  :shell
-                  :depends-on [:copy-configs]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.kondo.drift"
-                   "shell/argv" import-drift-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
-                   "workflow/instruction" import-review-instruction})
-   (workflow/step :inspect-and-commit
-                  "Inspect and commit copied clj-kondo configuration"
-                  :self
-                  :depends-on [:inspect-import-drift]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.kondo.review"
-                   "workflow/instruction"
-                   (fn [{:keys [worktree]}]
                      (fmt/reflow
                       (format
-                       "|In `%s`, inspect the complete diff under `.clj-kondo`.
-                        |Confirm it contains only reviewed external dependency
-                        |configs/hooks needed by the resolved classpath. Remove
-                        |overlapping consumer remaps, generated self-imports, and
-                        |unrelated state, then commit the reviewed config change.
-                        |Do not commit an uninspected copy."
-                       worktree)))})
-   (workflow/gate :quality
-                  "Run ordinary consumer quality checks"
-                  :shell
-                  :depends-on [:inspect-and-commit]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.quality"
-                   "shell/argv" (fn [{:keys [quality-argv]}] quality-argv)
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 1800
-                   "workflow/instruction"
-                   (fn [{:keys [quality-argv]}]
-                     (fmt/reflow
-                      (format
-                       "|In the selected worktree, run the consumer's ordinary
-                        |quality boundary from `quality-argv` (`%s`). A failing
-                        |check blocks runtime refresh and cutover; fix the change
-                        |and retry."
-                       (pr-str quality-argv))))})
-   (workflow/gate :verify-clean-status
-                  "Verify clean final Git status"
-                  :shell
-                  :depends-on [:quality]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.git.clean"
-                   "shell/argv" final-status-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|After the reviewed import commit and quality run, require
-                     |`git status --short` to be empty. Also confirm `git diff
-                     |--check` is clean and no tracked `.clj-kondo/.cache` file
-                     |exists before handing over the runtime generation.")})
+                       "|From worktree `%s`, run exactly `strand --workspace %s
+                        |spool bump %s --latest sha`. The explicit workspace is
+                        |mandatory. Record the previous coordinate and resulting
+                        |peeled SHA. If the CLI reports that the coordinate is
+                        |already current, record that outcome and continue."
+                       worktree workspace item)))})
+   (workflow/call :bootstrap-kondo
+                  #'bootstrap/bootstrap-kondo
+                  {:worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [workspace]}] workspace)})
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
                   :self
-                  :depends-on [:verify-clean-status]
+                  :depends-on [:bootstrap-kondo]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.refresh"
                    "workflow/instruction"
@@ -282,7 +148,7 @@
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.handover"
                    "workflow/instruction"
                    (fmt/reflow
-                    "|Do not stop or restart any runtime. Record the refresh result,
-                     |the pending generation, and the exact selected workspace, then
-                     |hand over that a direct user request is required before
-                     |runtime cutover.")})))
+                    "|Do not stop or restart any runtime. Record the bump results,
+                     |bootstrap handover, refresh result, pending generation, and
+                     |exact selected workspace, then hand over that a direct user
+                     |request is required before runtime cutover.")})))

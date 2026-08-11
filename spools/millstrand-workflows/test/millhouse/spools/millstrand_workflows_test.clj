@@ -43,12 +43,19 @@
                         :after [:millhouse/workflow]})
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :publish-spool-kondo)
+              bootstrap-resolved (workflow/resolve-workflow :bootstrap-kondo)
               bump-resolved (workflow/resolve-workflow :bump-spool)
               definition (:value resolved)
+              bootstrap-definition (:value bootstrap-resolved)
               bump-definition (:value bump-resolved)
               ids (mapv :id (:steps definition))]
           (is (= #{:start} (:entrypoints resolved)))
+          (is (= #{:start :call} (:entrypoints bootstrap-resolved)))
           (is (= #{:start :call} (:entrypoints bump-resolved)))
+          (is (= 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
+                 (:definition bootstrap-resolved)))
+          (is (= [:select-world :adoption-mode]
+                 (mapv :id (:steps bootstrap-definition))))
           (is (= 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool
                  (:definition bump-resolved)))
           (is (= "bump-spool"

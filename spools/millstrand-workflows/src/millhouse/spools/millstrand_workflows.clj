@@ -212,6 +212,21 @@
 
 (runtime/collect-entry!
  workflow/definition-kind
+ :bootstrap-kondo
+ 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bootstrap-kondo-greenfield
+ 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bootstrap-kondo-brownfield
+ 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield)
+
+(runtime/collect-entry!
+ workflow/definition-kind
  :bump-millstrand
  'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand)
 

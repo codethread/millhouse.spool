@@ -1,19 +1,17 @@
 # Millhouse Millstrand-workflows spool
 
 `millhouse.spools.millstrand-workflows` publishes repeatable workflows around
-reusable Millstrand and clj-kondo spool support. `publish-spool-kondo` is a
-reviewable publisher checklist for a root that owns macros, while `bump-spool`
-is the portable consumer workflow for updating pinned spool dependencies and
-refreshing the selected runtime. Neither workflow performs filesystem edits or
-runtime cutover itself: callers supply the explicit context and record each
-instruction's result.
+Millstrand and clj-kondo support. `publish-spool-kondo` covers producer-owned
+exports, `bootstrap-kondo` handles first-time consumer adoption, and
+`bump-spool` updates pinned spool families before reusing that bootstrap path.
+These workflows describe and record work; they do not choose branches, edit
+consumer repositories on the caller's behalf, push, land, or restart runtimes.
 
-`bump-millstrand` is the Millstrand-specific entrypoint. It first asks the
-caller to inspect the consumer's exact `deps.edn` coordinate. A local sibling
-coordinate is preserved and requires an explicit local-checkout decision before
-the consumer clj-kondo import/validation path runs; a Git/SHA coordinate routes
-to the registered `bump-spool` workflow with the Millstrand request. A local
-coordinate never receives an invented SHA.
+`bump-millstrand` inspects the consumer's exact `deps.edn` coordinate first. A
+local sibling coordinate stays local and requires an explicit decision before
+bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`, which asks
+Millstrand for the latest peeled SHA automatically. A local coordinate never
+receives an invented SHA.
 
 ## Identity and activation
 
@@ -21,8 +19,7 @@ coordinate never receives an invented SHA.
 - Namespace: `millhouse.spools.millstrand-workflows`
 - Spool key: `millhouse.spools/millstrand-workflows`
 
-Approve the root through the repository family entry, then activate it after the
-Workflow spool:
+Activate it after the Workflow spool:
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
@@ -39,75 +36,81 @@ Workflow spool:
 
 ## `publish-spool-kondo`
 
-Resolve the registered workflow and start it with a complete parameter map:
+Resolve the registered workflow and start it with the owning root, public
+namespace, spool key, and explicit macro-to-hook mappings. It verifies one
+producer source, publishes resources on the root classpath, reviews external
+imports and overlapping remaps, tests the exported contract, updates docs, and
+checks `git diff --check`, clean status, and cache hygiene.
+
+## `bootstrap-kondo`
+
+Start it with the exact consumer worktree and Millstrand workspace:
 
 ```clojure
-{:spool-root "spools/example-macros"
- :namespace "example.macros"
- :spool-key "example/macros"
- :macro-forms [{:macro "example.macros/defwidget"
-                :hook "hooks.example/defwidget"}]}
+{:worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"}
 ```
 
-The workflow walks these obligations in order:
+The first checkpoint asks `greenfield` versus `brownfield` before route work.
+Greenfield creates a minimal `.clj-kondo/config.edn` only when absent and
+ensures `.clj-kondo/.cache/` is ignored. Brownfield inventories existing config,
+imports, hooks, and ignore rules, then merges safely without duplicating
+producer-owned hooks or replacing them with consumer remaps.
 
-1. Confirm one producer source owns the listed macro forms.
-2. Keep `resources` on that root's classpath and verify the resource resolves.
-3. Add the explicit `clj-kondo.exports` config for each macro and hook.
-4. Implement hooks that model the named macro syntax shapes.
-5. Review external imports, inspect import drift, and reject overlapping consumer remaps.
-6. Check that no generated self-import or tracked `.clj-kondo/.cache` file is present.
-7. Test the exported config and hooks from a clean consumer classpath.
-8. Update the contract, cookbook, and generated API documentation.
-9. Finish with `git diff --check` and an empty `git status --short`.
-
-A macro shape change requires a reviewed export hook, focused tests, and
-documentation in the same change. The workflow supplies instructions and action
-references; a publisher performs and records the filesystem and quality work.
+Both routes run one full resolved-classpath
+`clj-kondo --lint "$(clojure -Spath)" --dependencies --parallel --copy-configs --skip-lint`
+import. They record provenance for Millstrand and every installed sibling spool,
+reject duplicate or overlapping mappings, check cache hygiene, let the agent
+discover the consumer's appropriate local quality checks, and leave a precise
+local handover. No fixed repository quality command is assumed.
 
 ## `bump-spool`
 
-Resolve `bump-spool` from the same activated module and provide the exact
-consumer worktree and Millstrand workspace:
+Provide family names only; versions and SHAs are intentionally not request
+parameters:
 
 ```clojure
-{:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
+{:families ["io.millstrand/millstrand" "millhouse/spools"]
  :worktree "/abs/path/to/consumer-worktree"
  :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false
- :quality-argv ["make" "quality"]}
+ :direct-user-request false}
 ```
 
-The workflow confirms the selected world, coordinates each requested bump, and imports all dependency clj-kondo exports in one classpath invocation. The review then checks one producer source, reviewed external imports, overlapping consumer remaps, import drift, and tracked cache files before committing the copied configuration. It runs the consumer's quality command and requires a clean final Git status before refreshing the selected runtime. Runtime stop/start cutover is conditional on an explicit direct-user request; otherwise the final step hands over the pending generation without stopping or restarting anything.
+For each family, the workflow emits:
+
+```text
+strand --workspace <workspace> spool bump <family> --latest sha
+```
+
+An already-current coordinate is recorded and accepted. The workflow then
+calls `bootstrap-kondo`, including its greenfield/brownfield choice, one full
+classpath import, provenance/duplicate/cache validation, local quality-check
+discovery, and handover. Runtime refresh and cutover retain the explicit
+direct-user boundary; ordinary agent and nested calls never stop or restart a
+runtime.
 
 ## `bump-millstrand`
 
-Start it with exactly one Millstrand request and the same explicit consumer
-world used by `bump-spool`:
+Use exactly one Millstrand family:
 
 ```clojure
-{:bumps [{:family "io.millstrand/millstrand" :version "latest"}]
+{:families ["io.millstrand/millstrand"]
  :worktree "/abs/path/to/consumer-worktree"
  :workspace "/abs/path/to/consumer-worktree/.millstrand"
  :direct-user-request false
- :deps-file "deps.edn"
- :quality-argv ["make" "quality"]}
+ :deps-file "deps.edn"}
 ```
 
-The workflow records an agent classification choice after inspecting
-`deps-file`. The local branch records a second `:move-forward`/`:stop` choice,
-keeps the local checkout unchanged, imports all resolved clj-kondo exports, and
-runs dependency validation plus the consumer quality command. The pinned branch
-calls registered `bump-spool`, which performs the requested bump and continues
-through its config, quality, and runtime-generation result. Runtime stop/start
-remains conditional on `:direct-user-request`; no agent or nested call grants
-that authority.
+After inspecting `deps-file`, choose `:local-checkout` or `:git-sha-pinned`.
+The local route preserves the checkout and calls `bootstrap-kondo`; the pinned
+route calls `bump-spool`, which uses the same automatic `--latest sha` default.
+Neither route invents a SHA or assumes a fixed quality command.
 
 ## See also
 
-- [`millstrand-workflows.cookbook.md`](./millstrand-workflows.cookbook.md) — the
-  publisher recipe and export layout.
+- [`millstrand-workflows.cookbook.md`](./millstrand-workflows.cookbook.md) —
+  recipes for producer publication and consumer adoption.
 - [`millstrand-workflows.api.md`](./millstrand-workflows.api.md) — generated API
   documentation.
 - [`../workflow/README.md`](../workflow/README.md) — the Workflow spool that
-  executes the registered definition.
+  executes registered definitions.
