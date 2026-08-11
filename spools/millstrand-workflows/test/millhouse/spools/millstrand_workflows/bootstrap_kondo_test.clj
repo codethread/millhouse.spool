@@ -73,6 +73,21 @@
         (is (str/includes? instruction "sync.root"))
         (is (str/includes? instruction "deps.edn"))
         (is (str/includes? instruction ":paths"))
+        (is (str/includes? instruction "millstrand/source-root"))
+        (is (str/includes? instruction "derive `BASE`"))
+        (is (str/includes? instruction "removing exactly"))
+        (is (str/includes? instruction "normalized `BASE` joined"))
+        (is (str/includes? instruction "BASE/deps.edn"))
+        (is (str/includes? instruction "including `resources`"))
+        (is (str/includes? instruction
+                           "BASE/resources/clj-kondo.exports/io.millstrand/millstrand/"))
+        (is (str/includes? instruction "installed spool root normally"))
+        (is (str/includes? instruction "Never search upward, guess `BASE`"))
+        (is (str/includes? instruction "exact family/root coordinate"))
+        (is (str/includes? instruction "failing path"))
+        (is (str/includes? instruction "permitted corrective invariant"))
+        (is (str/includes? instruction "readable regular `BASE/deps.edn`"))
+        (is (str/includes? instruction "Never silently fall back"))
         (is (str/includes? instruction
                            "absent `:paths` defaults to the `src` path"))
         (is (str/includes? instruction "explicit `:paths []` remains empty"))
@@ -178,3 +193,21 @@
     (is (not-any? #(str/includes? (name %) "make") refs))
     (is (not-any? #(str/includes? (name %) "github") refs))
     (is (not-any? #(str/includes? (name %) "push") refs))))
+
+(deftest codethread-paths-empty-greenfield-requires-millstrand-base-resources
+  (let [definition (definition #'bootstrap/bootstrap-kondo-greenfield)
+        copy (step definition :copy-configs)
+        instruction ((get-in copy [:attributes "workflow/instruction"]) params)]
+    ;; CodeThread's consumer has `:paths []`; existing brownfield imports must
+    ;; not be able to make this contract appear satisfied. The source-root
+    ;; contribution is independently required and names both the installed
+    ;; sibling root and the Millstrand project base export.
+    (is (str/includes? instruction "consumer `deps.edn` has `:paths []`"))
+    (is (str/includes? instruction "millstrand/source-root"))
+    (is (str/includes? instruction "installed spool root normally"))
+    (is (str/includes? instruction
+                       "BASE/resources/clj-kondo.exports/io.millstrand/millstrand/"))
+    (is (str/includes? instruction "consumer Clojure classpath"))
+    (is (str/includes? instruction "clj-kondo --lint RESOLVED_CLASSPATH"))
+    (is (not (str/includes? instruction "existing imports are sufficient")))
+    (is (not (str/includes? instruction "brownfield imports satisfy")))))

@@ -32,14 +32,34 @@
      |Treat every intended installed root reported by that status as required:
      |fail loudly if any root is unresolved or missing. For each resolved root,
      |record its exact identity and reported `sync.root`, read that root's
-     |`deps.edn`, and resolve its `:paths` relative to `sync.root`. Match the
-     |runtime: absent `:paths` defaults to the `src` path, while explicit
+     |`deps.edn`, and resolve its `:paths` relative to `sync.root`. For every
+     |declared `millstrand/source-root` coordinate, handle the source-root
+     |specially while still processing its installed spool root normally. Treat
+     |the declaration as a relative path and derive `BASE` by removing exactly
+     |its path segments from the end of the reported `sync.root`; validate that
+     |normalized `BASE` joined with the declared path is exactly `sync.root`.
+     |Fail loudly when the relative path is absolute, escapes, or cannot be
+     |reconciled. Never search upward, guess `BASE`, or use the worktree/current
+     |directory as a substitute. Read `BASE/deps.edn` and fail loudly when it is
+     |missing, not a regular file, unreadable, or invalid. Resolve its `:paths`
+     |relative to `BASE` and add every declared directory (including `resources`)
+     |to the resolved classpath, using the same absent `:paths` => `src` and
+     |explicit `:paths []` => empty semantics. Require the Millstrand core
+     |export at `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/`;
+     |fail loudly when that resource is absent. Match the runtime for ordinary
+     |roots too: absent `:paths` defaults to the `src` path, while explicit
      |`:paths []` remains empty. Do not guess paths. Combine those actual root
-     |directories with the consumer Clojure classpath, and record the exact roots
-     |and final classpath. The plain consumer `clojure -Spath` alone is
+     |and Millstrand base directories with the consumer Clojure classpath, and
+     |record the exact roots and final classpath, including each source-root/base
+     |derivation. The plain consumer `clojure -Spath` alone is
      |insufficient and must be explicitly rejected, including when the consumer
      |`deps.edn` has `:paths []`. Fail loudly when the installed-spool contribution
-     |is empty.
+     |is empty. Every failure above must report the exact family/root coordinate,
+     |status, `sync.root`, declaration, derived `BASE`, and failing path as
+     |applicable, plus the permitted corrective invariant: a synced root; a
+     |relative non-escaping declaration that reconstructs `sync.root`; a readable
+     |regular `BASE/deps.edn` containing valid EDN; the required export path; or at
+     |least one installed-spool classpath directory. Never silently fall back.
      |Run exactly one command with the resolved classpath:
      |`clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel
      |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
@@ -194,8 +214,20 @@
   agent-owned import runs `strand --workspace
   <workspace> spool status`, derives every installed root's classpath from its
   `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
-  path while preserving explicit `[]`. It combines those directories with the
-  consumer classpath and records the exact roots and classpath before one
+  path while preserving explicit `[]`. A declared `millstrand/source-root`
+  coordinate is special: derive `BASE` by removing exactly its relative path
+  segments from the end of `sync.root`, validate that `BASE` joined with the
+  declaration reconstructs `sync.root`, then read `BASE/deps.edn` and add its
+  declared paths, including `resources`, to the classpath. Require the
+  Millstrand core export at
+  `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/` and fail loudly
+  for an absent or unreconcilable base, a `BASE/deps.edn` that is missing, not a
+  readable regular file, or invalid EDN, or a missing export; do not search
+  upward or guess. Failures report the exact coordinate, source-root values,
+  failing path, and permitted corrective invariant. The installed source-root
+  spool is still resolved normally. It combines those directories with the
+  consumer classpath and records the exact roots and classpath, including each
+  base derivation, before one
   `clj-kondo --lint RESOLVED_CLASSPATH
   --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
   consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
