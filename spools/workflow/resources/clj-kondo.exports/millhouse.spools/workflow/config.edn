@@ -3,4 +3,4 @@
  :hooks
  {:analyze-call
   {millhouse.spools.workflow/defworkflow
-   hooks.millhouse.spools.millstrand-workflows/defworkflow}}}
+   hooks.millhouse.spools.workflow/defworkflow}}}

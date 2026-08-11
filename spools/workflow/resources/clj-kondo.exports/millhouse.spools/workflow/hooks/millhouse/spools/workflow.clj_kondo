@@ -1,5 +1,5 @@
-(ns hooks.millhouse.spools.millstrand-workflows
-  "clj-kondo hook for the workflow declaration shape exported by this spool."
+(ns hooks.millhouse.spools.workflow
+  "clj-kondo hook for the Workflow spool's defworkflow declaration shape."
   (:require [clj-kondo.hooks-api :as api]))
 
 (defn defworkflow

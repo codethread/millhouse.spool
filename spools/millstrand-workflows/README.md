@@ -29,10 +29,6 @@ Workflow spool:
    :required? true})
 ```
 
-The root's `deps.edn` includes both `src` and `resources`. The exported
-`clj-kondo.exports/millhouse.spools/millstrand-workflows/config.edn` and its hook
-resource are therefore visible to a consumer through the root classpath.
-
 ## `publish-spool-kondo`
 
 Resolve the registered workflow and start it with a complete parameter map:

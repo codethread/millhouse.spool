@@ -1,8 +1,7 @@
 (ns millhouse.spools.millstrand-workflows-test
   "Focused contract tests for the Millstrand-workflows publisher spool."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is]]
             [millhouse.spools.millstrand-workflows]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -63,22 +62,3 @@
                        ((get-in (step definition :publish-kondo-export)
                                 [:attributes "workflow/instruction"])
                         params))))))))
-
-(deftest exported-kondo-contract-is-on-root-classpath
-  (testing "the root manifest keeps resources visible"
-    (is (some #(= "resources" %) (:paths (edn/read-string
-                                          (slurp "spools/millstrand-workflows/deps.edn"))))))
-  (testing "the export config and hook resource resolve"
-    (let [config (io/resource
-                  "clj-kondo.exports/millhouse.spools/millstrand-workflows/config.edn")
-          hook (io/resource
-                "clj-kondo.exports/millhouse.spools/millstrand-workflows/hooks/millhouse/spools/millstrand_workflows.clj_kondo")
-          config-data (edn/read-string (slurp config))]
-      (is config)
-      (is hook)
-      (is (= 'clojure.core/def
-             (get-in config-data [:lint-as 'millhouse.spools.workflow/defworkflow])))
-      (is (= 'hooks.millhouse.spools.millstrand-workflows/defworkflow
-             (get-in config-data
-                     [:hooks :analyze-call
-                      'millhouse.spools.workflow/defworkflow]))))))

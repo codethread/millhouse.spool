@@ -9,6 +9,7 @@
                        "spools/cron/test"
                        "spools/workflow/src"
                        "spools/workflow/test"
+                       "spools/workflow/resources"
                        "spools/code-executor/src"
                        "spools/code-executor/test"
                        "spools/shell-executor/src"
@@ -16,8 +17,7 @@
                        "spools/kanban/src"
                        "spools/kanban/test"
                        "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"
-                       "spools/millstrand-workflows/resources"]
+                       "spools/millstrand-workflows/test"]
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
          :main-opts ["-m" "millhouse.test-runner"]}
   :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
