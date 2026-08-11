@@ -9,7 +9,8 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.spools.workflow :as workflow]
-            [millstrand.api.format.alpha :as format-alpha]))
+            [millstrand.api.format.alpha :as format-alpha]
+            [millstrand.api.runtime.alpha :as runtime]))
 
 (defn- non-blank-string?
   "Return true when `value` is a non-blank string."
@@ -166,3 +167,13 @@
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.publish.docs"
                    "workflow/instruction" docs-instruction})))
+
+;; The bump workflow lives in its own namespace so its focused contract can
+;; remain isolated. The activated spool namespace is the module owner, though.
+;; Collect the child Var here so the owner-complete module contribution includes
+;; both public definitions; publication resolves the child through the spool
+;; classloader after source collection, regardless of JVM load order.
+(runtime/collect-entry!
+ workflow/definition-kind
+ :bump-spool
+ 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool)

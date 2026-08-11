@@ -30,7 +30,7 @@
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
 
-(deftest publisher-workflow-exposes-ordered-obligations
+(deftest activated-module-resolves-both-public-workflows
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
@@ -43,9 +43,16 @@
                         :after [:millhouse/workflow]})
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :publish-spool-kondo)
+              bump-resolved (workflow/resolve-workflow :bump-spool)
               definition (:value resolved)
+              bump-definition (:value bump-resolved)
               ids (mapv :id (:steps definition))]
           (is (= #{:start} (:entrypoints resolved)))
+          (is (= #{:start :call} (:entrypoints bump-resolved)))
+          (is (= 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool
+                 (:definition bump-resolved)))
+          (is (= "bump-spool"
+                 (get-in bump-definition [:attributes "workflow/family"])))
           (is (= [:inspect-spool-root
                   :publish-root-classpath
                   :publish-kondo-export

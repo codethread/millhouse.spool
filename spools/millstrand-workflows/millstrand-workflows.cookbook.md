@@ -44,3 +44,26 @@ contract and generated API documentation so the mapping remains discoverable.
 Do not add a repository scan that guesses macro names. The mapping is intentionally
 authored because it is the compatibility contract between a macro owner and its
 consumers.
+
+## Bump a pinned spool in a consumer
+
+Start `bump-spool` from the same activated module with one request per spool
+family and the exact consumer paths:
+
+```clojure
+{:bumps [{:family "io.millstrand/millstrand" :version "v12"}
+         {:family "millhouse/spools" :version "latest"}]
+ :worktree "/abs/path/to/consumer-worktree"
+ :workspace "/abs/path/to/consumer-worktree/.millstrand"
+ :direct-user-request false
+ :quality-argv ["make" "quality"]}
+```
+
+The ordered workflow confirms the selected worktree and workspace, runs each
+explicit `strand --workspace ... spool bump`, imports the complete resolved
+classpath's clj-kondo exports once, and asks the caller to review and commit the
+copied configuration. It then runs `quality-argv` and refreshes the selected
+runtime. Keep `:direct-user-request` false for ordinary agent, scheduled, or
+nested calls: those runs end with a pending-generation handover and never stop
+or restart a runtime. A direct user may authorize the final cutover only after
+the refreshed generation has been recorded.
