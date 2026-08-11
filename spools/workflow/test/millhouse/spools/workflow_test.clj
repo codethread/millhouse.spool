@@ -4,7 +4,9 @@
   run-driving surface (start!/complete!/choose!, gates, checkpoints, bonds)."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.java.shell :as sh]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.current.alpha :as current]
@@ -22,6 +24,56 @@
 
 (defn- failure-reason [f]
   (:reason (ex-data (try (f) (catch clojure.lang.ExceptionInfo e e)))))
+
+(defn- lint-workflow-hook [source]
+  (let [root (.getCanonicalFile (io/file "."))
+        dir (test-support/temp-dir "millhouse-workflow-hook")
+        source-file (io/file dir "workflow_hook_test.clj")]
+    (try
+      (spit source-file source)
+      (sh/sh "clojure"
+             "-Sdeps"
+             "{:deps {clj-kondo/clj-kondo {:mvn/version \"2025.06.05\"}}}"
+             "-M"
+             "-m"
+             "clj-kondo.main"
+             "--lint"
+             (.getPath source-file)
+             "--config"
+             (.getPath (io/file root ".clj-kondo/config.edn"))
+             :dir (.getPath root))
+      (finally
+        (test-support/delete-tree! dir)))))
+
+(deftest workflow-defexecutor-hook-validates-declaration-shape
+  (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
+        valid (lint-workflow-hook
+               (str prefix
+                    "(workflow/defexecutor sample \"Sample.\" {} [_] nil)"))]
+    (testing "valid declarations remain lintable"
+      (is (zero? (:exit valid))
+          (str (:out valid) (:err valid))))
+    (doseq [[description declaration expected-value]
+            [["missing name" "(workflow/defexecutor)" "(workflow/defexecutor)"]
+             ["invalid name"
+              "(workflow/defexecutor :bad \"Bad.\" {} [_] nil)"
+              ":bad"]
+             ["missing argv"
+              "(workflow/defexecutor missing-argv \"Bad.\" {})"
+              "(workflow/defexecutor missing-argv \"Bad.\" {})"]
+             ["missing body"
+              "(workflow/defexecutor missing-body \"Bad.\" {} [_])"
+              "nil"]]]
+      (let [result (lint-workflow-hook (str prefix declaration))
+            output (str (:out result) (:err result))]
+        (testing description
+          (is (pos? (:exit result)) output)
+          (is (str/includes? output "Invalid workflow/defexecutor declaration")
+              output)
+          (is (str/includes? output expected-value) output)
+          (is (str/includes? output
+                             "(defexecutor name doc options argv & body)")
+              output))))))
 
 (deftest workflow-exported-kondo-contract-is-on-consumer-classpath
   (testing "the Workflow root publishes resources"
