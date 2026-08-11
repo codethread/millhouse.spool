@@ -28,12 +28,37 @@
   (let [argv (get-in (step :copy-configs) [:attributes "shell/argv"])
         command (nth argv 2)]
     (is (= ["sh" "-c"] (subvec argv 0 2)))
-    (is (= 1 (count (re-seq #"clj-kondo --copy-configs" command))))
-    (is (str/includes? command "clojure -Spath"))
-    (is (str/includes? command "--lint"))
+    (is (= (str "set -eu\n"
+                "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
+                " --copy-configs --skip-lint\n")
+           command))
     (is (= "/tmp/consumer"
            ((get-in (step :copy-configs) [:attributes "shell/cwd"])
             {:worktree "/tmp/consumer"})))))
+
+(deftest quality-boundary-uses-resolved-argv
+  (let [params {:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
+                :worktree "/tmp/consumer"
+                :workspace "/tmp/consumer/.millstrand"
+                :direct-user-request false}
+        compile-call (fn [params]
+                       (workflow/compile
+                        (workflow/workflow
+                         "Caller"
+                         (workflow/call :millstrand-bump #'bump/bump-spool params))
+                        {}))
+        quality-strand (fn [compiled]
+                         (some #(when (= :millstrand-bump--quality (:ref %)) %)
+                               (:strands compiled)))
+        default-quality (quality-strand (compile-call params))
+        custom-quality (quality-strand
+                        (compile-call (assoc params :quality-argv ["just" "quality"])))
+        instruction (get-in custom-quality [:attributes "workflow/instruction"])]
+    (is (= ["make" "quality"]
+           (get-in default-quality [:attributes "shell/argv"])))
+    (is (= ["just" "quality"]
+           (get-in custom-quality [:attributes "shell/argv"])))
+    (is (str/includes? instruction "[\"just\" \"quality\"]"))))
 
 (deftest bump-instructions-use-the-requested-workspace
   (let [instruction (get-in (step :bump-spool) [:attributes "workflow/instruction"])

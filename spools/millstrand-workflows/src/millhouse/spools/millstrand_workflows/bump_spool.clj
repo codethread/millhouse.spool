@@ -39,8 +39,11 @@
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
 (s/def ::direct-user-request boolean?)
+(s/def ::quality-argv
+  (s/coll-of ::non-blank-string :kind vector? :min-count 1))
 (s/def ::spool-bump-params
-  (s/keys :req-un [::bumps ::worktree ::workspace ::direct-user-request]))
+  (s/keys :req-un [::bumps ::worktree ::workspace ::direct-user-request]
+          :opt-un [::quality-argv]))
 
 (def ^:private copy-configs-command
   "The one dependency-config import command used by the workflow.
@@ -49,11 +52,8 @@
   dependency export is considered in one clj-kondo invocation."
   ["sh" "-c"
    (str "set -eu\n"
-        "clj-kondo --copy-configs --lint \"$(clojure -Spath)\"\n")])
-
-(def ^:private quality-command
-  "Run the consumer repository's ordinary quality boundary."
-  ["make" "quality"])
+        "clj-kondo --lint \"$(clojure -Spath)\" --dependencies --parallel"
+        " --copy-configs --skip-lint\n")])
 
 (workflow/defworkflow bump-spool
   "Bump a pinned spool in a selected consumer worktree and refresh its runtime.
@@ -65,11 +65,12 @@
   other invocations stop at a pending-generation handover."
   {:entrypoints #{:start :call}
    :param-spec ::spool-bump-params
-   :defaults {}
+   :defaults {:quality-argv ["make" "quality"]}
    :example {:bumps [{:family "io.millstrand/millstrand" :version "v12"}]
              :worktree "/abs/path/to/consumer-worktree"
              :workspace "/abs/path/to/consumer-worktree/.millstrand"
-             :direct-user-request false}
+             :direct-user-request false
+             :quality-argv ["make" "quality"]}
    :param-docs {:bumps
                 (fmt/reflow
                  "|One {family, version} record per requested spool family. `version`
@@ -89,7 +90,12 @@
                 (fmt/reflow
                  "|True only when the user directly requested runtime cutover. False
                   |ends at an explicit pending-generation handover and never grants
-                  |permission to stop or restart a runtime.")}}
+                  |permission to stop or restart a runtime.")
+                :quality-argv
+                (fmt/reflow
+                 "|The consumer's ordinary quality command as an argv vector. It
+                  |defaults to `[\"make\" \"quality\"]`; callers for other consumer
+                  |projects must supply their own command.")}}
   (workflow/workflow
    (fn [{:keys [bumps]}]
      (str "Bump consumer spools: " (str/join ", " (map :family bumps))))
@@ -146,11 +152,11 @@
                    "shell/timeout-secs" 300
                    "workflow/instruction"
                    (fmt/reflow
-                    "|Run the single `clj-kondo --copy-configs --lint
-                     |\"$(clojure -Spath)\"` command in the selected worktree.
-                     |It must resolve the complete classpath and copy every
-                     |dependency export in one invocation; do not run one import
-                     |per spool.")})
+                    "|Run the single `clj-kondo --lint \"$(clojure -Spath)\"
+                     |--dependencies --parallel --copy-configs --skip-lint`
+                     |command in the selected worktree. It must resolve the
+                     |complete classpath and copy every dependency export in one
+                     |invocation; do not run one import per spool.")})
    (workflow/step :inspect-and-commit
                   "Inspect and commit copied clj-kondo configuration"
                   :self
@@ -173,14 +179,18 @@
                   :depends-on [:inspect-and-commit]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.quality"
-                   "shell/argv" quality-command
+                   "shell/argv" (fn [{:keys [quality-argv]}] quality-argv)
                    "shell/cwd" (fn [{:keys [worktree]}] worktree)
                    "shell/timeout-secs" 1800
                    "workflow/instruction"
-                   (fmt/reflow
-                    "|In the selected worktree, run the consumer's ordinary
-                     |quality boundary (`make quality`). A failing check blocks
-                     |runtime refresh and cutover; fix the change and retry.")})
+                   (fn [{:keys [quality-argv]}]
+                     (fmt/reflow
+                      (format
+                       "|In the selected worktree, run the consumer's ordinary
+                        |quality boundary from `quality-argv` (`%s`). A failing
+                        |check blocks runtime refresh and cutover; fix the change
+                        |and retry."
+                       (pr-str quality-argv))))})
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
                   :self
