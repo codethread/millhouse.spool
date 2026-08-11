@@ -1,0 +1,6 @@
+{:lint-as
+ {millhouse.spools.workflow/defworkflow clojure.core/def}
+ :hooks
+ {:analyze-call
+  {millhouse.spools.workflow/defworkflow
+   hooks.millhouse.spools.workflow/defworkflow}}}

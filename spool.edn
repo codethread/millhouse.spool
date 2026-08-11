@@ -4,4 +4,5 @@
          millhouse.spools/cron {:root "spools/cron"}
          millhouse.spools.executors/code {:root "spools/code-executor"}
          millhouse.spools.executors/shell {:root "spools/shell-executor"}
-         millhouse.spools/kanban {:root "spools/kanban"}}}
+         millhouse.spools/kanban {:root "spools/kanban"}
+         millhouse.spools/millstrand-workflows {:root "spools/millstrand-workflows"}}}

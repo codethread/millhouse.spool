@@ -8,7 +8,8 @@
    "spools/cron/src" "millhouse/spools"
    "spools/workflow/src" "millhouse/spools"
    "spools/code-executor/src" "millhouse/spools"
-   "spools/shell-executor/src" "millhouse/spools"})
+   "spools/shell-executor/src" "millhouse/spools"
+   "spools/millstrand-workflows/src" "millhouse/spools"})
 
 (defn- clj-file->ns
   [root file]

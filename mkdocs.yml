@@ -67,3 +67,7 @@ nav:
           - Cookbook: spools/kanban/kanban.cookbook.md
           - API: spools/kanban/kanban.api.md
           - Peering API: spools/kanban/kanban.peering.api.md
+      - Millstrand-workflows:
+          - Contract: spools/millstrand-workflows/README.md
+          - Cookbook: spools/millstrand-workflows/millstrand-workflows.cookbook.md
+          - API: spools/millstrand-workflows/millstrand-workflows.api.md

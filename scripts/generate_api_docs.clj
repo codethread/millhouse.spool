@@ -17,7 +17,9 @@
    {:source "spools/kanban/src/millhouse/spools/kanban.clj"
     :outfile "spools/kanban/kanban.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
-    :outfile "spools/kanban/kanban.peering.api.md"}])
+    :outfile "spools/kanban/kanban.peering.api.md"}
+   {:source "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
+    :outfile "spools/millstrand-workflows/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
   (quickdoc/quickdoc

@@ -18,7 +18,8 @@
     millhouse.e2e.cron.lifecycle-test
     millhouse.spools.executors.code-test
     millhouse.spools.executors.shell-test
-    millhouse.spools.kanban-test])
+    millhouse.spools.kanban-test
+    millhouse.spools.millstrand-workflows-test])
 
 (def serial-namespaces
   "Namespaces proven to require a JVM-global serial island."
