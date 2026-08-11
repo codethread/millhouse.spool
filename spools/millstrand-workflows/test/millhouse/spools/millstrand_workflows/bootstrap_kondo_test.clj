@@ -88,6 +88,8 @@
                          "git ls-files '.clj-kondo/.cache/**'"))
       (is (str/includes? validate-command "test -f .lsp/config.edn"))
       (is (str/includes? validate-command ":copy-kondo-configs? false"))
+      (is (str/includes? validate-command "false; observed"))
+      (is (str/includes? validate-command "(pr-str observed)"))
       (is (not (str/includes? validate-command
                               "millhouse.spools")))
       (is (str/includes? ((get-in validate [:attributes "workflow/instruction"])

@@ -52,9 +52,12 @@
         "test -f .lsp/config.edn\n"
         "clojure -e '"
         "(require '[clojure.edn :as edn]) "
-        "(let [config (edn/read-string (slurp \".lsp/config.edn\"))] "
-        "(when (not= false (:copy-kondo-configs? config)) "
-        "(binding [*out* *err*] (println \".lsp/config.edn must set :copy-kondo-configs? false\")) "
+        "(let [config (edn/read-string (slurp \".lsp/config.edn\")) "
+        "observed (:copy-kondo-configs? config)] "
+        "(when (not= false observed) "
+        "(binding [*out* *err*] "
+        "(println \".lsp/config.edn must set :copy-kondo-configs? false; observed\" "
+        "(pr-str observed))) "
         "(System/exit 1)))'\n"
         "git diff --check\n"
         "git check-ignore -q --no-index .clj-kondo/.cache/\n"
@@ -89,8 +92,8 @@
   (fmt/reflow
    (format
     "|In `%s`, establish the brownfield Kondo boundary: inventory the existing
-     |`.clj-kondo` config, imports, hooks, and
-    |ignore rules before editing, and ensure `.clj-kondo/.cache/` is ignored by
+     |`.clj-kondo` config, imports, hooks, and ignore rules before editing, and
+     |ensure `.clj-kondo/.cache/` is ignored by
      |the repository configuration. Merge `:copy-kondo-configs? false` into
      |`.lsp/config.edn` without overwriting any other existing LSP setting. Merge
      |only missing local settings and keep one producer-owned source for each
