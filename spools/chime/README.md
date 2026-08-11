@@ -10,6 +10,19 @@ Chime spawns a user-configured local process with the user's authority. Its code
 
 For composition recipes — binding a notifier, writing rules that fire on an attribute transition or on readiness, and debugging when the notifications go quiet — see the [cookbook](./chime.cookbook.md).
 
+### Published clj-kondo support
+
+This spool owns `millhouse.spools.chime/defrule`, so its public clj-kondo
+export is published from this root at
+`resources/clj-kondo.exports/millhouse.spools/chime/`. The export models the
+generated `<name>-rule` handler and keeps the macro's options and rule body in
+the analysis tree. A consumer dependency must include this root's `resources`
+path so clj-kondo can resolve both `config.edn` and the hook.
+
+The export, hook, and owner contract test live with Chime. When `defrule`
+changes shape, update them together; a spool that only consumes Chime must not
+re-export this contract.
+
 ## Loading
 
 Approve `millhouse.spools/chime` through the [repository family entry](../../README.md#consumption), then activate it from trusted startup config after syncing approved roots:
