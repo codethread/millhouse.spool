@@ -1,11 +1,4 @@
-{;; with-weaver-world binds [ctx opts] as
- ;; let-shaped vectors; kondo cannot expand these custom macros, so lint their
- ;; binding forms as let to resolve the bound symbols.
- :lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest
-           millstrand.api.lifecycle.alpha/defreconcile clojure.core/def
-           millstrand.api.lifecycle.alpha/defresource clojure.core/def
-           millstrand.api.lifecycle.alpha/defseed clojure.core/def
-           millstrand.test.alpha/with-weaver-world clojure.core/let
+{:lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest
            ;; defworkflow defines a Var from (name doc opts definition); def's
            ;; shape resolves the name without kondo expanding the macro.
            millhouse.spools.workflow/defworkflow clojure.core/def}
