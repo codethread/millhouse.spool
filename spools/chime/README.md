@@ -1,31 +1,19 @@
 # Millhouse Chime spool
 
-## Overview
+`millhouse.spools.chime` turns meaningful Millstrand graph events into local
+notifications. It evaluates workspace-owned rules against the current graph
+and sends matching notices through a notifier command chosen by each user.
 
-`millhouse.spools.chime` is a local notification engine for Millstrand graph events. It watches strand mutations, evaluates small user-registered rules, and sends matching notices through a user-bound local notifier command.
+Chime ships no rules and no notifier. Shared workspace configuration decides
+what deserves attention; personal configuration decides how a developer is
+told. Chime keeps that binding, its rules, deduplication memory, batch memory,
+and recent failures on the active runtime for the weaver lifetime.
 
-Chime knows nothing about any particular workflow or attribute vocabulary: it ships **no rules and no notifier**. A workspace's trusted config decides what deserves attention (rules) and each developer decides how to be told (notifier). It owns only runtime-local weaver-lifetime state: the notifier binding, rules, deduplication memory, batch scan memory, and recent failures are kept on the active runtime and isolated from other runtimes in the same JVM.
+## 1. Activation
 
-Chime spawns a user-configured local process with the user's authority. Its code loads through the approved `millhouse/spools` Git family rather than the production classpath.
-
-For composition recipes — binding a notifier, writing rules that fire on an attribute transition or on readiness, and debugging when the notifications go quiet — see the [cookbook](./chime.cookbook.md).
-
-### Published clj-kondo support
-
-This spool owns `millhouse.spools.chime/defrule`, so its public clj-kondo
-export is published from this root at
-`resources/clj-kondo.exports/millhouse.spools/chime/`. The export models the
-generated `<name>-rule` handler and keeps the macro's options and rule body in
-the analysis tree. A consumer dependency must include this root's `resources`
-path so clj-kondo can resolve both `config.edn` and the hook.
-
-The export, hook, and owner contract test live with Chime. When `defrule`
-changes shape, update them together; a spool that only consumes Chime must not
-re-export this contract.
-
-## Loading
-
-Approve `millhouse.spools/chime` through the [repository family entry](../../README.md#consumption), then activate it from trusted startup config after syncing approved roots:
+Approve `millhouse.spools/chime` through the [repository family entry](../../README.md#consumption),
+then activate it from trusted startup configuration after syncing approved
+roots:
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
@@ -38,79 +26,57 @@ Approve `millhouse.spools/chime` through the [repository family entry](../../REA
    :required? true})
 ```
 
-The module's `defresource` maintains the graph-event handler, registration barrier, and visible rule view under one shared monitor. A useful setup then layers two things on top:
+Activation installs the graph-event handler, the synchronous mutation barrier,
+and the lifecycle-managed rule view. It publishes no rule and binds no
+notifier by itself.
 
-- shared config (`init.clj` / a workspace spool) authors the workspace's rules with `defrule`, so the repo decides what needs attention;
-- each developer binds their notifier in gitignored `init.local.clj` with `set-notifier!`, so how you get told (a notification daemon, `osascript`, a bell) stays a personal choice.
+## 2. Author rules in workspace modules
 
-## Notifier binding
+Use `defrule` in shared, trusted configuration. The macro defines the handler
+and collects an owner-partitioned declaration; publication reconciles the
+effective rule view. Source evaluation does not run the rule. The generated
+API documents the declaration shape and focused authoring example.
 
-Bind the notifier with plain data:
+Each rule receives a context containing `:event`, the candidate `:strand`, and
+one `:ready-ids` set computed for the scan. Return nil when there is nothing to
+announce, or a notification map with a non-blank `:title` and optional string
+`:body`. Chime scans the whole graph, so closing one strand can notify about a
+different strand that just became ready. Batch events and their fanout share a
+`:batch/id`; only the first event for that batch scans.
 
-```clojure
-(require '[millhouse.spools.chime :as chime])
+An owner-complete refresh retracts omitted declarations. A declaration that is
+already matching is used as the initial seen baseline, so restarting a weaver
+does not replay durable conditions. A mutation that commits after registration
+is ordered after that baseline and can notify normally.
 
-(chime/set-notifier! {:argv ["my-notify"]})
-(chime/notifier)
-```
+Trusted REPL code and tests can use `register!` and `unregister!` for direct
+runtime-local rules. These seams do not edit a rule Var or a module-owned
+declaration.
 
-For each notification, chime spawns `:argv` with the title appended as the final argument and the body written to stdin — any command with the shape `my-notify <title>` (body on stdin) works, including a small wrapper script around whatever your platform uses.
+## 3. Bind a personal notifier
 
-Notifier state is weaver-lifetime: re-bind on every startup/reload (which `init.local.clj` does naturally). With no notifier bound, a fired rule records a loud failure in `(chime/recent-failures)` instead of silently dropping the event.
+Bind a plain `{:argv [...]}` map in gitignored local startup configuration.
+Chime starts that command for each notification, appends the title as its final
+argument, and writes the body to standard input. The command runs with the
+user's local authority, so its path and arguments must be trusted.
 
-Manual sends use the same path:
+The binding is not durable: set it again after every weaver startup or config
+reload. If a rule fires while no notifier is bound, Chime records a
+`:notifier-missing` failure instead of dropping the notification. Process and
+rule failures are likewise retained by `recent-failures`; event-handler
+failures remain on Millstrand's event failure surface.
 
-```clojure
-(chime/notify! {:title "Build finished" :body "All strands under plan abc are closed."})
-```
+Chime marks a `[rule strand]` pair seen only after the notifier process starts.
+It does not notify again while the rule keeps matching, clears the mark when
+the rule stops matching, and can be re-armed with `reset-seen!` for tests or
+interactive configuration.
 
-## Rules
+## 4. Millstrand state and APIs
 
-A rule is a named function registered by fully qualified symbol. On every graph mutation chime scans current strands and calls each rule with a context map containing at least:
-
-- `:strand` — the candidate strand being evaluated;
-- `:event` — the triggering graph event;
-- `:ready-ids` — the set of ready strand ids, computed once per scan, so
-  readiness rules need no extra queries.
-
-The rule returns nil for no notification or `{:title "..." :body "..."}` to send one. Scans are whole-graph on purpose — the strand worth notifying about is often not the strand that changed (closing one strand is what makes another ready). Batch events and their per-strand fanout share a `:batch/id` and trigger only one scan.
-
-Worked example — notify when a strand that parents other work is closed:
-
-```clojure
-(ns my.rules
-  "Workspace notification rules."
-  (:require [millstrand.api.current.alpha :as current]
-            [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.spools.chime :as chime]))
-
-(chime/defrule parent-completed
-  "Notify when a strand with parent-of children reaches closed."
-  [{:keys [strand]}]
-  (when (and (= "closed" (:state strand))
-             (seq (weaver/list (current/runtime)
-                               [:edge/in "parent-of" [:= :id (:id strand)]] {})))
-    {:title (str "Plan complete: " (:title strand))
-     :body (str "Strand " (:id strand) " and the work it parents are finished.")}))
-```
-
-Loading this module publishes `:parent-completed` under its module owner. Omission retracts it on refresh. That authoring-form path is the durable source. Trusted REPL code and tests may use Chime's runtime-local `register!` seam for a live rule, and `unregister!` removes only that direct entry; neither function changes the rule Var or the module-owned declaration. The rule registry remains local to the active runtime.
-
-When a rule is registered, chime treats its currently matching strands as an initial seen baseline. Restarting a weaver therefore does not replay every durable condition on the next graph mutation. This suppresses every condition already true at registration, including one that first became true while the weaver was down and has never produced a notification. Conditions that start after registration notify normally. Chime's pre-commit mutation barrier orders concurrent graph changes after registration, so they are not absorbed into the baseline.
-
-Chime then deduplicates notifications per `[rule strand]` while the rule keeps
-matching: a strand is marked seen only after the notifier process starts, so a
-missing or failing notifier does not swallow the alert, and the mark clears when
-the rule stops matching so a recurrence notifies again. Use
-`(chime/reset-seen!)` from tests or config to clear that memory.
-
-Rule, notifier, and process failures are recorded by `(chime/recent-failures)` and event handler failures remain visible through the Millstrand event failure surface.
-
-## See also
-
-- [`../../README.md`](../../README.md) — the spool index.
-- [`agent-harness.spool/agent-run/README.md`][agent-run-contract] — external coordinate,
-  activation, and local-override pattern.
-- [`https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/docs/spools/customisation.md#workspace-modules-and-local-spools`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/docs/spools/customisation.md#workspace-modules-and-local-spools) — authoring workspace modules and local spools.
-
-[agent-run-contract]: https://github.com/codethread/agent-harness.spool/blob/d28bfb35b5fc1891a7a318e06886aa446722241d/agent-run/README.md
+| Surface | Identity | Consumer contract |
+| --- | --- | --- |
+| Rule authoring | `defrule` → `:millhouse.spools.chime/rules` | Publishes one owner-partitioned notification rule declaration. |
+| Event handler | `:chime/engine` | Scans graph mutations for matching rules. |
+| Registration barrier | `:chime/registration-barrier` | Orders graph commits after an in-progress rule baseline. |
+| Direct runtime seam | `register!` / `unregister!` | Adds or removes a trusted, runtime-local rule without changing module declarations. |
+| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/chime/` | Models `defrule` and its generated handler; consumers must expose this root's `resources` path. |
