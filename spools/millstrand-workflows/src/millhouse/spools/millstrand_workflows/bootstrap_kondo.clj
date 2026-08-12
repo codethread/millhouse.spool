@@ -206,6 +206,16 @@
 (workflow/defworkflow bootstrap-kondo
   "Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
 
+  Start it with the exact consumer worktree and Millstrand workspace:
+
+  ```clojure
+  (require '[millhouse.spools.workflow :as workflow])
+
+  (workflow/start! \"consumer-kondo\" :bootstrap-kondo
+    {:worktree \"/abs/path/to/consumer-worktree\"
+     :workspace \"/abs/path/to/consumer-worktree/.millstrand\"})
+  ```
+
   Both routes import all resolved dependency exports once, validate provenance,
   duplicate mappings, and cache hygiene, discover local quality checks, and
   leave a precise handover. Both route preparations merge
@@ -271,7 +281,10 @@
                                                   |be established.")}])))
 
 (workflow/defworkflow bootstrap-kondo-greenfield
-  "Establish a greenfield Kondo boundary and import Millstrand exports."
+  "Establish a greenfield Kondo boundary and import Millstrand exports.
+
+  This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
+  normally start the parent workflow so adoption mode is recorded first."
   {:entrypoints #{:continue}
    :param-spec ::bootstrap-kondo-params}
   (apply workflow/workflow
@@ -285,7 +298,10 @@
          (shared-steps)))
 
 (workflow/defworkflow bootstrap-kondo-brownfield
-  "Inventory and merge an existing Kondo boundary before importing exports."
+  "Inventory and merge an existing Kondo boundary before importing exports.
+
+  This is the `brownfield` continuation selected by `bootstrap-kondo`; callers
+  normally start the parent workflow so adoption mode is recorded first."
   {:entrypoints #{:continue}
    :param-spec ::bootstrap-kondo-params}
   (apply workflow/workflow

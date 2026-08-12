@@ -112,6 +112,19 @@
 (workflow/defworkflow publish-spool-kondo
   "Publish clj-kondo support for a macro-owning spool root.
 
+  Start the registered workflow with a complete publisher contract:
+
+  ```clojure
+  (require '[millhouse.spools.workflow :as workflow])
+
+  (workflow/start! \"publish-example\" :publish-spool-kondo
+    {:spool-root \"spools/example-macros\"
+     :namespace \"example.macros\"
+     :spool-key \"example/macros\"
+     :macro-forms [{:macro \"example.macros/defwidget\"
+                    :hook \"hooks.example/defwidget\"}]})
+  ```
+
   The caller names the owning root, public namespace, spool key, and every
   macro-to-hook mapping. The workflow then walks the obligations in order:
   verify root ownership, publish resources on the root classpath, publish the

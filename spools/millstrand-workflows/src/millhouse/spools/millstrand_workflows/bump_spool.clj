@@ -37,6 +37,18 @@
 (workflow/defworkflow bump-spool
   "Bump selected spool families to their remote default-branch HEAD SHA and bootstrap Kondo.
 
+  Start it with family names and the exact consumer paths:
+
+  ```clojure
+  (require '[millhouse.spools.workflow :as workflow])
+
+  (workflow/start! \"consumer-bump\" :bump-spool
+    {:families [\"io.millstrand/millstrand\" \"millhouse/spools\"]
+     :worktree \"/abs/path/to/consumer-worktree\"
+     :workspace \"/abs/path/to/consumer-worktree/.millstrand\"
+     :direct-user-request false})
+  ```
+
   The caller supplies exact consumer paths and family names. Each bump uses
   `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
   and accepted. The shared bootstrap workflow then handles greenfield or
