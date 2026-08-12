@@ -243,7 +243,15 @@
             (do (destroy-process-tree! process)
                 (.waitFor process)
                 (merge {:timeout? true :exit (.exitValue process)}
-                       (timeout-output reader))))
+                       (try
+                         (timeout-output reader)
+                         (catch Throwable _
+                           ;; Killing the process closes its output pipe. On some
+                           ;; platforms the reader observes that close as an
+                           ;; IOException instead of EOF; timeout remains the
+                           ;; authoritative terminal outcome.
+                           {:output timeout-output-marker
+                            :output-truncated? true})))))
           (do (.waitFor process)
               {:exit (.exitValue process) :output @reader}))))))
 

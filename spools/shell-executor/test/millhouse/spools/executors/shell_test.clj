@@ -72,6 +72,17 @@
     (is (instance? java.io.IOException failure))
     (is (= "reader failed" (ex-message failure)))))
 
+(deftest timeout-remains-authoritative-when-kill-closes-output-stream
+  (with-redefs-fn {#'shell/destroy-process-tree! (fn [process]
+                                                   (.destroyForcibly ^Process process))
+                   #'shell/timeout-output (fn [_]
+                                            (throw (java.io.IOException. "Stream closed")))}
+    (fn []
+      (let [result (#'shell/execute! ["sh" "-c" "sleep 30"] nil 1)]
+        (is (:timeout? result))
+        (is (:output-truncated? result))
+        (is (str/includes? (:output result) "output truncated after timeout"))))))
+
 (deftest pass-closes-gate-records-outcome-and-unblocks-next-step
   (with-shell
     (fn [rt]
