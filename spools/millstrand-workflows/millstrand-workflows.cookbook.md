@@ -14,14 +14,22 @@ Recipes here combine multiple workflow families; parameter shapes and focused st
 
 **Situation.** A consumer pins Millstrand or another spool family and needs the newest approved default-branch commit.
 
-**Composition.** Give `bump-spool` family names plus the exact consumer worktree and workspace. It emits one `spool bump <family> --latest sha` request per family, accepts an already-current coordinate, then calls `bootstrap-kondo` and hands over the refreshed runtime state.
+**Composition.** Give `bump-spool` family names plus the exact consumer worktree and workspace. It emits one `spool bump <family> --latest sha` request per family, accepts an already-current coordinate, calls `bootstrap-kondo`, and refreshes the selected runtime. Choose `app`, `spool`, or `clojure-app` when prompted. The chosen continuation asks the agent to align tools.deps, LSP, lint, tests, and Weaver behavior with the effective spool world before handover or an authorized cutover.
 
-**Why this shape.** Family-only input prevents callers from inventing versions or SHAs. Reusing bootstrap keeps dependency resolution, Kondo ownership, provenance, and quality discovery identical after a bump.
+**Why this shape.** Family-only input prevents callers from inventing versions or SHAs. Reusing bootstrap keeps Kondo ownership and provenance identical after a bump. The repository-style steps stay manual because each consumer has different aliases, commands, and source ownership; they do not add a universal gate.
 
 ## Choose a local or pinned Millstrand update
 
 **Situation.** A consumer's Millstrand coordinate may be a sibling checkout during development or a Git/SHA pin in a shared checkout.
 
-**Composition.** Start `bump-millstrand`, inspect the exact `deps-file`, and route explicitly. The local route preserves the checkout, asks for a move-forward decision, and then calls `bootstrap-kondo`; the pinned route delegates to `bump-spool`. Both routes refresh the selected runtime and hand over unless the direct user has authorized cutover.
+**Composition.** Start `bump-millstrand`, inspect the exact `deps-file`, and route explicitly. The local route preserves the checkout, asks for a move-forward decision, then calls `bootstrap-kondo`; the pinned route delegates to `bump-spool`. Both routes refresh the selected runtime and ask for the same `app`, `spool`, or `clojure-app` tooling choice. When a generation is pending, record what works against the current generation and leave the chosen Weaver check unfinished. Hand over unless the direct user has authorized cutover; after cutover, repeat that check against the adopted generation.
 
-**Why this shape.** Local development stays local, while pinned consumers use the remote default-branch SHA path. The explicit boundary prevents an agent or nested workflow from stopping or restarting a runtime.
+**Why this shape.** Local development stays local, while pinned consumers use the remote default-branch SHA path. Both get the same tooling contract without pretending that `deps.edn` replaces spool approval. The explicit boundary prevents an agent or nested workflow from stopping or restarting a runtime.
+
+## Configure tooling without changing a coordinate
+
+**Situation.** A consumer already has the intended spool coordinates but its Clojure tools do not see the same source, config, or tests as its Weaver.
+
+**Composition.** Call `configure-consumer-tooling` with the exact worktree and workspace. Inspect spool status and repository conventions, then choose one style. Use `app` for a non-Clojure product with Millstrand config, `spool` for a repository that publishes roots, and `clojure-app` for a Clojure application with Millstrand config. Work through the manual tools.deps, LSP, lint, test, and Weaver steps, recording the real commands and results.
+
+**Why this shape.** Clojure tools consume a static tools.deps view, while the Weaver consumes approved spool roots. The workflow makes the two views agree where needed without merging their authority or imposing one repository layout.

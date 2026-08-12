@@ -5,6 +5,8 @@
             [clojure.test :refer [deftest is]]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo]
             [millhouse.spools.millstrand-workflows.bump-millstrand :as bump]
+            [millhouse.spools.millstrand-workflows.bump-spool :as bump-spool]
+            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
@@ -66,18 +68,43 @@
          (get-in local-choices ["move-forward" "description"])
          "bootstrap"))))
 
-(deftest local-path-calls-shared-bootstrap-before-refresh
+(deftest local-path-configures-consumer-tooling-after-refresh
   (let [local (definition #'bump/bump-millstrand-local-validate)
         bootstrap-call (step local :bootstrap-kondo)
         refresh (step local :refresh-runtime)
+        tooling-call (step local :configure-consumer-tooling)
         compiled (workflow/compile local params)
         refs (set (map :ref (:strands compiled)))]
     (is (= #'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
            (:procedure bootstrap-call)))
     (is (= [:bootstrap-kondo] (:depends-on refresh)))
+    (is (= #'tooling/configure-consumer-tooling
+           (:procedure tooling-call)))
+    (is (= [:refresh-runtime] (:depends-on tooling-call)))
+    (is (= [:configure-consumer-tooling]
+           (:depends-on (step local :handover-runtime-generation-evidence))))
+    (is (str/includes?
+         ((get-in (step local :assess-authorized-cutover)
+                  [:attributes "workflow/instruction"])
+          params)
+         "If no pending generation exists"))
+    (is (str/includes?
+         ((get-in (step local :handover-runtime-generation-evidence)
+                  [:attributes "workflow/instruction"])
+          params)
+         "no cutover is required"))
     (is (contains? refs :bootstrap-kondo--select-world))
     (is (contains? refs :bootstrap-kondo--adoption-mode))
-    (is (contains? refs :handover-pending-generation))
+    (is (contains? refs :configure-consumer-tooling--inspect-repository))
+    (is (contains? refs :configure-consumer-tooling--repository-style))
+    (is (contains? refs :handover-runtime-generation-evidence))
+    (is (not-any? #(str/starts-with? (name %) "bump-spool--") refs))
+    (let [inspect-instruction
+          (get-in (into {} (map (juxt :ref identity) (:strands compiled)))
+                  [:configure-consumer-tooling--inspect-repository
+                   :attributes "workflow/instruction"])]
+      (is (str/includes? inspect-instruction (:worktree params)))
+      (is (str/includes? inspect-instruction (:workspace params))))
     (is (not-any? #(str/includes? (name %) "quality") refs))))
 
 (deftest pinned-path-uses-automatic-latest-sha-and-bootstrap
@@ -99,7 +126,19 @@
                                        [:bump-spool--bump-spool-1 :attributes
                                         "workflow/instruction"])]
           (is (= #{:continue} (:entrypoints resolved)))
+          (is (= #'bump-spool/bump-spool
+                 (:procedure (step (:value resolved) :bump-spool))))
           (is (str/includes? bump-instruction
                              "strand --workspace /tmp/consumer/.millstrand spool bump io.millstrand/millstrand --latest sha"))
           (is (str/includes? bump-instruction "already current"))
-          (is (contains? (set (keys strands)) :bump-spool--bootstrap-kondo--select-world)))))))
+          (is (contains? (set (keys strands)) :bump-spool--bootstrap-kondo--select-world))
+          (is (contains? (set (keys strands))
+                         :bump-spool--configure-consumer-tooling--inspect-repository))
+          (is (contains? (set (keys strands))
+                         :bump-spool--configure-consumer-tooling--repository-style))
+          (let [inspect-instruction
+                (get-in strands
+                        [:bump-spool--configure-consumer-tooling--inspect-repository
+                         :attributes "workflow/instruction"])]
+            (is (str/includes? inspect-instruction (:worktree params)))
+            (is (str/includes? inspect-instruction (:workspace params)))))))))

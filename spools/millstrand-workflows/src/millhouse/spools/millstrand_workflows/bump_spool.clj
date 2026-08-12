@@ -2,13 +2,15 @@
   "The portable consumer workflow for bumping pinned Millstrand spool families.
 
   This workflow assumes that its caller has selected the worktree and workspace
-  in which the change is allowed. It requests the remote default-branch HEAD SHA for each
-  family, tolerates an already-current coordinate, then reuses the shared Kondo
-  bootstrap before handing over the refreshed runtime."
+  in which the change is allowed. It requests the remote default-branch HEAD SHA
+  for each family, tolerates an already-current coordinate, then reuses the shared
+  Kondo bootstrap and repository-style tooling setup before handing over the
+  refreshed runtime."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
+            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]))
 
 (defn- non-blank-string?
@@ -35,7 +37,7 @@
   (s/keys :req-un [::families ::worktree ::workspace ::direct-user-request]))
 
 (workflow/defworkflow bump-spool
-  "Bump selected spool families to their remote default-branch HEAD SHA and bootstrap Kondo.
+  "Bump selected spool families and configure consumer tooling.
 
   Start it with family names and the exact consumer paths:
 
@@ -51,9 +53,10 @@
 
   The caller supplies exact consumer paths and family names. Each bump uses
   `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
-  and accepted. The shared bootstrap workflow then handles greenfield or
-  brownfield Kondo adoption, local quality discovery, and handover. Runtime
-  cutover is offered only for a direct user request."
+  and accepted. The shared bootstrap workflow handles greenfield or brownfield
+  Kondo adoption. After refresh, an agent chooses the repository style and
+  manually aligns LSP, lint, tests, and Weaver proof without new executor gates.
+  Runtime cutover is offered only for a direct user request."
   {:entrypoints #{:start :call}
    :param-spec ::spool-bump-params
    :defaults {}
@@ -135,33 +138,46 @@
                         |`(runtime/refresh! (current/runtime))`. Record the full
                         |result and whether the bumped coordinate is adopted or
                         |pending. Refresh does not itself authorize a stop or
-                        |restart."
+                       |restart."
                        workspace)))})
-   (workflow/step :cutover
-                  "Cut over the selected runtime after direct user authorization"
+   (workflow/call :configure-consumer-tooling
+                  #'tooling/configure-consumer-tooling
+                  {:worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [workspace]}] workspace)}
+                  :depends-on [:refresh-runtime])
+   (workflow/step :assess-authorized-cutover
+                  "Assess generation state and use authorized cutover only when pending"
                   :self
-                  :depends-on [:refresh-runtime]
+                  :depends-on [:configure-consumer-tooling]
                   :condition [:= :direct-user-request true]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.cutover"
                    "workflow/instruction"
                    (fmt/reflow
-                    "|This step is present only for a direct user request. Ask the
-                     |direct user to confirm the recorded pending generation, then
+                    "|This step is present only for a direct user request. Inspect
+                     |the recorded refresh and tooling evidence first. If no pending
+                     |generation exists, do not stop or start anything; record that
+                     |the adopted-generation Weaver proof is already complete. If a
+                     |generation is pending, ask the direct user to confirm it, then
                      |stop and start only the selected runtime by its exact
-                     |workspace/PID. Reconnect and verify the bumped coordinate is
-                     |adopted with no pending generation. Never infer this authority
+                     |workspace/PID. Reconnect, verify the bumped coordinate is
+                     |adopted with no pending generation, and repeat the selected
+                     |repository-style Weaver check. Never infer restart authority
                      |from an agent, scheduled, or nested workflow call.")})
-   (workflow/step :handover-pending-generation
-                  "Hand over pending runtime generation"
+   (workflow/step :handover-runtime-generation-evidence
+                  "Hand over adopted or pending runtime generation evidence"
                   :self
-                  :depends-on [:refresh-runtime]
+                  :depends-on [:configure-consumer-tooling]
                   :condition [:= :direct-user-request false]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.handover"
                    "workflow/instruction"
                    (fmt/reflow
                     "|Do not stop or restart any runtime. Record the bump results,
-                     |bootstrap handover, refresh result, pending generation, and
-                     |exact selected workspace, then hand over that a direct user
+                     |bootstrap and repository-tooling handovers, refresh result,
+                     |generation state, and exact selected workspace. If no pending
+                     |generation exists, record that no cutover is required and the
+                     |adopted-generation Weaver proof is complete. If a generation
+                     |is pending, mark the selected repository-style Weaver check
+                     |after cutover as unfinished and hand over that a direct user
                      |request is required before runtime cutover.")})))

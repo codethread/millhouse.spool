@@ -29,25 +29,34 @@ The producer resource directory is the source of truth for its mapping. A change
 
 ## 3. Adopt exports in a consumer
 
-`bootstrap-kondo` asks for `greenfield` or `brownfield` before route-specific work. Greenfield creates `.clj-kondo/config.edn` only when absent and establishes the cache ignore rule. Brownfield inventories existing config, imports, hooks, and ignore rules before merging only missing local settings. Both routes preserve existing LSP settings while ensuring `.lsp/config.edn` contains `:copy-kondo-configs? false`; explicit bootstrap is the sole Kondo import owner. Before importing, both routes verify that the `clj-kondo` binary is available. If it is missing, the agent stops to discuss the [official installation options](https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md) and obtains explicit approval for the user's chosen method before running an installer or package manager.
+`bootstrap-kondo` asks for `greenfield` or `brownfield` before route-specific work. Greenfield creates `.clj-kondo/config.edn` only when absent and establishes the cache ignore rule. Brownfield inventories existing config, imports, hooks, and ignore rules before merging only missing local settings. Both routes preserve existing LSP settings while ensuring `.lsp/config.edn` contains `:copy-kondo-configs? false`; explicit bootstrap is the sole Kondo import owner. Before importing, both routes verify a repository-native or standalone clj-kondo command that accepts the required import flags. If neither exists, the agent stops to discuss the [official installation options](https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md) and obtains explicit approval for the user's chosen method before running an installer or package manager.
 
 For every intended installed root, read the live `strand --workspace <workspace> spool status` result and derive classpath directories from its reported `sync.root` and `deps.edn` `:paths`. A declared `millstrand/source-root` is handled specially: remove exactly its relative path segments from the end of `sync.root` to derive `BASE`, verify the reconstruction, read `BASE/deps.edn`, and include its declared paths, including `resources`. Require `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/`; do not search upward or guess. Absent `:paths` means `src`, while explicit `:paths []` remains empty. The installed spool root is still resolved normally, and a plain consumer `clojure -Spath` is insufficient.
 
-The import records exact roots, derivations, and the combined classpath before one `clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel --copy-configs --skip-lint` invocation. Unresolved roots, a missing base export, an invalid base `deps.edn`, or an empty installed-spool contribution fail loudly with the applicable invariant. Validation checks one provenance source per imported mapping, duplicate and overlap decisions, repository-relative self-imports, LSP ownership, and tracked cache files; legitimate producer imports remain valid. Quality checks are discovered from the consumer repository and handed over with the before/during/after self-import result.
+The import records exact roots, derivations, the verified Kondo command, and the combined classpath before one `KONDO_CMD --lint RESOLVED_CLASSPATH --dependencies --parallel --copy-configs --skip-lint` invocation. Unresolved roots, a missing base export, an invalid base `deps.edn`, or an empty installed-spool contribution fail loudly with the applicable invariant. Validation checks one provenance source per imported mapping, duplicate and overlap decisions, repository-relative self-imports, LSP ownership, and tracked cache files; legitimate producer imports remain valid. Quality checks are discovered from the consumer repository and handed over with the before/during/after self-import result.
 
 ## 4. Update dependency coordinates
 
-`bump-spool` accepts family names only. It requests each remote default-branch HEAD SHA with `spool bump <family> --latest sha`, records an already-current coordinate as successful, then reuses `bootstrap-kondo` before handing over the refreshed runtime.
+`bump-spool` accepts family names only. It requests each remote default-branch HEAD SHA with `spool bump <family> --latest sha`, records an already-current coordinate as successful, then reuses `bootstrap-kondo` and refreshes the selected runtime.
 
-`bump-millstrand` first inspects the exact `io.millstrand/millstrand` entry in `deps-file`. A local sibling coordinate stays local and requires an explicit continuation decision before bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`. Neither route invents a SHA or assumes a fixed quality command.
+After refresh, `configure-consumer-tooling` inspects the repository and asks the agent to choose one style:
 
-Runtime refresh and cutover retain the direct-user boundary: ordinary agent and nested calls hand over the pending generation and never stop or restart a runtime.
+- `app`: a non-Clojure product that uses Clojure only for Millstrand config, tooling, and tests;
+- `spool`: a repository that owns and publishes one or more spool roots;
+- `clojure-app`: an ordinary Clojure application that also has Millstrand config.
+
+Each continuation walks through tools.deps, clojure-lsp, clj-kondo and lint, tests, and Weaver proof. These are ordinary agent steps, not gates. The agent adapts the repository's existing files and commands, records the actual evidence, and stops when the style or classpath ownership is ambiguous. `spools.edn` remains the Weaver's approval graph; `deps.edn` and the LSP, lint, and test configuration provide a matching view for Clojure tools.
+
+`bump-millstrand` first inspects the exact `io.millstrand/millstrand` entry in `deps-file`. A local sibling coordinate stays local and requires an explicit continuation decision before bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`. Both routes reach the same repository-style tooling choice. Neither route invents a SHA or assumes a fixed quality command.
+
+Runtime refresh and cutover retain the direct-user boundary. When refresh reports no pending generation, the chosen route proves real Weaver behavior immediately. When it reports a pending generation, the workflow separates prepared tooling, proof against the current generation, and the Weaver check that remains unfinished. Ordinary agent and nested calls hand that check over and never stop or restart a runtime. A direct-user cutover repeats the chosen Weaver check after the new generation is adopted.
 
 ## 5. Millstrand state and APIs
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
-| Workflow registry | `workflow/definition-kind` owned by `millhouse.spools.millstrand-workflows` | Publishes the producer, bootstrap, bump, and continuation workflow definitions during module refresh. |
-| Agent instructions | `workflow/action-ref` on each workflow step | Exposes the exact producer, classpath, validation, quality, and handover obligation for the driving agent. |
+| Workflow registry | `workflow/definition-kind` owned by `millhouse.spools.millstrand-workflows` | Publishes the producer, bootstrap, bump, tooling-choice, and continuation workflow definitions during module refresh. |
+| Agent instructions | `workflow/action-ref` on each workflow step | Exposes the exact producer, classpath, LSP, lint, test, Weaver, and handover obligation for the driving agent. |
+| Repository style | Agent choice in `configure-consumer-tooling` | Selects `app`, `spool`, or `clojure-app`; its setup steps are manual and add no executor gate. |
 | Kondo import boundary | `.lsp/config.edn :copy-kondo-configs? false` | Keeps explicit bootstrap as the sole consumer-side import owner. |
 | Runtime cutover boundary | `:direct-user-request` | Allows stop/restart instructions only for a direct user request; other callers receive a handover. |

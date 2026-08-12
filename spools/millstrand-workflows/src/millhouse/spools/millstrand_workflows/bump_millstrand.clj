@@ -2,14 +2,15 @@
   "The local-aware consumer workflow for updating Millstrand.
 
   The workflow asks the caller to inspect the selected coordinate. A local
-  checkout stays local and uses the shared Kondo bootstrap; a pinned checkout
-  delegates to bump-spool, whose family-only contract requests the remote
-  default-branch HEAD SHA automatically."
+  checkout stays local and uses the shared Kondo bootstrap and repository-style
+  tooling setup; a pinned checkout delegates to bump-spool, whose family-only
+  contract requests the remote default-branch HEAD SHA automatically."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
             [millhouse.spools.millstrand-workflows.bump-spool :as bump]
+            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]))
 
 (defn- non-blank-string?
@@ -71,17 +72,25 @@
 (defn- cutover-instruction
   []
   (fmt/reflow
-   "|This step is present only for a direct user request. Ask the direct user
-    |to confirm the recorded pending generation, then stop and start only the
-    |selected runtime by its exact workspace/PID. Never infer this authority
-    |from an agent, scheduled, or nested workflow call."))
+   "|This step is present only for a direct user request. Inspect the recorded
+    |refresh and tooling evidence first. If no pending generation exists, do not
+    |stop or start anything; record that the adopted-generation Weaver proof is
+    |already complete. If a generation is pending, ask the direct user to
+    |confirm it, then stop and start only the selected runtime by its exact
+    |workspace/PID. Confirm the local coordinate is adopted with no pending
+    |generation and repeat the selected repository-style Weaver check. Never
+    |infer restart authority from an agent, scheduled, or nested workflow call."))
 
 (defn- handover-instruction
   []
   (fmt/reflow
-   "|Do not stop or restart any runtime. Record the bootstrap and refresh
-    |results, pending generation, and exact selected workspace; hand over that
-    |direct-user authorization is required before runtime cutover."))
+   "|Do not stop or restart any runtime. Record the bootstrap, repository-
+    |tooling, and refresh results, generation state, and exact selected
+    |workspace. If no pending generation exists, record that no cutover is
+    |required and the adopted-generation Weaver proof is complete. If a
+    |generation is pending, mark the selected repository-style Weaver check
+    |after cutover as unfinished and hand over that direct-user authorization is
+    |required before runtime cutover."))
 
 (workflow/defworkflow bump-millstrand
   "Inspect a consumer Millstrand coordinate and choose its honest update path.
@@ -101,8 +110,9 @@
   ```
 
   A local sibling coordinate is never converted into a guessed SHA. A pinned
-  coordinate delegates to bump-spool, which requests the remote default-branch HEAD SHA and
-  then calls the shared Kondo bootstrap."
+  coordinate delegates to bump-spool, which requests the remote default-branch
+  HEAD SHA. Both routes choose the consumer repository style and manually align
+  LSP, lint, tests, and Weaver proof without new executor gates."
   {:entrypoints #{:start}
    :param-spec ::millstrand-bump-params
    :defaults {:deps-file "deps.edn"}
@@ -176,10 +186,11 @@
                                                   |decision is supplied.")}])))
 
 (workflow/defworkflow bump-millstrand-local-validate
-  "Bootstrap Kondo for an explicitly approved local Millstrand checkout.
+  "Configure an explicitly approved local Millstrand checkout.
 
-  This continuation preserves the local coordinate, runs shared bootstrap, and
-  refreshes the selected runtime before handing over or cutting over."
+  This continuation preserves the local coordinate, runs shared bootstrap,
+  refreshes the selected runtime, and configures repository-style tooling before
+  handing over or cutting over."
   {:entrypoints #{:continue}
    :param-spec ::millstrand-bump-params}
   (workflow/workflow
@@ -202,18 +213,23 @@
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.refresh"
                    "workflow/instruction" refresh-instruction})
-   (workflow/step :cutover
-                  "Cut over the selected runtime after direct user authorization"
+   (workflow/call :configure-consumer-tooling
+                  #'tooling/configure-consumer-tooling
+                  {:worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [workspace]}] workspace)}
+                  :depends-on [:refresh-runtime])
+   (workflow/step :assess-authorized-cutover
+                  "Assess generation state and use authorized cutover only when pending"
                   :self
-                  :depends-on [:refresh-runtime]
+                  :depends-on [:configure-consumer-tooling]
                   :condition [:= :direct-user-request true]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.cutover"
                    "workflow/instruction" (fn [_] (cutover-instruction))})
-   (workflow/step :handover-pending-generation
-                  "Hand over pending runtime generation"
+   (workflow/step :handover-runtime-generation-evidence
+                  "Hand over adopted or pending runtime generation evidence"
                   :self
-                  :depends-on [:refresh-runtime]
+                  :depends-on [:configure-consumer-tooling]
                   :condition [:= :direct-user-request false]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.handover"

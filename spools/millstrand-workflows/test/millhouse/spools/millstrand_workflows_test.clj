@@ -30,7 +30,7 @@
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
 
-(deftest activated-module-resolves-both-public-workflows
+(deftest activated-module-resolves-published-workflows
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
@@ -45,6 +45,13 @@
         (let [resolved (workflow/resolve-workflow :publish-spool-kondo)
               bootstrap-resolved (workflow/resolve-workflow :bootstrap-kondo)
               bump-resolved (workflow/resolve-workflow :bump-spool)
+              tooling-resolved (workflow/resolve-workflow :configure-consumer-tooling)
+              tooling-app-resolved
+              (workflow/resolve-workflow :configure-consumer-tooling-app)
+              tooling-spool-resolved
+              (workflow/resolve-workflow :configure-consumer-tooling-spool)
+              tooling-clojure-app-resolved
+              (workflow/resolve-workflow :configure-consumer-tooling-clojure-app)
               definition (:value resolved)
               bootstrap-definition (:value bootstrap-resolved)
               bump-definition (:value bump-resolved)
@@ -52,6 +59,10 @@
           (is (= #{:start} (:entrypoints resolved)))
           (is (= #{:start :call} (:entrypoints bootstrap-resolved)))
           (is (= #{:start :call} (:entrypoints bump-resolved)))
+          (is (= #{:start :call} (:entrypoints tooling-resolved)))
+          (is (= #{:continue} (:entrypoints tooling-app-resolved)))
+          (is (= #{:continue} (:entrypoints tooling-spool-resolved)))
+          (is (= #{:continue} (:entrypoints tooling-clojure-app-resolved)))
           (is (= 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
                  (:definition bootstrap-resolved)))
           (is (= [:select-world :adoption-mode]
@@ -60,6 +71,14 @@
                  (:definition bump-resolved)))
           (is (= "bump-spool"
                  (get-in bump-definition [:attributes "workflow/family"])))
+          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling
+                 (:definition tooling-resolved)))
+          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app
+                 (:definition tooling-app-resolved)))
+          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool
+                 (:definition tooling-spool-resolved)))
+          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app
+                 (:definition tooling-clojure-app-resolved)))
           (is (= [:inspect-spool-root
                   :publish-root-classpath
                   :publish-kondo-export

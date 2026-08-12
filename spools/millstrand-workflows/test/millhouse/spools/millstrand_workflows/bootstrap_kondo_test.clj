@@ -67,14 +67,16 @@
       (is (= [":prepare"] (mapv str (:depends-on ensure-kondo))))
       (let [instruction ((get-in ensure-kondo [:attributes "workflow/instruction"])
                          params)]
+        (is (str/includes? instruction "repository's Makefile"))
+        (is (str/includes? instruction "clojure -M:lint"))
         (is (str/includes? instruction "command -v clj-kondo"))
-        (is (str/includes? instruction "clj-kondo --version"))
+        (is (str/includes? instruction "KONDO_CMD --version"))
         (is (str/includes? instruction
                            "https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md"))
         (is (str/includes? instruction "user choose the installation method"))
         (is (str/includes? instruction "explicit approval"))
         (is (str/includes? instruction "stop before importing configs"))
-        (is (str/includes? instruction "without reinstalling it")))
+        (is (str/includes? instruction "do not reinstall")))
       (is (= [":ensure-kondo"] (mapv str (:depends-on copy))))
       (is (nil? (get-in copy [:attributes "workflow/gate"])))
       (is (nil? (get-in copy [:attributes "shell/argv"])))
@@ -108,9 +110,9 @@
         (is (str/includes? instruction "consumer `deps.edn` has `:paths []`"))
         (is (str/includes? instruction "installed-spool contribution is empty"))
         (is (str/includes? instruction
-                           "clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel"))
+                           "KONDO_CMD --lint RESOLVED_CLASSPATH --dependencies --parallel"))
         (is (str/includes? instruction "--copy-configs --skip-lint"))
-        (is (= 1 (count (re-seq #"clj-kondo --lint" instruction))))
+        (is (= 1 (count (re-seq #"KONDO_CMD --lint" instruction))))
         (is (not (str/includes? instruction
                                 "clj-kondo --lint \"$(clojure -Spath)\"")))
         (is (str/includes? instruction "exact roots and final classpath"))
@@ -220,6 +222,6 @@
     (is (str/includes? instruction
                        "BASE/resources/clj-kondo.exports/io.millstrand/millstrand/"))
     (is (str/includes? instruction "consumer Clojure classpath"))
-    (is (str/includes? instruction "clj-kondo --lint RESOLVED_CLASSPATH"))
+    (is (str/includes? instruction "KONDO_CMD --lint RESOLVED_CLASSPATH"))
     (is (not (str/includes? instruction "existing imports are sufficient")))
     (is (not (str/includes? instruction "brownfield imports satisfy")))))

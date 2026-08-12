@@ -216,7 +216,7 @@
 ;; The bump workflow lives in its own namespace so its focused contract can
 ;; remain isolated. The activated spool namespace is the module owner, though.
 ;; Collect the child Var here so the owner-complete module contribution includes
-;; both public definitions; publication resolves the child through the spool
+;; all public definitions; publication resolves each child through the spool
 ;; classloader after source collection, regardless of JVM load order.
 (runtime/collect-entry!
  workflow/definition-kind
@@ -257,3 +257,23 @@
  workflow/definition-kind
  :bump-millstrand-pinned
  'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-pinned)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :configure-consumer-tooling
+ 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :configure-consumer-tooling-app
+ 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :configure-consumer-tooling-spool
+ 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool)
+
+(runtime/collect-entry!
+ workflow/definition-kind
+ :configure-consumer-tooling-clojure-app
+ 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app)

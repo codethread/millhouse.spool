@@ -21,6 +21,7 @@
     millhouse.spools.kanban-test
     millhouse.spools.millstrand-workflows-test
     millhouse.spools.millstrand-workflows.bootstrap-kondo-test
+    millhouse.spools.millstrand-workflows.consumer-tooling-test
     millhouse.spools.millstrand-workflows.bump-spool-test
     millhouse.spools.millstrand-workflows.bump-millstrand-test])
 

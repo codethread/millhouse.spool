@@ -60,8 +60,9 @@
      |relative non-escaping declaration that reconstructs `sync.root`; a readable
      |regular `BASE/deps.edn` containing valid EDN; the required export path; or at
      |least one installed-spool classpath directory. Never silently fall back.
-     |Run exactly one command with the resolved classpath:
-     |`clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel
+     |Using the exact `KONDO_CMD` command prefix verified by the preceding step,
+     |run exactly one import invocation:
+     |`KONDO_CMD --lint RESOLVED_CLASSPATH --dependencies --parallel
      |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
     worktree workspace)))
 
@@ -97,17 +98,21 @@
   [{:keys [worktree]}]
   (fmt/reflow
    (format
-    "|In `%s`, check whether the `clj-kondo` binary is available on `PATH` with
-     |`command -v clj-kondo`. When it is present, record the resolved executable
-     |and `clj-kondo --version`, then continue without reinstalling it. When it is
-     |absent, stop before importing configs and discuss the official installation
-     |options with the user:
+    "|In `%s`, inspect the repository's Makefile, `deps.edn`, scripts, and CI for
+     |an existing clj-kondo command that accepts raw clj-kondo arguments. A
+     |tools.deps invocation such as `clojure -M:lint` is valid when its alias
+     |resolves clj-kondo and accepts the import flags. Otherwise check for a
+     |standalone executable with `command -v clj-kondo`. Record the selected
+     |command prefix as `KONDO_CMD` and verify `KONDO_CMD --version`; do not
+     |reinstall or replace a working repository-native command. When neither form
+     |is available, stop before importing configs and discuss the official
+     |installation options with the user:
      |https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md
      |Let the user choose the installation method and destination. Do not download
      |or run an installer or package-manager command without their explicit
-     |approval. After an approved installation, verify `command -v clj-kondo` and
-     |`clj-kondo --version` before continuing. If the user declines installation,
-     |leave the bootstrap blocked and record the missing prerequisite."
+     |approval. After an approved installation, record and verify `KONDO_CMD`
+     |before continuing. If the user declines installation, leave the bootstrap
+     |blocked and record the missing prerequisite."
     worktree)))
 
 (defn- greenfield-instruction
@@ -262,7 +267,7 @@
   spool is still resolved normally. It combines those directories with the
   consumer classpath and records the exact roots and classpath, including each
   base derivation, before one
-  `clj-kondo --lint RESOLVED_CLASSPATH
+  `KONDO_CMD --lint RESOLVED_CLASSPATH
   --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
   consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
   installed-spool contribution fail loudly. No repository hosting or release

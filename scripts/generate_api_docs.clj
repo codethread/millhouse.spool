@@ -21,7 +21,8 @@
    {:source ["spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
              "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj"
              "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"]
+             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"
+             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj"]
     :outfile "spools/millstrand-workflows/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
