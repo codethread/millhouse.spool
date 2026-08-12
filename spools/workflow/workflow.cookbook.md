@@ -4,7 +4,7 @@ Composition recipes for `millhouse.spools.workflow`: how to shape real workflows
 
 This is the **how/why** half of the workflow docs. The other two halves are:
 
-- [`workflow.md`](./README.md) — the **contract**: guarantees, run
+- [`README.md`](./README.md) — the **contract**: guarantees, run
   lifecycle, routing semantics, and the `workflow/*` attribute vocabulary. Read
   it for what the engine promises.
 - [`workflow.api.md`](./workflow.api.md) — the **generated reference**: every
@@ -136,7 +136,9 @@ publisher through root ownership, export, hook, test, and documentation checks.
   round pours a new molecule under the same `run-id`, so the whole loop history
   stays in the graph, inspectable via `run-history` and squashable later.
 
-Honest source: adapted from the end-to-end example that formerly lived in `workflow.md`, and mirrored by `ct.spools.devflow`'s `human-signoff-proposal` revise loop.
+Honest source: adapted from the end-to-end example that formerly lived in the
+contract, and mirrored by `ct.spools.devflow`'s `human-signoff-proposal` revise
+loop.
 
 ---
 
@@ -267,7 +269,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
   inner step beneath a `call`, its `procedure` join closes in the *same*
   transaction (stamped `workflow/outcome-by "engine"`). Joins never surface as
   ready work, so an agent driving the run sees the parent's next step, not a
-  bookkeeping strand (contract [§4, "Procedure join auto-close"](./README.md#4-run-lifecycle)).
+  bookkeeping strand (contract [§4, "Procedure join auto-close"](./README.md#4-drive-a-run)).
 - **One definition, many call sites.** The same `review` can be `call`-ed by a proposal stage and a spec stage with different `:artifact` params; a CI-round sub-flow can be recomposed by every stage that pushes commits. That is the point of `call` over duplication.
 
 Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `ct.spools.devflow`'s `:agent-review-proposal` call.
@@ -399,7 +401,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   gate doesn't add a scheduling primitive — it just *labels* a step "not yours,
   wait for `<waiter>`". `step-view` surfaces it as `:gate "ci"`, so a driving
   agent treats a ready gate as **poll/hand off, don't do** (contract
-  [§3, "Gates"](./README.md#3-definition-layer)).
+  [§2, "Gates"](./README.md#2-define-workflow-data)).
 - **`:by` is mandatory on a gate close** and records `workflow/outcome-by`, so
   the audit trail always names who satisfied the wait. `complete!` fails loudly
   if you try to close a gate without it.
@@ -492,7 +494,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
   keeping binding keys simple keywords (`:pr.ci.wait`, `:instruction`) and
   mapping them onto the canonical string attribute vocabulary
   (`"workflow/instruction"`) at build time keeps them faithful across the JSON
-  layer (contract [§3, "Tool bindings"](./README.md#3-definition-layer)).
+  layer (contract [§2, "Tool bindings"](./README.md#2-define-workflow-data)).
 
 Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
 
@@ -565,15 +567,7 @@ Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstran
 
 ---
 
-## See also
-
-- [`workflow.md`](./README.md) — the contract: run lifecycle, checkpoint and
-  routing semantics, the auto-close rule, and the full `workflow/*` attribute
-  table.
-- [`workflow.api.md`](./workflow.api.md) — generated signatures and docstrings
-  for every public fn referenced above.
-- [`devflow.md`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/devflow.md) — the reference higher-level spool built on this
-  namespace, and the most complete real example of named-stage routing and
-  revise loops.
-- `(millhouse.spools.workflow/explain)` — machine-readable builder contracts, meant
-  to be called before constructing workflow data.
+For the contract, read [`README.md`](./README.md). For exact signatures and
+focused function examples, read [`workflow.api.md`](./workflow.api.md). The
+machine-readable builder contracts are available from
+`(millhouse.spools.workflow/explain)` before constructing workflow data.
