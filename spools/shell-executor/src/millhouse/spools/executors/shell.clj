@@ -9,9 +9,9 @@
   the gate ready and stamped rather than masquerading as a completed run. It is
   a subagent-executor sibling minus everything agent-run-specific: the failure
   detail lives on the gate itself, so there is no separate run strand, no
-  `delegates` edge, and no session/harness vocabulary. This namespace is the
-  only adapter that knows both the workflow gate contract and process
-  execution."
+  `delegates` edge, and no session/harness vocabulary. Request validation and
+  the durable coordinator surfaces are described on the public executor and
+  query Vars below."
   (:require [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
@@ -109,7 +109,10 @@
 ;; Gate attribute contract
 
 (defn non-blank-string?
-  "Non-blank string."
+  "Return true when `value` is a non-blank string.
+
+  The shell request spec uses this predicate for the optional `shell/cwd`
+  attribute."
   [value]
   (and (string? value) (not (str/blank? value))))
 
@@ -322,7 +325,10 @@
   "Dispatch every ready `:shell` gate not already claimed or errored.
 
   Enumerates ready gates purely through the workflow surface and serializes on a
-  runtime-owned monitor so concurrent scans cannot double-launch a gate."
+  runtime-owned monitor so concurrent scans cannot double-launch a gate. Each
+  accepted gate receives a `shell/running` claim before its process is submitted
+  to the worker pool; the event thread never waits for the child. Scans run on
+  relevant graph changes and once during handler activation."
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
@@ -346,7 +352,33 @@
 ;; Owner declarations and resource reconciliation
 
 (workflow/defexecutor shell
-  "Return durable stall detail for a ready `:shell` gate view, or nil."
+  "Return durable stall detail for a ready `:shell` gate view, or nil.
+
+  The executor accepts a gate with `workflow/gate` equal to `\"shell\"` and a
+  request matching `::request`: `shell/argv` is a non-empty sequential value of
+  strings, while `shell/cwd` and `shell/timeout-secs` are optional non-blank and
+  positive-integer values. The command is passed directly to `ProcessBuilder`,
+  so shell syntax must be explicit in the argv, for example:
+
+  ```clojure
+  (workflow/gate :verify \"Run tests\" :shell
+                 :attributes {\"shell/argv\" [\"clojure\" \"-M:test\"]
+                              \"shell/cwd\" \"/workspace/app\"
+                              \"shell/timeout-secs\" 600})
+  ```
+
+  A zero exit closes the gate through `workflow/complete!` with `:by \"shell\"`
+  and records `shell/exit-code` plus the bounded 16 KiB combined stdout/stderr
+  tail in `shell/output`. A non-zero exit, timeout, spawn error, or invalid
+  request leaves the gate ready with `gate/error`; process failures also record
+  the exit code and output. A timeout force-kills the process tree. Invalid
+  requests spawn no process. The executor skips a gate while `gate/error` or
+  `shell/running` is present.
+
+  For a stalled ready gate this function returns
+  `{:gate gate-id :error detail}`. Remove the `gate/error` attribute (and any
+  stale `shell/running` claim after a crash) to re-arm the next scan; a blank
+  string is still present data."
   {:request-spec ::request}
   [gate-view]
   (require-valid! ::gate-view gate-view "Invalid shell gate view")
@@ -356,7 +388,25 @@
     (require-valid! ::stall-detail result "Invalid shell gate stall detail")))
 
 (millstrand/defquery stalled-shell-gates
-  "Return active shell gates carrying a durable error stamp."
+  "Return active shell gates carrying a durable error stamp.
+
+  The query is the persistence-side companion to `shell-stalled?`:
+
+  ```clojure
+  (weaver/list-query runtime 'stalled-shell-gates {})
+  ```
+
+  Recovery removes the error key rather than replacing it with a blank string;
+  a trusted nil patch re-arms a ready gate for the next event-driven scan:
+
+  ```clojure
+  (weaver/update! runtime gate-id
+                  {:attributes {\"gate/error\" nil
+                                \"shell/running\" nil}})
+  ```
+
+  Rewrite request attributes in the same update when fixing the underlying
+  command or working directory."
   {}
   [:and [:= :state "active"]
    [:= [:attr "workflow/gate"] "shell"]
