@@ -1,12 +1,13 @@
 (ns millhouse.spools.executors.code
   "Fulfil workflow `:code` gates by invoking trusted Clojure functions.
 
-  The code executor resolves a gate's fully qualified `code/fn` through the
-  runtime spool classloader, invokes it with the poured `code/params` map on a
-  bounded worker pool, and owns the gate's terminal transition. Successful
-  non-nil returns are recorded as `code/result`; exceptions and timeouts stamp
+  The executor resolves a gate's fully qualified `code/fn` through the runtime
+  spool classloader, invokes it with the poured `code/params` map on a bounded
+  worker pool, and owns the gate's terminal transition. Successful non-nil
+  returns are recorded as `code/result`; exceptions and timeouts stamp
   `gate/error`. Claim tokens prevent an abandoned invocation from publishing a
-  late result."
+  late result. There is no process isolation: a resolved function runs with
+  the weaver's ambient Clojure authority and owns any subprocesses it starts."
   (:require [clojure.spec.alpha :as s]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.events.alpha :as events]
@@ -74,12 +75,21 @@
          ensure-resources! state)
 
 (defn on-event
-  "Scan for newly ready code gates after a graph mutation."
+  "Scan for ready `:code` gates after a graph mutation.
+
+  This function is registered as the `:code/engine` event handler by the
+  `code-engine` lifecycle resource. The scan is also performed during resource
+  opening, so durable gates that were already ready are reconciled immediately."
   [_event]
   (scan!))
 
 (workflow/defexecutor code
-  "Return durable stall detail for a ready `:code` gate view, or nil."
+  "Return durable stall detail for a ready `:code` gate view, or nil.
+
+  A gate view is a map containing its string `:id`. The result is
+  `{:gate id :error detail}` when the current gate is ready and carries
+  `gate/error`; otherwise the result is nil. This predicate is the executor's
+  coordinator-facing attention surface."
   {:request-spec ::request}
   [gate-view]
   (require-valid! ::gate-view gate-view "Invalid code gate view")
@@ -89,7 +99,11 @@
     (require-valid! ::stall-detail result "Invalid code gate stall detail")))
 
 (millstrand/defquery stalled-code-gates
-  "Return active code gates carrying a durable error stamp."
+  "Return active code gates carrying a durable `gate/error` stamp.
+
+  Use this named query to find code gates that a coordinator can inspect and
+  deliberately re-arm by removing `gate/error` after fixing the request or
+  resolved function."
   {}
   [:and [:= :state "active"]
    [:= [:attr "workflow/gate"] "code"]
@@ -105,7 +119,12 @@
 (s/def ::close-result (s/keys :req-un [::closed]))
 
 (defn open-code-engine!
-  "Open the code executor handler and worker resources."
+  "Open the code executor handler and worker resources.
+
+  This lifecycle callback declares the `code/*` vocabulary, registers the
+  `:code/engine` graph handler, creates the bounded worker and timeout pools,
+  scans existing ready gates, and returns the engine handle owned by
+  `code-engine`."
   [ctx]
   (require-valid! ::open-context ctx "Invalid code engine open context")
   (let [runtime (:runtime ctx)
@@ -119,7 +138,10 @@
     (require-valid! ::engine-handle result "Invalid code engine handle")))
 
 (defn close-code-engine!
-  "Close code executor resources and unregister its event handler."
+  "Close code executor resources and unregister its event handler.
+
+  This lifecycle callback removes `:code/engine` and shuts down the worker and
+  timeout pools owned by the matching open operation."
   [ctx]
   (require-valid! ::close-context ctx "Invalid code engine close context")
   (events/unregister-handler! (:runtime ctx) :code/engine)
@@ -128,7 +150,11 @@
                   "Invalid code engine close result"))
 
 (lifecycle/defresource code-engine
-  "Own the code executor handler and worker resources."
+  "Own the code executor's vocabulary, event handler, and worker resources.
+
+  Opening this module resource publishes the `code/*` attributes and `:code`
+  workflow executor; closing it unregisters graph scanning and stops both
+  executor pools."
   {:open 'millhouse.spools.executors.code/open-code-engine!
    :close 'millhouse.spools.executors.code/close-code-engine!})
 
