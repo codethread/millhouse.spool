@@ -93,6 +93,23 @@
      |directory or a canonical workspace."
     worktree workspace)))
 
+(defn- ensure-kondo-instruction
+  [{:keys [worktree]}]
+  (fmt/reflow
+   (format
+    "|In `%s`, check whether the `clj-kondo` binary is available on `PATH` with
+     |`command -v clj-kondo`. When it is present, record the resolved executable
+     |and `clj-kondo --version`, then continue without reinstalling it. When it is
+     |absent, stop before importing configs and discuss the official installation
+     |options with the user:
+     |https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md
+     |Let the user choose the installation method and destination. Do not download
+     |or run an installer or package-manager command without their explicit
+     |approval. After an approved installation, verify `command -v clj-kondo` and
+     |`clj-kondo --version` before continuing. If the user declines installation,
+     |leave the bootstrap blocked and record the missing prerequisite."
+    worktree)))
+
 (defn- greenfield-instruction
   [{:keys [worktree]}]
   (fmt/reflow
@@ -171,10 +188,17 @@
 (defn- shared-steps
   "Return the steps shared by greenfield and brownfield bootstrap routes."
   []
-  [(workflow/step :copy-configs
-                  "Resolve installed spool classpaths and import Kondo configs"
+  [(workflow/step :ensure-kondo
+                  "Ensure the clj-kondo binary is available"
                   :self
                   :depends-on [:prepare]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.ensure-kondo"
+                   "workflow/instruction" ensure-kondo-instruction})
+   (workflow/step :copy-configs
+                  "Resolve installed spool classpaths and import Kondo configs"
+                  :self
+                  :depends-on [:ensure-kondo]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.copy"
                    "workflow/instruction" copy-configs-instruction})

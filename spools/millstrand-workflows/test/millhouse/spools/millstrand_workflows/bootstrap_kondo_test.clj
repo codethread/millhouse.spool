@@ -49,6 +49,7 @@
            [#'bootstrap/bootstrap-kondo-brownfield :brownfield]]]
     (let [definition (definition definition-var)
           prepare (step definition :prepare)
+          ensure-kondo (step definition :ensure-kondo)
           copy (step definition :copy-configs)
           validate (step definition :validate)
           quality (step definition :discover-quality)
@@ -63,7 +64,18 @@
         (is (str/includes? prepare-instruction ":copy-kondo-configs? false"))
         (is (str/includes? prepare-instruction "other existing LSP setting"))
         (is (str/includes? prepare-instruction "resulting LSP setting")))
-      (is (= [":prepare"] (mapv str (:depends-on copy))))
+      (is (= [":prepare"] (mapv str (:depends-on ensure-kondo))))
+      (let [instruction ((get-in ensure-kondo [:attributes "workflow/instruction"])
+                         params)]
+        (is (str/includes? instruction "command -v clj-kondo"))
+        (is (str/includes? instruction "clj-kondo --version"))
+        (is (str/includes? instruction
+                           "https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md"))
+        (is (str/includes? instruction "user choose the installation method"))
+        (is (str/includes? instruction "explicit approval"))
+        (is (str/includes? instruction "stop before importing configs"))
+        (is (str/includes? instruction "without reinstalling it")))
+      (is (= [":ensure-kondo"] (mapv str (:depends-on copy))))
       (is (nil? (get-in copy [:attributes "workflow/gate"])))
       (is (nil? (get-in copy [:attributes "shell/argv"])))
       (is (nil? (get-in copy [:attributes "shell/cwd"])))
