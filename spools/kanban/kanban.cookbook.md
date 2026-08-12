@@ -1,453 +1,154 @@
-# Millstrand Kanban Spool — Cookbook
+# Millhouse Kanban cookbook
 
-Composition recipes for `millhouse.spools.kanban`: how to run real user↔agent work through the board, and *why* each stamp, edge, and note is where it is.
+Compositions for running user↔agent work through the Kanban board. The
+[contract](./README.md) defines lanes, attributes, and consumer-visible
+surfaces; the generated [API](./kanban.api.md) and [peering API](./kanban.peering.api.md)
+define signatures and focused calls. These recipes combine those surfaces into
+repeatable operating patterns.
 
-This is the **how/why** half of the kanban docs. The other two halves are:
+## 1. Carry one card from queue to handoff
 
-- [`README.md`](./README.md) — the **contract**: the board model, the lanes and
-  priority ladder, the `kanban/*` attribute vocabulary, and the CLI op surface.
-  Read it for what the board guarantees.
-- [`src/millhouse/spools/kanban.clj`](./src/millhouse/spools/kanban.clj) — every public
-  fn's signature, arity, and docstring.
+**Situation.** A user request is ready to work, and the next agent must leave a
+clear owner, branch, resume point, and review trail.
 
-Division of truth: signatures live in the source docstrings and the attribute table lives in the contract; narrative and composition live here. This cookbook never restates a signature or the lane/attribute table — it links to them.
-
-The kanban CLI is JSON-only, so every recipe below is a `strand kanban …` shell flow. The REPL fns behind each verb (and the ASCII `print-board!` human view) are documented in the source docstrings; run `strand kanban prime` for the live, spool-authored working discipline these recipes distil.
-
-## How to read a recipe
-
-Every recipe has the same four parts, so you can skim to the one that matches your situation and lift the snippet:
-
-1. **Situation** — the shape of problem you're staring at.
-2. **Composition** — which verbs combine, and how.
-3. **Snippet** — a complete, runnable flow.
-4. **Why this shape** — the reasoning: why each stamp is there, what it buys a
-   later agent, and what skipping it would cost.
-
-Each recipe cites the honest source it was distilled from — the spool source, this repo's own conventions, or `test/millhouse/spools/kanban_test.clj`, which drives every documented behaviour against a real weaver runtime and doubles as the executable proof for these flows.
-
----
-
-## Recipe: Pick up the next card and carry it end to end
-
-**Situation.** You're an agent sitting down to work with a user. There's a queue of pending features; you need to take the right one, make the work discoverable to everyone else, and leave it resumable if you're interrupted.
-
-**Composition.** The usual loop is `next`, `claim`, `task add` to slice the work, and `note` the doing-task as you go. When the work is ready for review, run `review`. If review asks for changes, run `rework`; when the work has landed, `finish` closes it out.
+**Composition.** Select with `next`, claim the card, split work into dependent
+tasks, note the doing-task as work progresses, then expose review and finish.
 
 ```sh
-# 1. Take the highest-priority (p1 first) oldest pending feature.
 card=$(strand kanban next | jq -r '.next.id')
+strand kanban claim "$card" --owner claude --branch kanban-spool
 
-# 2. Claim it — owner and branch are mandatory; worktree is optional.
-strand kanban claim "$card" --owner claude --branch kanban-spool --worktree /path/to/wt
+impl=$(strand kanban task add "$card" "Implement the change" | jq -r '.task.id')
+docs=$(strand kanban task add "$card" "Document the change" --depends-on "$impl" \
+  | jq -r '.task.id')
+strand update "$impl" --attr owner=claude
 
-# 3. Decompose into tasks; the depends-on edges are the concurrency DAG.
-impl=$(strand kanban task add "$card" "Implement the ops" | jq -r '.task.id')
-docs=$(strand kanban task add "$card" "Write the docs" --depends-on "$impl" | jq -r '.task.id')
-strand update "$impl" --attr owner=claude   # owned + dependencies met = the doing-task
-
-# 4. Note the doing-task as you reach decisions and progress, not at the end.
-strand kanban note "$impl" "Chose lane names over statuses because X" --by claude --kind decision
-strand --stdin kanban note "$impl" :stdin --by claude --kind activity <<'NOTE'
-Done: impl + tests.
-Next: docs.
-Validation: clojure -M:test green.
-Gotcha: reload the weaver after merge.
+strand kanban note "$impl" "Implementation started; tests are next." \
+  --by claude --kind activity
+strand --stdin kanban note "$impl" :stdin --by claude --kind review-dump <<'NOTE'
+Validation:
+- clojure -M:test
+Next: hand the branch to review.
 NOTE
 
-# 5. Move it through review. Rework returns it to claimed when needed.
 strand kanban review "$card"
+# If review requests changes:
 strand kanban rework "$card"
 strand kanban review "$card"
 
-# 6. Close it once the work has landed, with a lean handover note on the card.
-strand kanban note "$card" "Handover: landed as <sha>; docs follow-up card filed" --by claude --kind summary
+strand kanban note "$card" "Handover: implementation reviewed and ready to land." \
+  --by claude --kind summary
 strand kanban finish "$card" --outcome done
 ```
 
-**Why this shape.**
+**Why this shape.** The claim makes the work discoverable by branch and keeps
+two agents from selecting the same pending feature. Tasks make a resumable
+doing-task and reuse the same dependency DAG that determines readiness. Notes
+on the task retain progress and bulk findings without turning the card into a
+log; `board` and `card` surface the newest note for a cold-start handoff.
+Review is a visible lane transition, and the final card note records the
+handoff after the branch is ready rather than pretending that a closed card is
+self-explanatory.
 
-- **`next` encodes the queue policy so you don't.** It serves the p1-first,
-  then-oldest pending *feature* — epics are never served, refinement cards stay
-  inert until a human promotes them. You take what the board says is next
-  instead of re-deriving urgency by hand (contract [Model](./README.md#model);
-  `kanban-priority-orders-lanes-and-next` in `kanban_test.clj`).
-- **`claim`'s `owner`/`branch` is what makes the work discoverable.** The claim
-  refuses to proceed without both, because that stamp is exactly what
-  `strand branches` and the roster read to answer "who is working where". A
-  claimed card is the branch's active work root; skip the claim and the work is
-  invisible to every other agent (`claim!` docstring;
-  `kanban-add-next-claim-and-finish-round-trip`).
-- **The card is the audit root, not a status field.** Claiming moves the card to
-  the `claimed` lane and `next` stops serving it, so two agents can't both pull
-  the same feature.
-- **Tasks make the resume point exist at all.** The claim says who owns the
-  feature; the task tier says where inside it the work stands. Skip the
-  decomposition and the board's doing-task signal, the derived-status DAG, and
-  the note target all vanish — which is exactly how review dumps end up on the
-  card (contract [Task tier](./README.md#task-tier)).
-- **Note the doing-task as you go — that is the interruption contract.** A
-  crash, a context limit, or a handoff to another agent all resolve the same
-  way: whoever picks up reads the doing-task and its `latest-note`. Writing
-  progress *as* you work, not after, is the whole point — the resume point
-  exists before you stop. Card notes stay lean handover summaries; bulk content
-  (review findings, pasted output) goes on a task note, and views clip note
-  bodies past a cap so no single dump drowns the card
-  (contract [Notes and resume](./README.md#notes-and-resume)).
-- **`review` and `rework` keep review visible.** `review` moves the card to
-  `in_review`, so board readers can see work waiting on review. `rework` moves it
-  back to `claimed` when the branch needs changes.
-- **`finish` records an explicit outcome.** `done` and `abandoned` both close the
-  card, but `kanban/outcome` stays on the strand, preserving honest history
-  rather than a wall of indistinguishable "closed".
+## 2. Build a dependent backlog atomically
 
-Honest source: the pick-up flow authored in the spool's own `prime` payload (`:pick-up-next-card`, `:working-agreement`) and this repo's `CLAUDE.md` kanban convention, proven end to end by `kanban-add-next-claim-and-finish-round-trip`.
+**Situation.** A release has several features, with design blocking
+implementation and documentation. The backlog should be created as one graph
+and then served in priority order.
 
----
-
-## Recipe: Stock the backlog in one weave
-
-**Situation.** A user hands you a list of features at once — often with dependencies between them ("docs after the design lands") — and you want them all as pending cards in a single atomic step, with the blockers already wired.
-
-**Composition.** One `kanban-batch` weave. Each item is a card; `depends-on` values that match a sibling `key` become batch-local `depends-on` edges, and any other `depends-on` value is treated as an existing strand id.
+**Composition.** Use the `kanban-batch` pattern when the items and their
+dependencies are known together. Add an epic separately when the board needs a
+durable grouping and an epic-scoped frontier.
 
 ```sh
-strand weave --pattern kanban-batch --input '{
-  "items": [
-    {"key": "design", "title": "Design the board model", "body": "Lanes + priority ladder", "priority": "p2"},
-    {"key": "impl",   "title": "Implement the ops",       "depends-on": ["design"]},
-    {"key": "docs",   "title": "Write the cookbook",      "depends-on": ["impl", "gfg6x"]}
+strand weave --pattern kanban-batch --input "$(jq -n '{
+  items: [
+    {key: "design", title: "Design the board", priority: "p2"},
+    {key: "implementation", title: "Implement the board", depends-on: ["design"]},
+    {key: "docs", title: "Document the board", depends-on: ["implementation"]}
   ]
-}'
+}')"
+
+strand kanban next
 ```
 
-**Why this shape.**
+**Why this shape.** The batch pattern validates keys and dependencies before
+publishing the cards, so a typo cannot leave a half-built backlog. Sibling keys
+are resolved inside the weave and other dependency values are durable strand
+ids. If the same work needs an initiative lens, create an epic and attach
+features with `--epic`; its children keep independent priority, claims,
+branches, and review paths, while `next --epic` and the parameterized query
+serve only that epic's direct pending features.
 
-- **Atomic beats a loop of `add`.** One weave creates every card and every edge
-  in a single transaction, so a mid-list failure never leaves you with half a
-  backlog and dangling references.
-- **Sibling keys and durable ids share one `depends-on` list.** A dependency that matches a
-  sibling `key` (`design`) resolves to the card being created alongside it; any
-  other value (`gfg6x`) is a durable strand id. That lets a new backlog depend on
-  both its own siblings and existing work without two different syntaxes
-  (`kanban-batch` docstring;
-  `kanban-batch-weave-creates-cards-and-dependencies`).
-- **It fails loudly, so a typo can't rot silently.** Duplicate keys, an unknown
-  priority, an unexpected item key, or a `depends-on` id that doesn't exist all abort
-  the whole weave with a specific error rather than creating a subtly wrong
-  graph (`kanban-batch-weave-fails-loudly`).
-- **Cards land pending at p3 by default.** Batch cards are actionable
-  immediately; set `priority` per item to jump the queue, and reach for a
-  refinement card (via plain `kanban add --lane refinement`) only when an idea
-  isn't ready to be worked.
+## 3. Resume work and collect review across cards
 
-Honest source: the `kanban-batch` pattern in the spool source and its two test cases, plus the bulk-authoring section of the contract doc.
+**Situation.** A new agent has no conversation context, while several branches
+may have review work ready at once.
 
----
-
-## Recipe: Group a multi-card initiative under an epic
-
-**Situation.** A single theme spans several features — a subsystem rewrite, a release. You want them grouped so the board shows them together, but each feature still claimed and worked on its own.
-
-**Composition.** Create one `epic` card, then add each feature with `--epic <id>`. The epic is `parent-of` its features; it is a grouping card, never work.
+**Composition.** Read the board's doing-task projections first, open one card's
+resume view, and use the cross-card review frontier for coordination. Mark
+review strands with an open review signal such as `kind=review`.
 
 ```sh
-epic=$(strand kanban add "Board rewrite" --type epic | jq -r '.card.id')
-strand kanban add "Design the lanes"  --epic "$epic"
-strand kanban add "Port the old cards" --epic "$epic" --priority p2
+strand kanban board | jq '{claimed, in_review, needs_review: .["needs-review"]}'
+strand kanban card "$card" | jq '{card, tasks, notes, active_work: .["active-work"], ready, related}'
 
-# Work the epic as a loop: the ready frontier inside it, honouring depends-on edges…
-strand ready --query kanban-epic-pending --param epic="$epic"
-# …or one card at a time, priority-ordered.
-strand kanban next --epic "$epic"
-```
-
-**Why this shape.**
-
-- **An epic groups; it never gets served or claimed.** `next` skips epics and
-  `claim` refuses them, because there's nothing to *do* on an epic — the work
-  lives in its features. The epic is a lens over the board, not a task
-  (`kanban-epics-group-features`).
-- **Features stay independently claimable.** Each feature under the epic keeps
-  its own lane, priority, owner, and branch, so two agents can claim two features
-  of the same epic and work them in parallel. The board tags each feature with
-  its `epic:` so the grouping stays visible without collapsing the features into
-  one card.
-- **The nesting rules fail loudly.** An epic can't nest under another epic, and
-  `--epic` must point at an actual epic — both are rejected at `add` time, so the
-  grouping can't quietly go two levels deep or hang a feature off a non-epic.
-- **The epic has its own frontier.** `kanban next --epic` serves the epic's own
-  queue (and fails loudly on a non-epic id), and the registered
-  `kanban-epic-pending` query composed with `strand ready` answers "what is
-  ready next inside this epic" while cards blocked by `depends-on` edges stay
-  out of view — the one-command read a loop working a single epic resumes from
-  ([Queries](./README.md#queries); `kanban-epic-pending-query-scopes-the-ready-frontier`).
-
-Honest source: `add!`'s `--type`/`--epic` handling and `kanban-epics-group-features`.
-
----
-
-## Recipe: Finish an epic — complete it, or abandon and reopen
-
-**Situation.** An epic has run its course. Either its features all landed and you want to close the grouping cleanly (**complete**), or the whole initiative is being dropped and you want to close it *and* its in-flight features in one act — while keeping the option to bring it all back if the decision reverses (**abandon**, then **reopen**).
-
-**Composition.** `finish` is polymorphic: on an epic it closes from the `refinement`/`pending` lane (epics are never claimed). `--outcome done` completes; `--outcome abandoned` cascades reversibly; `reopen` inverts a matching abandon.
-
-```sh
-epic=$(strand kanban add "Board rewrite" --type epic | jq -r '.card.id')
-a=$(strand kanban add "Design the lanes"  --epic "$epic" | jq -r '.card.id')
-b=$(strand kanban add "Port the old cards" --epic "$epic" | jq -r '.card.id')
-
-# --- Complete path: every feature child must be closed first. ---
-strand kanban claim "$a" --owner claude --branch rewrite-a && strand kanban finish "$a"
-strand kanban claim "$b" --owner claude --branch rewrite-b && strand kanban finish "$b"
-strand kanban finish "$epic" --outcome done
-# => epic closed, kanban/outcome=done, lane absent. An open child would fail loudly,
-#    naming the child and its lane instead.
-
-# --- Abandon path: allowed with children still open; the cascade is reversible. ---
-epic2=$(strand kanban add "Speculative theme" --type epic | jq -r '.card.id')
-done=$(strand kanban add "Already shipped" --epic "$epic2" | jq -r '.card.id')
-open=$(strand kanban add "Half-built"      --epic "$epic2" | jq -r '.card.id')
-strand kanban claim "$done" --owner claude --branch shipped && strand kanban finish "$done"
-
-strand kanban finish "$epic2" --outcome abandoned
-# => "$open" closes abandoned with kanban/abandon-restore-lane=pending; "$done" (already
-#    closed) is untouched and keeps outcome=done, no marker; the epic closes abandoned
-#    with its own pre-abandon lane recorded.
-
-# Changed your mind: reopen inverts exactly what the abandon closed.
-strand kanban reopen "$epic2"
-# => epic active at its restore lane; "$open" active again at pending; "$done" stays
-#    closed/done (it was never abandoned, so it carries no marker).
-```
-
-**Why this shape.**
-
-- **`finish` stays one verb, epics get a lane-appropriate path.** A feature closes
-  from the work lanes it actually travels (`claimed`/`in_review`); an epic never
-  enters those, so it closes from the queue lanes it *does* sit in
-  (`refinement`/`pending`). One reviewed verb, two honest gates — no epic-only
-  verb family to learn (contract [Finishing an epic](./README.md#finishing-an-epic);
-  `kanban-epic-complete-closes-only-when-children-are-closed`).
-- **Complete asserts its children are done.** `--outcome done` refuses while any
-  direct feature child is open and names the offenders, so a "completed" epic is a
-  real claim about its features, never a lie that closes over live work
-  (`complete-epic!`; same test).
-- **Abandon is reversible by construction.** The cascade records, on each child it
-  transitions, exactly the one fact needed to undo itself — the lane it closed the
-  card from (`kanban/abandon-restore-lane`). A child that was already closed is
-  finished work: it is left untouched and unmarked, so reopen can tell "closed by
-  this abandon" from "legitimately done before it"
-  (`abandon-epic!`; `kanban-epic-abandon-cascades-reversibly-and-reopen-inverts`).
-- **Reopen is a true inverse, not a blanket reopen.** It pairs with abandon only —
-  a `done` epic is refused — and reverses *only* the marked cards, restoring each
-  to its own stored lane. The pre-done feature stays closed. That is why abandoning
-  and reopening round-trips the board to exactly where it was
-  (`reopen!`; same test).
-- **Absence is always the trusted nil patch.** Every cleared lane, outcome, and
-  marker goes *absent* (the same `update-card!` nil patch `finish` has always
-  used), never a blank string standing in for absence — so a reopened card reads
-  as genuinely unset, not empty (`kanban-epic-*` tests assert no attribute is ever
-  `""`).
-
-Honest source: the polymorphic `finish!`, `complete-epic!`/`abandon-epic!`/`reopen!` in the spool source, the contract [Finishing an epic](./README.md#finishing-an-epic) section, and the epic-lifecycle tests in `kanban_test.clj`.
-
----
-
-## Recipe: Hang execution strands under a card
-
-**Situation.** The user's request is approved and it's real work — a task DAG of execution strands. You want one clear work root for the feature.
-
-**Composition.** Claim the card, build the execution strands as usual, then connect their root to the card with a `parent-of` edge. The card becomes the audit root; the execution strands are the work beneath it.
-
-```sh
-strand kanban claim "$card" --owner claude --branch board-rewrite
-
-# Build the execution strands however you normally would; capture their shared root.
-root=$(strand add "Feature: board rewrite" | jq -r '.id')
-impl=$(strand add "Implement" | jq -r '.id')
-review=$(strand add "Review" --attr kind=review | jq -r '.id')
-strand update "$root" --edge parent-of:"$impl" --edge parent-of:"$review"
+review=$(strand add "Review the implementation" --attr kind=review | jq -r '.id')
+strand update "$card" --edge parent-of:"$review"
 strand update "$review" --edge depends-on:"$impl"
 
-# Adopt the execution root under the card.
-strand update "$card" --edge parent-of:"$root"
+# This remains out of needs-review until implementation is closed and the
+# review strand is in the engine's ready frontier.
+strand kanban board | jq '.["needs-review"]'
 ```
 
-**Why this shape.**
+**Why this shape.** The doing-task is the durable resume point: its body,
+dependencies, derived status, and `latest-note` tell the next agent what is
+active and what to do next. The card view also exposes blockers in both
+directions through `related`. The review queue is computed from the graph on
+every board read, so it cannot drift from actual readiness or require a second
+index maintained by coordinators.
 
-- **One work root, not two.** Kanban complements the engines that build the
-  execution strands — it doesn't replace them. Hanging the execution root beneath
-  the card means the card stays the single place a human looks, while the engine
-  still owns the execution graph (spool `prime` `:working-agreement`; contract
-  [Model](./README.md#model)).
-- **`card <id>` reads straight through the subtree.** Because the execution strands
-  hang off the card by `parent-of`, the card view joins the card to its active work and
-  the *ready frontier* of that subtree — an agent resuming the card sees exactly
-  which tasks are unblocked without a separate query (`card-view` /
-  `card-subtree`; the card-view test in `kanban_test.clj`).
-- **The claim stamp cascades by reachability.** Only the card carries `branch`
-  and `owner`; every descendant is discoverable *through* the card, so you never
-  re-stamp each task. That's the same active-work-root convention `strand
-  branches` relies on (spool `prime` `:branch-visibility`).
+## 4. Transfer queued board work between sibling weavers
 
-Honest source: the spool `prime` working-agreement and branch-visibility blocks, this repo's `CLAUDE.md` (plans and runs hang beneath cards via `parent-of`), and the card-view test that hangs a task and a review under a claimed card.
+**Situation.** Two repositories have independent weavers, but a pending card
+belongs on the other board. The receiving board should get the work shape while
+execution history and claims remain local.
 
----
-
-## Recipe: Resume interrupted work from a cold start
-
-**Situation.** You wake up with no context. A previous agent hit a context limit, crashed, or handed off mid-card, and you need to continue without them.
-
-**Composition.** Two reads, top-down. `board` shows the claimed lane with each card's doing-task; `card <id>` is the full resume view — tasks with their derived statuses, notes newest-first, active work, the ready frontier, and related cards.
-
-```sh
-strand kanban board                 # claimed cards show owner, branch, and doing-task
-strand kanban card "$card"          # tasks, notes, active work, ready frontier, related
-```
-
-**Why this shape.**
-
-- **The task tier is the resume point.** The doing-task carries its body, dependencies,
-  and lane, and its `latest-note` — surfaced inline on every task projection —
-  records what's done, what's next, the validation state, and gotchas, so the
-  resume path needs no prior conversation and no extra note query. The
-  cold-start read is `board` → `card` → doing-task and its `latest-note`; even
-  with no notes the doing-task alone tells you where the work stands
-  (`card-view`; contract [Notes and resume](./README.md#notes-and-resume)).
-- **Notes are closed child strands, not an attribute.** Each note keeps its own
-  timestamp and `note/by` attribution, and concurrent agents appending notes never race a
-  read-merge-write cycle on one attribute. That's why two agents can both leave
-  notes on a hot card without clobbering each other (`note!` docstring).
-- **The card view is the single resume entry point.** It filters the subtree to
-  *active* work and intersects it with the engine ready frontier, so you see the
-  tasks you can actually start, not the whole history. `related` surfaces
-  `depends-on` edges in both directions, so a blocker on another card shows up
-  before you start down a dead end (`card-view`;
-  `kanban-card-related-both-directions`).
-
-Honest source: the `note!`/`card-view` source, the spool `prime` notes block, and the card-view and board assertions in `kanban_test.clj`.
-
----
-
-## Recipe: Watch the cross-card review queue
-
-**Situation.** Several cards are claimed or in review, each spawning review work. A coordinator (or a human) needs one queue of what's ready to review right now, without opening every card.
-
-**Composition.** Read `board` and use its `needs-review` list. It aggregates, across claimed and in-review feature cards, the descendants that are active, in the ready frontier, and marked for human review — each tagged with its card and branch.
-
-```sh
-strand kanban board | jq '.needs-review'
-# => [{"card": "...", "branch": "board-rewrite", "item": {"id": "...", "title": "Review the ops"}}]
-```
-
-To feed that queue, mark review work as such when you build the subtree — a
-`kind: review` strand, one flagged `hitl`, or a workflow checkpoint with
-`workflow/checkpoint-kind=human`:
-
-```sh
-review=$(strand add "Review the ops" --attr kind=review | jq -r '.id')
-strand update "$card" --edge parent-of:"$review"
-strand update "$review" --edge depends-on:"$impl"   # stays out of the queue until impl closes
-```
-
-**Why this shape.**
-
-- **The queue is always present and always current.** `needs-review` is computed
-  on every `board` call, so there's no separate index to maintain and it can't
-  drift from the graph. An empty queue is a real answer, not a missing one
-  (`kanban-board-needs-review-frontier`).
-- **Only *ready* review work surfaces.** A review that still depends on unfinished
-  work is deliberately excluded, so the queue is things a reviewer can act on now,
-  not a wish list. The `depends-on` edge above is exactly what holds a review out
-  of the frontier until its implementation closes (`needs-review-entries`;
-  same test).
-- **Each entry carries its branch, so review lands in the right tree.** The card's
-  claim-time `branch` rides along on every entry, so a reviewer knows which
-  worktree to check out before reading the diff.
-- **What counts as review is a small, open vocabulary.** `kind: review`, `hitl`,
-  or `workflow/checkpoint-kind=human` all qualify, which is why engine review gates and ad-hoc
-  review strands both show up in the same queue without kanban knowing about
-  either (`review-item?`; spool `prime` `:staying-aware`).
-
-Honest source: `needs-review-entries` / `board` in the spool source, the `:staying-aware` prime block, and `kanban-board-needs-review-frontier`.
-
----
-
-## Recipe: Peer a card to a sibling repo's board
-
-**Situation.** Two repos live side by side on one machine — say `backend` and `frontend` — each with its own weaver and board. A card in `backend` is really work for `frontend`, and you want to hand it over without copy-pasting its title, body, and priority by hand.
-
-**Composition.** Turn on peering in both repos (Guild + Kanban + the peering module), name each weaver, then `kanban-peers` to find the target and `kanban-send` to hand the card over. The board tier travels; tasks, notes, and claims stay home.
+**Composition.** Approve Guild and Kanban in both workspaces, activate peering
+after them, publish a distinct weaver name, discover the target, and send the
+queued card.
 
 ```clojure
-;; In BOTH repos: .millstrand/spools.edn approves Guild and the Kanban root.
-{:spools {millstrand.spools/guild {:local/root "/path/to/your/millstrand/spools/guild"}
-          millhouse/spools {:git/url "https://github.com/codethread/millhouse.spool.git"
-                             :git/sha "<40-hex-sha-for-the-approved-commit>"
-                             :roots {millhouse.spools/kanban "spools/kanban"}}}}
+;; In each workspace's init.clj: guild, then kanban, then peering.
+(runtime/module! runtime :guild
+  {:ns 'millstrand.spools.guild
+   :spools ['millstrand.spools/guild]
+   :required? true})
+(runtime/module! runtime :millhouse/kanban
+  {:ns 'millhouse.spools.kanban
+   :spools ['millhouse.spools/kanban]
+   :required? true})
+(runtime/module! runtime :millhouse/kanban-peering
+  {:ns 'millhouse.spools.kanban.peering
+   :spools ['millhouse.spools/kanban 'millstrand.spools/guild]
+   :after [:guild :millhouse/kanban]
+   :required? true})
 ```
-
-In BOTH repos, `.millstrand/config.json` publishes a portable weaver name — set `name` to `"backend"` in one repo and `"frontend"` in the other:
 
 ```json
 {"configFormat": "alpha", "name": "backend"}
 ```
 
-```clojure
-;; In BOTH repos: .millstrand/init.clj activates guild, then kanban, then peering.
-;; Requires Millstrand commit 343f886880092bc38ed3e0522eca2d95a7cf04bc or a
-;; descendant; no Millstrand release marker contains this convention floor yet.
-(require '[millstrand.api.current.alpha :as current]
-         '[millstrand.api.runtime.alpha :as runtime])
-
-(def runtime (current/runtime))
-(runtime/module! runtime :guild
-  {:ns 'millstrand.spools.guild :spools ['millstrand.spools/guild]
-   :required? true})
-(runtime/module! runtime :millhouse/kanban
-  {:ns 'millhouse.spools.kanban :spools ['millhouse.spools/kanban]
-   :required? true})
-(runtime/module! runtime :millhouse/kanban-peering
-  {:ns 'millhouse.spools.kanban.peering :spools ['millhouse.spools/kanban 'millstrand.spools/guild]
-   :after [:guild :millhouse/kanban]
-   :required? true})
-```
-
 ```sh
-# Start each weaver (each repo, from its own checkout).
-mill weaver start
-
-# From backend: find the peer and confirm it accepts cards.
-strand kanban-peers | jq '.peers[] | select(.name=="frontend")'
-# => {"name":"frontend","weaver-id":"…","running?":true,"kanban-send?":true}
-
-# Hand a pending card over. The board tier travels; the local card is untouched.
+strand kanban-peers | jq '.peers[] | select(.name == "frontend")'
 strand kanban-send frontend "$card"
-# => {"operation":"kanban-send","peer":"frontend","sent":{"card":{"id":"9xk2p"}}}
 ```
 
-**Why this shape.**
-
-- **Guild is approved like any other spool.** Peering's receive op is a guild op, so the consuming workspace approves `millstrand.spools/guild` in `spools.edn` and syncs it exactly as it approves kanban — there is no separate install path and no classpath magic. Approving both lets the peering lifecycle register its receiver through Guild at activation (contract [Peering](./README.md#peering); `peering-lifecycle-requires-guild-first` in `kanban_peering_test.clj`).
-- **Activation order is a hard prerequisite.** The peering lifecycle fails loudly if Guild or the Kanban board op is not already registered, so the `:after [:guild :millhouse/kanban]` guard is correctness, not taste — a reordered init.clj surfaces the problem at startup instead of at the first send (`peering-lifecycle-requires-guild-first`/`-kanban-first`).
-- **The name is the provenance, so it is mandatory.** Every sent card is stamped `kanban/from` `"<board>:<card>"`, which needs the sending weaver's published name. A nameless weaver refuses to send rather than stamp a blank origin — set `name` in `.millstrand/config.json` (`send-requires-a-named-runtime`).
-- **Only queued work travels, and the source is left alone.** `kanban-send` refuses a claimed, in-review, or closed card with its lane in the error, and an epic refuses while any child is in-flight — in-flight and finished work is world-local. On success it *notes* the local card with the remote ids but never moves its lane, so closing the handed-over card stays your explicit choice (`send-refuses-in-flight-and-finished-cards`, `send-invokes-the-peer-and-notes-the-local-card`).
-- **The received card is a fresh local card.** It lands through the target's own `add!` path, takes the target's ids and defaults, and carries only the `kanban/from` stamp back to its origin — no tasks, notes, or claims cross, so the two boards never entangle their execution or history (contract [Peering](./README.md#peering); the receive tests in `kanban_peering_test.clj`).
-
-Honest source: the send/receive ops and `kanban-peering-receiver` lifecycle resource in [`src/millhouse/spools/kanban/peering.clj`](./src/millhouse/spools/kanban/peering.clj), the contract [Peering](./README.md#peering) section, and the peering test suite that drives both sides against a real weaver runtime.
-
----
-
-## See also
-
-- [`README.md`](./README.md) — the contract: the board model, the lane and
-  priority ladder, the `kanban/*` attribute table, and the CLI op surface.
-- [`src/millhouse/spools/kanban.clj`](./src/millhouse/spools/kanban.clj) — signatures
-  and docstrings for every verb and helper referenced above.
-- `strand kanban prime` — the live, spool-authored working discipline (working
-  agreement, pick-up flow, note-as-you-go/resume-from-task contract, adjacent-work awareness,
-  branch visibility). The single source these recipes distil.
-- `strand kanban about` — the terse command manual.
-- `strand pattern explain kanban-batch` — the batch pattern's input contract.
+**Why this shape.** The activation edge makes Guild's receiver seam and the
+Kanban board op prerequisites explicit. Peering refuses claimed, in-review,
+closed, or otherwise malformed work, so a transfer cannot silently split an
+active execution history. The receiver calls the local card-creation path,
+which gives the new card local identity and defaults; only queued board data
+and provenance cross the boundary. A successful send notes the source card but
+does not move or close it, leaving that lifecycle decision with the caller.

@@ -86,6 +86,20 @@
 (workflow/defworkflow bump-millstrand
   "Inspect a consumer Millstrand coordinate and choose its honest update path.
 
+  Start it with exactly one Millstrand family and the dependency file to
+  inspect:
+
+  ```clojure
+  (require '[millhouse.spools.workflow :as workflow])
+
+  (workflow/start! \"millstrand-bump\" :bump-millstrand
+    {:families [\"io.millstrand/millstrand\"]
+     :worktree \"/abs/path/to/consumer-worktree\"
+     :workspace \"/abs/path/to/consumer-worktree/.millstrand\"
+     :direct-user-request false
+     :deps-file \"deps.edn\"})
+  ```
+
   A local sibling coordinate is never converted into a guessed SHA. A pinned
   coordinate delegates to bump-spool, which requests the remote default-branch HEAD SHA and
   then calls the shared Kondo bootstrap."
@@ -138,7 +152,10 @@
                                                   |Git/SHA pin; stop for repair.")}])))
 
 (workflow/defworkflow bump-millstrand-local
-  "Require an explicit decision before validating a local Millstrand checkout."
+  "Require an explicit decision before validating a local Millstrand checkout.
+
+  This is the local continuation selected after `bump-millstrand` classifies
+  the exact dependency coordinate."
   {:entrypoints #{:continue}
    :param-spec ::millstrand-bump-params}
   (workflow/workflow
@@ -159,7 +176,10 @@
                                                   |decision is supplied.")}])))
 
 (workflow/defworkflow bump-millstrand-local-validate
-  "Bootstrap Kondo for an explicitly approved local Millstrand checkout."
+  "Bootstrap Kondo for an explicitly approved local Millstrand checkout.
+
+  This continuation preserves the local coordinate, runs shared bootstrap, and
+  refreshes the selected runtime before handing over or cutting over."
   {:entrypoints #{:continue}
    :param-spec ::millstrand-bump-params}
   (workflow/workflow
@@ -200,7 +220,10 @@
                    "workflow/instruction" (fn [_] (handover-instruction))})))
 
 (workflow/defworkflow bump-millstrand-pinned
-  "Delegate a Git/SHA-pinned Millstrand update to registered bump-spool."
+  "Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.
+
+  This continuation is selected after coordinate classification and keeps the
+  family-only remote default-branch SHA contract."
   {:entrypoints #{:continue}
    :param-spec ::millstrand-bump-params}
   (workflow/workflow

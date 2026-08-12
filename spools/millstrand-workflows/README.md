@@ -1,16 +1,10 @@
 # Millhouse Millstrand-workflows spool
 
-`millhouse.spools.millstrand-workflows` publishes repeatable workflows around Millstrand and clj-kondo support. `publish-spool-kondo` covers producer-owned exports, `bootstrap-kondo` handles first-time consumer adoption, and `bump-spool` updates pinned spool families before reusing that bootstrap path. These workflows describe and record work; they do not choose branches, edit consumer repositories on the caller's behalf, push, land, or restart runtimes.
+`millhouse.spools.millstrand-workflows` publishes guided workflows for producer-owned clj-kondo exports and consumer dependency adoption. The workflows describe and record work; they do not choose branches, edit consumer repositories on the caller's behalf, push, land, or restart runtimes.
 
-`bump-millstrand` inspects the consumer's exact `deps.edn` coordinate first. A local sibling coordinate stays local and requires an explicit decision before bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`, which asks Millstrand for the remote default-branch HEAD SHA automatically. A local coordinate never receives an invented SHA.
+## 1. Activation
 
-## Identity and activation
-
-- Root: `spools/millstrand-workflows`
-- Namespace: `millhouse.spools.millstrand-workflows`
-- Spool key: `millhouse.spools/millstrand-workflows`
-
-Activate it after the Workflow spool:
+Activate it after the Workflow spool. The root is `spools/millstrand-workflows`, the namespace is `millhouse.spools.millstrand-workflows`, and the spool key is `millhouse.spools/millstrand-workflows`.
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
@@ -25,58 +19,35 @@ Activate it after the Workflow spool:
    :required? true})
 ```
 
-## `publish-spool-kondo`
+Activation publishes the workflow definitions described below.
 
-Resolve the registered workflow and start it with the owning root, public namespace, spool key, and explicit macro-to-hook mappings. It verifies one producer source, publishes resources on the root classpath, reviews external imports and overlapping remaps, tests the exported contract, updates docs, and checks `git diff --check`, clean status, and cache hygiene.
+## 2. Publish a producer export
 
-## `bootstrap-kondo`
+`publish-spool-kondo` is for a spool root that owns macro source. It requires one producer source and an explicit macro-to-hook mapping for each form. The workflow verifies that `resources` is on the root classpath, publishes the export and hooks, reviews external imports and overlapping consumer remaps, tests the exported contract, updates the root's docs, and checks cache hygiene and clean status.
 
-Start it with the exact consumer worktree and Millstrand workspace:
+The producer resource directory is the source of truth for its mapping. A changed macro shape requires a reviewed export hook, focused tests, and documentation; the workflow does not discover macros or edit files automatically.
 
-```clojure
-{:worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"}
-```
+## 3. Adopt exports in a consumer
 
-The first checkpoint asks `greenfield` versus `brownfield` before route work. Greenfield creates a minimal `.clj-kondo/config.edn` only when absent and ensures `.clj-kondo/.cache/` is ignored by repository configuration. Brownfield inventories existing config, imports, hooks, and ignore rules, then ensures `.clj-kondo/.cache/` is ignored by repository configuration before merging safely without duplicating producer-owned hooks or replacing them with consumer remaps. Both routes merge `:copy-kondo-configs? false` into `.lsp/config.edn`, creating it only when absent and preserving every other LSP setting; explicit bootstrap is the sole Kondo import owner.
+`bootstrap-kondo` asks for `greenfield` or `brownfield` before route-specific work. Greenfield creates `.clj-kondo/config.edn` only when absent and establishes the cache ignore rule. Brownfield inventories existing config, imports, hooks, and ignore rules before merging only missing local settings. Both routes preserve existing LSP settings while ensuring `.lsp/config.edn` contains `:copy-kondo-configs? false`; explicit bootstrap is the sole Kondo import owner.
 
-Both routes use one provider-neutral agent step to read the live resolved world with `strand --workspace <workspace> spool status`, require every intended installed root to resolve, and derive each root's actual classpath directories from its reported `sync.root` and `deps.edn` `:paths`. A declared `millstrand/source-root` coordinate is handled specially while its installed spool root is still resolved normally: derive `BASE` by removing exactly the declared relative path segments from the end of `sync.root`, validate that joining them reconstructs `sync.root`, then require `BASE/deps.edn` to exist as a readable regular file containing valid EDN and add its declared paths, including `resources`. Fail loudly for an absolute, escaping, or unreconcilable declaration, guessed/upward base lookup, a bad base deps file, or a missing `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/` export. Every failure reports the exact coordinate and applicable `sync.root`, declaration, `BASE`, status, or path plus the permitted corrective invariant; it never silently falls back. Apply the runtime path rules to both roots: absent `:paths` defaults to `["src"]`, while explicit `:paths []` remains empty. The step records each root, source-root/base derivation, and combined classpath, rejects plain consumer `clojure -Spath` alone (including a consumer with `:paths []`), fails on unresolved roots or an empty installed-spool contribution, and runs exactly one `clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel --copy-configs --skip-lint` invocation. It does not require GitHub, GitLab, or `jq`. Validation verifies `.lsp/config.edn` still records `:copy-kondo-configs? false`, one provenance source per imported mapping, no duplicate or overlapping mappings, no self-import under coordinates belonging to the consumer repository, and no tracked `.clj-kondo/.cache` file. Legitimate Millhouse and other producer imports are expected in consumers. Record the consumer self-import result before, during, and after quality, along with the discovered quality commands and results, in the handover. No fixed repository quality command is assumed.
+For every intended installed root, read the live `strand --workspace <workspace> spool status` result and derive classpath directories from its reported `sync.root` and `deps.edn` `:paths`. A declared `millstrand/source-root` is handled specially: remove exactly its relative path segments from the end of `sync.root` to derive `BASE`, verify the reconstruction, read `BASE/deps.edn`, and include its declared paths, including `resources`. Require `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/`; do not search upward or guess. Absent `:paths` means `src`, while explicit `:paths []` remains empty. The installed spool root is still resolved normally, and a plain consumer `clojure -Spath` is insufficient.
 
-## `bump-spool`
+The import records exact roots, derivations, and the combined classpath before one `clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel --copy-configs --skip-lint` invocation. Unresolved roots, a missing base export, an invalid base `deps.edn`, or an empty installed-spool contribution fail loudly with the applicable invariant. Validation checks one provenance source per imported mapping, duplicate and overlap decisions, repository-relative self-imports, LSP ownership, and tracked cache files; legitimate producer imports remain valid. Quality checks are discovered from the consumer repository and handed over with the before/during/after self-import result.
 
-Provide family names only; versions and SHAs are intentionally not request parameters:
+## 4. Update dependency coordinates
 
-```clojure
-{:families ["io.millstrand/millstrand" "millhouse/spools"]
- :worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false}
-```
+`bump-spool` accepts family names only. It requests each remote default-branch HEAD SHA with `spool bump <family> --latest sha`, records an already-current coordinate as successful, then reuses `bootstrap-kondo` before handing over the refreshed runtime.
 
-For each family, the workflow emits:
+`bump-millstrand` first inspects the exact `io.millstrand/millstrand` entry in `deps-file`. A local sibling coordinate stays local and requires an explicit continuation decision before bootstrap. A Git/SHA-pinned coordinate delegates to `bump-spool`. Neither route invents a SHA or assumes a fixed quality command.
 
-```text
-strand --workspace <workspace> spool bump <family> --latest sha
-```
+Runtime refresh and cutover retain the direct-user boundary: ordinary agent and nested calls hand over the pending generation and never stop or restart a runtime.
 
-An already-current coordinate is recorded and accepted. The workflow then calls `bootstrap-kondo`, including its greenfield/brownfield choice, one full classpath import, provenance/duplicate/cache validation, local quality-check discovery, and handover. Runtime refresh and cutover retain the explicit direct-user boundary; ordinary agent and nested calls never stop or restart a runtime.
+## 5. Millstrand state and APIs
 
-## `bump-millstrand`
-
-Use exactly one Millstrand family:
-
-```clojure
-{:families ["io.millstrand/millstrand"]
- :worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false
- :deps-file "deps.edn"}
-```
-
-After inspecting `deps-file`, choose `:local-checkout` or `:git-sha-pinned`. The local route preserves the checkout and calls `bootstrap-kondo`; the pinned route calls `bump-spool`, which uses the same automatic remote default-branch HEAD SHA resolution behind `--latest sha`. Neither route invents a SHA or assumes a fixed quality command.
-
-## See also
-
-- [`millstrand-workflows.cookbook.md`](./millstrand-workflows.cookbook.md) — recipes for producer publication and consumer adoption.
-- [`millstrand-workflows.api.md`](./millstrand-workflows.api.md) — generated API documentation.
-- [`../workflow/README.md`](../workflow/README.md) — the Workflow spool that executes registered definitions.
+| Surface | Identity | Consumer contract |
+| --- | --- | --- |
+| Workflow registry | `workflow/definition-kind` owned by `millhouse.spools.millstrand-workflows` | Publishes the producer, bootstrap, bump, and continuation workflow definitions during module refresh. |
+| Agent instructions | `workflow/action-ref` on each workflow step | Exposes the exact producer, classpath, validation, quality, and handover obligation for the driving agent. |
+| Kondo import boundary | `.lsp/config.edn :copy-kondo-configs? false` | Keeps explicit bootstrap as the sole consumer-side import owner. |
+| Runtime cutover boundary | `:direct-user-request` | Allows stop/restart instructions only for a direct user request; other callers receive a handover. |

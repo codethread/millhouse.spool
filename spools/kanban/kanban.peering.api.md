@@ -34,19 +34,19 @@ Opt-in board peering: the RECEIVE guild op plus the SEND-side local ops.
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L229-L229">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L240-L240">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/*list-peers*">`*list-peers*`</a>
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L228-L228">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L239-L239">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/*send-card*">`*send-card*`</a>
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L230-L230">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L241-L241">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/close-peering!">`close-peering!`</a>
 ``` clojure
@@ -60,7 +60,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
   baseline. Its own lifecycle reset removes receivers; this close therefore
   preserves the established process-lifetime receiver behavior while static
   peering operations retract with their module owner.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L715-L723">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L726-L734">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peering-receiver">`kanban-peering-receiver`</a>
 
@@ -68,7 +68,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
 
 
 Own guarded Guild receiver registration for the peering module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L725-L728">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L736-L739">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peers-op">`kanban-peers-op`</a>
 ``` clojure
@@ -77,7 +77,7 @@ Own guarded Guild receiver registration for the peering module lifetime.
 Function.
 
 List sibling weavers and whether each accepts peered kanban cards.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L686-L691">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L697-L702">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-send-op">`kanban-send-op`</a>
 ``` clojure
@@ -86,7 +86,7 @@ List sibling weavers and whether each accepts peered kanban cards.
 Function.
 
 Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L693-L698">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L704-L709">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/open-peering!">`open-peering!`</a>
 ``` clojure
@@ -95,7 +95,7 @@ Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
 Function.
 
 Register the guarded `kanban.send.v1` receiver through Guild's supported seam.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L700-L713">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L711-L724">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/send-op">`send-op`</a>
 ``` clojure
@@ -110,4 +110,15 @@ Receive a peered card or epic bundle onto this board.
   `:features` bundle creates the epic and hangs each feature under it with a
   `parent-of` edge (same path as `kanban add --epic`), preserving input order.
   Returns JSON-safe ids only.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L185-L203">Source</a></sub></p>
+
+  A single-card payload has this shape:
+
+  ```clojure
+  {:card {:title "Investigate timeout" :priority "p2"}
+   :from {:board "backend" :card "abc12"}}
+  ```
+
+  The receiver creates a fresh local id and stamps optional provenance as
+  `kanban/from`; claims, tasks, notes, labels, and execution strands do not
+  cross the boundary.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L185-L214">Source</a></sub></p>

@@ -3,7 +3,12 @@
 
   Chime watches strand mutations, evaluates small userland rules, and sends
   attention notices through a workspace-bound local notifier command. It owns
-  only weaver-lifetime runtime state and composes the public weaver/event API."
+  only weaver-lifetime runtime state and composes the public weaver/event API.
+
+  Module authors normally use `defrule`, `set-notifier!`, and the direct rule
+  seam (`register!`/`unregister!`). The lifecycle callbacks and `engine`
+  resource are public because the runtime resolves them by symbol; activation
+  owns their registration and cleanup."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.current.alpha :as current]
@@ -30,7 +35,10 @@
 (declare baseline-rule! rt)
 
 (def rule-kind
-  "Owner-partitioned kind id for Chime notification rules."
+  "Owner-partitioned kind id for Chime notification rules.
+
+  `defrule` publishes declarations under this identity; the active module
+  reconciles the effective entries into Chime's visible rule view."
   :millhouse.spools.chime/rules)
 (def ^:private repl-owner :millstrand.owner/repl)
 
@@ -49,8 +57,9 @@
 (defn rule-declaration
   "Return a validated Chime rule declaration.
 
-  `options` conforms to `::rule-options`; override intent remains collection
-  metadata."
+  `rule-key` is a keyword and `fn-sym` is a fully qualified symbol. `options`
+  conforms to `::rule-options`; override intent remains collection metadata.
+  Consumers normally create declarations through `defrule`."
   [rule-key options fn-sym]
   (when-not (s/valid? ::rule-options options)
     (fail! "Invalid Chime rule options"
@@ -65,7 +74,20 @@
   "Define a notification rule and collect its Chime declaration.
 
   Options conform to `::rule-options`; `:override? true` records explicit
-  override intent."
+  override intent. The generated handler receives a context map containing
+  `:event`, `:strand`, and `:ready-ids`, and returns nil or a notification map.
+  The declaration is collected under the current module owner; omitting it on
+  the owner's next refresh retracts it.
+
+  ```clojure
+  (chime/defrule checkpoint-ready
+    \"Notify when a human checkpoint is ready.\"
+    [{:keys [strand ready-ids]}]
+    (when (and (= \"checkpoint\" (get-in strand [:attributes \"workflow/role\"]))
+               (contains? ready-ids (:id strand)))
+      {:title (str \"Checkpoint ready: \" (:title strand))
+       :body (str \"Review \" (:id strand))}))
+  ```"
   [name doc & args]
   (let [[options argv body] (if (vector? (first args))
                               [{} (first args) (next args)]
@@ -145,7 +167,8 @@
     the only thing that says what went wrong.
   - `:message` — present only when something threw, not `:exception/message`:
     a missing notifier and a non-zero notifier exit are failures without an
-    exception to take a message from."
+    exception to take a message from. Every entry also has `:failed/at`, an
+    ISO-8601 timestamp for when Chime recorded it."
   []
   @(failure-log))
 
@@ -170,7 +193,15 @@
 
   The binding is `{:argv [..]}`. Chime appends the notification title as the
   final argument and writes the body to stdin. Rebinding replaces the prior
-  value; pass a valid binding after every weaver startup or config reload."
+  value; pass a valid binding after every weaver startup or config reload.
+
+  ```clojure
+  (require '[millhouse.spools.chime :as chime])
+  (chime/set-notifier! {:argv [\"my-notify\"]})
+  ```
+
+  The command runs with the local user's authority and must accept the title
+  as its final argument."
   [notifier]
   (reset! (notifier-binding) (validate-notifier! notifier))
   {:notifier @(notifier-binding)})
@@ -223,7 +254,14 @@
   "Send one notification through the current binding.
 
   Returns an inspectable map immediately. Missing notifier is recorded as a loud
-  failure instead of silently dropping the notification."
+  failure instead of silently dropping the notification. With a bound notifier,
+  the return has `:status :started`, the expanded `:argv`, and `:title`; a
+  missing binding returns `:status :failed` with the recorded `:failure`.
+
+  ```clojure
+  (chime/notify! {:title \"Build finished\"
+                  :body \"All strands under the plan are closed.\"})
+  ```"
   [notification]
   (let [notification (validate-notification! notification)]
     (if-let [notifier @(notifier-binding)]
@@ -257,10 +295,18 @@
   "Register or replace a notification rule.
 
   `fn-symbol` names a function receiving `{:event .. :strand ..}` and returning
-  nil or `{:title .. :body ..}`. Currently matching strands become the rule's
-  initial seen baseline, so durable conditions do not notify after registration
-  even when they have never notified before. Mutations serialized after
-  registration notify normally."
+  nil or `{:title .. :body ..}`. The context also includes `:ready-ids`, the
+  ready strand ids computed for the scan. Currently matching strands become the
+  rule's initial seen baseline, so durable conditions do not notify after
+  registration even when they have never notified before. Mutations serialized
+  after registration notify normally.
+
+  ```clojure
+  (chime/register! :agent-failure 'my.rules/agent-failed)
+  ```
+
+  This is the direct runtime-local seam; module authors generally use
+  `defrule` so owner refresh can retract declarations."
   [name fn-symbol]
   (let [rule-key (rule-name name)
         rule {:key rule-key :fn fn-symbol}
@@ -384,7 +430,10 @@
 
   Rules receive `{:event .. :strand .. :ready-ids #{..}}`; `:ready-ids` is
   computed once per scan. Batch events and their per-strand fanout share a
-  `:batch/id`, and only the first event of a batch triggers a scan."
+  `:batch/id`, and only the first event of a batch triggers a scan. The scan
+  walks the whole current graph, so a rule can notify about a strand different
+  from the event's directly affected strand. Call the zero-argument form from
+  trusted code or use the event-handler path installed by activation."
   ([event]
    (let [visible (rule-registry)]
      (locking visible
@@ -401,7 +450,11 @@
   ([] (scan! {:event/type :chime/scan})))
 
 (defn on-event
-  "Weaver event handler: scan graph changes for attention notifications."
+  "Weaver event handler: scan graph changes for attention notifications.
+
+  Activation registers this handler for strand mutations, batch application,
+  burning, and superseding. Consumers normally let the `engine` resource own
+  that registration rather than calling this function directly."
   [event]
   (scan! event))
 
@@ -550,6 +603,9 @@
                             (registry/effective (rule-kinds) rule-kind))]])))))))
 
 (lifecycle/defresource engine
-  "Own Chime's handler, mutation barrier, and visible rule view atomically."
+  "Own Chime's handler, mutation barrier, and visible rule view atomically.
+
+  Activation applies this resource; removing it unregisters the event handler
+  and mutation barrier and retracts the visible rule view."
   {:open 'millhouse.spools.chime/open-engine!
    :close 'millhouse.spools.chime/close-engine!})

@@ -1,58 +1,27 @@
 # Millstrand-workflows cookbook
 
-## Publish one macro-owning root
+Recipes here combine multiple workflow families; parameter shapes and focused starts live in the generated API.
 
-Start `publish-spool-kondo` with the owning root's public identity and an explicit vector of macro-to-hook mappings. Keep the producer's `resources/clj-kondo.exports/<coordinate>/` directory on its classpath and use that directory as the one source for each mapping. Review external imports separately, remove generated self-imports, reject overlapping consumer remaps and tracked `.clj-kondo/.cache` files, then run focused tests and update the contract/cookbook/API docs.
+## Publish and adopt a producer export
 
-## Bootstrap Kondo in a consumer
+**Situation.** A macro-owning spool has changed its public forms and a consumer must adopt the export without taking ownership of producer mappings.
 
-Start `bootstrap-kondo` with explicit paths:
+**Composition.** Run `publish-spool-kondo` in the producer checkout, review its export and tests, then run `bootstrap-kondo` in the consumer. Select `greenfield` only for a missing local boundary; select `brownfield` to inventory and merge an existing one. The consumer bootstrap consumes the resolved dependency classpath, validates provenance and cache hygiene, and discovers the consumer's own quality checks.
 
-```clojure
-{:worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"}
-```
+**Why this shape.** Publication establishes one producer source of truth before adoption. Keeping the two workflows in separate worktrees makes ownership, self-import checks, and pending local work explicit.
 
-Answer the first checkpoint before changing the route:
+## Bump a pinned family and adopt its exports
 
-- `greenfield`: create `.clj-kondo/config.edn` only if absent and ensure `.clj-kondo/.cache/` is ignored by repository configuration. Leave producer mappings to dependency exports.
-- `brownfield`: inventory the existing config, imported configs, hooks, and ignore rules, then ensure `.clj-kondo/.cache/` is ignored by repository configuration. Merge only missing local settings, preserve existing ownership, and never duplicate a producer-owned hook or replace it with a consumer remap.
+**Situation.** A consumer pins Millstrand or another spool family and needs the newest approved default-branch commit.
 
-Both routes must merge `:copy-kondo-configs? false` into `.lsp/config.edn`, creating it only when absent and preserving all other LSP settings. This makes explicit bootstrap the sole Kondo import owner for every consumer.
+**Composition.** Give `bump-spool` family names plus the exact consumer worktree and workspace. It emits one `spool bump <family> --latest sha` request per family, accepts an already-current coordinate, then calls `bootstrap-kondo` and hands over the refreshed runtime state.
 
-Both routes then use one provider-neutral agent step to run `strand --workspace <workspace> spool status` and inspect the live resolved world. Require every intended installed root reported by status to resolve successfully, record each exact root identity and its reported `sync.root`, read that root's `deps.edn`, and resolve its `:paths` relative to `sync.root`. For each declared `millstrand/source-root` coordinate, process the installed spool root normally and also derive `BASE` by removing exactly the declaration's relative path segments from the end of `sync.root`; validate that `BASE` joined with the declaration reconstructs `sync.root`. Do not search upward or guess. Require `BASE/deps.edn` to exist as a readable regular file containing valid EDN, then add its declared paths—including `resources`—relative to `BASE`. Require `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/` to exist, failing loudly when the Millstrand core export is absent. Every failure must report the exact coordinate and applicable status, `sync.root`, declaration, `BASE`, or failing path together with the permitted corrective invariant; never silently fall back. Match Millstrand's runtime rule for both roots: absent `:paths` defaults to `["src"]`, while explicit `:paths []` remains empty. Record the roots, each source-root/base derivation, and final classpath. The consumer's plain `clojure -Spath` alone is insufficient and must be explicitly rejected, including when its `deps.edn` has `:paths []`; fail loudly on unresolved roots or an empty installed-spool contribution. Run exactly one command with the resulting classpath: `clj-kondo --lint RESOLVED_CLASSPATH --dependencies --parallel --copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`.
+**Why this shape.** Family-only input prevents callers from inventing versions or SHAs. Reusing bootstrap keeps dependency resolution, Kondo ownership, provenance, and quality discovery identical after a bump.
 
-Validate every imported Millstrand and installed sibling spool export against its producer `clj-kondo.exports` path. Record one provenance source per config and hook, verify `.lsp/config.edn` records `:copy-kondo-configs? false`, reject duplicate or overlapping mappings, and identify the consumer repository's producer namespace/path coordinates from its metadata and exports before rejecting only self-imports under those coordinates. Legitimate Millhouse and other producer imports are expected in consumers. Ensure no tracked `.clj-kondo/.cache` file exists. Prove and record the consumer self-import result before, during, and after quality. Inspect the consumer's own Makefile, docs, scripts, and CI configuration to discover appropriate local quality checks; record the commands and results rather than assuming `make quality` or a CI service. Finish with a handover containing paths, mode, provenance, duplicate decisions, LSP setting, cache status, consumer self-import results, quality results, and pending local work.
+## Choose a local or pinned Millstrand update
 
-## Bump spool families
+**Situation.** A consumer's Millstrand coordinate may be a sibling checkout during development or a Git/SHA pin in a shared checkout.
 
-Use family names only:
+**Composition.** Start `bump-millstrand`, inspect the exact `deps-file`, and route explicitly. The local route preserves the checkout, asks for a move-forward decision, and then calls `bootstrap-kondo`; the pinned route delegates to `bump-spool`. Both routes refresh the selected runtime and hand over unless the direct user has authorized cutover.
 
-```clojure
-{:families ["io.millstrand/millstrand" "millhouse/spools"]
- :worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false}
-```
-
-Each family emits the explicit command below, which asks Millstrand to resolve and record the remote default-branch HEAD SHA:
-
-```text
-strand --workspace <workspace> spool bump <family> --latest sha
-```
-
-If the family is already current, record that outcome and continue. After all family requests, reuse `bootstrap-kondo` so Kondo adoption, provenance, duplicates, cache hygiene, local quality discovery, and handover stay identical for first-time and bump workflows. Keep `:direct-user-request` false for agent, scheduled, or nested calls; only a direct user may authorize runtime cutover.
-
-## Bump Millstrand with local-coordinate handling
-
-Use exactly one Millstrand family:
-
-```clojure
-{:families ["io.millstrand/millstrand"]
- :worktree "/abs/path/to/consumer-worktree"
- :workspace "/abs/path/to/consumer-worktree/.millstrand"
- :direct-user-request false
- :deps-file "deps.edn"}
-```
-
-Inspect the exact `deps-file` and choose `:local-checkout` or `:git-sha-pinned`. For a sibling checkout such as `../millstrand` or `../skein-src`, choose `:move-forward` only after confirming the local path; bootstrap then preserves it and never invents a SHA. For a Git/SHA pin, the continuation calls `bump-spool` with the family only, so it automatically emits `strand --workspace <workspace> spool bump io.millstrand/millstrand --latest sha`.
+**Why this shape.** Local development stays local, while pinned consumers use the remote default-branch SHA path. The explicit boundary prevents an agent or nested workflow from stopping or restarting a runtime.

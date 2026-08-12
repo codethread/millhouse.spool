@@ -118,7 +118,9 @@
   fails loudly, directing the caller to `gate` instead. A `:self` step carries
   no `workflow/gate` attribute, so its compiled output is identical to a bare
   step. The result is plain data and may be passed to `workflow` or
-  transformed by user code before compilation."
+  transformed by user code before compilation.
+
+  Example: `(step :build title :self :depends-on [:prepare])`."
   [id title waiter & {:as opts}]
   (reject-unknown-keys! opts step-opt-keys :step)
   (when-not (s/valid? ::self-waiter waiter)
@@ -137,7 +139,10 @@
   driving agent should treat a ready gate as a poll/hand-off point, not work to
   do. `register-executor!` keys a stall predicate by this same waiter name, so
   `await!` can stay silent on a healthy executor-owned gate. Accepts the same
-  opts as `step`."
+  opts as `step`.
+
+  Example: `(gate :ci title :ci :depends-on [:push])`; a fulfiller closes the
+  ready gate with `(complete! run-id {:step gate-id :by actor})`."
   [id title waiter & {:as opts}]
   (reject-unknown-keys! opts step-opt-keys :gate)
   (when-not (s/valid? ::external-waiter waiter)
@@ -163,7 +168,9 @@
   identity again and validates against whatever it names then.
 
   `:kind` names the decision owner and defaults to `:human`; it is stored as
-  `workflow/checkpoint-kind` and is the canonical human-in-the-loop signal."
+  `workflow/checkpoint-kind` and is the canonical human-in-the-loop signal.
+
+  Example: `(checkpoint :release title :choices [:ship :hold])`."
   [id title & {:as opts}]
   (reject-unknown-keys! opts checkpoint-opt-keys :checkpoint)
   (let [kind (or (:kind opts) :human)
@@ -188,7 +195,9 @@
 
   The callee workflow is expanded inline at compile time. Downstream parent
   steps depend on the call id, which represents completion of the expanded
-  procedure's exit steps."
+  procedure's exit steps.
+
+  Example: `(call :review #'review params :depends-on [:implement])`."
   [id procedure params & {:as opts}]
   (reject-unknown-keys! opts call-opt-keys :call)
   (merge {:id id :procedure procedure :params params} opts))
@@ -211,7 +220,10 @@
 
   Opts are `:depends-on`, `:description`, `:title`, and `:attributes`. There is
   deliberately no `:condition` or `:loop`: a selection point the params might
-  delete, or multiply, is not a selection point."
+  delete, or multiply, is not a selection point.
+
+  Example: `(defer :perform-work title :depends-on [:prepare])`; bind it with
+  `(bind-defers definition {:perform-work #{:review :build}})`."
   [id title & {:as opts}]
   (reject-unknown-keys! opts defer-opt-keys :defer)
   ;; The lineage a cycle check reads is compile's to write. An authored value
@@ -270,7 +282,9 @@
   call fails at the builder rather than at the pour — as does a defer carrying
   a `:condition`, a `:loop`, an authored `workflow/defer-path`, an `:example`
   the live `:param-spec` rejects, or a `:param-docs` key the spec never
-  declares, none of which a shape spec can express."
+  declares, none of which a shape spec can express.
+
+  Example: `(workflow name (step :build title :self))`."
   [name & body]
   (let [[opts steps] (if (and (map? (first body))
                               (not (contains? (first body) :id)))
@@ -426,7 +440,10 @@
   context after keyword values are stringified and non-JSON-safe values are
   rejected loudly. `opts` may include :family, :definition, :context, and
   :root-attributes. `:ready` is empty when the run has no ready workflow work
-  (e.g. an empty workflow, which also reports `:done true`)."
+  (e.g. an empty workflow, which also reports `:done true`).
+
+  Example: `(start! run-id #'build params)` returns the first
+  ready frontier."
   ([run-id workflow params]
    (start! run-id workflow params {}))
   ([run-id workflow params opts]
@@ -553,7 +570,10 @@
 
   When the closed step is the last active inner step beneath a `procedure`
   join, the join closes in the same transaction (see `cascade-join-ids`). All
-  validation happens before any mutation."
+  validation happens before any mutation.
+
+  Example: `(complete! run-id {:by actor})` closes the sole ready ordinary
+  step."
   ([run-id]
    (complete! run-id {}))
   ([run-id opts]
@@ -633,7 +653,9 @@
   closes and any continuation pour ride one batch, a failing apply commits
   nothing and the run stays resumable. Validation, routing, and batch-building
   mechanics live in `millhouse.spools.workflow.internal.routing`; all validation
-  happens before any mutation."
+  happens before any mutation.
+
+  Example: `(choose! run-id :approved {})` records a terminal choice."
   ([run-id choice]
    (choose! run-id choice {} {}))
   ([run-id choice input]
@@ -993,7 +1015,9 @@
   registry the same way module publication validates a staged candidate, so a
   symbol that will not resolve, a definition that is not a valid definition, or a
   route to a name that cannot honor it fails before anything changes. Returns
-  `name`."
+  `name`.
+
+  Example: `(register-workflow! :build 'my.ns/build)` returns `:build`."
   [name definition-sym]
   (require-valid! ::registry-name name "Workflow registry name must be a keyword")
   (require-valid! ::definition-symbol definition-sym
@@ -1032,7 +1056,9 @@
   owner-partition declaration data (DELTA-OlrDrt-001.CC8). Maps are checked
   before invokables on purpose: a map is `ifn?`, and a mistyped declaration must
   fail loudly rather than register as a lookup predicate. Returns the registered
-  waiter as a keyword."
+  waiter as a keyword.
+
+  Example: `(register-executor! :ci 'my.ns/ci-stalled?)` returns `:ci`."
   [waiter pred]
   (when-not (s/valid? ::external-waiter waiter)
     (fail! "Executor waiter must be a keyword, symbol, or non-blank string other than :self"

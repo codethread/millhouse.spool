@@ -9,6 +9,11 @@ Human-attention notification bridge for Millstrand graph events.
   attention notices through a workspace-bound local notifier command. It owns
   only weaver-lifetime runtime state and composes the public weaver/event API.
 
+  Module authors normally use `defrule`, `set-notifier!`, and the direct rule
+  seam (`register!`/`unregister!`). The lifecycle callbacks and `engine`
+  resource are public because the runtime resolves them by symbol; activation
+  owns their registration and cleanup.
+
 
 
 
@@ -18,7 +23,7 @@ Human-attention notification bridge for Millstrand graph events.
 
 
 Runtime captured for asynchronous notifier worker threads.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L118-L120">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L140-L142">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/close-engine!">`close-engine!`</a>
 ``` clojure
@@ -34,7 +39,7 @@ Close Chime's atomic engine boundary for a validated lifecycle context.
   A failed close restores the active cluster before surfacing the failure. The
   retained resource handle can therefore be retried without exposing a
   half-closed handler, barrier, or rule view.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L515-L550">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L568-L603">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/defrule">`defrule`</a>
 ``` clojure
@@ -45,8 +50,21 @@ Macro.
 Define a notification rule and collect its Chime declaration.
 
   Options conform to `::rule-options`; `:override? true` records explicit
-  override intent.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L64-L81">Source</a></sub></p>
+  override intent. The generated handler receives a context map containing
+  `:event`, `:strand`, and `:ready-ids`, and returns nil or a notification map.
+  The declaration is collected under the current module owner; omitting it on
+  the owner's next refresh retracts it.
+
+  ```clojure
+  (chime/defrule checkpoint-ready
+    "Notify when a human checkpoint is ready."
+    [{:keys [strand ready-ids]}]
+    (when (and (= "checkpoint" (get-in strand [:attributes "workflow/role"]))
+               (contains? ready-ids (:id strand)))
+      {:title (str "Checkpoint ready: " (:title strand))
+       :body (str "Review " (:id strand))}))
+  ```
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L73-L103">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/engine">`engine`</a>
 
@@ -54,7 +72,10 @@ Define a notification rule and collect its Chime declaration.
 
 
 Own Chime's handler, mutation barrier, and visible rule view atomically.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L552-L555">Source</a></sub></p>
+
+  Activation applies this resource; removing it unregisters the event handler
+  and mutation barrier and retracts the visible rule view.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L605-L611">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/mutation-registration-barrier!">`mutation-registration-barrier!`</a>
 ``` clojure
@@ -65,7 +86,7 @@ Function.
 Serialize a pending graph mutation after any in-progress rule registration.
 
   Installed as a synchronous pre-commit hook. Its return value is ignored.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L408-L414">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L461-L467">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/notifier">`notifier`</a>
 ``` clojure
@@ -74,7 +95,7 @@ Serialize a pending graph mutation after any in-progress rule registration.
 Function.
 
 Return the current notifier binding, or nil when none is bound.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L178-L181">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L209-L212">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/notify!">`notify!`</a>
 ``` clojure
@@ -85,8 +106,15 @@ Function.
 Send one notification through the current binding.
 
   Returns an inspectable map immediately. Missing notifier is recorded as a loud
-  failure instead of silently dropping the notification.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L222-L238">Source</a></sub></p>
+  failure instead of silently dropping the notification. With a bound notifier,
+  the return has `:status :started`, the expanded `:argv`, and `:title`; a
+  missing binding returns `:status :failed` with the recorded `:failure`.
+
+  ```clojure
+  (chime/notify! {:title "Build finished"
+                  :body "All strands under the plan are closed."})
+  ```
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L253-L276">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/on-event">`on-event`</a>
 ``` clojure
@@ -95,7 +123,11 @@ Send one notification through the current binding.
 Function.
 
 Weaver event handler: scan graph changes for attention notifications.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L403-L406">Source</a></sub></p>
+
+  Activation registers this handler for strand mutations, batch application,
+  burning, and superseding. Consumers normally let the `engine` resource own
+  that registration rather than calling this function directly.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L452-L459">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/open-engine!">`open-engine!`</a>
 ``` clojure
@@ -111,7 +143,7 @@ Open Chime's atomic engine boundary for a validated lifecycle context.
   The handler, mutation barrier, and visible rule view change under their
   shared monitor. A failed open compensates back to the inactive boundary so a
   lifecycle retry never inherits a half-open engine.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L489-L513">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L542-L566">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/recent-failures">`recent-failures`</a>
 ``` clojure
@@ -131,8 +163,9 @@ Return the last 100 notifier, process, and rule failures for this weaver lifetim
     the only thing that says what went wrong.
   - `:message` — present only when something threw, not `:exception/message`:
     a missing notifier and a non-zero notifier exit are failures without an
-    exception to take a message from.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L135-L150">Source</a></sub></p>
+    exception to take a message from. Every entry also has `:failed/at`, an
+    ISO-8601 timestamp for when Chime recorded it.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L157-L173">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/register!">`register!`</a>
 ``` clojure
@@ -143,11 +176,19 @@ Function.
 Register or replace a notification rule.
 
   `fn-symbol` names a function receiving `{:event .. :strand ..}` and returning
-  nil or `{:title .. :body ..}`. Currently matching strands become the rule's
-  initial seen baseline, so durable conditions do not notify after registration
-  even when they have never notified before. Mutations serialized after
-  registration notify normally.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L256-L283">Source</a></sub></p>
+  nil or `{:title .. :body ..}`. The context also includes `:ready-ids`, the
+  ready strand ids computed for the scan. Currently matching strands become the
+  rule's initial seen baseline, so durable conditions do not notify after
+  registration even when they have never notified before. Mutations serialized
+  after registration notify normally.
+
+  ```clojure
+  (chime/register! :agent-failure 'my.rules/agent-failed)
+  ```
+
+  This is the direct runtime-local seam; module authors generally use
+  `defrule` so owner refresh can retract declarations.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L294-L329">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/reset-seen!">`reset-seen!`</a>
 ``` clojure
@@ -156,7 +197,7 @@ Register or replace a notification rule.
 Function.
 
 Clear per-weaver notification deduplication and batch-scan state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L152-L157">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L175-L180">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/rule-declaration">`rule-declaration`</a>
 ``` clojure
@@ -166,9 +207,10 @@ Function.
 
 Return a validated Chime rule declaration.
 
-  `options` conforms to `::rule-options`; override intent remains collection
-  metadata.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L49-L62">Source</a></sub></p>
+  `rule-key` is a keyword and `fn-sym` is a fully qualified symbol. `options`
+  conforms to `::rule-options`; override intent remains collection metadata.
+  Consumers normally create declarations through `defrule`.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L57-L71">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/rule-kind">`rule-kind`</a>
 
@@ -176,7 +218,10 @@ Return a validated Chime rule declaration.
 
 
 Owner-partitioned kind id for Chime notification rules.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L32-L34">Source</a></sub></p>
+
+  `defrule` publishes declarations under this identity; the active module
+  reconciles the effective entries into Chime's visible rule view.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L37-L42">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/rules">`rules`</a>
 ``` clojure
@@ -185,7 +230,7 @@ Owner-partitioned kind id for Chime notification rules.
 Function.
 
 Return registered notification rules ordered by key.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L285-L288">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L331-L334">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/scan!">`scan!`</a>
 ``` clojure
@@ -198,8 +243,11 @@ Evaluate registered rules against currently affected strands.
 
   Rules receive `{:event .. :strand .. :ready-ids #{..}}`; `:ready-ids` is
   computed once per scan. Batch events and their per-strand fanout share a
-  `:batch/id`, and only the first event of a batch triggers a scan.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L382-L401">Source</a></sub></p>
+  `:batch/id`, and only the first event of a batch triggers a scan. The scan
+  walks the whole current graph, so a rule can notify about a strand different
+  from the event's directly affected strand. Call the zero-argument form from
+  trusted code or use the event-handler path installed by activation.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L428-L450">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/set-notifier!">`set-notifier!`</a>
 ``` clojure
@@ -212,7 +260,15 @@ Bind the local notifier command for this weaver lifetime.
   The binding is `{:argv [..]}`. Chime appends the notification title as the
   final argument and writes the body to stdin. Rebinding replaces the prior
   value; pass a valid binding after every weaver startup or config reload.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L168-L176">Source</a></sub></p>
+
+  ```clojure
+  (require '[millhouse.spools.chime :as chime])
+  (chime/set-notifier! {:argv ["my-notify"]})
+  ```
+
+  The command runs with the local user's authority and must accept the title
+  as its final argument.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L191-L207">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/unregister!">`unregister!`</a>
 ``` clojure
@@ -221,4 +277,4 @@ Bind the local notifier command for this weaver lifetime.
 Function.
 
 Unregister a notification rule by key.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L290-L311">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L336-L357">Source</a></sub></p>

@@ -223,7 +223,16 @@
   "Create a kanban card in the pending (or refinement) lane.
 
   `--type epic` creates a grouping epic; `--epic <id>` hangs a new feature
-  under an existing epic with a parent-of edge."
+  under an existing epic with a parent-of edge.
+
+  ```clojure
+  (add! runtime \"Investigate the timeout\"
+        {\"--lane\" \"refinement\"
+         \"--priority\" \"p2\"
+         \"--label\" [\"reliability\"]})
+  ```
+
+  A refinement card stays out of `next` until a human calls `promote!`."
   [runtime title flags]
   (let [title (require-non-blank! :title title)
         epic-id (get flags "--epic")]
@@ -281,7 +290,18 @@
   :priority \"p1|p2|p3|p4 (optional, default p3)\"
   :depends-on [\"sibling-key-or-existing-strand-id\"]}]}. `depends-on` values matching sibling
   keys become batch-local edges; all other values are treated as durable strand
-  ids and fail loudly if absent."
+  ids and fail loudly if absent.
+
+  ```sh
+  strand weave --pattern kanban-batch --input \\
+    '{\"items\":[{\"key\":\"design\",\"title\":\"Design the board\"},
+               {\"key\":\"docs\",\"title\":\"Write the docs\",
+                \"depends-on\":[\"design\"]}]}'
+  ```
+
+  The pattern validates the complete input before publishing the batch, so
+  duplicate keys and missing durable dependencies fail without a partial
+  backlog."
   {:spec ::kanban-batch-input}
   [{:keys [input]}]
   (let [{:keys [items]} input
@@ -393,7 +413,12 @@
   driving it and on which branch; `--worktree` is optional (direct work in the
   main checkout has no separate worktree). `--run-id` optionally stamps an
   opaque run pointer for agents to query through their workflow directly. Epics
-  group work and are never claimed themselves."
+  group work and are never claimed themselves.
+
+  ```sh
+  strand kanban claim abc12 --owner claude --branch feature-timeouts \\
+    --worktree /work/feature-timeouts
+  ```"
   [runtime id flags]
   (let [strand (require-lane! "claim" (card-strand runtime (require-non-blank! :id id)) "pending")]
     (when (= "epic" (card-type strand))
@@ -522,7 +547,15 @@
   child is closed) and `--outcome abandoned` cascade-closes each still-open
   feature child, recording each transitioned card's lane in
   `kanban/abandon-restore-lane` so `kanban reopen` can reverse exactly what the
-  abandon closed."
+  abandon closed.
+
+  ```sh
+  strand kanban finish abc12 --outcome done
+  strand kanban finish ep789 --outcome abandoned
+  strand kanban reopen ep789
+  ```
+
+  Reopen is paired with abandon only; a completed epic remains closed."
   [runtime id flags]
   (let [id (require-non-blank! :id id)
         strand (card-strand runtime id)
@@ -705,7 +738,12 @@
 
   `--depends-on <id>` is repeatable and lays the same `depends-on` edges that
   are the concurrency DAG and drive the derived `blocked`/`ready` split; task
-  status is never stored."
+  status is never stored.
+
+  ```sh
+  strand kanban task add abc12 \"Implement the parser\"
+  strand kanban task add abc12 \"Document the parser\" --depends-on task01
+  ```"
   [runtime feature-id title flags]
   (let [feature (feature-strand runtime (require-non-blank! :feature feature-id))
         title (require-non-blank! :title title)
@@ -776,7 +814,15 @@
   is what `kanban card <id>` surfaces as each task's `:latest-note` — and keep
   card notes to lean handover summaries. `--kind` stamps the open `note/kind`
   view hint (blessed values: activity, decision, review-dump, summary). A
-  task note reports its owning card alongside the task when one parents it."
+  task note reports its owning card alongside the task when one parents it.
+
+  ```sh
+  strand kanban note task01 \"Parser is green; review next\" \\
+    --by claude --kind activity
+  strand --stdin kanban note task01 :stdin --by claude --kind review-dump <<'NOTE'
+  Review findings and command output belong on the task, not the card.
+  NOTE
+  ```"
   [runtime id text flags]
   (let [target (note-target runtime (require-non-blank! :id id))
         text (require-non-blank! :text text)
@@ -899,7 +945,13 @@
 
   This is the resume entry point: everything an agent needs to continue a
   card lives here. `:tasks` projects the feature card's child tasks with the
-  four derived statuses (empty for cards that carry no task tier)."
+  four derived statuses (empty for cards that carry no task tier).
+
+  ```clojure
+  (card-view runtime \"abc12\")
+  ;; => {:card ..., :tasks ..., :notes ..., :active-work ...,
+  ;;     :ready ..., :related ...}
+  ```"
   [runtime id]
   (let [card (card-strand runtime (require-non-blank! :id id))
         {:keys [notes work]} (card-subtree runtime card)
@@ -981,7 +1033,12 @@
   working one axis pulls the next card on that axis rather than the next card
   overall. `epic-id` narrows to one epic's direct features — the pick-up read
   for a loop working a single epic — and fails loudly when the id does not
-  name an epic card."
+  name an epic card.
+
+  ```clojure
+  (next-card runtime [\"reliability\"])
+  (next-card runtime nil \"ep789\")
+  ```"
   ([runtime] (next-card runtime nil))
   ([runtime labels] (next-card runtime labels nil))
   ([runtime labels epic-id]

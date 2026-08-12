@@ -189,7 +189,18 @@
   keyword-keyed JSON body. A `:card` creates a single feature; an `:epic` +
   `:features` bundle creates the epic and hangs each feature under it with a
   `parent-of` edge (same path as `kanban add --epic`), preserving input order.
-  Returns JSON-safe ids only."
+  Returns JSON-safe ids only.
+
+  A single-card payload has this shape:
+
+  ```clojure
+  {:card {:title \"Investigate timeout\" :priority \"p2\"}
+   :from {:board \"backend\" :card \"abc12\"}}
+  ```
+
+  The receiver creates a fresh local id and stamps optional provenance as
+  `kanban/from`; claims, tasks, notes, labels, and execution strands do not
+  cross the boundary."
   [{:guild/keys [input] :op/keys [runtime]}]
   (let [stamp (from-stamp (:from input))]
     (if-let [card (:card input)]

@@ -1,18 +1,17 @@
 # Millhouse code executor spool
 
-> This is the contract for `code/*` gate attributes, execution authority, outcomes, concurrency, timeout, recovery, and coordinator attention. The generated function reference is [`code.api.md`](./code.api.md).
+`millhouse.spools.executors.code` fulfils ready workflow gates whose waiter is
+`:code` by invoking trusted Clojure functions inside the weaver process. It
+publishes the `code/*` gate vocabulary, records successful returns, and leaves
+failures ready for deliberate recovery. The [cookbook](./code.cookbook.md)
+shows compositions; the [generated API](./code.api.md) has the exact public
+function contracts.
 
-## Overview
+## 1. Activation
 
-`millhouse.spools.executors.code` fulfils ready workflow gates whose waiter is `:code`. It resolves the gate's qualified `code/fn` symbol through the runtime spool classloader and calls that Var with the poured `code/params` map. A normal return closes the gate. An exception or timeout stamps `gate/error` and leaves the gate ready for deliberate recovery.
-
-A code gate runs arbitrary Clojure inside the weaver process with ambient runtime authority. There is no process isolation. The function owns every subprocess it starts.
-
-Collected authoring forms publish the executor and stalled-gate query. A module-scoped lifecycle resource owns the vocabulary, event handler, worker pool, and timeout scheduler. Removing the module unregisters the handler and closes both pools.
-
-## Loading
-
-The code executor has its own root and depends on the workflow spool. Approve both roots, declare workflow first, then order the code executor after every module that defines a function it may resolve:
+The code executor has its own root and depends on the workflow spool. Approve
+both roots, load workflow first, and order the code executor after every module
+that defines a function it may resolve:
 
 ```clojure
 (runtime/module! runtime :millhouse/spools-workflow
@@ -28,52 +27,81 @@ The code executor has its own root and depends on the workflow spool. Approve bo
    :after [:my/code-functions]})
 ```
 
-Reconciliation scans durable ready gates immediately.
+Activation publishes the `:code` workflow executor, the `stalled-code-gates`
+query, and the `code/*` attribute namespace. It also scans durable ready gates
+immediately, so existing work does not need a new graph mutation to start.
 
-## Gate attributes
+## 2. Gate request attributes
 
-| Attribute | Required | Meaning |
+Author a normal `(workflow/gate ... :code ...)`. The request attributes are
+snapshots poured with the gate; the function Var is resolved when execution
+starts.
+
+| Attribute | Required | Consumer contract |
 |---|---|---|
-| `workflow/gate` = `"code"` | yes | Selects this executor. |
-| `code/fn` | yes | String spelling a fully qualified symbol naming the Var to invoke. Symbols, unqualified names, closures, and unresolved Vars fail loudly. |
-| `code/params` | yes | JSON object poured with the gate. Missing or non-object values fail loudly. |
-| `code/timeout-secs` | no | Positive-integer wall-clock bound. Invalid values fail loudly. |
+| `workflow/gate` = `"code"` | yes | Selects this executor. Other waiters are ignored. |
+| `code/fn` | yes | String spelling a fully qualified symbol naming a callable Var. Symbols, unqualified names, closures, and unresolved Vars fail loudly. |
+| `code/params` | yes | JSON object passed to the function. Its keys may be strings or keywords, and all values must be JSON-safe. |
+| `code/timeout-secs` | no | Positive integer wall-clock bound. Invalid values fail loudly; there is no implicit clamp. |
 
-The executor consults the named specs `:code/fn`, `:code/params`, and `:code/timeout-secs` — registered under the attribute names themselves — before invocation. Their combined request contract is `:millhouse.spools.executors.code/request`, declared on the executor's registry entry, so `strand workflow executors` projects the contract, a copyable attribute template, and the printed form graph without reading this spool's source. Successful return values must satisfy `:millhouse.spools.executors.code/result`.
+The executor validates the named specs `:code/fn`, `:code/params`, and
+`:code/timeout-secs` before invocation. Their combined request spec,
+`:millhouse.spools.executors.code/request`, is declared on the executor
+registry entry, so `strand workflow executors` can project the request
+contract and attribute template.
 
-Request attributes are snapshots. Function resolution happens when the gate executes, so a Var redefinition can repair an already-poured stalled gate after `gate/error` is cleared. The poured params do not change.
+## 3. Invocation and outcomes
 
-## Outcomes
+Code runs with the weaver's ambient Clojure authority. There is no process
+isolation; a function owns every subprocess or other external resource it
+starts. A normal return closes the gate through `workflow/complete!` with
+`workflow/outcome-by` set to `"code"`. Non-nil returns must be JSON-safe and
+are stamped as `code/result`; nil returns omit that attribute.
 
-| Attribute | Meaning |
+The executor uses a unique `code/running` claim for each accepted invocation.
+Every terminal write re-reads that claim. If a timeout or coordinator recovery
+has removed or replaced it, the old invocation's result is discarded.
+
+| Attribute | Consumer contract |
 |---|---|
 | `code/running` | Unique claim token for one accepted invocation. |
-| `code/result` | JSON-safe non-nil return value. Nil omits this attribute. |
-| `gate/error` | Durable exception, validation, resolution, or timeout detail. Presence stalls the gate until a coordinator removes it. |
+| `code/result` | JSON-safe non-nil return value on a successful closed gate. |
+| `gate/error` | Durable validation, resolution, exception, or timeout detail; its presence stalls the gate. |
 
-A successful invocation clears its matching claim and closes the gate through `workflow/complete!` with `:by "code"`. A thrown exception records its message and `ex-data`. Result validation is part of the terminal transition: a non-JSON-safe return fails the gate instead of corrupting persisted attributes.
+## 4. Concurrency and timeout
 
-Every terminal write re-reads `code/running`. If the claim is absent or differs from the invocation's token, the result is discarded. This prevents an abandoned invocation from closing or rewriting a gate after timeout or recovery.
+The module owns a fixed pool of eight daemon worker threads with no task queue.
+When all workers are occupied, a ready gate remains unclaimed for a later
+event-driven scan. A gate is not claimed merely because it was offered to a
+saturated pool.
 
-## Concurrency and timeout
+On timeout, the executor interrupts the worker, clears its matching claim, and
+stamps `gate/error`. Clojure code cannot be killed safely: long-running
+functions must cooperate with interruption, for example by checking
+`Thread/interrupted` in loops. A stubborn function can occupy one worker
+permanently, making pool saturation visible. Interrupting a function does not
+terminate child processes; code that starts one must clean it up itself.
 
-The module owns a fixed pool of eight daemon worker threads with no task queue. A saturated scan leaves the gate unclaimed; a later event-driven scan retries it. The pool first accepts a start-gated task, then the executor stamps its claim token, then the task is released. A gate is never stamped merely because it was offered to a saturated pool.
+## 5. Failure and recovery
 
-On timeout, the executor interrupts the worker thread, clears its matching claim, stamps `gate/error`, and abandons the invocation. Clojure code cannot be killed safely. Code gates must cooperate with interruption, including checking `Thread/interrupted` in long loops. Non-interruptible work can occupy one pool thread permanently. The fixed bound makes that loss visible as saturation rather than hiding it behind unbounded thread creation.
+Exceptions, invalid requests, unresolved functions, invalid results, and
+timeouts leave the gate active and ready with `gate/error`. Later scans skip a
+gate while that key is present. A blank error is still present data and does
+not re-arm the gate.
 
-Interrupting a code gate does not terminate its child processes. A gate that starts a subprocess must stop it in its own interruption path. Long-lived child-process supervision is better served by the shell executor, which can kill a process tree.
+After fixing the function or request data, a coordinator removes
+`gate/error`. The next scan resolves the current Var and retries the poured
+request. A weaver crash can leave `code/running` without a live invocation;
+removing that token re-arms the gate. Because terminal writes are claim
+guarded, an invocation from the old claim cannot publish into the recovered
+claim.
 
-## Failure and recovery
+## 6. Millstrand state and APIs
 
-Failed gates remain active, ready, and stamped with `gate/error`; later scans skip them. After fixing the function or request data, a coordinator removes `gate/error`. The next scan resolves the current Var and retries the gate. A blank error string is still present data and does not re-arm the gate.
-
-A weaver crash may leave a `code/running` token with no live invocation. Removing that token re-arms the gate. Because completion is token-guarded, an invocation from an earlier claim cannot publish into the recovered claim.
-
-## Coordinator attention
-
-The module registers the `:code` workflow executor and the `stalled-code-gates` named query. Its stall predicate returns `{:gate id :error detail}` for a ready code gate carrying `gate/error`. Healthy claimed gates remain ordinary waiting work.
-
-## See also
-
-- [`millhouse.spools.workflow`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/spools/workflow.md) for gate authoring and executor registration.
-- [`millhouse.spools.executors.shell`](../shell-executor/README.md) for process-isolated command execution.
+| Surface | Identity | Consumer contract |
+|---|---|---|
+| Workflow executor | `code` from `workflow/defexecutor` | Fulfils ready `:code` gates and reports `{:gate id :error detail}` for a ready gate carrying `gate/error`. |
+| Named query | `stalled-code-gates` from `millstrand/defquery` | Selects active code gates carrying `gate/error` for coordinator inspection. |
+| Attribute namespace | `code/*` from the `code-engine` lifecycle resource | Publishes request, claim, and result attributes listed above. |
+| Event handler | `:code/engine` | Re-scans ready code gates after graph mutations and is removed when the module closes. |
+| Request tooling | `:millhouse.spools.executors.code/request` on executor registration | Projects the combined request contract and copyable attribute template through workflow tooling. |
