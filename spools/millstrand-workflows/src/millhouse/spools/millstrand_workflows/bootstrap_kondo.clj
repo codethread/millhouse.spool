@@ -419,7 +419,7 @@
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.handover"
                    "workflow/instruction" handover-instruction})])
 
-(workflow/defworkflow! bootstrap-kondo
+(workflow/defworkflow bootstrap-kondo
   "Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
 
   Start it with the exact consumer worktree and Millstrand workspace:
@@ -587,7 +587,7 @@
                                                  "|Stop when the consumer's configuration ownership cannot
                                                   |be established.")}])))
 
-(workflow/defworkflow! bootstrap-kondo-greenfield
+(workflow/defworkflow bootstrap-kondo-greenfield
   "Establish a greenfield Kondo boundary and import Millstrand exports.
 
   This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
@@ -604,7 +604,7 @@
                          "workflow/instruction" greenfield-instruction})
          (shared-steps)))
 
-(workflow/defworkflow! bootstrap-kondo-brownfield
+(workflow/defworkflow bootstrap-kondo-brownfield
   "Inventory and merge an existing Kondo boundary before importing exports.
 
   This is the `brownfield` continuation selected by `bootstrap-kondo`; callers

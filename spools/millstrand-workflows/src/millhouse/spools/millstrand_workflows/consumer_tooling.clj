@@ -703,7 +703,7 @@
                   {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
                                               (name style) ".handover")
                    "workflow/instruction" (fn [params] (handover-instruction style params))})])
-(workflow/defworkflow! configure-consumer-tooling
+(workflow/defworkflow configure-consumer-tooling
   "Choose and configure tooling for a Millstrand consumer repository style.
 
   Start or call it with the exact consumer worktree, its derived
@@ -839,7 +839,7 @@
                     "|Stop when one repository style cannot be established
                      |without guessing or collapsing distinct projects.")}])))
 
-(workflow/defworkflow! configure-consumer-tooling-app
+(workflow/defworkflow configure-consumer-tooling-app
   "Configure tooling for a non-Clojure product with Millstrand config.
 
   This continuation is selected by `configure-consumer-tooling`; callers
@@ -851,7 +851,7 @@
          "Configure application Millstrand tooling"
          (route-steps :app)))
 
-(workflow/defworkflow! configure-consumer-tooling-spool
+(workflow/defworkflow configure-consumer-tooling-spool
   "Configure tooling for a repository that owns Millstrand spool roots.
 
   This continuation is selected by `configure-consumer-tooling`; callers
@@ -863,7 +863,7 @@
          "Configure spool repository tooling"
          (route-steps :spool)))
 
-(workflow/defworkflow! configure-consumer-tooling-clojure-app
+(workflow/defworkflow configure-consumer-tooling-clojure-app
   "Configure tooling for a Clojure application with Millstrand config.
 
   This continuation is selected by `configure-consumer-tooling`; callers

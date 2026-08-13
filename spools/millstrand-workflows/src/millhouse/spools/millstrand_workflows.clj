@@ -8,9 +8,12 @@
   work."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
+            [millhouse.spools.millstrand-workflows.bump-millstrand :as millstrand]
+            [millhouse.spools.millstrand-workflows.bump-spool :as bump]
+            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]
-            [millstrand.api.format.alpha :as format-alpha]
-            [millstrand.api.runtime.alpha :as runtime]))
+            [millstrand.api.format.alpha :as format-alpha]))
 
 (defn- non-blank-string?
   "Return true when `value` is a non-blank string."
@@ -213,67 +216,16 @@
                   {"workflow/action-ref" "millstrand-workflows.publish.clean-status"
                    "workflow/instruction" final-status-instruction})))
 
-;; The bump workflow lives in its own namespace so its focused contract can
-;; remain isolated. The activated spool namespace is the module owner, though.
-;; Collect the child Var here so the owner-complete module contribution includes
-;; all public definitions; publication resolves each child through the spool
-;; classloader after source collection, regardless of JVM load order.
-(runtime/collect-entry!
- workflow/definition-kind
- :bump-spool
- 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bootstrap-kondo
- 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bootstrap-kondo-greenfield
- 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bootstrap-kondo-brownfield
- 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bump-millstrand
- 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bump-millstrand-local
- 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bump-millstrand-local-validate
- 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-local-validate)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :bump-millstrand-pinned
- 'millhouse.spools.millstrand-workflows.bump-millstrand/bump-millstrand-pinned)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :configure-consumer-tooling
- 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :configure-consumer-tooling-app
- 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :configure-consumer-tooling-spool
- 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool)
-
-(runtime/collect-entry!
- workflow/definition-kind
- :configure-consumer-tooling-clojure-app
- 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app)
+(workflow/use-workflow!
+ bootstrap/bootstrap-kondo
+ bootstrap/bootstrap-kondo-greenfield
+ bootstrap/bootstrap-kondo-brownfield
+ bump/bump-spool
+ millstrand/bump-millstrand
+ millstrand/bump-millstrand-local
+ millstrand/bump-millstrand-local-validate
+ millstrand/bump-millstrand-pinned
+ tooling/configure-consumer-tooling
+ tooling/configure-consumer-tooling-app
+ tooling/configure-consumer-tooling-spool
+ tooling/configure-consumer-tooling-clojure-app)

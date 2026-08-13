@@ -56,6 +56,21 @@
               bootstrap-definition (:value bootstrap-resolved)
               bump-definition (:value bump-resolved)
               ids (mapv :id (:steps definition))]
+          (is (= #{:publish-spool-kondo
+                   :bootstrap-kondo
+                   :bootstrap-kondo-greenfield
+                   :bootstrap-kondo-brownfield
+                   :bump-spool
+                   :bump-millstrand
+                   :bump-millstrand-local
+                   :bump-millstrand-local-validate
+                   :bump-millstrand-pinned
+                   :configure-consumer-tooling
+                   :configure-consumer-tooling-app
+                   :configure-consumer-tooling-spool
+                   :configure-consumer-tooling-clojure-app}
+                 (set (keys (workflow/workflows))))
+              "the publishing root selects every reusable child workflow")
           (is (= #{:start} (:entrypoints resolved)))
           (is (= #{:start :call} (:entrypoints bootstrap-resolved)))
           (is (= #{:start :call} (:entrypoints bump-resolved)))
