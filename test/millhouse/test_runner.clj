@@ -26,8 +26,14 @@
     millhouse.spools.millstrand-workflows.bump-millstrand-test])
 
 (def serial-namespaces
-  "Namespaces proven to require a JVM-global serial island."
-  #{'millhouse.spools.executors.code-test
+  "Namespaces proven to require a JVM-global serial island.
+
+  The consumer fixture's generated init runs source-backed module activation
+  during weaver startup, before the test body can provide an in-process
+  activation seam. Keep that namespace out of the parallel pool so its startup
+  reloads cannot overlap another fixture's shared JVM namespace reloads."
+  #{'millhouse.consumer-test
+    'millhouse.spools.executors.code-test
     'millhouse.spools.kanban-test})
 
 (defn- initial-summary [] test/*initial-report-counters*)
