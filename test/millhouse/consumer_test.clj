@@ -25,47 +25,50 @@
 
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
-            '[millstrand.api.runtime.alpha :as runtime])
-   (def rt (current/runtime))
-   (runtime/module! rt :millhouse/workflow
-     {:ns 'millhouse.spools.workflow
-      :spools ['millhouse.spools/workflow]
-      :required? true})
-   (runtime/module! rt :millhouse/workflow-cli
-     {:ns 'millhouse.spools.workflow.cli
-      :spools ['millhouse.spools/workflow]
-      :after [:millhouse/workflow]
-      :required? true})
-   (runtime/module! rt :millhouse/chime
-     {:ns 'millhouse.spools.chime
-      :spools ['millhouse.spools/chime]
-      :required? true})
-   (runtime/module! rt :millhouse/cron
-     {:ns 'millhouse.spools.cron
-      :spools ['millhouse.spools/cron]
-      :required? true})
-   (runtime/module! rt :millhouse/code-executor
-     {:ns 'millhouse.spools.executors.code
-      :spools ['millhouse.spools.executors/code
-               'millhouse.spools/workflow]
-      :after [:millhouse/workflow]
-      :required? true})
-   (runtime/module! rt :millhouse/shell-executor
-     {:ns 'millhouse.spools.executors.shell
-      :spools ['millhouse.spools.executors/shell
-               'millhouse.spools/workflow]
-      :after [:millhouse/workflow]
-      :required? true})
-   (runtime/module! rt :millhouse/kanban
-     {:ns 'millhouse.spools.kanban
-      :spools ['millhouse.spools/kanban]
-      :required? true})
-   (runtime/module! rt :millhouse/millstrand-workflows
-     {:ns 'millhouse.spools.millstrand-workflows
-      :spools ['millhouse.spools/millstrand-workflows
-               'millhouse.spools/workflow]
-      :after [:millhouse/workflow]
-      :required? true})")
+            '[millstrand.api.runtime.alpha :as runtime]
+            '[millhouse.test-support :as test-support])
+   (test-support/with-module-activation
+     #(do
+        (def rt (current/runtime))
+        (runtime/module! rt :millhouse/workflow
+          {:ns 'millhouse.spools.workflow
+           :spools ['millhouse.spools/workflow]
+           :required? true})
+        (runtime/module! rt :millhouse/workflow-cli
+          {:ns 'millhouse.spools.workflow.cli
+           :spools ['millhouse.spools/workflow]
+           :after [:millhouse/workflow]
+           :required? true})
+        (runtime/module! rt :millhouse/chime
+          {:ns 'millhouse.spools.chime
+           :spools ['millhouse.spools/chime]
+           :required? true})
+        (runtime/module! rt :millhouse/cron
+          {:ns 'millhouse.spools.cron
+           :spools ['millhouse.spools/cron]
+           :required? true})
+        (runtime/module! rt :millhouse/code-executor
+          {:ns 'millhouse.spools.executors.code
+           :spools ['millhouse.spools.executors/code
+                    'millhouse.spools/workflow]
+           :after [:millhouse/workflow]
+           :required? true})
+        (runtime/module! rt :millhouse/shell-executor
+          {:ns 'millhouse.spools.executors.shell
+           :spools ['millhouse.spools.executors/shell
+                    'millhouse.spools/workflow]
+           :after [:millhouse/workflow]
+           :required? true})
+        (runtime/module! rt :millhouse/kanban
+          {:ns 'millhouse.spools.kanban
+           :spools ['millhouse.spools/kanban]
+           :required? true})
+        (runtime/module! rt :millhouse/millstrand-workflows
+          {:ns 'millhouse.spools.millstrand-workflows
+           :spools ['millhouse.spools/millstrand-workflows
+                    'millhouse.spools/workflow]
+           :after [:millhouse/workflow]
+           :required? true})))")
 
 (deftest family-syncs-activates-and-publishes-all-roots
   (test-alpha/with-weaver-world
@@ -202,25 +205,25 @@
      \"A sample executable.\"
      {:executable \"sample-bin\"})
 
-   (workflow/defworkflow sample-workflow
+   (workflow/defworkflow! sample-workflow
      \"A sample workflow.\"
      {:entrypoints #{:start} :defaults {}}
      (workflow/workflow
        (fn [_] \"done\")
        (workflow/step :done \"Done\" :self)))
 
-   (workflow/defexecutor sample-executor
+   (workflow/defexecutor! sample-executor
      \"A sample executor.\"
      {}
      [_]
      nil)
 
-   (chime/defrule sample-rule
+   (chime/defrule! sample-rule
      \"A sample Chime rule.\"
      [_]
      nil)
 
-   (cron/defjob :sample-job
+   (cron/defjob! sample-job \" Sample job. \"
      {:interval-ms 1000
       :handler 'consumer.forms/sample-job-handler})")
 

@@ -17,7 +17,8 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
   ;; Perform one duplicate-tolerant unit of periodic work.
   {:outcome :reported})
 
-(cron/defjob :nightly-report
+(cron/defjob! nightly-report
+  "Run the nightly report."
   {:interval-ms 86400000
    :jitter-ms 3600000
    :handler 'report-job/report-tick})
@@ -41,7 +42,7 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
 - Owner-complete publication makes removal expressible: unchanged declarations preserve their wakes, changed declarations replace them, and omission cancels them.
 - The explicit `:after` edge makes Cron's registry-kind ownership a prerequisite rather than relying on source load order.
 
-An example of this split is Millstrand's [NVD scan job](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/jobs/nvd_scan.clj), activated separately from its [main startup config](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/init.clj).
+An example of this split is Millstrand's [NVD scan job](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/jobs/nvd_scan.clj), activated separately from its [main startup config](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/init.clj).
 
 ## Coordinate many weavers with a best-effort lock and durable card
 
@@ -75,7 +76,8 @@ An example of this split is Millstrand's [NVD scan job](https://github.com/codet
       ((requiring-resolve 'millhouse.spools.kanban/add!)
        runtime title {"--body" body "--priority" "p1"}))}))
 
-(cron/defjob :shared-scan
+(cron/defjob! shared-scan
+  "Run the shared scan."
   {:interval-ms 518400000
    :jitter-ms 3600000
    :handler 'my.scan/scan-tick})
@@ -89,4 +91,4 @@ An example of this split is Millstrand's [NVD scan job](https://github.com/codet
 - Creating the card first makes it the alert of record. A later notification or cleanup failure cannot erase the finding.
 - Injected side effects let tests exercise locking and finding behavior independently of Cron's scheduler tests.
 
-Millstrand's [NVD scan job](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/jobs/nvd_scan.clj) is the reference composition for this pattern.
+Millstrand's [NVD scan job](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/jobs/nvd_scan.clj) is the reference composition for this pattern.

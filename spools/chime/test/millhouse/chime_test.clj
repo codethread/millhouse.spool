@@ -31,10 +31,16 @@
       (is (.isFile hook-file))
       (is (= 'clojure.core/defn
              (get-in config-data [:lint-as 'millhouse.spools.chime/defrule])))
+      (is (= 'clojure.core/defn
+             (get-in config-data [:lint-as 'millhouse.spools.chime/defrule!])))
       (is (= 'hooks.millhouse.spools.chime/defrule
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.chime/defrule]))))))
+                      'millhouse.spools.chime/defrule])))
+      (is (= 'hooks.millstrand/use-vars
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.chime/use-rule!]))))))
 
 (defn- with-chime [f]
   (test-support/with-runtime
@@ -60,6 +66,13 @@
 
 (defn- file-contains? [file text]
   (and (.exists file) (str/includes? (slurp file) text)))
+
+(defn- rejected-spec [thunk]
+  (try
+    (thunk)
+    ::no-error
+    (catch clojure.lang.ExceptionInfo error
+      (get-in (ex-data error) [:explain :clojure.spec.alpha/spec]))))
 
 (defn- await-notifier-threads!
   "Join every live chime notifier dispatch thread. `notify!` starts one daemon
@@ -153,10 +166,10 @@
   (with-chime
     (fn [_ config-dir]
       (testing "binding validation fails loudly"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown keys"
-                              (chime/set-notifier! {:argv ["x"] :extra true})))
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-empty"
-                              (chime/set-notifier! {:argv []})))
+        (is (= :millhouse.spools.chime/notifier
+               (rejected-spec #(chime/set-notifier! {:argv ["x"] :extra true}))))
+        (is (= :millhouse.spools.chime/notifier
+               (rejected-spec #(chime/set-notifier! {:argv []}))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-blank"
                               (chime/notify! {:body "no title"}))))
       (testing "notify! appends title and writes body to stdin"
@@ -186,8 +199,8 @@
 (deftest rule-registration-validation
   (with-chime
     (fn [_ _]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fully qualified"
-                            (chime/register! :bad 'not-qualified)))
+      (is (= :millhouse.spools.chime/rule-entry
+             (rejected-spec #(chime/register! :bad 'not-qualified))))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cannot be resolved"
                             (chime/register! :bad 'missing.ns/fn)))
       (is (= :phase-failed (:key (chime/register! "phase-failed" 'millhouse.chime-test/phase-failed-rule))))
@@ -513,7 +526,9 @@
     {:prefix "millstrand-chime-module"}
     (fn [rt config-dir]
       (is (= :applied
-             (:status (runtime/module! rt :chime {:ns 'millhouse.spools.chime}))))
+             (:status (test-support/with-module-activation
+                        #(runtime/module! rt :chime
+                                          {:ns 'millhouse.spools.chime})))))
       (is (= 1 (count (engine-handler-entries rt))))
       (is (= 1 (count (barrier-hook-entries rt))))
       (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)

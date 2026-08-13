@@ -52,6 +52,18 @@
   (t/is (= (set expected-keys) (set (keys (new-state-fn))))
         "spool-state key set drifted; bump its state version and expected keys together"))
 
+(def ^:private module-activation-lock (Object.))
+
+(defn with-module-activation
+  "Run one source-backed module activation under the JVM namespace lock.
+
+  Source activation reloads namespace Vars shared by parallel test fixtures;
+  callers use this seam around direct `runtime/module!` calls as well as the
+  convenience wrapper below."
+  [f]
+  (locking module-activation-lock
+    (f)))
+
 (defn with-runtime
   "Call f with a disposable runtime and its config directory File."
   ([f] (with-runtime {} f))
@@ -69,10 +81,14 @@
 (defn activate-spool!
   "Activate a namespace-backed module and fail on any refused outcome."
   [rt key ns-sym & {:keys [after load]}]
-  (test-alpha/activate-module! rt key ns-sym
-                               (cond-> {}
-                                 load (assoc :load load)
-                                 after (assoc :after after))))
+  ;; Source activation reloads a Clojure namespace in the shared test JVM.
+  ;; Serialize that global namespace mutation so a parallel fixture cannot
+  ;; select a declaration between its def and declaration-metadata install.
+  (with-module-activation
+    #(test-alpha/activate-module! rt key ns-sym
+                                  (cond-> {}
+                                    load (assoc :load load)
+                                    after (assoc :after after)))))
 
 (defn temp-dir
   "Create a disposable directory below /tmp. The caller owns cleanup."

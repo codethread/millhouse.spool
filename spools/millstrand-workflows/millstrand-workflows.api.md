@@ -40,7 +40,7 @@ Publish clj-kondo support for a macro-owning spool root.
   explicit clj-kondo export and hooks, test the exported contract, and document
   the public surface. It does not discover macros automatically or perform
   filesystem edits itself; each step is an agent-facing instruction.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj#L112-L214">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj#L115-L217">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo">millhouse.spools.millstrand-workflows.bootstrap-kondo</a>

@@ -100,7 +100,7 @@ claim.
 
 | Surface | Identity | Consumer contract |
 |---|---|---|
-| Workflow executor | `code` from `workflow/defexecutor` | Fulfils ready `:code` gates and reports `{:gate id :error detail}` for a ready gate carrying `gate/error`. |
+| Workflow executor | `code` from `workflow/defexecutor!` | Fulfils ready `:code` gates and reports `{:gate id :error detail}` for a ready gate carrying `gate/error`. |
 | Named query | `stalled-code-gates` from `millstrand/defquery` | Selects active code gates carrying `gate/error` for coordinator inspection. |
 | Attribute namespace | `code/*` from the `code-engine` lifecycle resource | Publishes request, claim, and result attributes listed above. |
 | Event handler | `:code/engine` | Re-scans ready code gates after graph mutations and is removed when the module closes. |

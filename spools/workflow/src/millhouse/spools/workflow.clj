@@ -24,6 +24,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.batch.alpha :as batch]
+            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.graph.alpha :as graph]
@@ -937,29 +938,19 @@
       validate-param-authoring!
       defs/validate-defer-declarations!))
 
-(defmacro defworkflow
-  "Define a static workflow definition Var and collect its registry entry.
-
-  Ordinary Clojure semantics first: this is a `def`, so loading the namespace
-  defines `name` and nothing else — a code-only reload redefines the Var without
-  touching the live registry. `options` carries the registration contract
-  (`:entrypoints`, `:param-spec`, `:defaults`, and the authored `:example` and
-  `:param-docs`) and merges into the built `definition`, so the Var alone
-  answers what the workflow is for, how it may be invoked, and what a valid
-  invocation looks like.
-
-  Only while a module contribution collector is active does the form also
-  contribute `name`'s qualified symbol under `definition-kind`, keyed by
-  `(keyword name)`. That is what makes removal expressible: an owner that stops
-  evaluating a `defworkflow` form drops the entry by omission at the next
-  refresh."
-  [name doc options definition]
+(defn- workflow-authoring-plan
+  [_mode name doc options definition]
   (let [qualified (symbol (str (ns-name *ns*)) (str name))]
-    `(do
-       (def ~name (static-definition ~doc ~options ~definition))
-       (alter-meta! (var ~name) assoc :doc ~doc)
-       (runtime/collect-entry! definition-kind ~(keyword name) '~qualified)
-       (var ~name))))
+    {:name name
+     :definition `(def ~(with-meta name {:doc doc})
+                    (static-definition ~doc ~options ~definition))
+     :kind definition-kind
+     :key (keyword name)
+     :entry `(~'quote ~qualified)
+     :use-options {}}))
+
+(authoring/defauthoring workflow [_mode name doc options definition]
+  (workflow-authoring-plan _mode name doc options definition))
 
 (def executor-kind
   "Owner-partitioned kind id for gate-waiter -> stall-predicate-symbol declarations."
@@ -986,20 +977,23 @@
                     (:request-spec options) (assoc :request-spec (:request-spec options)))
                   "Invalid workflow executor declaration"))
 
-(defmacro defexecutor
-  "Define a gate stall predicate and collect its workflow executor declaration.
+(authoring/register-registry-kind!
+ definition-kind :millhouse.spools.workflow.internal.registry/definition-symbol)
+(authoring/register-registry-kind! executor-kind ::executor-entry)
 
-  `options` conforms to `::executor-options`. The waiter key is the unqualified
-  form name and `:override? true` records explicit override intent."
-  [name doc options argv & body]
+(defn- executor-authoring-plan
+  [_mode name doc options argv body]
   (let [handler-name (symbol (str name "-stalled?"))
         qualified (symbol (str (ns-name *ns*)) (str handler-name))]
-    `(do
-       (defn ~handler-name ~doc ~argv ~@body)
-       (runtime/collect-entry!
-        executor-kind ~(str name) (executor-declaration ~options '~qualified)
-        (select-keys ~options #{:override?}))
-       (var ~handler-name))))
+    {:name handler-name
+     :definition `(defn ~(with-meta handler-name {:doc doc}) ~argv ~@body)
+     :kind executor-kind
+     :key (str name)
+     :entry `(executor-declaration ~options '~qualified)
+     :use-options `(select-keys ~options #{:override?})}))
+
+(authoring/defauthoring executor [_mode name doc options argv & body]
+  (executor-authoring-plan _mode name doc options argv body))
 
 (defn register-workflow!
   "Register a workflow definition under a stable keyword `name`.

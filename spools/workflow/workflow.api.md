@@ -36,7 +36,7 @@ Alpha workflow spool for molecule and wisp-style strand graphs.
 Function.
 
 Return active workflow root strands, optionally filtered by family.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L469-L474">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L470-L475">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/advance!">`advance!`</a>
 ``` clojure
@@ -62,7 +62,7 @@ Advance run-id by one ready ordinary step, checkpoint, or explicitly selected
   and supplies that target's own params, which does not fit `advance!`'s
   one-ready-step vocabulary, so it directs the caller to `defer!`.
   `::advance-opts` owns the complete opts shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L740-L820">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L741-L821">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/await!">`await!`</a>
 ``` clojure
@@ -84,7 +84,7 @@ Block until workflow run-id is done, at a checkpoint, at a defer awaiting a
   The three-arg `(runtime run-id opts)` arity threads the target runtime
   explicitly; the shorter arities resolve `current/runtime` as the ergonomic
   default for trusted in-process callers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L855-L881">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L856-L882">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/bind-defers">`bind-defers`</a>
 ``` clojure
@@ -107,7 +107,7 @@ Return `definition` with each declared defer named in `bindings` bound to the
   reads is stable. Targets are checked against the complete candidate registry
   when the result is registered, not here: `bind-defers` is pure and has no
   registry to consult.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L241-L270">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L242-L271">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/bond!">`bond!`</a>
 ``` clojure
@@ -119,7 +119,7 @@ Bond two materialized molecules: `right-id` depends on `left-id`.
 
   The `workflow/bond` edge attribute distinguishes a cross-molecule bond from
   the intra-molecule dependency edges `compile` emits.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L400-L408">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L401-L409">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/burn!">`burn!`</a>
 ``` clojure
@@ -128,7 +128,7 @@ Bond two materialized molecules: `right-id` depends on `left-id`.
 Function.
 
 Burn a materialized molecule or wisp subgraph rooted at `root-id`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L410-L413">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L411-L414">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/call">`call`</a>
 ``` clojure
@@ -143,7 +143,7 @@ Return a procedure-style workflow call.
   procedure's exit steps.
 
   Example: `(call :review #'review params :depends-on [:implement])`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L193-L203">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L194-L204">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/catalog">`catalog`</a>
 ``` clojure
@@ -167,7 +167,7 @@ Return the discovery catalogue of registered workflows, in name order.
   `::list-request` owns the request shape and `::catalog-item` each emitted
   item; the request is validated before any lookup and every item before
   emission.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1107-L1124">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1101-L1118">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/checkpoint">`checkpoint`</a>
 ``` clojure
@@ -194,7 +194,7 @@ Return a workflow checkpoint step definition.
   `workflow/checkpoint-kind` and is the canonical human-in-the-loop signal.
 
   Example: `(checkpoint :release title :choices [:ship :hold])`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L154-L191">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L155-L192">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/choice-detail">`choice-detail`</a>
 ``` clojure
@@ -207,7 +207,7 @@ Return one choice explanation for run-id's current workflow checkpoint.
 
   opts may include `:step` (materialized strand id) to select among multiple
   ready checkpoints; without it, exactly one checkpoint must be ready.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L842-L853">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L843-L854">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/choice-details">`choice-details`</a>
 ``` clojure
@@ -222,7 +222,7 @@ Return choice explanations for run-id's current workflow checkpoint, keyed by
 
   opts may include `:step` (materialized strand id) to select among multiple
   ready checkpoints; without it, exactly one checkpoint must be ready.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L822-L840">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L823-L841">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/choose!">`choose!`</a>
 ``` clojure
@@ -257,7 +257,7 @@ Record a checkpoint choice for run-id, optionally pour its continuation,
   happens before any mutation.
 
   Example: `(choose! run-id :approved {})` records a terminal choice.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L633-L681">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L634-L682">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/compile">`compile`</a>
 ``` clojure
@@ -285,7 +285,7 @@ Return a batch payload for a workflow molecule or wisp.
   strand, then assemble the strands + edges payload. The expansion mechanics
   live in `millhouse.spools.workflow.internal.compile`, which re-enters its own
   `compile` for inline procedure calls.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L300-L330">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L301-L331">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/complete!">`complete!`</a>
 ``` clojure
@@ -317,7 +317,7 @@ Close the current ready non-checkpoint workflow step for run-id and return
 
   Example: `(complete! run-id {:by actor})` closes the sole ready ordinary
   step.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L553-L631">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L554-L632">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/current-root">`current-root`</a>
 ``` clojure
@@ -326,7 +326,7 @@ Close the current ready non-checkpoint workflow step for run-id and return
 Function.
 
 Return the single active workflow root for run-id, nil when absent, or fail if ambiguous.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L476-L479">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L477-L480">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/defer">`defer`</a>
 ``` clojure
@@ -355,7 +355,7 @@ Return a workflow defer step definition — a named point whose target a worker
 
   Example: `(defer :perform-work title :depends-on [:prepare])`; bind it with
   `(bind-defers definition {:perform-work #{:review :build}})`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L205-L239">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L206-L240">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/defer!">`defer!`</a>
 ``` clojure
@@ -393,19 +393,25 @@ Fill run-id's ready defer with an allowed registered `workflow`, returning the
   nothing and the defer stays ready. Resolution through mutation holds the run's
   guard, so a concurrent `choose!` or `defer!` re-resolves against the frontier
   this one left rather than writing over it.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L683-L732">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L684-L733">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/defexecutor">`defexecutor`</a>
 ``` clojure
-(defexecutor name doc options argv & body)
+(defexecutor & args)
 ```
 Macro.
 
-Define a gate stall predicate and collect its workflow executor declaration.
+Define an inert executor declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L995-L996">Source</a></sub></p>
 
-  `options` conforms to `::executor-options`. The waiter key is the unqualified
-  form name and `:override? true` records explicit override intent.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L989-L1002">Source</a></sub></p>
+## <a name="millhouse.spools.workflow/defexecutor!">`defexecutor!`</a>
+``` clojure
+(defexecutor! & args)
+```
+Macro.
+
+Define and select a executor declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L995-L996">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/definition-kind">`definition-kind`</a>
 
@@ -413,7 +419,7 @@ Define a gate stall predicate and collect its workflow executor declaration.
 
 
 Owner-partitioned kind id for workflow name -> definition-symbol declarations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L916-L918">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L917-L919">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/definition-view">`definition-view`</a>
 ``` clojure
@@ -439,30 +445,25 @@ Return the full-fidelity discovery view of registered workflow `name`.
 
   `::show-request` owns the request shape and `::definition-view` the result,
   both validated at the boundary.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1126-L1146">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1120-L1140">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/defworkflow">`defworkflow`</a>
 ``` clojure
-(defworkflow name doc options definition)
+(defworkflow & args)
 ```
 Macro.
 
-Define a static workflow definition Var and collect its registry entry.
+Define an inert workflow declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L952-L953">Source</a></sub></p>
 
-  Ordinary Clojure semantics first: this is a `def`, so loading the namespace
-  defines `name` and nothing else — a code-only reload redefines the Var without
-  touching the live registry. `options` carries the registration contract
-  (`:entrypoints`, `:param-spec`, `:defaults`, and the authored `:example` and
-  `:param-docs`) and merges into the built `definition`, so the Var alone
-  answers what the workflow is for, how it may be invoked, and what a valid
-  invocation looks like.
+## <a name="millhouse.spools.workflow/defworkflow!">`defworkflow!`</a>
+``` clojure
+(defworkflow! & args)
+```
+Macro.
 
-  Only while a module contribution collector is active does the form also
-  contribute `name`'s qualified symbol under `definition-kind`, keyed by
-  `(keyword name)`. That is what makes removal expressible: an owner that stops
-  evaluating a `defworkflow` form drops the entry by omission at the next
-  refresh.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L940-L962">Source</a></sub></p>
+Define and select a workflow declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L952-L953">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/describe">`describe`</a>
 ``` clojure
@@ -485,7 +486,7 @@ Return a compile-time projection of `workflow` without materializing any strand.
 
   `(describe workflow)` merges defaults under `params` and applies a static
   definition's `:param-spec` when it declares one.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L332-L354">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L333-L355">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/done?">`done?`</a>
 ``` clojure
@@ -499,7 +500,7 @@ Return true when run-id has no active workflow root, or every workflow work
   parallel sibling still running beside a filled one.
 
   Fails loudly for a run-id that has never had a root strand.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L522-L530">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L523-L531">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/executor-catalog">`executor-catalog`</a>
 ``` clojure
@@ -515,7 +516,7 @@ Return the discovery catalogue of registered gate executors, in waiter order.
   projection of its gate-request contract, resolved live so the view documents
   the spec as it is now. A declared spec that no longer resolves fails loudly
   rather than reading as an executor with no contract.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1084-L1094">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1078-L1088">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/executor-declaration">`executor-declaration`</a>
 ``` clojure
@@ -527,7 +528,7 @@ Return a validated workflow executor declaration.
 
   `options` conforms to `::executor-options`. The returned entry conforms to
   `::executor-entry`; override intent remains collection metadata.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L977-L987">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L968-L978">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/executor-kind">`executor-kind`</a>
 
@@ -535,7 +536,7 @@ Return a validated workflow executor declaration.
 
 
 Owner-partitioned kind id for gate-waiter -> stall-predicate-symbol declarations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L964-L966">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L955-L957">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/executors">`executors`</a>
 ``` clojure
@@ -544,7 +545,7 @@ Owner-partitioned kind id for gate-waiter -> stall-predicate-symbol declarations
 Function.
 
 Return the current registry map of gate waiter name (keyword) -> stall predicate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1078-L1082">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1072-L1076">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/explain">`explain`</a>
 ``` clojure
@@ -558,7 +559,7 @@ Return self-documenting workflow spool input contracts.
   Agents can call this before constructing workflow data. It reports the stable
   public builders, valid step/checkpoint fields, and concrete examples without
   exposing batch payload internals.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L58-L77">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L59-L78">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/gate">`gate`</a>
 ``` clojure
@@ -580,7 +581,7 @@ Return a workflow gate step definition — a step whose completion belongs to
 
   Example: `(gate :ci title :ci :depends-on [:push])`; a fulfiller closes the
   ready gate with `(complete! run-id {:step gate-id :by actor})`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L131-L152">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L132-L153">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/json->params">`json->params`</a>
 ``` clojure
@@ -599,7 +600,7 @@ Return the params map for a decoded JSON object `value`.
   merge and `:param-spec` validation. Conversion is total, so a spec requiring
   string-keyed or mixed-keyed maps stays reachable only from trusted Clojure in
   v1 (PROP-Wcd-001.NG8).
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L98-L111">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L99-L112">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/molecule-id">`molecule-id`</a>
 ``` clojure
@@ -608,7 +609,7 @@ Return the params map for a decoded JSON object `value`.
 Function.
 
 Return the materialized root molecule id from a `pour!` or `wisp!` result.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L392-L398">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L393-L399">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/pour!">`pour!`</a>
 ``` clojure
@@ -619,7 +620,7 @@ Return the materialized root molecule id from a `pour!` or `wisp!` result.
 Function.
 
 Materialize `workflow` as a persistent molecule strand graph.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L371-L378">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L372-L379">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/ready">`ready`</a>
 ``` clojure
@@ -634,7 +635,7 @@ Return agent-facing ready workflow steps for run-id.
   `step-view` on a strand without run context stays unchanged. An optional
   selector map filters by `:role`, `:gate`, `:checkpoint`, or
   `:checkpoint-kind`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L486-L496">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L487-L497">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/ready-checkpoint">`ready-checkpoint`</a>
 ``` clojure
@@ -643,7 +644,7 @@ Return agent-facing ready workflow steps for run-id.
 Function.
 
 Return the single ready checkpoint view for run-id, nil if none, or fail if ambiguous.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L505-L512">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L506-L513">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/ready-gates">`ready-gates`</a>
 ``` clojure
@@ -653,7 +654,7 @@ Return the single ready checkpoint view for run-id, nil if none, or fail if ambi
 Function.
 
 Return ready gate step views for run-id, optionally filtered by waiter.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L498-L503">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L499-L504">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/ready-step">`ready-step`</a>
 ``` clojure
@@ -664,7 +665,7 @@ Function.
 Return the single ready workflow step for run-id, or fail if ambiguous.
 
   The view carries `:run-id` (see `ready`).
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L514-L520">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L515-L521">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/register-executor!">`register-executor!`</a>
 ``` clojure
@@ -690,7 +691,7 @@ Register a stall predicate for gate waiter `waiter` (a keyword/symbol/string
   waiter as a keyword.
 
   Example: `(register-executor! :ci 'my.ns/ci-stalled?)` returns `:ci`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1043-L1076">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1037-L1070">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/register-workflow!">`register-workflow!`</a>
 ``` clojure
@@ -714,7 +715,7 @@ Register a workflow definition under a stable keyword `name`.
   `name`.
 
   Example: `(register-workflow! :build 'my.ns/build)` returns `:build`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1004-L1029">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L998-L1023">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/resolve-workflow">`resolve-workflow`</a>
 ``` clojure
@@ -723,7 +724,7 @@ Register a workflow definition under a stable keyword `name`.
 Function.
 
 Return the live resolved registered workflow definition for `name`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1398-L1401">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1392-L1395">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-await">`run-await`</a>
 ``` clojure
@@ -740,7 +741,7 @@ Block until `request`'s run is done or needs a worker, and return the result.
   never returned, because a run whose whole frontier is executor-owned and
   healthy is exactly what this call waits through. `::await-request` owns the
   request shape and `::attention-result` the answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1382-L1396">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1376-L1390">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-choices">`run-choices`</a>
 ``` clojure
@@ -759,7 +760,7 @@ Return the ready checkpoint's choice explanations with live input contracts.
   multiple ready checkpoints, and without it exactly one checkpoint must be
   ready. `::choices-request` owns the request shape and `::choices-result` the
   answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1234-L1257">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1228-L1251">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-choose!">`run-choose!`</a>
 ``` clojure
@@ -775,7 +776,7 @@ Record `request`'s choice on the ready checkpoint and return the run result.
   `json->params` first — and a routed choice pours its continuation in the same
   mutation, so the returned frontier is already the continuation's.
   `::choose-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1292-L1309">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1286-L1303">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-complete!">`run-complete!`</a>
 ``` clojure
@@ -802,7 +803,7 @@ Close the ready ordinary step of `request`'s run and return the run result.
   A gate is never inferred. Closing one is an assertion that something outside
   the run happened, so it takes both an explicit `:step` and a `:by` recording
   who decided so. `::complete-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1259-L1290">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1253-L1284">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-defer!">`run-defer!`</a>
 ``` clojure
@@ -819,7 +820,7 @@ Fill the ready defer of `request`'s run and return the run result.
   current root and the run resumes when it finishes, so the returned frontier is
   the expansion's — or, for a target that materializes nothing, whatever the
   declaring workflow does next. `::defer-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1362-L1380">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1356-L1374">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-history">`run-history`</a>
 ``` clojure
@@ -840,7 +841,7 @@ Return a read-only, creation-ordered projection of every molecule ever poured
   only; a caller's `complete!` `:attributes` stay readable on the closed strand
   itself. Writes nothing and fails loudly (TEN-003) for a run that never had a
   root strand.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L532-L551">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L533-L552">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-next!">`run-next!`</a>
 ``` clojure
@@ -862,7 +863,7 @@ Advance the ready ordinary step, checkpoint, or explicitly selected gate and
   A defer is not advanceable because selecting its target and params is a
   different request; failures direct the worker to `workflow defer`.
   `::next-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1311-L1360">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1305-L1354">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-ready">`run-ready`</a>
 ``` clojure
@@ -878,7 +879,7 @@ Return the run result for `request`'s run without touching it.
   complete current frontier — every ready item of every role, in definition and
   loop order — because a worker filtering for its own role can do so, while one
   that never saw a sibling item cannot. `::ready-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1200-L1212">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1194-L1206">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-start!">`run-start!`</a>
 ``` clojure
@@ -897,7 +898,7 @@ Start registered workflow `:workflow` as run `:run-id` and return the run result
   Params are the definition's own: its `:defaults` merge underneath and the
   merged map is judged whole by its `:param-spec`, so omitting `:params` and
   passing `{}` are the same request. `::start-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1181-L1198">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1175-L1192">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/seed-workflow-vocab!">`seed-workflow-vocab!`</a>
 ``` clojure
@@ -908,7 +909,7 @@ Function.
 Seed the `workflow/*` attribute namespace into `rt`'s vocabulary registry,
   owned by this spool, so the attributes `compile` and the builders write are
   discoverable data.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1403-L1432">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1397-L1426">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/spec-forms">`spec-forms`</a>
 ``` clojure
@@ -931,7 +932,7 @@ Return the ordered `s/form` documentation graph rooted at `spec-name`.
   executes no predicate. A root that is not a currently registered qualified
   keyword fails loudly as `:workflow/spec-missing`, so a stale identity is never
   mistaken for a spec with nothing to say.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L79-L96">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L80-L97">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/squash!">`squash!`</a>
 ``` clojure
@@ -941,7 +942,7 @@ Return the ordered `s/form` documentation graph rooted at `spec-name`.
 Function.
 
 Replace a materialized wisp/molecule with one digest strand, then burn its graph.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L415-L428">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L416-L429">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/squash-run!">`squash-run!`</a>
 ``` clojure
@@ -959,7 +960,7 @@ Squash a finished run's molecules into one closed digest strand and return it.
   `workflow/run-id`, `workflow/squashed-count`, and a compact JSON-safe
   `workflow/summary` of the history (molecule titles + checkpoint outcomes).
   opts may override the digest `:title` and merge extra `:attributes`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L883-L914">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L884-L915">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/start!">`start!`</a>
 ``` clojure
@@ -984,7 +985,7 @@ Start a workflow run and return the `{:ready [step-view ...] :done boolean}`
 
   Example: `(start! run-id #'build params)` returns the first
   ready frontier.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L430-L467">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L431-L468">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/static-definition">`static-definition`</a>
 ``` clojure
@@ -1002,7 +1003,7 @@ Return the static definition value `defworkflow` defines.
   The authored documentation is judged here against the live `:param-spec`, so
   a definition that constructs cannot carry a drifted example or a doc for an
   undeclared key.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L920-L938">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L921-L939">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/step">`step`</a>
 ``` clojure
@@ -1020,7 +1021,7 @@ Return a workflow step definition — a unit of work the driving agent does
   transformed by user code before compilation.
 
   Example: `(step :build title :self :depends-on [:prepare])`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L113-L129">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L114-L130">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/step-view">`step-view`</a>
 ``` clojure
@@ -1029,7 +1030,7 @@ Return a workflow step definition — a unit of work the driving agent does
 Function.
 
 Return the agent-facing view of a workflow step.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L481-L484">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L482-L485">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/unregister-workflow!">`unregister-workflow!`</a>
 ``` clojure
@@ -1044,7 +1045,25 @@ Remove the direct/REPL registration of workflow `name`.
   this is that removal. Later starts, routes, and registered-name revisions fail
   before mutation, while strands already poured from the definition are left
   exactly as they are. Returns the remaining direct registrations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1031-L1041">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1025-L1035">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow/use-executor!">`use-executor!`</a>
+``` clojure
+(use-executor! & args)
+```
+Macro.
+
+Select one or more executor declaration Vars; return them as a vector.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L995-L996">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow/use-workflow!">`use-workflow!`</a>
+``` clojure
+(use-workflow! & args)
+```
+Macro.
+
+Select one or more workflow declaration Vars; return them as a vector.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L952-L953">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/wisp!">`wisp!`</a>
 ``` clojure
@@ -1058,7 +1077,7 @@ Materialize `workflow` as an ephemeral wisp strand graph.
 
   Wisps are normal Millstrand strands marked with workflow attributes so userland can
   burn or squash them explicitly.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L380-L390">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L381-L391">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/workflow">`workflow`</a>
 ``` clojure
@@ -1081,7 +1100,7 @@ Return a Clojure-native workflow definition.
   declares, none of which a shape spec can express.
 
   Example: `(workflow name (step :build title :self))`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L272-L298">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L273-L299">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/workflow-definition">`workflow-definition`</a>
 ``` clojure
@@ -1091,7 +1110,7 @@ Function.
 
 Return the definition symbol registered under keyword `name`, failing loudly
   (TEN-003) when `name` is not registered.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1096-L1100">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1090-L1094">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/workflow-vocabulary">`workflow-vocabulary`</a>
 
@@ -1099,7 +1118,7 @@ Return the definition symbol registered under keyword `name`, failing loudly
 
 
 Seed the process-lifetime Workflow attribute vocabulary.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1448-L1450">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1442-L1444">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/workflows">`workflows`</a>
 ``` clojure
@@ -1108,4 +1127,4 @@ Seed the process-lifetime Workflow attribute vocabulary.
 Function.
 
 Return the current registry map of workflow name (keyword) -> definition symbol.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1102-L1105">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1096-L1099">Source</a></sub></p>

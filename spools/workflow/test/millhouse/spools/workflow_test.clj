@@ -100,6 +100,10 @@
              (get-in config-data [:lint-as 'millhouse.spools.workflow/defworkflow])))
       (is (= 'clojure.core/def
              (get-in config-data [:lint-as 'millhouse.spools.workflow/defexecutor])))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.workflow/defworkflow!])))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.workflow/defexecutor!])))
       (is (= 'hooks.millhouse.spools.workflow/defworkflow
              (get-in config-data
                      [:hooks :analyze-call
@@ -107,7 +111,15 @@
       (is (= 'hooks.millhouse.spools.workflow/defexecutor
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.workflow/defexecutor]))))))
+                      'millhouse.spools.workflow/defexecutor])))
+      (is (= 'hooks.millstrand/use-vars
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.workflow/use-workflow!])))
+      (is (= 'hooks.millstrand/use-vars
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.workflow/use-executor!]))))))
 
 (deftest workflow-module-declares-workflow-attr-namespace
   (with-runtime
@@ -2424,13 +2436,13 @@
     source))
 
 (def ^:private alpha-definition-form
-  (str "(workflow/defworkflow alpha\n"
+  (str "(workflow/defworkflow! alpha\n"
        "  \"Alpha routine.\"\n"
        "  {:entrypoints #{:start :continue}}\n"
        "  (workflow/workflow \"Alpha\" (workflow/step :a \"A\" :self)))\n"))
 
 (def ^:private beta-routing-form
-  (str "(workflow/defworkflow beta\n"
+  (str "(workflow/defworkflow! beta\n"
        "  \"Beta routine routing to alpha.\"\n"
        "  {:entrypoints #{:start}}\n"
        "  (workflow/workflow \"Beta\"\n"

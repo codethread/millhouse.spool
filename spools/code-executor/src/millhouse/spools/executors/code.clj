@@ -83,7 +83,7 @@
   [_event]
   (scan!))
 
-(workflow/defexecutor code
+(workflow/defexecutor! code
   "Return durable stall detail for a ready `:code` gate view, or nil.
 
   A gate view is a map containing its string `:id`. The result is

@@ -78,11 +78,10 @@ declaring workflow instead of transferring ownership of the run.
 <a name="5-checkpoints-and-routing"></a>
 ## 3. Publish definitions and contracts
 
-Use `defworkflow` for a static definition that should be discoverable across
-module refreshes:
+Use inert `defworkflow` to create a declaration Var, then select it with `use-workflow!` in a publishing module. `defworkflow!` combines those two steps when the definition belongs to the same module:
 
 ```clojure
-(defworkflow build
+(defworkflow! build
   "Build the requested feature."
   {:entrypoints #{:start}
    :param-spec ::build-params
@@ -93,11 +92,7 @@ module refreshes:
     (step :implement "Implement" :self)))
 ```
 
-The definition Var is ordinary Clojure data. The registry contribution is
-collected only during module publication, so omitting a form on refresh removes
-that owner's entry. A registered name can advertise `:start`, `:continue`, and
-`:call`; the corresponding boundaries are enforced for worker starts, named
-continuations, and calls/defer targets. Direct Clojure values remain trusted.
+The definition Var is ordinary Clojure data. Inert definitions contribute nothing; typed selection is the publication boundary, so omitting a selection on refresh removes that owner's entry. A registered name can advertise `:start`, `:continue`, and `:call`; the corresponding boundaries are enforced for worker starts, named continuations, and calls/defer targets. Direct Clojure values remain trusted.
 
 `:defaults` merge below caller params. `:param-spec` validates the complete
 resolved map before compilation or routing. `:example` must be a complete
@@ -190,4 +185,4 @@ values are merged beneath explicit string `--attr` values.
 | Returning composition | `workflow/defer`, `workflow/defer-workflows`, `workflow/procedure` | A filled defer records its selected target and returns through an auto-closed procedure join. |
 | Archival | `workflow/role "digest"`, `workflow/summary` | `squash!` and `squash-run!` leave a closed digest with the folded-root/count metadata. |
 | Worker tooling | `workflow` from `millhouse.spools.workflow.cli` | Opt-in list/show/executors and run verbs expose registered workflows without publishing topology. |
-| Authoring tooling | `resources/clj-kondo.exports/millhouse.spools/workflow/` | The root exports `defworkflow` and `defexecutor`; consumers must include this root's `resources` path. |
+| Authoring tooling | `resources/clj-kondo.exports/millhouse.spools/workflow/` | The root exports `defworkflow`, `defworkflow!`, `use-workflow!`, `defexecutor`, `defexecutor!`, and `use-executor!`; consumers must include this root's `resources` path. |

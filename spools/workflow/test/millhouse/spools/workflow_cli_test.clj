@@ -120,7 +120,7 @@
 
 (defn- alpha-form
   [doc]
-  (str "(workflow/defworkflow alpha\n"
+  (str "(workflow/defworkflow! alpha\n"
        "  \"" doc "\"\n"
        "  {:entrypoints #{:start}}\n"
        "  (workflow/workflow \"Alpha\" (workflow/step :a \"A\" :self)))\n"))

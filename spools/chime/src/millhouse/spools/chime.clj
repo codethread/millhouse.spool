@@ -5,12 +5,13 @@
   attention notices through a workspace-bound local notifier command. It owns
   only weaver-lifetime runtime state and composes the public weaver/event API.
 
-  Module authors normally use `defrule`, `set-notifier!`, and the direct rule
-  seam (`register!`/`unregister!`). The lifecycle callbacks and `engine`
-  resource are public because the runtime resolves them by symbol; activation
-  owns their registration and cleanup."
+  Module authors normally use `defrule!` (or `defrule` plus `use-rule!`),
+  `set-notifier!`, and the direct rule seam (`register!`/`unregister!`). The
+  lifecycle callbacks and `engine` resource are public because the runtime
+  resolves them by symbol; activation owns their registration and cleanup."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.hooks.alpha :as hooks]
@@ -37,13 +38,22 @@
 (def rule-kind
   "Owner-partitioned kind id for Chime notification rules.
 
-  `defrule` publishes declarations under this identity; the active module
+  `use-rule!` publishes declarations under this identity; the active module
   reconciles the effective entries into Chime's visible rule view."
   :millhouse.spools.chime/rules)
 (def ^:private repl-owner :millstrand.owner/repl)
 
 (s/def ::key keyword?)
 (s/def ::fn (s/and symbol? namespace))
+(s/def ::rule-name
+  (s/or :keyword keyword?
+        :symbol symbol?
+        :string (s/and string? #(not (str/blank? %)))))
+(s/def ::notifier-arg (s/and string? #(not (str/blank? %))))
+(s/def ::argv (s/coll-of ::notifier-arg :kind vector? :min-count 1))
+(s/def ::notifier
+  (s/and (s/keys :req-un [::argv])
+         #(= #{:argv} (set (keys %)))))
 (s/def ::rule-entry
   (s/and (s/keys :req-un [::key ::fn])
          #(and (keyword? (:key %))
@@ -59,7 +69,8 @@
 
   `rule-key` is a keyword and `fn-sym` is a fully qualified symbol. `options`
   conforms to `::rule-options`; override intent remains collection metadata.
-  Consumers normally create declarations through `defrule`."
+  Consumers normally create declarations through `defrule` and select them with
+  `use-rule!`."
   [rule-key options fn-sym]
   (when-not (s/valid? ::rule-options options)
     (fail! "Invalid Chime rule options"
@@ -70,37 +81,33 @@
              {:entry entry :explain (s/explain-data ::rule-entry entry)}))
     entry))
 
-(defmacro defrule
-  "Define a notification rule and collect its Chime declaration.
+(authoring/register-registry-kind! rule-kind ::rule-entry)
 
-  Options conform to `::rule-options`; `:override? true` records explicit
-  override intent. The generated handler receives a context map containing
-  `:event`, `:strand`, and `:ready-ids`, and returns nil or a notification map.
-  The declaration is collected under the current module owner; omitting it on
-  the owner's next refresh retracts it.
-
-  ```clojure
-  (chime/defrule checkpoint-ready
-    \"Notify when a human checkpoint is ready.\"
-    [{:keys [strand ready-ids]}]
-    (when (and (= \"checkpoint\" (get-in strand [:attributes \"workflow/role\"]))
-               (contains? ready-ids (:id strand)))
-      {:title (str \"Checkpoint ready: \" (:title strand))
-       :body (str \"Review \" (:id strand))}))
-  ```"
-  [name doc & args]
+(defn- rule-authoring-plan
+  [mode name doc args]
   (let [[options argv body] (if (vector? (first args))
                               [{} (first args) (next args)]
                               [(first args) (second args) (nnext args)])
         handler-name (symbol (str name "-rule"))
         fn-sym (symbol (str (ns-name *ns*)) (str handler-name))
         rule-key (keyword (str name))]
-    `(do
-       (defn ~handler-name ~doc ~argv ~@body)
-       (runtime/collect-entry! rule-kind ~rule-key
-                               (rule-declaration ~rule-key ~options '~fn-sym)
-                               (select-keys ~options #{:override?}))
-       (var ~handler-name))))
+    (when-not (vector? argv)
+      (fail! "Chime defrule requires an argument vector"
+             {:name name :args args
+              :grammar "(defrule name doc [options] argv & body)"}))
+    (when-not (seq body)
+      (fail! "Chime defrule requires a rule body"
+             {:name name :args args
+              :grammar "(defrule name doc [options] argv & body)"}))
+    {:name handler-name
+     :definition `(defn ~(with-meta handler-name {:doc doc}) ~argv ~@body)
+     :kind rule-kind
+     :key rule-key
+     :entry `(rule-declaration ~rule-key ~options '~fn-sym)
+     :use-options `(select-keys ~options #{:override?})}))
+
+(authoring/defauthoring rule [mode name doc & args]
+  (rule-authoring-plan mode name doc args))
 
 (def ^:private state-version
   "Shape version for chime's runtime spool-state map. Bump whenever `new-state`'s
@@ -179,15 +186,6 @@
   (reset! (scanned-batch-ids) [])
   {:seen 0})
 
-(defn- validate-notifier! [notifier]
-  (when-not (map? notifier)
-    (fail! "Notifier binding must be a map" {:binding notifier}))
-  (when-let [unknown (seq (remove #{:argv} (keys notifier)))]
-    (fail! "Notifier binding contains unknown keys" {:unknown (vec unknown)}))
-  (when-not (and (vector? (:argv notifier)) (seq (:argv notifier)) (every? non-blank-string? (:argv notifier)))
-    (fail! "Notifier :argv must be a non-empty vector of non-blank strings" {:argv (:argv notifier)}))
-  notifier)
-
 (defn set-notifier!
   "Bind the local notifier command for this weaver lifetime.
 
@@ -203,7 +201,8 @@
   The command runs with the local user's authority and must accept the title
   as its final argument."
   [notifier]
-  (reset! (notifier-binding) (validate-notifier! notifier))
+  (reset! (notifier-binding)
+          (require-valid! ::notifier notifier "Invalid Chime notifier binding"))
   {:notifier @(notifier-binding)})
 
 (defn notifier
@@ -276,15 +275,14 @@
         {:status :failed :failure failure}))))
 
 (defn- rule-name [name]
-  (cond
-    (keyword? name) name
-    (symbol? name) (keyword (str name))
-    (and (string? name) (not (str/blank? name))) (keyword name)
-    :else (fail! "Rule name must be a keyword, symbol, or non-blank string" {:name name})))
+  (let [name (require-valid! ::rule-name name
+                             "Rule name must be a keyword, symbol, or non-blank string")]
+    (cond
+      (keyword? name) name
+      (symbol? name) (keyword (str name))
+      (string? name) (keyword name))))
 
 (defn- resolve-rule-fn [fn-symbol]
-  (when-not (and (symbol? fn-symbol) (namespace fn-symbol))
-    (fail! "Rule fn must be a fully qualified symbol" {:fn fn-symbol}))
   (try
     (or (requiring-resolve fn-symbol)
         (fail! "Rule fn cannot be resolved" {:fn fn-symbol}))
@@ -309,10 +307,13 @@
   `defrule` so owner refresh can retract declarations."
   [name fn-symbol]
   (let [rule-key (rule-name name)
-        rule {:key rule-key :fn fn-symbol}
+        ;; Validate the assembled entry so spec errors describe the public
+        ;; rule boundary once.
+        rule (require-valid! ::rule-entry {:key rule-key :fn fn-symbol}
+                             "Invalid Chime rule entry")
         visible (rule-registry)
         kinds (rule-kinds)]
-    (resolve-rule-fn fn-symbol)
+    (resolve-rule-fn (:fn rule))
     ;; Registration, event scans, and the pre-commit mutation barrier share this
     ;; monitor. Seed before publishing; a mutation cannot commit and enqueue its
     ;; event until the baseline and rule become visible together.
@@ -326,7 +327,7 @@
                                  {:layer :direct :entries entries
                                   :overrides (set (keys entries))}))
       (swap! visible assoc rule-key rule))
-    {:key rule-key :fn fn-symbol}))
+    rule))
 
 (defn rules
   "Return registered notification rules ordered by key."
