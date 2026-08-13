@@ -3,9 +3,9 @@
 
   The workflow asks whether the consumer is greenfield or brownfield before it
   gives configuration instructions. Both routes import the complete resolved
-  classpath once, make explicit bootstrap the sole Kondo import owner, validate
-  provenance and cache hygiene, and hand back the local quality command for the
-  consumer rather than guessing one."
+  classpath once, make explicit bootstrap the sole Kondo import owner, manually
+  validate provenance and cache hygiene, and hand back the local quality command
+  for the consumer rather than guessing one."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
@@ -65,24 +65,6 @@
      |`KONDO_CMD --lint RESOLVED_CLASSPATH --dependencies --parallel
      |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
     worktree workspace)))
-
-(def ^:private validate-kondo-command
-  "Check the LSP import boundary, formatting, provenance, and cache hygiene."
-  ["sh" "-c"
-   (str "set -eu\n"
-        "test -f .lsp/config.edn\n"
-        "clojure -e '"
-        "(require (symbol \"clojure.edn\")) "
-        "(let [config (clojure.edn/read-string (slurp \".lsp/config.edn\")) "
-        "observed (:copy-kondo-configs? config)] "
-        "(when (not= false observed) "
-        "(binding [*out* *err*] "
-        "(println \".lsp/config.edn must set :copy-kondo-configs? false; observed\" "
-        "(pr-str observed))) "
-        "(System/exit 1)))'\n"
-        "git diff --check\n"
-        "git check-ignore -q --no-index .clj-kondo/.cache/\n"
-        "test -z \"$(git ls-files '.clj-kondo/.cache/**')\"\n")])
 
 (defn- select-world-instruction
   [{:keys [worktree workspace]}]
@@ -162,7 +144,19 @@
      |immediately after import, and after quality. Confirm `.lsp/config.edn`
      |exists and records `:copy-kondo-configs? false`, proving explicit bootstrap
      |remains the sole import owner. Record the producer path for each imported
-     |mapping, the exact LSP setting, and run the supplied hygiene gate."
+     |mapping and the exact LSP setting. From the worktree, run these exact
+     |hygiene checks manually and stop if any check fails:
+     |`test -f .lsp/config.edn`;
+     |`clojure -e '(require (symbol \"clojure.edn\")) (let [config
+     | (clojure.edn/read-string (slurp \".lsp/config.edn\")) observed
+     | (:copy-kondo-configs? config)] (when (not= false observed)
+     | (binding [*out* *err*] (println \".lsp/config.edn must set
+     | :copy-kondo-configs? false; observed\" (pr-str observed)))
+     | (System/exit 1)))'`;
+     |`git diff --check`;
+     |`git check-ignore -q --no-index .clj-kondo/.cache/`; and
+     |`test -z \"$(git ls-files '.clj-kondo/.cache/**')\"`. Record each command
+     |and result in the handover."
     worktree)))
 
 (defn- quality-discovery-instruction
@@ -207,15 +201,12 @@
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.copy"
                    "workflow/instruction" copy-configs-instruction})
-   (workflow/gate :validate
+   (workflow/step :validate
                   "Validate Kondo provenance, duplicates, and cache hygiene"
-                  :shell
+                  :self
                   :depends-on [:copy-configs]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.validate"
-                   "shell/argv" validate-kondo-command
-                   "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                   "shell/timeout-secs" 300
                    "workflow/instruction" validate-instruction})
    (workflow/step :discover-quality
                   "Discover and run appropriate local quality checks"
@@ -246,8 +237,8 @@
   ```
 
   Both routes import all resolved dependency exports once, validate provenance,
-  duplicate mappings, and cache hygiene, discover local quality checks, and
-  leave a precise handover. Both route preparations merge
+  duplicate mappings, and cache hygiene manually, discover local quality checks,
+  and leave a precise handover. Both route preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
   LSP settings, so explicit bootstrap remains the sole import owner. The
   agent-owned import runs `strand --workspace
