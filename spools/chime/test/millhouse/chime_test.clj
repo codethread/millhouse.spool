@@ -31,10 +31,16 @@
       (is (.isFile hook-file))
       (is (= 'clojure.core/defn
              (get-in config-data [:lint-as 'millhouse.spools.chime/defrule])))
+      (is (= 'clojure.core/defn
+             (get-in config-data [:lint-as 'millhouse.spools.chime/defrule!])))
       (is (= 'hooks.millhouse.spools.chime/defrule
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.chime/defrule]))))))
+                      'millhouse.spools.chime/defrule])))
+      (is (= 'hooks.millstrand/use-vars
+             (get-in config-data
+                     [:hooks :analyze-call
+                      'millhouse.spools.chime/use-rule!]))))))
 
 (defn- with-chime [f]
   (test-support/with-runtime

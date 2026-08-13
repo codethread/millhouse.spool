@@ -66,7 +66,7 @@ publisher through root ownership, export, hook, test, and documentation checks.
 (s/def ::revision boolean?)
 (s/def ::ship-params (s/keys :req-un [::feature] :opt-un [::revision]))
 
-(workflow/defworkflow ship
+(workflow/defworkflow! ship
   "Design and implement a feature, then stop for human sign-off."
   {:entrypoints #{:start}
    :param-spec ::ship-params
@@ -174,7 +174,7 @@ Each stage is a `defworkflow` Var: a name, a doc, its declared entrypoints, and 
   (into {} (map (fn [[name sym]] [name (workflow/register-workflow! name sym)]))
         stage-workflows))
 
-(workflow/defworkflow proposal
+(workflow/defworkflow! proposal
   "Write a proposal for a feature and stop for human sign-off."
   {:entrypoints #{:continue}
    :param-spec ::proposal-params
@@ -235,7 +235,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
 (s/def ::artifact (s/and string? (complement str/blank?)))
 (s/def ::review-params (s/keys :req-un [::artifact]))
 
-(workflow/defworkflow review
+(workflow/defworkflow! review
   "Inspect an artifact and write a review of it."
   {:entrypoints #{:call}
    :param-spec ::review-params
@@ -246,7 +246,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
     (workflow/step :write-review (fn [{:keys [artifact]}] (str "Write review for " artifact)) :self
                    :depends-on [:inspect])))
 
-(workflow/defworkflow demo
+(workflow/defworkflow! demo
   "Write an artifact, have it reviewed, then carry on."
   {:entrypoints #{:start}}
   (workflow/workflow
@@ -285,13 +285,13 @@ Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spool
 ```clojure
 (require '[millhouse.spools.workflow :as workflow])
 
-(workflow/defworkflow spike
+(workflow/defworkflow! spike
   "Run a bounded investigation."
   {:entrypoints #{:call}}
   (workflow/workflow "Spike"
     (workflow/step :investigate "Investigate" :self)))
 
-(workflow/defworkflow devflow
+(workflow/defworkflow! devflow
   "Deliver a feature."
   {:entrypoints #{:call}}
   (workflow/workflow "Devflow"
@@ -306,7 +306,7 @@ Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spool
     (workflow/step :record "Record the result" :self :depends-on [:perform-work])))
 
 ;; user config: the authority that can see the tracker and delivery routines
-(workflow/defworkflow handled-intake
+(workflow/defworkflow! handled-intake
   "Handle an intake and record its result."
   {:entrypoints #{:start}}
   (workflow/bind-defers intake {:perform-work #{:spike :devflow}}))
@@ -341,7 +341,7 @@ Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the
     (workflow/defer :perform-work "Choose the final routine"
       :depends-on [:prepare])))
 
-(workflow/defworkflow finished-intake
+(workflow/defworkflow! finished-intake
   "Finish an intake with a worker-selected routine."
   {:entrypoints #{:start}}
   (workflow/bind-defers final-selection {:perform-work #{:spike :devflow}}))
@@ -371,7 +371,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
 (s/def ::feature (s/and string? (complement str/blank?)))
 (s/def ::ci-round-params (s/keys :req-un [::feature]))
 
-(workflow/defworkflow pr-ci-round
+(workflow/defworkflow! pr-ci-round
   "Wait for CI on a pull request, then judge the result."
   {:entrypoints #{:start :continue}
    :param-spec ::ci-round-params
@@ -459,7 +459,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
     (workflow/gate :ci-wait (fn [{:keys [feature]}] (str "Wait for CI on " feature)) :ci
                    :attributes (bind-attrs bindings :pr.ci.wait))))
 
-(workflow/defworkflow ci-round
+(workflow/defworkflow! ci-round
   "Wait for CI on a pull request, against the reference forge."
   {:entrypoints #{:start :continue}
    :param-spec ::ci-round-params
@@ -472,7 +472,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
   (merge-with merge github-pr-bindings
               {:pr.ci.wait {:instruction "glab ci status --live"}}))
 
-(workflow/defworkflow gitlab-ci-round
+(workflow/defworkflow! gitlab-ci-round
   "Wait for CI on a pull request, against GitLab."
   {:entrypoints #{:start :continue}
    :param-spec ::ci-round-params
@@ -522,7 +522,7 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
 (s/def ::tasks (s/coll-of ::task :kind vector? :min-count 1))
 (s/def ::pipeline-params (s/keys :req-un [::run-id ::tasks] :opt-un [::harness ::cwd]))
 
-(workflow/defworkflow delegate-pipeline
+(workflow/defworkflow! delegate-pipeline
   "Delegate a list of tasks to subagents one at a time, then accept the batch."
   {:entrypoints #{:start}
    :param-spec ::pipeline-params

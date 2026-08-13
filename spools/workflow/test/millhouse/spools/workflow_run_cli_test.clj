@@ -1155,7 +1155,7 @@
   (str "(clojure.spec.alpha/def ::feature clojure.core/string?)\n"
        "(clojure.spec.alpha/def ::devflow-params\n"
        "  (clojure.spec.alpha/keys :req-un [::feature]))\n"
-       "(workflow/defworkflow devflow\n"
+       "(workflow/defworkflow! devflow\n"
        "  \"Plan and build a feature.\"\n"
        "  {:entrypoints #{:start :call}\n"
        "   :param-spec ::devflow-params}\n"
@@ -1166,7 +1166,7 @@
 (def ^:private workspace-binding-form
   ;; The workspace is the authority boundary: it can see both spools, so it says
   ;; which registered routines the kanban exit allows.
-  (str "(workflow/defworkflow tracked-card\n"
+  (str "(workflow/defworkflow! tracked-card\n"
        "  \"Track a card and select its delivery routine.\"\n"
        "  {:entrypoints #{:start}}\n"
        "  (workflow/bind-defers template/general {:perform-work #{:devflow}}))\n"))

@@ -5,7 +5,8 @@
 
 Fixed-interval recurrence over Millstrand's durable scheduler wakes.
 
-  Module authors normally declare jobs with `defjob`; trusted code holding a
+  Module authors normally declare and select jobs with `defjob!` (or `defjob`
+  plus `use-job!`); trusted code holding a
   runtime may use `register!` and `unregister!` directly. Handler returns and
   errors appear in `jobs`; throws are also recorded by `recent-failures` and do
   not stop cadence. The scheduler remains the sole next-fire authority.
@@ -28,7 +29,7 @@ Lifecycle read hook: return Cron's managed `id -> job-status` map.
 
   `scheduled-jobs` calls this with `{:runtime runtime}`; consumers wanting the
   sorted status projection use `jobs`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L412-L419">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L423-L430">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/apply-jobs!">`apply-jobs!`</a>
 ``` clojure
@@ -42,7 +43,7 @@ Lifecycle apply hook: converge managed jobs and wakes onto `:desired`.
   `scheduled-jobs`. It removes omitted jobs, applies changed jobs, restores
   missing wakes, and returns `{:reconciled :cron :jobs [sorted-ids...]}`. A
   failed change names its job, operation, declaration, wake key, and remedy.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L437-L457">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L448-L468">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/await-quiescent!">`await-quiescent!`</a>
 ``` clojure
@@ -72,38 +73,25 @@ Block until every offloaded cron job on `runtime` has finished, then return
   Polling and timeout use the runtime Clock. `opts` accepts only positive-integer
   `:timeout-ms`, defaulting to 10000; timeout fails loudly with the remaining
   in-flight count.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L247-L283">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L249-L285">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/defjob">`defjob`</a>
 ``` clojure
-(defjob id job)
-(defjob id options job)
+(defjob & args)
 ```
 Macro.
 
-Collect one Cron job declaration for the current runtime module.
+Define an inert job declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L402-L403">Source</a></sub></p>
 
-  ```clojure
-  (require '[millhouse.spools.cron :as cron])
+## <a name="millhouse.spools.cron/defjob!">`defjob!`</a>
+``` clojure
+(defjob! & args)
+```
+Macro.
 
-  (cron/defjob :nightly-report
-    {:interval-ms 86400000
-     :jitter-ms 3600000
-     :handler 'my.jobs/emit-report})
-  ```
-
-  `id` is the stable registry key. The closed `job` map takes positive
-  `:interval-ms`, optional non-negative `:jitter-ms` (default `0`, sampled
-  uniformly in `[-jitter, +jitter]`), and a fully qualified `:handler` symbol
-  resolving at fire time to `(fn [runtime] ...)`.
-  The optional options map accepts only boolean `:override?`; true marks
-  same-id shadowing as intentional under registry layer rules. It remains
-  collection metadata rather than part of the job value.
-
-  Source evaluation schedules nothing. The form contributes under the current
-  module owner; after publication Cron preserves unchanged wakes, replaces
-  changed jobs, and removes declarations omitted by their owner.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L365-L392">Source</a></sub></p>
+Define and select a job declaration; return its Var.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L402-L403">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/desired-jobs">`desired-jobs`</a>
 ``` clojure
@@ -115,7 +103,7 @@ Lifecycle read hook: return the effective owner-published declarations as a
   normalized `id -> job` map.
 
   `scheduled-jobs` calls this with `{:runtime runtime}`; module authors do not.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L399-L410">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L410-L421">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/fire-wake">`fire-wake`</a>
 ``` clojure
@@ -131,7 +119,7 @@ Scheduler callback for a `cron/<id>` wake; consumers do not call it directly.
   execution executor, then returns so the lane never runs the job body. An
   executor rejection is recorded as an `:offload` failure rather than thrown
   onto the event lane.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L220-L245">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L222-L247">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/job-declaration">`job-declaration`</a>
 ``` clojure
@@ -146,16 +134,16 @@ Build the validated registry value used by `defjob`; consumers normally call
   `{:override? boolean}` declaration options, and returns the job value.
   `:override? true` marks same-id shadowing as intentional under registry layer
   rules; it remains collection metadata rather than part of the job value.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L352-L363">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L354-L365">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/job-kind">`job-kind`</a>
 
 
 
 
-Registry kind `:millhouse.spools.cron/jobs`, targeted by `defjob` and the
+Registry kind `:millhouse.spools.cron/jobs`, targeted by `use-job!` and the
   `scheduled-jobs` lifecycle declaration.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L38-L41">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L40-L43">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/jobs">`jobs`</a>
 ``` clojure
@@ -169,7 +157,7 @@ Return Cron's managed jobs on `runtime` as status maps, sorted by id.
   and (once fired) `:last-result`/`:last-fired-at`/`:last-error`. When a job next
   fires lives in its durable `cron/<id>` wake — read scheduler introspection
   (`millstrand.api.scheduler.alpha/pending`), the single timing view.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L484-L492">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L495-L503">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/recent-failures">`recent-failures`</a>
 ``` clojure
@@ -183,7 +171,7 @@ Return up to 100 recorded failures for this runtime's weaver lifetime,
   Each entry carries `:kind` (`:run` for a handler throw or `:offload` for an
   executor rejection), `:job`, `:message`, and `:at`. A `:run` failure also
   carries the handler exception's `:data` when present.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L111-L119">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L113-L121">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/register!">`register!`</a>
 ``` clojure
@@ -213,7 +201,7 @@ Register or replace one job directly on `runtime`.
   a durable wake. A changed tuple or missing wake arms a fresh wake at
   `now + interval + jitter`. Cron writes `fire-wake` as the scheduler callback;
   the job's `:handler` remains a function of the runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L303-L350">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L305-L352">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/remove-jobs!">`remove-jobs!`</a>
 ``` clojure
@@ -225,7 +213,7 @@ Lifecycle removal hook: cancel every managed job and wake.
 
   `scheduled-jobs` calls this with `{:runtime runtime}` when its declaration is
   removed. Returns `{:reconciled :cron :jobs []}`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L459-L470">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L470-L481">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/scheduled-jobs">`scheduled-jobs`</a>
 
@@ -237,7 +225,7 @@ Lifecycle declaration that keeps durable Cron wakes converged on the
 
   Any owner publication for that kind triggers desired/actual reconciliation;
   removing this declaration invokes `remove-jobs!`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L472-L482">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L483-L493">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/unregister!">`unregister!`</a>
 ``` clojure
@@ -251,4 +239,13 @@ Remove job `id` from `runtime` and cancel its pending `cron/<id>` wake.
   normalized to a keyword. Returns `{:unregistered id}` when either managed
   configuration or a pending wake existed, otherwise `{:unregistered nil}`.
   A missing wake is tolerated; genuine scheduler cancellation failures surface.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L171-L186">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L173-L188">Source</a></sub></p>
+
+## <a name="millhouse.spools.cron/use-job!">`use-job!`</a>
+``` clojure
+(use-job! & args)
+```
+Macro.
+
+Select one or more job declaration Vars; return them as a vector.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L402-L403">Source</a></sub></p>

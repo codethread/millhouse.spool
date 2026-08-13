@@ -17,7 +17,8 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
   ;; Perform one duplicate-tolerant unit of periodic work.
   {:outcome :reported})
 
-(cron/defjob :nightly-report
+(cron/defjob! nightly-report
+  "Run the nightly report."
   {:interval-ms 86400000
    :jitter-ms 3600000
    :handler 'report-job/report-tick})
@@ -75,7 +76,8 @@ An example of this split is Millstrand's [NVD scan job](https://github.com/codet
       ((requiring-resolve 'millhouse.spools.kanban/add!)
        runtime title {"--body" body "--priority" "p1"}))}))
 
-(cron/defjob :shared-scan
+(cron/defjob! shared-scan
+  "Run the shared scan."
   {:interval-ms 518400000
    :jitter-ms 3600000
    :handler 'my.scan/scan-tick})

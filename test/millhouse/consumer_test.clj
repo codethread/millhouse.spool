@@ -202,25 +202,25 @@
      \"A sample executable.\"
      {:executable \"sample-bin\"})
 
-   (workflow/defworkflow sample-workflow
+   (workflow/defworkflow! sample-workflow
      \"A sample workflow.\"
      {:entrypoints #{:start} :defaults {}}
      (workflow/workflow
        (fn [_] \"done\")
        (workflow/step :done \"Done\" :self)))
 
-   (workflow/defexecutor sample-executor
+   (workflow/defexecutor! sample-executor
      \"A sample executor.\"
      {}
      [_]
      nil)
 
-   (chime/defrule sample-rule
+   (chime/defrule! sample-rule
      \"A sample Chime rule.\"
      [_]
      nil)
 
-   (cron/defjob :sample-job
+   (cron/defjob! sample-job \" Sample job. \"
      {:interval-ms 1000
       :handler 'consumer.forms/sample-job-handler})")
 

@@ -483,11 +483,12 @@
             |payload. executors is the gate-authoring read: each registered
             |waiter with its projected gate-request contract, where the
             |executor declares one. Durable workflow definitions normally enter
-            |the registry through `defworkflow` in module source; direct
+            |the registry through `defworkflow!` or `use-workflow!` in module source; direct
             |registration is the runtime-implied trusted code and test seam for live state.")
    :prime (fmt/reflow
-           "|For durable workflow definitions, author `defworkflow` in module
-            |source and activate its module. For a live code or test change, use
+           "|For durable workflow definitions, author `defworkflow` and select it with
+            |`use-workflow!`, or use `defworkflow!` in module source and activate its module.
+            |For a live code or test change, use
             |the explicit-runtime registration functions; the connected REPL can
             |use their runtime-implied forms. Run `strand workflow list` to see the
             |registered routines, then

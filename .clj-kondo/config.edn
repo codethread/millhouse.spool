@@ -43,6 +43,8 @@
                       millhouse.spools.workflow-test/live-var-definition
                       millhouse.spools.workflow-test/exploding-constructor
                       millhouse.spools.workflow-test/malformed-constructor
+                      millhouse.spools.workflow/workflow-authoring-plan
+                      millhouse.spools.workflow/executor-authoring-plan
                       millhouse.spools.workflow-test/call-only-bound-card
                       millhouse.spools.workflow-test/legacy-bound-card
                       millhouse.spools.workflow-test/defer-caller

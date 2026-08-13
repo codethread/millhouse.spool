@@ -94,7 +94,7 @@
     |after cutover as unfinished and hand over that direct-user authorization is
     |required before runtime cutover."))
 
-(workflow/defworkflow bump-millstrand
+(workflow/defworkflow! bump-millstrand
   "Inspect a consumer Millstrand coordinate and choose its honest update path.
 
   Start it with exactly one Millstrand family and the dependency file to
@@ -173,7 +173,7 @@
                                                  "|The coordinate is neither an accepted local checkout nor a
                                                   |Git/SHA pin; stop for repair.")}])))
 
-(workflow/defworkflow bump-millstrand-local
+(workflow/defworkflow! bump-millstrand-local
   "Require an explicit decision before validating a local Millstrand checkout.
 
   This is the local continuation selected after `bump-millstrand` classifies
@@ -197,7 +197,7 @@
                                                  "|Do not validate or alter the consumer until a local-checkout
                                                   |decision is supplied.")}])))
 
-(workflow/defworkflow bump-millstrand-local-validate
+(workflow/defworkflow! bump-millstrand-local-validate
   "Configure an explicitly approved local Millstrand checkout.
 
   This continuation preserves the local coordinate, runs shared bootstrap,
@@ -250,7 +250,7 @@
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.handover"
                    "workflow/instruction" (fn [_] (handover-instruction))})))
 
-(workflow/defworkflow bump-millstrand-pinned
+(workflow/defworkflow! bump-millstrand-pinned
   "Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.
 
   This continuation is selected after coordinate classification and keeps the

@@ -39,7 +39,11 @@
       (is (.isFile config-file))
       (is (= 'clojure.core/def
              (get-in config-data [:lint-as 'millhouse.spools.cron/defjob])))
-      (is (nil? (:hooks config-data))))))
+      (is (= 'clojure.core/def
+             (get-in config-data [:lint-as 'millhouse.spools.cron/defjob!])))
+      (is (= 'hooks.millstrand/use-vars
+             (get-in config-data
+                     [:hooks :analyze-call 'millhouse.spools.cron/use-job!]))))))
 
 (def ^:private blocking-started (atom (promise)))
 (def ^:private blocking-release (atom (promise)))

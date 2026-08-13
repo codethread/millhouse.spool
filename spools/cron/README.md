@@ -19,7 +19,11 @@ Activation publishes Cron's job declaration kind and reconciliation lifecycle. C
 
 ## 2. Jobs
 
-`defjob` is the module authoring form. It collects a job declaration under the current module owner and schedules nothing during source evaluation. Its generated API entry owns the complete job shape, options, and focused example.
+`defjob` is an inert declaration form: `(defjob name doc job)` defines a Var and
+contributes nothing. Select it with `use-job!`, optionally passing the closed
+`{:override? boolean}` selection map. `defjob!` defines and selects in one form,
+with either `(defjob! name doc job)` or `(defjob! name doc options job)`. Its
+generated API entry owns the complete job shape, options, and focused example.
 
 Owner-complete publication drives the job lifecycle:
 
@@ -35,6 +39,6 @@ Handlers receive the active runtime and must tolerate at-least-once delivery. `r
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
-| Job authoring | `defjob` → `:millhouse.spools.cron/jobs` | Publishes one owner-partitioned desired job declaration. |
+| Job authoring | `use-job!` → `:millhouse.spools.cron/jobs` | Publishes selected owner-partitioned desired job declarations; `defjob!` combines definition and selection. |
 | Durable timing | Scheduler wake `cron/<id>` | Holds the authoritative next-fire time and dispatches `millhouse.spools.cron/fire-wake`. |
-| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/cron/config.edn` | Maps `defjob` to `clojure.core/def`; the Cron root must expose its `resources` path. |
+| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/cron/config.edn` | Models `defjob`, `defjob!`, and `use-job!`; the Cron root must expose its `resources` path. |

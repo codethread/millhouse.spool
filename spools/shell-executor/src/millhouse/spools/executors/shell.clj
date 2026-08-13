@@ -359,7 +359,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Owner declarations and resource reconciliation
 
-(workflow/defexecutor shell
+(workflow/defexecutor! shell
   "Return durable stall detail for a ready `:shell` gate view, or nil.
 
   The executor accepts a gate with `workflow/gate` equal to `\"shell\"` and a

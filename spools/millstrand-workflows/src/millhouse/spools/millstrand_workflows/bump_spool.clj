@@ -60,7 +60,7 @@
      |`spool status` later in this bump workflow."
     worktree workspace)))
 
-(workflow/defworkflow bump-spool
+(workflow/defworkflow! bump-spool
   "Bump selected spool families and configure consumer tooling.
 
   Start it with family names and the exact consumer paths:

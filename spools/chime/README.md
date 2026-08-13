@@ -32,10 +32,10 @@ notifier by itself.
 
 ## 2. Author rules in workspace modules
 
-Use `defrule` in shared, trusted configuration. The macro defines the handler
-and collects an owner-partitioned declaration; publication reconciles the
-effective rule view. Source evaluation does not run the rule. The generated
-API documents the declaration shape and focused authoring example.
+Use inert `defrule` to define a handler declaration, then select it with
+`use-rule!`; `defrule!` defines and selects in one form. Selection publishes an
+owner-partitioned declaration; source evaluation does not run the rule. The
+generated API documents the declaration shape and focused authoring example.
 
 Each rule receives a context containing `:event`, the candidate `:strand`, and
 one `:ready-ids` set computed for the scan. Return nil when there is nothing to

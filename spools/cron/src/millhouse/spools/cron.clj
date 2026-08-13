@@ -1,7 +1,8 @@
 (ns millhouse.spools.cron
   "Fixed-interval recurrence over Millstrand's durable scheduler wakes.
 
-  Module authors normally declare jobs with `defjob`; trusted code holding a
+  Module authors normally declare and select jobs with `defjob!` (or `defjob`
+  plus `use-job!`); trusted code holding a
   runtime may use `register!` and `unregister!` directly. Handler returns and
   errors appear in `jobs`; throws are also recorded by `recent-failures` and do
   not stop cadence. The scheduler remains the sole next-fire authority.
@@ -12,6 +13,7 @@
   declaration resolves them by symbol; module authors do not call them."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.format.alpha :as format-alpha]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.registry.alpha :as registry]
@@ -36,7 +38,7 @@
   4)
 
 (def job-kind
-  "Registry kind `:millhouse.spools.cron/jobs`, targeted by `defjob` and the
+  "Registry kind `:millhouse.spools.cron/jobs`, targeted by `use-job!` and the
   `scheduled-jobs` lifecycle declaration."
   :millhouse.spools.cron/jobs)
 (def ^:private repl-owner :millstrand.owner/repl)
@@ -362,34 +364,43 @@
   (reject-unknown-keys! "Cron job declaration" job-keys job)
   (require-valid! ::job (assoc job :id id) "Invalid Cron job declaration"))
 
-(defmacro defjob
-  "Collect one Cron job declaration for the current runtime module.
+(authoring/register-registry-kind! job-kind ::job)
 
-  ```clojure
-  (require '[millhouse.spools.cron :as cron])
+(defn- job-authoring-plan
+  [mode name doc args]
+  (let [parsed (cond
+                 (= mode :define)
+                 (if (= 1 (count args))
+                   [{} (first args)]
+                   (fail! "Cron defjob requires exactly one job argument"
+                          {:name name :args args
+                           :grammar "(defjob name doc job)"}))
 
-  (cron/defjob :nightly-report
-    {:interval-ms 86400000
-     :jitter-ms 3600000
-     :handler 'my.jobs/emit-report})
-  ```
+                 (= mode :define-and-use)
+                 (case (count args)
+                   1 [{} (first args)]
+                   2 [(first args) (second args)]
+                   (fail! "Cron defjob! requires a job or options and job"
+                          {:name name :args args
+                           :grammar "(defjob! name doc job) or (defjob! name doc {:override? boolean} job)"}))
 
-  `id` is the stable registry key. The closed `job` map takes positive
-  `:interval-ms`, optional non-negative `:jitter-ms` (default `0`, sampled
-  uniformly in `[-jitter, +jitter]`), and a fully qualified `:handler` symbol
-  resolving at fire time to `(fn [runtime] ...)`.
-  The optional options map accepts only boolean `:override?`; true marks
-  same-id shadowing as intentional under registry layer rules. It remains
-  collection metadata rather than part of the job value.
+                 :else
+                 (fail! "Unknown Cron authoring mode"
+                        {:mode mode :name name}))
+        [options job] parsed
+        id (keyword name)]
+    {:name name
+     :definition `(def ~(with-meta name {:doc doc})
+                    (job-declaration ~id ~options ~job))
+     :kind job-kind
+     :key id
+     :entry `(job-declaration ~id ~options ~job)
+     :use-options (if (= :define-and-use mode)
+                    `(select-keys ~options #{:override?})
+                    {})}))
 
-  Source evaluation schedules nothing. The form contributes under the current
-  module owner; after publication Cron preserves unchanged wakes, replaces
-  changed jobs, and removes declarations omitted by their owner."
-  ([id job]
-   `(defjob ~id {} ~job))
-  ([id options job]
-   `(runtime/collect-entry! job-kind ~id (job-declaration ~id ~options ~job)
-                            (select-keys ~options #{:override?}))))
+(authoring/defauthoring job [mode name doc & args]
+  (job-authoring-plan mode name doc args))
 
 (runtime/collect-kind! ::job-kinds
                        {:id job-kind

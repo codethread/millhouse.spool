@@ -109,7 +109,7 @@
      |producer export under `%s/resources` is the only source of its mapping."
     spool-root)))
 
-(workflow/defworkflow publish-spool-kondo
+(workflow/defworkflow! publish-spool-kondo
   "Publish clj-kondo support for a macro-owning spool root.
 
   Start the registered workflow with a complete publisher contract:

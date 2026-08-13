@@ -78,11 +78,12 @@ declaring workflow instead of transferring ownership of the run.
 <a name="5-checkpoints-and-routing"></a>
 ## 3. Publish definitions and contracts
 
-Use `defworkflow` for a static definition that should be discoverable across
-module refreshes:
+Use inert `defworkflow` to create a declaration Var, then select it with
+`use-workflow!` in a publishing module. `defworkflow!` combines those two steps
+when the definition belongs to the same module:
 
 ```clojure
-(defworkflow build
+(defworkflow! build
   "Build the requested feature."
   {:entrypoints #{:start}
    :param-spec ::build-params
@@ -93,9 +94,9 @@ module refreshes:
     (step :implement "Implement" :self)))
 ```
 
-The definition Var is ordinary Clojure data. The registry contribution is
-collected only during module publication, so omitting a form on refresh removes
-that owner's entry. A registered name can advertise `:start`, `:continue`, and
+The definition Var is ordinary Clojure data. Inert definitions contribute
+nothing; typed selection is the publication boundary, so omitting a selection on
+refresh removes that owner's entry. A registered name can advertise `:start`, `:continue`, and
 `:call`; the corresponding boundaries are enforced for worker starts, named
 continuations, and calls/defer targets. Direct Clojure values remain trusted.
 
