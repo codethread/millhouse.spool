@@ -116,6 +116,13 @@
   (test-support/activate-spool! rt :millhouse/spools-workflow-cli 'millhouse.spools.workflow.cli
                                 :after [:millhouse/spools-workflow]))
 
+(defn- activate-millstrand-workflows!
+  "Activate the registered publisher workflows used by the progression seam."
+  [rt]
+  (test-support/activate-spool! rt :millhouse/millstrand-workflows
+                                'millhouse.spools.millstrand-workflows
+                                :after [:millhouse/spools-workflow]))
+
 (defn- register!
   [& names]
   (doseq [name names]
@@ -459,6 +466,46 @@
         (is (= "Solo" (get-in result [:root :title])))
         (is (= ["Do the work"] (mapv :title (:ready result)))
             "the routed continuation replaced the whole frontier")))))
+
+(deftest manual-bootstrap-composition-returns-to-configure-consumer-tooling
+  (with-runtime
+    (fn [rt _]
+      (activate-cli! rt)
+      (activate-millstrand-workflows! rt)
+      (let [params {"worktree" "/tmp/consumer"
+                    "workspace" "/tmp/consumer/.millstrand"}
+            started (started "run-configure-consumer-tooling"
+                             :configure-consumer-tooling
+                             :params params)
+            after-inspection (verb "complete" "run-configure-consumer-tooling")
+            style (item-id after-inspection "Choose the consumer repository style")
+            after-style (invoke {:subcommand ["choose"]
+                                 :run-id "run-configure-consumer-tooling"
+                                 :step style
+                                 :choice "spool"})
+            bootstrap-step (item-id after-style
+                                    "Bootstrap Kondo in a separate registered run")
+            after-bootstrap
+            (invoke {:subcommand ["complete"]
+                     :run-id "run-configure-consumer-tooling"
+                     :step bootstrap-step
+                     :context {:bootstrap-kondo-run-id "consumer-kondo-brownfield"
+                               :bootstrap-kondo-mode "brownfield"
+                               :bootstrap-kondo-done true}})]
+        (is (= ["Inspect the effective spool world and classify the repository"]
+               (mapv :title (:ready started))))
+        (is (= ["Bootstrap Kondo in a separate registered run"]
+               (mapv :title (:ready after-style))))
+        (is (= ["Align the tools.deps view with the effective spool world"]
+               (mapv :title (:ready after-bootstrap))))
+        (is (false? (:done after-bootstrap)))
+        (is (= {:worktree "/tmp/consumer"
+                :workspace "/tmp/consumer/.millstrand"
+                :bootstrap-kondo-run-id "consumer-kondo-brownfield"
+                :bootstrap-kondo-mode "brownfield"
+                :bootstrap-kondo-done true}
+               (get-in (weaver/show rt (get-in after-bootstrap [:root :id]))
+                       [:attributes :workflow/context])))))))
 
 (deftest choose-refuses-a-frontier-without-a-checkpoint
   (with-runtime

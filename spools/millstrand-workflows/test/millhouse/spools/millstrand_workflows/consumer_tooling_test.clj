@@ -3,7 +3,6 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
             [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]))
 
@@ -75,6 +74,7 @@
                (mapv :depends-on steps)))
         (is (every? #(nil? (get-in % [:attributes "workflow/gate"])) steps))
         (is (every? #(nil? (get-in % [:attributes "shell/argv"])) steps))
+        (is (every? #(nil? (:procedure %)) steps))
         (is (not (str/includes? (pr-str payload) "workflow/gate")))))))
 
 (deftest every-standalone-route-bootstraps-before-lint
@@ -82,10 +82,22 @@
     (testing (name style)
       (let [route (definition definition-var)
             steps (:steps route)
-            bootstrap-call (step route :bootstrap-kondo)
+            bootstrap-step (step route :bootstrap-kondo)
             lint (step route :configure-lint)]
         (is (= :bootstrap-kondo (:id (first steps))))
-        (is (= #'bootstrap/bootstrap-kondo (:procedure bootstrap-call)))
+        (is (nil? (:procedure bootstrap-step)))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           "separate registered `bootstrap-kondo` run"))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           "choose the consumer's `greenfield` or `brownfield`"))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           "child run id"))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           "selected mode"))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           ":bootstrap-kondo-done true"))
+        (is (str/includes? (instruction route :bootstrap-kondo)
+                           "Do not treat the runtime-routed child checkpoint as a return"))
         (is (= [:bootstrap-kondo]
                (:depends-on (step route :align-tools-deps))))
         (is (= [:configure-lsp] (:depends-on lint)))
