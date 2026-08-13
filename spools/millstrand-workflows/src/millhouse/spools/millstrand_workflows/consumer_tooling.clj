@@ -17,11 +17,71 @@
   (and (string? value)
        (not (str/blank? value))))
 
+(defn- git-sha?
+  "Return true when `value` is a complete lowercase Git SHA."
+  [value]
+  (and (string? value)
+       (boolean (re-matches #"[0-9a-f]{40}" value))))
+
+(defn- pinned-remote-family?
+  "Return true when `value` names a pinned remote Millhouse family."
+  [{:keys [kind family coordinate root]}]
+  (and (= "pinned-remote-family" kind)
+       (= "millhouse/spools" family)
+       (nil? root)
+       (map? coordinate)
+       (non-blank-string? (:git/url coordinate))
+       (git-sha? (:git/sha coordinate))))
+
+(defn- local-self-root?
+  "Return true when `value` names a local Millhouse self root."
+  [{:keys [kind family coordinate root]}]
+  (and (= "local-self-root" kind)
+       (= "millhouse/spools" family)
+       (non-blank-string? root)
+       (map? coordinate)
+       (non-blank-string? (:local/root coordinate))))
+
 (s/def ::non-blank-string non-blank-string?)
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
+(s/def ::kind ::non-blank-string)
+(s/def ::family ::non-blank-string)
+(s/def ::coordinate map?)
+(s/def ::root ::non-blank-string)
+(s/def ::pinned-remote-family
+  (s/and
+   (s/keys :req-un [::kind ::family ::coordinate])
+   pinned-remote-family?))
+(s/def ::local-self-root
+  (s/and
+   (s/keys :req-un [::kind ::family ::coordinate ::root])
+   local-self-root?))
+(s/def ::invocation-producer
+  (s/or :pinned-remote-family ::pinned-remote-family
+        :local-self-root ::local-self-root))
 (s/def ::consumer-tooling-params
-  (s/keys :req-un [::worktree ::workspace]))
+  (s/keys :req-un [::worktree ::workspace ::invocation-producer]))
+
+(defn- invocation-producer-instruction
+  [{:keys [worktree workspace invocation-producer]}]
+  (fmt/reflow
+   (format
+    "|In worktree `%s` and selected workspace `%s`, before bootstrap, prove the
+     |consumer uses this exact invocation-producer contract: `%s`. For
+     |`pinned-remote-family`, the contract is the complete `millhouse/spools`
+     |family coordinate with its exact `git/url` and full lowercase `git/sha`.
+     |For `local-self-root`, it is the exact Millhouse self root and `local/root`.
+     |Read the selected `spools.edn` activation and every relevant Millhouse root
+     |in every applicable `deps.edn`. Record the exact family/root, coordinate,
+     |and `:deps/root` evidence for each. When an existing coordinate differs,
+     |manually edit only the applicable `spools.edn` activation and Millhouse
+     |entries in `deps.edn` to the supplied contract, preserving each declared
+     |`:deps/root`; record the before and after values. Show that shared roots use
+     |one version-coherent family coordinate. Stop only when metadata is missing
+     |or incomparable, or the manual alignment cannot be verified. Do not infer
+     |the running workflow SHA, guess metadata, or automate these edits."
+    worktree workspace (pr-str invocation-producer))))
 
 (defn- inspect-repository-instruction
   [{:keys [worktree workspace]}]
@@ -394,9 +454,17 @@
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
   [style]
-  [(workflow/step :bootstrap-kondo
+  [(workflow/step :prove-invocation-producer
+                  "Prove the consumer uses the invocation producer coordinate"
+                  :self
+                  :attributes
+                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
+                                              (name style) ".invocation-producer")
+                   "workflow/instruction" invocation-producer-instruction})
+   (workflow/step :bootstrap-kondo
                   "Bootstrap Kondo in a separate registered run"
                   :self
+                  :depends-on [:prove-invocation-producer]
                   :attributes
                   {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
                                               (name style) ".bootstrap-kondo")
@@ -452,20 +520,35 @@
 (workflow/defworkflow configure-consumer-tooling
   "Choose and configure tooling for a Millstrand consumer repository style.
 
-  Start or call it with the exact consumer worktree and selected workspace. The
-  agent first inspects the effective spool world and repository conventions,
-  then chooses `app`, `spool`, or `clojure-app`. Each continuation aligns and
-  composes the registered `bootstrap-kondo` workflow before aligning and
-  proving tools.deps, clojure-lsp, clj-kondo/lint, tests, and Weaver behavior
-  through ordinary manual steps. It contains no executor gates and never
-  restarts a Weaver."
+  Start or call it with the exact consumer worktree, selected workspace, and
+  invocation-producer coordinate. The coordinate must be either a pinned remote
+  `millhouse/spools` family or a local Millhouse self root. The agent first
+  inspects the effective spool world and repository conventions, then chooses
+  `app`, `spool`, or `clojure-app`. The selected continuation manually aligns
+  and proves activation and dependencies against that exact coordinate before
+  composing the registered `bootstrap-kondo` workflow and proving tools.deps,
+  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary manual
+  steps. It contains no executor gates and never restarts a Weaver."
   {:entrypoints #{:start :call}
    :param-spec ::consumer-tooling-params
    :defaults {}
    :example {:worktree "/abs/path/to/consumer-worktree"
-             :workspace "/abs/path/to/consumer-worktree/.millstrand"}
+             :workspace "/abs/path/to/consumer-worktree/.millstrand"
+             :invocation-producer
+             {:kind "pinned-remote-family"
+              :family "millhouse/spools"
+              :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                           :git/sha "0123456789012345678901234567890123456789"}}}
    :param-docs {:worktree "Exact consumer worktree to inspect and update."
-                :workspace "Exact selected Millstrand workspace for the consumer."}}
+                :workspace "Exact selected Millstrand workspace for the consumer."
+                :invocation-producer
+                (fmt/reflow
+                 "|Required exact coordinate of the Millhouse workflow producer:
+                  |use `pinned-remote-family` with `millhouse/spools`, `git/url`,
+                  |and a full lowercase `git/sha` for ordinary consumers, or
+                  |`local-self-root` with the exact self `root` and `local/root`
+                  |when Millhouse is the consumer. The workflow never infers or
+                  |edits this coordinate.")}}
   (workflow/workflow
    "Configure consumer tooling by repository style"
    (workflow/step :inspect-repository
@@ -510,7 +593,7 @@
 
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
-  recorded first."
+  recorded before the continuation's producer-coordinate proof."
   {:entrypoints #{:continue}
    :param-spec ::consumer-tooling-params}
   (apply workflow/workflow
@@ -522,7 +605,7 @@
 
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
-  recorded first."
+  recorded before the continuation's producer-coordinate proof."
   {:entrypoints #{:continue}
    :param-spec ::consumer-tooling-params}
   (apply workflow/workflow
@@ -534,7 +617,7 @@
 
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
-  recorded first."
+  recorded before the continuation's producer-coordinate proof."
   {:entrypoints #{:continue}
    :param-spec ::consumer-tooling-params}
   (apply workflow/workflow

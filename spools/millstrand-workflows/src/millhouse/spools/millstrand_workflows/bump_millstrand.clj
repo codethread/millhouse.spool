@@ -33,9 +33,11 @@
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
 (s/def ::deps-file ::non-blank-string)
+(s/def ::invocation-producer ::tooling/invocation-producer)
 (s/def ::direct-user-request boolean?)
 (s/def ::millstrand-bump-params
-  (s/keys :req-un [::families ::worktree ::workspace ::direct-user-request]
+  (s/keys :req-un [::families ::worktree ::workspace ::invocation-producer
+                   ::direct-user-request]
           :opt-un [::deps-file]))
 
 (defn- inspect-deps-instruction
@@ -105,6 +107,10 @@
     {:families [\"io.millstrand/millstrand\"]
      :worktree \"/abs/path/to/consumer-worktree\"
      :workspace \"/abs/path/to/consumer-worktree/.millstrand\"
+     :invocation-producer {:kind \"pinned-remote-family\"
+                           :family \"millhouse/spools\"
+                           :coordinate {:git/url \"https://github.com/codethread/millhouse.spool.git\"
+                                        :git/sha \"0123456789012345678901234567890123456789\"}}
      :direct-user-request false
      :deps-file \"deps.edn\"})
   ```
@@ -119,6 +125,10 @@
    :example {:families ["io.millstrand/millstrand"]
              :worktree "/abs/path/to/consumer-worktree"
              :workspace "/abs/path/to/consumer-worktree/.millstrand"
+             :invocation-producer {:kind "pinned-remote-family"
+                                   :family "millhouse/spools"
+                                   :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                                :git/sha "0123456789012345678901234567890123456789"}}
              :direct-user-request false
              :deps-file "deps.edn"}
    :param-docs {:families
@@ -127,6 +137,8 @@
                   |automatic remote default-branch HEAD SHA bump.")
                 :worktree "Exact consumer worktree in which inspection and validation run."
                 :workspace "Exact Millstrand workspace selected for this consumer."
+                :invocation-producer
+                "Exact Millhouse producer coordinate forwarded to consumer tooling."
                 :direct-user-request
                 (fmt/reflow
                  "|True only when the direct user requested runtime cutover.")
@@ -216,7 +228,9 @@
    (workflow/call :configure-consumer-tooling
                   #'tooling/configure-consumer-tooling
                   {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [workspace]}] workspace)}
+                   :workspace (fn [{:keys [workspace]}] workspace)
+                   :invocation-producer (fn [{:keys [invocation-producer]}]
+                                          invocation-producer)}
                   :depends-on [:refresh-runtime])
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"
@@ -249,5 +263,7 @@
                   {:families (fn [{:keys [families]}] families)
                    :worktree (fn [{:keys [worktree]}] worktree)
                    :workspace (fn [{:keys [workspace]}] workspace)
+                   :invocation-producer (fn [{:keys [invocation-producer]}]
+                                          invocation-producer)
                    :direct-user-request (fn [{:keys [direct-user-request]}]
                                           direct-user-request)})))

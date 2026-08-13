@@ -14,10 +14,20 @@
 (defn- step [id]
   (some #(when (= id (:id %)) %) (:steps (definition))))
 
+(def ^:private invocation-producer
+  {:kind "pinned-remote-family"
+   :family "millhouse/spools"
+   :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                :git/sha "0123456789012345678901234567890123456789"}})
+
 (deftest params-require-families-and-an-explicit-world
   (let [valid {:families ["io.millstrand/millstrand"]
                :worktree "/tmp/consumer"
                :workspace "/tmp/consumer/.millstrand"
+               :invocation-producer {:kind "pinned-remote-family"
+                                     :family "millhouse/spools"
+                                     :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                                  :git/sha "0123456789012345678901234567890123456789"}}
                :direct-user-request false}]
     (is (s/valid? ::bump/spool-bump-params valid))
     (is (not (s/valid? ::bump/spool-bump-params
@@ -59,6 +69,7 @@
   (let [params {:families ["io.millstrand/millstrand"]
                 :worktree "/tmp/consumer"
                 :workspace "/tmp/consumer/.millstrand"
+                :invocation-producer invocation-producer
                 :direct-user-request false}
         payload (workflow/compile (definition) params)
         edges (set (map (juxt :from :to :type) (:edges payload)))]
@@ -89,6 +100,7 @@
   (let [params {:families ["io.millstrand/millstrand"]
                 :worktree "/tmp/consumer"
                 :workspace "/tmp/consumer/.millstrand"
+                :invocation-producer invocation-producer
                 :direct-user-request false}
         strands (into {} (map (juxt :ref identity)
                               (:strands (workflow/compile (definition) params))))

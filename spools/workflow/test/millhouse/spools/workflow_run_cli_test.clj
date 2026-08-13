@@ -473,7 +473,11 @@
       (activate-cli! rt)
       (activate-millstrand-workflows! rt)
       (let [params {"worktree" "/tmp/consumer"
-                    "workspace" "/tmp/consumer/.millstrand"}
+                    "workspace" "/tmp/consumer/.millstrand"
+                    "invocation-producer" {"kind" "pinned-remote-family"
+                                           "family" "millhouse/spools"
+                                           "coordinate" {"git/url" "https://github.com/codethread/millhouse.spool.git"
+                                                         "git/sha" "0123456789012345678901234567890123456789"}}}
             started (started "run-configure-consumer-tooling"
                              :configure-consumer-tooling
                              :params params)
@@ -483,7 +487,12 @@
                                  :run-id "run-configure-consumer-tooling"
                                  :step style
                                  :choice "spool"})
-            bootstrap-step (item-id after-style
+            producer-step (item-id after-style
+                                   "Prove the consumer uses the invocation producer coordinate")
+            after-producer (invoke {:subcommand ["complete"]
+                                    :run-id "run-configure-consumer-tooling"
+                                    :step producer-step})
+            bootstrap-step (item-id after-producer
                                     "Bootstrap Kondo in a separate registered run")
             after-bootstrap
             (invoke {:subcommand ["complete"]
@@ -494,13 +503,19 @@
                                :bootstrap-kondo-done true}})]
         (is (= ["Inspect the effective spool world and classify the repository"]
                (mapv :title (:ready started))))
-        (is (= ["Bootstrap Kondo in a separate registered run"]
+        (is (= ["Prove the consumer uses the invocation producer coordinate"]
                (mapv :title (:ready after-style))))
+        (is (= ["Bootstrap Kondo in a separate registered run"]
+               (mapv :title (:ready after-producer))))
         (is (= ["Align the tools.deps view with the effective spool world"]
                (mapv :title (:ready after-bootstrap))))
         (is (false? (:done after-bootstrap)))
         (is (= {:worktree "/tmp/consumer"
                 :workspace "/tmp/consumer/.millstrand"
+                :invocation-producer {:kind "pinned-remote-family"
+                                      :family "millhouse/spools"
+                                      :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                                   :git/sha "0123456789012345678901234567890123456789"}}
                 :bootstrap-kondo-run-id "consumer-kondo-brownfield"
                 :bootstrap-kondo-mode "brownfield"
                 :bootstrap-kondo-done true}

@@ -16,6 +16,10 @@
   {:families ["io.millstrand/millstrand"]
    :worktree "/tmp/consumer"
    :workspace "/tmp/consumer/.millstrand"
+   :invocation-producer {:kind "pinned-remote-family"
+                         :family "millhouse/spools"
+                         :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                      :git/sha "0123456789012345678901234567890123456789"}}
    :direct-user-request false
    :deps-file "deps.edn"})
 

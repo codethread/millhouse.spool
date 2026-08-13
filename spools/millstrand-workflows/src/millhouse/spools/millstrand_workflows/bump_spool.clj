@@ -32,9 +32,11 @@
          unique-families?))
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
+(s/def ::invocation-producer ::tooling/invocation-producer)
 (s/def ::direct-user-request boolean?)
 (s/def ::spool-bump-params
-  (s/keys :req-un [::families ::worktree ::workspace ::direct-user-request]))
+  (s/keys :req-un [::families ::worktree ::workspace ::invocation-producer
+                   ::direct-user-request]))
 
 (workflow/defworkflow bump-spool
   "Bump selected spool families and configure consumer tooling.
@@ -48,6 +50,10 @@
     {:families [\"io.millstrand/millstrand\" \"millhouse/spools\"]
      :worktree \"/abs/path/to/consumer-worktree\"
      :workspace \"/abs/path/to/consumer-worktree/.millstrand\"
+     :invocation-producer {:kind \"pinned-remote-family\"
+                           :family \"millhouse/spools\"
+                           :coordinate {:git/url \"https://github.com/codethread/millhouse.spool.git\"
+                                        :git/sha \"0123456789012345678901234567890123456789\"}}
      :direct-user-request false})
   ```
 
@@ -63,6 +69,10 @@
    :example {:families ["io.millstrand/millstrand"]
              :worktree "/abs/path/to/consumer-worktree"
              :workspace "/abs/path/to/consumer-worktree/.millstrand"
+             :invocation-producer {:kind "pinned-remote-family"
+                                   :family "millhouse/spools"
+                                   :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                                :git/sha "0123456789012345678901234567890123456789"}}
              :direct-user-request false}
    :param-docs {:families
                 (fmt/reflow
@@ -73,6 +83,8 @@
                 "Exact consumer worktree in which the bump and bootstrap run."
                 :workspace
                 "Exact Millstrand workspace passed to every strand command."
+                :invocation-producer
+                "Exact Millhouse producer coordinate forwarded to consumer tooling."
                 :direct-user-request
                 (fmt/reflow
                  "|True only when the direct user requested runtime cutover. It
@@ -143,7 +155,9 @@
    (workflow/call :configure-consumer-tooling
                   #'tooling/configure-consumer-tooling
                   {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [workspace]}] workspace)}
+                   :workspace (fn [{:keys [workspace]}] workspace)
+                   :invocation-producer (fn [{:keys [invocation-producer]}]
+                                          invocation-producer)}
                   :depends-on [:refresh-runtime])
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"

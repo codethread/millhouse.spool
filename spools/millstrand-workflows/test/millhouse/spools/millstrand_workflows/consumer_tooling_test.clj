@@ -8,7 +8,11 @@
 
 (def ^:private params
   {:worktree "/tmp/consumer"
-   :workspace "/tmp/consumer/.millstrand"})
+   :workspace "/tmp/consumer/.millstrand"
+   :invocation-producer {:kind "pinned-remote-family"
+                         :family "millhouse/spools"
+                         :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
+                                      :git/sha "0123456789012345678901234567890123456789"}}})
 
 (def ^:private routes
   [[:app #'tooling/configure-consumer-tooling-app]
@@ -33,10 +37,23 @@
          (some? second-index)
          (< first-index second-index))))
 
-(deftest params-require-an-explicit-consumer-world
+(deftest params-require-an-explicit-consumer-world-and-producer-coordinate
   (is (s/valid? ::tooling/consumer-tooling-params params))
   (is (not (s/valid? ::tooling/consumer-tooling-params
                      (dissoc params :workspace))))
+  (is (not (s/valid? ::tooling/consumer-tooling-params
+                     (dissoc params :invocation-producer))))
+  (is (s/valid? ::tooling/invocation-producer
+                (:invocation-producer params)))
+  (is (s/valid? ::tooling/invocation-producer
+                {:kind "local-self-root"
+                 :family "millhouse/spools"
+                 :root "spools/millstrand-workflows"
+                 :coordinate {:local/root "/tmp/millhouse"}}))
+  (is (not (s/valid? ::tooling/invocation-producer
+                     (assoc (:invocation-producer params)
+                            :coordinate {:git/url "https://example.test/millhouse.git"
+                                         :git/sha "18f2f43"}))))
   (is (not (s/valid? ::tooling/consumer-tooling-params
                      (assoc params :worktree " ")))))
 
@@ -64,7 +81,8 @@
       (let [route (definition definition-var)
             steps (:steps route)
             payload (workflow/compile route params)]
-        (is (= [:bootstrap-kondo
+        (is (= [:prove-invocation-producer
+                :bootstrap-kondo
                 :align-tools-deps
                 :configure-lsp
                 :configure-lint
@@ -73,6 +91,7 @@
                 :handover]
                (mapv :id steps)))
         (is (= [nil
+                [:prove-invocation-producer]
                 [:bootstrap-kondo]
                 [:align-tools-deps]
                 [:configure-lsp]
@@ -92,8 +111,20 @@
             steps (:steps route)
             bootstrap-step (step route :bootstrap-kondo)
             lint (step route :configure-lint)]
-        (is (= :bootstrap-kondo (:id (first steps))))
+        (is (= :prove-invocation-producer (:id (first steps))))
         (is (nil? (:procedure bootstrap-step)))
+        (let [producer-text (instruction route :prove-invocation-producer)]
+          (is (str/includes? producer-text "exact invocation-producer contract"))
+          (is (str/includes? producer-text "pinned-remote-family"))
+          (is (str/includes? producer-text "local-self-root"))
+          (is (str/includes? producer-text "selected `spools.edn` activation"))
+          (is (str/includes? producer-text "every relevant Millhouse root"))
+          (is (str/includes? producer-text "one version-coherent family coordinate"))
+          (is (str/includes? producer-text "manually edit only the applicable"))
+          (is (str/includes? producer-text "record the before and after values"))
+          (is (str/includes? producer-text "Stop only when metadata is missing"))
+          (is (str/includes? producer-text "Do not infer the running workflow SHA"))
+          (is (str/includes? producer-text "automate these edits")))
         (let [bootstrap-text (instruction route :bootstrap-kondo)]
           (is (str/includes? bootstrap-text
                              "separate registered `bootstrap-kondo` run"))
@@ -164,6 +195,8 @@
           (is (precedes? bootstrap-text
                          "Only after successful before, after-start, or after-repair evidence"
                          "child run id")))
+        (is (= [:prove-invocation-producer]
+               (:depends-on (step route :bootstrap-kondo))))
         (is (= [:bootstrap-kondo]
                (:depends-on (step route :align-tools-deps))))
         (is (= [:configure-lsp] (:depends-on lint)))
