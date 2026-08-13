@@ -49,10 +49,16 @@
   (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
         valid (lint-workflow-hook
                (str prefix
-                    "(workflow/defexecutor sample \"Sample.\" {} [_] nil)"))]
+                    "(workflow/defexecutor sample \"Sample.\" {} [_] nil)"))
+        computed-doc (lint-workflow-hook
+                      (str prefix
+                           "(workflow/defworkflow sample "
+                           "(str \"Computed\" \".\") {} nil)"))]
     (testing "valid declarations remain lintable"
       (is (zero? (:exit valid))
-          (str (:out valid) (:err valid))))
+          (str (:out valid) (:err valid)))
+      (is (zero? (:exit computed-doc))
+          (str (:out computed-doc) (:err computed-doc))))
     (doseq [[description declaration expected-value]
             [["missing name" "(workflow/defexecutor)" "(workflow/defexecutor)"]
              ["invalid name"
