@@ -307,13 +307,13 @@
   `defrule` so owner refresh can retract declarations."
   [name fn-symbol]
   (let [rule-key (rule-name name)
-        fn-symbol (require-valid! ::fn fn-symbol
-                                  "Rule fn must be a fully qualified symbol")
+        ;; Validate the assembled entry so spec errors describe the public
+        ;; rule boundary once.
         rule (require-valid! ::rule-entry {:key rule-key :fn fn-symbol}
                              "Invalid Chime rule entry")
         visible (rule-registry)
         kinds (rule-kinds)]
-    (resolve-rule-fn fn-symbol)
+    (resolve-rule-fn (:fn rule))
     ;; Registration, event scans, and the pre-commit mutation barrier share this
     ;; monitor. Seed before publishing; a mutation cannot commit and enqueue its
     ;; event until the baseline and rule become visible together.
@@ -327,7 +327,7 @@
                                  {:layer :direct :entries entries
                                   :overrides (set (keys entries))}))
       (swap! visible assoc rule-key rule))
-    {:key rule-key :fn fn-symbol}))
+    rule))
 
 (defn rules
   "Return registered notification rules ordered by key."

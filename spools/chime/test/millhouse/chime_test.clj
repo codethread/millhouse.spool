@@ -199,7 +199,7 @@
 (deftest rule-registration-validation
   (with-chime
     (fn [_ _]
-      (is (= :millhouse.spools.chime/fn
+      (is (= :millhouse.spools.chime/rule-entry
              (rejected-spec #(chime/register! :bad 'not-qualified))))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cannot be resolved"
                             (chime/register! :bad 'missing.ns/fn)))
