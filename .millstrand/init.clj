@@ -14,7 +14,7 @@
                   :spools ['millstrand.spools/batteries]})
 
 (runtime/module! runtime :module-adapters
-                 {:file "adapters/help.clj"
+                 {:file "ct/adapters/help.clj"
                   :after [:millstrand/spools-batteries]})
 
 ;; --- Workflow and shell provider surfaces ----------------------------------
