@@ -100,10 +100,10 @@
      |applied `:status :applied` result continues normally. The only supported
      |pending next-generation result has top-level `:status :partial` and a
      |nonempty `:modules` outcome map. Every top-level `:modules` map key must
-     |equal its outcome `:module/key`; reject any map-key identity mismatch.
-     |Every module outcome must be exactly one
-     |of three forms: (a) `:status :unchanged`, with no `:error`, refusal,
-     |`:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
+     |equal its outcome `:module/key`; reject any missing or mismatched map-key
+     |identity. Every module outcome must be exactly one of three forms: (a) an
+     |unchanged module with `:status :unchanged` and no `:error`, `:reason`,
+     |refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
      |`:status :refused` and `:reason :hard-conflict`, carrying the exact
      |`:root/outcome`; or (c) `:status :failed` or `:status :skipped` with
      |`:reason :missing-dependency`, whose `:dependency` equals the nested
@@ -148,11 +148,24 @@
      |current/prepared root pair, then continue tooling against the prepared
      |roots without restarting or claiming adoption. Any other partial,
      |refused, per-root failure, missing pending record, refresh error, or
-     |ambiguous ownership fails loudly. If no coordinate changed, continue
-     |only when the selected spool status explicitly has `:status :no-change`,
-     |proves that no active root coordinate changed, and proves that no pending
-     |generation exists; an absent, contradictory, or malformed no-change
-     |status fails loudly. Do not
+     |ambiguous ownership fails loudly. If no coordinate changed, run exactly
+     |the same `(runtime/refresh! (current/runtime))` and record its full result,
+     |the read-only `(runtime/status (current/runtime))` result, and the
+     |selected `strand --workspace <workspace> spool status` result. Continue
+     |only when the refresh result has top-level `:status :unchanged`, every
+     |entry in its `:modules` map has the exact unchanged shape above, and
+     |runtime status has `:pending-generation nil`. Derive one exact intended
+     |family/root set from the selected activation and relevant producer
+     |metadata, then require spool status `:families` and each `:roots` map to
+     |cover exactly that set: no missing, extra, or mismatched family/root.
+     |Every intended root outcome must have `:status :synced`, a `:sync` map,
+     |and a nonempty `:sync.root` (the `:root` inside `:sync`) equal to the
+     |recorded active-root evidence for that family/root. Failed, conflicted,
+     |source-reload, partial, missing, extra, or mismatched roots, and absent,
+     |blank, or otherwise invalid `:sync.root` fail loudly. Reject `:status :applied`,
+     |`:status :partial`, `:status :refused`, any refresh error, any other module
+     |status, any non-nil pending generation, or any absent, contradictory, or
+     |malformed result loudly. Do not
      |infer the running workflow SHA, guess metadata, or automate these edits."
     worktree (consumer-workspace worktree) (pr-str invocation-producer))))
 
@@ -614,9 +627,10 @@
   explicitly refreshes the runtime. A fully applied refresh continues normally;
   the only accepted pending result is top-level `:status :partial` with a
   nonempty module outcome map. Every top-level `:modules` map key must equal its
-  outcome `:module/key`; reject any map-key identity mismatch. Every module
-  outcome is exactly one of unchanged
-  with no error/refusal/root outcome, a direct refused hard-conflict with the
+  outcome `:module/key`; reject any missing or mismatched map-key identity. Every
+  unchanged module must have `:status :unchanged` and no `:error`, `:reason`,
+  refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`. Every other
+  module outcome is exactly one of a direct refused hard-conflict with the
   exact `:root/outcome` and shared changed-root/residual classification, or a
   failed/skipped missing-dependency wrapper whose
   `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
@@ -641,9 +655,21 @@
   and `:namespace-residuals`. It records
   current and prepared generations and uses prepared roots for tooling without
   claiming adoption. Other partial or error results fail loudly. With no
-  coordinate change, continue only for selected spool status `:status
-  :no-change` proving no active root coordinate changed and no pending
-  generation exists; otherwise fail loudly. Weaver proof remains
+  coordinate change, the
+  workflow runs the same full `(runtime/refresh! (current/runtime))` and
+  records that result together with `(runtime/status (current/runtime))` and
+  read-only `spool status`. It accepts only top-level refresh `:status
+  :unchanged`, a `:modules` map whose every module has the exact unchanged shape
+  above, and runtime `:pending-generation nil`. The selected activation and
+  relevant producer metadata define one exact intended family/root set; spool
+  status `:families` and every `:roots` map must cover exactly that set, with no
+  missing, extra, or mismatched family/root. Every root outcome must be
+  `:status :synced` with a `:sync` map whose nonempty `:root` (`:sync.root`)
+  equals the recorded active-root evidence for that family/root. Failed,
+  conflicted, source-reload, partial, missing, extra, or mismatched roots, and
+  absent, blank, or otherwise invalid `:sync.root`, fail loudly. Applied,
+  partial, refused, error, other module statuses, non-nil pending generation, or
+  malformed and contradictory results fail loudly. Weaver proof remains
   current-generation-only. It contains no executor gates and never restarts a
   Weaver."
   {:entrypoints #{:start :call}

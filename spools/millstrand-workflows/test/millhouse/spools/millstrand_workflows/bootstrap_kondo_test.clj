@@ -2,8 +2,9 @@
   "Contract tests for first-time Millstrand Kondo adoption."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is]]
+            [clojure.test :refer [deftest is testing]]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
+            [millhouse.spools.millstrand-workflows.unchanged-proof :as unchanged-proof]
             [millhouse.spools.workflow :as workflow]))
 
 (def ^:private params
@@ -178,8 +179,9 @@
     (is (str/includes? copy-text "preceding refresh result must have top-level `:status :partial` and a nonempty `:modules` outcome map"))
     (is (str/includes? copy-text "Every module outcome must be exactly one of three forms"))
     (is (str/includes? copy-text
-                       "Every top-level `:modules` map key must equal its outcome `:module/key`; reject any map-key identity mismatch"))
-    (is (str/includes? copy-text "`:status :unchanged`, with no `:error`, refusal"))
+                       "Every top-level `:modules` map key must equal its outcome `:module/key`; reject any missing or mismatched map-key identity"))
+    (is (str/includes? copy-text
+                       "unchanged module with `:status :unchanged` and no `:error`, `:reason`"))
     (is (str/includes? copy-text "direct `:status :refused` and `:reason :hard-conflict`"))
     (is (str/includes? copy-text
                        "must carry `:root-lib` equal to exactly one `:lib` in the declared nonempty changed-root set"))
@@ -213,11 +215,50 @@
     (is (str/includes? copy-text "Weaver proof remains current-generation-only"))
     (is (str/includes? copy-text "makes no adoption claim"))
     (is (str/includes? copy-text "Any other partial/error shape or any mismatch fails loudly"))
-    (is (str/includes? copy-text "`:status :no-change`"))
+    (is (str/includes? copy-text
+                       "recorded full `(runtime/refresh! (current/runtime))` result"))
+    (is (str/includes? copy-text
+                       "top-level `:status :unchanged`, every entry in `:modules` having the exact unchanged shape above"))
+    (is (str/includes? copy-text
+                       "`:pending-generation nil`. Derive one exact intended family/root set"))
+    (is (str/includes? copy-text "cover exactly that set"))
+    (is (str/includes? copy-text "have `:status :synced`, a `:sync` map"))
+    (is (str/includes? copy-text "nonempty `:sync.root`"))
+    (is (str/includes? copy-text "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"))
+    (is (str/includes? copy-text "absent, blank, or otherwise invalid `:sync.root`"))
+    (is (not (str/includes? copy-text ":status :no-change")))
     (is (precedes? copy-text "select exactly one unambiguous prepared `new-root`"
                    "readable `deps.edn` and the required exports"))
     (is (precedes? copy-text "Never use the active old `sync.root` for a changed family"
                    "Kondo, LSP, and tools.deps all use these prepared roots"))))
+
+(deftest both-bootstrap-routes-require-exact-unchanged-proof-shape
+  (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
+                          #'bootstrap/bootstrap-kondo-brownfield]]
+    (let [copy-text (instruction (definition definition-var) :copy-configs)]
+      (doseq [needle ["Every top-level `:modules` map key must equal its outcome `:module/key`"
+                      "missing or mismatched map-key identity"
+                      "unchanged module with `:status :unchanged` and no `:error`, `:reason`"
+                      "one exact intended family/root set"
+                      "cover exactly that set"
+                      "Every intended root outcome must have `:status :synced`, a `:sync` map"
+                      "nonempty `:sync.root`"
+                      "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"
+                      "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+        (is (str/includes? copy-text needle) needle)))))
+
+(deftest both-bootstrap-routes-reject-malformed-unchanged-proof-fixtures
+  (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
+                          #'bootstrap/bootstrap-kondo-brownfield]]
+    (let [copy-text (instruction (definition definition-var) :copy-configs)]
+      (doseq [{:keys [fixture proof]} unchanged-proof/negative-fixtures]
+        (testing (name fixture)
+          (is (not (unchanged-proof/valid? proof)))))
+      (doseq [needle ["one exact intended family/root set"
+                      "cover exactly that set"
+                      "Every intended root outcome must have `:status :synced`, a `:sync` map"
+                      "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+        (is (str/includes? copy-text needle) needle)))))
 
 (deftest both-routes-require-no-self-import-before-during-and-after-quality
   (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield

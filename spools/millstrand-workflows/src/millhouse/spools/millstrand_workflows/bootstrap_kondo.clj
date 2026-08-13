@@ -36,10 +36,10 @@
      |active `sync.root`. For the one supported pending next-generation shape,
      |the preceding refresh result must have top-level `:status :partial` and a
      |nonempty `:modules` outcome map. Every top-level `:modules` map key must
-     |equal its outcome `:module/key`; reject any map-key identity mismatch.
-     |Every module outcome must be exactly one
-     |of three forms: (a) `:status :unchanged`, with no `:error`, refusal,
-     |`:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
+     |equal its outcome `:module/key`; reject any missing or mismatched map-key
+     |identity. Every module outcome must be exactly one of three forms: (a) an
+     |unchanged module with `:status :unchanged` and no `:error`, `:reason`,
+     |refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
      |`:status :refused` and `:reason :hard-conflict`, carrying the exact
      |`:root/outcome`; or (c) `:status :failed` or `:status :skipped` with
      |`:reason :missing-dependency`, whose `:dependency` equals the nested
@@ -88,10 +88,23 @@
      |`:pending-generation` with exactly `:status`, `:generation`, `:diff`,
      |`:approved-spools`, and `:remedy`; its `:diff` must be the same changed-root
      |and residual classification, including both `:changed-roots` and
-     |`:namespace-residuals`. If the selected spool status is explicitly
-     |`:status :no-change`, continue only when it proves that no active root
-     |coordinate changed and no pending generation exists. Any absent,
-     |contradictory, or malformed no-change status fails loudly. Kondo,
+     |`:namespace-residuals`. If no coordinate changed, accept only the recorded
+     |full `(runtime/refresh! (current/runtime))` result with top-level `:status
+     |:unchanged`, every entry in `:modules` having the exact unchanged shape
+     |above, and
+     |the recorded `(runtime/status (current/runtime))` result having
+     |`:pending-generation nil`. Derive one exact intended family/root set from
+     |the selected activation and relevant producer metadata, then require spool
+     |status `:families` and each `:roots` map to cover exactly that set: no
+     |missing, extra, or mismatched family/root. Every intended root outcome must
+     |have `:status :synced`, a `:sync` map, and a nonempty `:sync.root` (the
+     |`:root` inside `:sync`) equal to the recorded active-root evidence for that
+     |family/root. Failed, conflicted, source-reload, partial, missing, extra, or
+     |mismatched roots, and absent, blank, or otherwise invalid `:sync.root` fail
+     |loudly. Reject `:status :applied`,
+     |`:status :partial`, `:status :refused`, refresh errors, other module
+     |statuses, non-nil pending generation, or absent, contradictory, or
+     |malformed evidence. Kondo,
      |LSP, and tools.deps all use these prepared roots; Weaver proof remains
      |current-generation-only and makes no adoption claim. Before resolving any
      |classpath, parse the selected `spools.edn` and the consumer's producer
@@ -390,9 +403,10 @@
   applied refresh uses active `sync.root` values. The only pending shape this
   workflow accepts is top-level `:status :partial` with a nonempty module
   outcome map. Every top-level `:modules` map key must equal its outcome
-  `:module/key`; reject any map-key identity mismatch. Every module outcome is
-  exactly one of unchanged with no
-  error/refusal/root outcome, a direct refused hard-conflict with the exact
+  `:module/key`; reject any missing or mismatched map-key identity. Every
+  unchanged module must have `:status :unchanged` and no `:error`, `:reason`,
+  refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`. Every other
+  module outcome is exactly one of a direct refused hard-conflict with the exact
   `:root/outcome` and shared changed-root/residual classification, or a
   failed/skipped missing-dependency wrapper whose
   `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
@@ -418,9 +432,19 @@
   prepared generations, validates each prepared root's coordinate, cache
   provenance, `deps.edn`, and exports, and uses prepared roots for tooling
   without claiming Weaver adoption. Other partial or error results fail
-  loudly. With no coordinate change, continue only for selected spool status
-  `:status :no-change` proving no active root coordinate changed and no pending
-  generation exists; otherwise fail loudly. Before
+  loudly. With no coordinate change, accept only the recorded full
+  `(runtime/refresh! (current/runtime))` result with top-level refresh `:status
+  :unchanged`, every module in `:modules` with the exact unchanged shape above,
+  and runtime `:pending-generation nil`. The selected activation and relevant
+  producer metadata define one exact intended family/root set; spool status
+  `:families` and every `:roots` map must cover exactly that set, with no
+  missing, extra, or mismatched family/root. Every root outcome must be
+  `:status :synced` with a `:sync` map whose nonempty `:root` (`:sync.root`)
+  equals the recorded active-root evidence for that family/root. Failed,
+  conflicted, source-reload, partial, missing, extra, or mismatched roots, and
+  absent, blank, or otherwise invalid `:sync.root`, fail loudly. Applied,
+  partial, refused, error, other module statuses, non-nil pending generation, or
+  malformed and contradictory evidence fail loudly. Before
   resolving paths, the agent parses the selected spool metadata once into an
   `owned-roots` table. It canonicalizes every installed contribution entry,
   every consumer classpath entry, and every owned classpath/export comparison

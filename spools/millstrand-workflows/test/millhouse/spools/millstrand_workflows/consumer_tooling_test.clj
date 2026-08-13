@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
+            [millhouse.spools.millstrand-workflows.unchanged-proof :as unchanged-proof]
             [millhouse.spools.workflow :as workflow]))
 
 (def ^:private params
@@ -125,20 +126,20 @@
                        [:modules 'demo/direct :module/key]
                        'demo/not-direct)
     :mutation-path [:modules 'demo/direct :module/key]
-    :required-text "reject any map-key identity mismatch"}
+    :required-text "reject any missing or mismatched map-key identity"}
    {:fixture :direct-terminal-root-lib-outside-changed-roots
     :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
                        [:modules 'demo/one-hop :dependency/outcome :root-lib]
                        'unrelated/root)
     :mutation-path [:modules 'demo/one-hop :dependency/outcome :root-lib]
     :required-text "reject any direct or terminal refusal whose `:root-lib` is outside or mismatched against the declared nonempty changed-root set"}
-   {:fixture :invalid-no-change
+   {:fixture :invalid-unchanged-refresh
     :refresh (assoc (:refresh captured-pending-refresh-fixture)
-                    :status :no-change
+                    :status :applied
                     :active-root-coordinate-changed? true
                     :pending-generation {:status :pending})
     :mutation-path [:status]
-    :required-text "no pending generation exists"}])
+    :required-text "Reject `:status :applied`"}])
 
 (def ^:private routes
   [[:app #'tooling/configure-consumer-tooling-app]
@@ -209,6 +210,38 @@
         (is (not (str/includes? inspect-text "/tmp/workflow-host/.millstrand")))
         (is (not (str/includes? handover-text "/tmp/workflow-host/.millstrand")))))))
 
+(deftest unchanged-refresh-proof-uses-runtime-and-spool-contract-shapes
+  (let [{:keys [refresh runtime-status spool-status]} unchanged-proof/refresh-fixture]
+    (is (= :unchanged (:status refresh)))
+    (is (= :full (:mode refresh)))
+    (is (unchanged-proof/valid? unchanged-proof/refresh-fixture))
+    (is (every? #(= :unchanged (:status %)) (vals (:modules refresh))))
+    (is (nil? (:pending-generation runtime-status)))
+    (is (map? (:families spool-status)))
+    (is (map? (get-in spool-status [:families 'demo/family :roots])))
+    (is (= :synced (get-in spool-status [:families 'demo/family :roots
+                                         'demo/root :status])))
+    (is (= "/tmp/demo"
+           (get-in spool-status [:families 'demo/family :roots
+                                 'demo/root :sync :root])))
+    (is (not (contains? spool-status :status)))))
+
+(deftest unchanged-refresh-proof-rejects-every-requested-malformed-shape
+  (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (doseq [{:keys [fixture proof]} unchanged-proof/negative-fixtures]
+      (testing (name fixture)
+        (is (not (unchanged-proof/valid? proof)))))
+    (doseq [needle ["missing or mismatched map-key identity"
+                    "no `:error`, `:reason`, refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`"
+                    "cover exactly that set"
+                    "no missing, extra, or mismatched family/root"
+                    "`:status :synced`, a `:sync` map"
+                    "nonempty `:sync.root`"
+                    "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"
+                    "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+      (is (str/includes? text needle) needle))))
+
 (deftest repository-style-choice-is-explicit
   (let [parent (definition #'tooling/configure-consumer-tooling)
         checkpoint (step parent :repository-style)
@@ -265,9 +298,36 @@
                               :prove-invocation-producer)]
         (is (str/includes? text "run exactly `(runtime/refresh! (current/runtime))`"))
         (is (str/includes? text "fully applied `:status :applied` result continues normally"))
-        (is (str/includes? text "If no coordinate changed, continue only when the selected spool status explicitly has `:status :no-change`"))
         (is (precedes? text "run exactly `(runtime/refresh! (current/runtime))`"
                        "fully applied `:status :applied` result continues normally"))))))
+
+(deftest producer-alignment-unchanged-refresh-is-the-no-coordinate-proof
+  (doseq [[style definition-var] routes]
+    (testing (name style)
+      (let [text (instruction (definition definition-var)
+                              :prove-invocation-producer)]
+        (is (str/includes? text "If no coordinate changed, run exactly"))
+        (is (str/includes? text
+                           "the read-only `(runtime/status (current/runtime))` result"))
+        (is (str/includes? text
+                           "top-level `:status :unchanged`, every entry in its `:modules` map has the exact unchanged shape above"))
+        (is (str/includes? text "runtime status has `:pending-generation nil`"))
+        (is (str/includes? text "cover exactly that set"))
+        (is (not (str/includes? text ":status :no-change")))
+        (is (precedes? text "If no coordinate changed, run exactly"
+                       "top-level `:status :unchanged`"))
+        (is (precedes? text "top-level `:status :unchanged`"
+                       "runtime status has `:pending-generation nil`"))))))
+
+(deftest producer-alignment-unchanged-refresh-rejects-other-outcomes
+  (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (doseq [needle ["Reject `:status :applied`, `:status :partial`, `:status :refused`"
+                    "any refresh error"
+                    "any other module status"
+                    "any non-nil pending generation"
+                    "any absent, contradictory, or malformed result loudly"]]
+      (is (str/includes? text needle) needle))))
 
 (deftest producer-alignment-supported-pending-repoint-continues-tooling
   (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
@@ -275,7 +335,7 @@
     (is (str/includes? text "pending next-generation result has top-level `:status :partial`"))
     (is (str/includes? text "nonempty `:modules` outcome map"))
     (is (str/includes? text "Every module outcome must be exactly one of three forms"))
-    (is (str/includes? text "`:status :unchanged`, with no `:error`, refusal"))
+    (is (str/includes? text "unchanged module with `:status :unchanged` and no `:error`, `:reason`"))
     (is (str/includes? text "direct `:status :refused` and `:reason :hard-conflict`"))
     (is (str/includes? text "`:status :failed` or `:status :skipped` with `:reason :missing-dependency`"))
     (is (str/includes? text "finite acyclic chain"))
@@ -298,7 +358,7 @@
     (is (str/includes? text "Record the current generation, prepared generation"))
     (is (str/includes? text "continue tooling against the prepared roots"))
     (is (str/includes? text "without restarting or claiming adoption"))
-    (is (str/includes? text "no-change"))))
+    (is (str/includes? text "cover exactly that set"))))
 
 (deftest producer-alignment-unsupported-partial-fails-loudly
   (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
@@ -370,7 +430,7 @@
                     "use `:root-lib` equal to the matched changed-root `:lib`"
                     "Every binding and provider `:namespace`"
                     "Every binding and provider `:file` path"
-                    "no pending generation exists"]]
+                    "runtime status has `:pending-generation nil`"]]
       (is (str/includes? text needle) needle))))
 
 (deftest rejected-pending-fixtures-name-the-required-failures
@@ -388,8 +448,8 @@
                   (get-in refresh mutation-path))
             (str "fixture must mutate accepted path: " mutation-path))
         (is (str/includes? text required-text) required-text)))
-    (is (str/includes? text "no active root coordinate changed"))
-    (is (str/includes? text "absent, contradictory, or malformed no-change status fails loudly"))))
+    (is (str/includes? text "top-level `:status :unchanged`"))
+    (is (str/includes? text "any absent, contradictory, or malformed result loudly"))))
 
 (deftest every-route-is-an-ordinary-manual-sequence
   (doseq [[style definition-var] routes]
