@@ -358,18 +358,25 @@
     "|In worktree `%s`, first attempt exact target status for workspace `%s` with
      |`strand --workspace %s spool status`. Record the before evidence: the exact
      |command, structured result, selected workspace, and current Weaver/root
-     |identities. If status reports no Weaver or target startup fails, stop before
-     |bootstrap and capture the exact structured startup failure, including the
-     |offending acquisition coordinate and invariant. Repair only that proven
-     |`spools.edn` acquisition coordinate, using approved remote root metadata
-     |from the failed status or the authorized root metadata source. Do not guess
-     |a URL, SHA, root, or source path, and do not edit any other acquisition,
-     |runtime, or tooling setting. Record the before coordinate, failure, approved
-     |metadata, and exact repair as error/repair evidence. Start the repaired
-     |workspace as a disposable target, rerun the same exact status command, and
-     |record the after evidence; if it still fails, fail loudly and do not start
-     |the child. Never stop or restart the canonical Weaver.
-     |Only after successful after evidence, start a separate registered
+     |identities. Treat `mill/no-selected-weaver` as the normal clean-worktree
+     |state, not an acquisition failure: explicitly start that exact worktree
+     |workspace as a disposable Weaver with `mill weaver start --workspace %s`,
+     |then rerun the same exact status command and record the after-start evidence.
+     |If that disposable startup fails, capture the exact structured startup
+     |failure. Only
+     |when the startup failure proves an acquisition invariant may the one-coordinate
+     |recovery branch run: repair only that proven `spools.edn` acquisition
+     |coordinate, using approved remote root metadata from the failure or the
+     |authorized root metadata source. Do not guess a URL, SHA, root, or source
+     |path, and do not edit any other acquisition, runtime, or tooling setting.
+     |Record the before coordinate, failure, approved metadata, and exact repair as
+     |error/repair evidence. Start the repaired workspace as a disposable target,
+     |rerun the same exact status command, and record the after-repair evidence; if
+     |it still fails, fail loudly and do not start the child. If status already
+     |selects a Weaver, use that exact running target as-is. Never stop or restart
+     |a canonical or already-running Weaver.
+     |Only after successful before, after-start, or after-repair evidence, start a separate
+     |registered
      |`bootstrap-kondo` run (for example, use a distinct run id such as
      |`consumer-kondo-<timestamp>`). Drive that child run through its ready
      |frontier: choose the consumer's `greenfield` or `brownfield` adoption mode,
@@ -382,7 +389,7 @@
      |starts only after that evidence and the successful handover. Leave the
      |separate child run available for audit and preserve its exact command and
      |result evidence."
-    worktree workspace workspace)))
+    worktree workspace workspace workspace)))
 
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."

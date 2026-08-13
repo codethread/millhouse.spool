@@ -25,6 +25,14 @@
   ((get-in (step definition id) [:attributes "workflow/instruction"])
    params))
 
+(defn- precedes?
+  [text first-needle second-needle]
+  (let [first-index (str/index-of text first-needle)
+        second-index (str/index-of text second-needle)]
+    (and (some? first-index)
+         (some? second-index)
+         (< first-index second-index))))
+
 (deftest params-require-an-explicit-consumer-world
   (is (s/valid? ::tooling/consumer-tooling-params params))
   (is (not (s/valid? ::tooling/consumer-tooling-params
@@ -86,48 +94,76 @@
             lint (step route :configure-lint)]
         (is (= :bootstrap-kondo (:id (first steps))))
         (is (nil? (:procedure bootstrap-step)))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "separate registered `bootstrap-kondo` run"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "first attempt exact target status"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "`strand --workspace /tmp/consumer/.millstrand spool status`"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "before evidence"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "no Weaver or target startup fails"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "exact structured startup failure"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "offending acquisition coordinate"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "only that proven `spools.edn` acquisition coordinate"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "approved remote root metadata"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "Do not guess"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "error/repair evidence"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "disposable target"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "after evidence"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "fail loudly and do not start the child"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "Never stop or restart the canonical Weaver"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "Only after successful after evidence"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "choose the consumer's `greenfield` or `brownfield`"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "child run id"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "selected mode"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           ":bootstrap-kondo-done true"))
-        (is (str/includes? (instruction route :bootstrap-kondo)
-                           "Do not treat the runtime-routed child checkpoint as a return"))
+        (let [bootstrap-text (instruction route :bootstrap-kondo)]
+          (is (str/includes? bootstrap-text
+                             "separate registered `bootstrap-kondo` run"))
+          (is (str/includes? bootstrap-text
+                             "first attempt exact target status"))
+          (is (str/includes? bootstrap-text
+                             "`strand --workspace /tmp/consumer/.millstrand spool status`"))
+          (is (str/includes? bootstrap-text
+                             "before evidence"))
+          (is (str/includes? bootstrap-text
+                             "`mill/no-selected-weaver` as the normal clean-worktree"))
+          (is (str/includes? bootstrap-text
+                             "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
+          (is (str/includes? bootstrap-text
+                             "after-start evidence"))
+          (is (str/includes? bootstrap-text
+                             "exact structured startup failure"))
+          (is (str/includes? bootstrap-text
+                             "Only when the startup failure proves an acquisition invariant"))
+          (is (str/includes? bootstrap-text
+                             "only that proven `spools.edn` acquisition coordinate"))
+          (is (str/includes? bootstrap-text
+                             "approved remote root metadata"))
+          (is (str/includes? bootstrap-text
+                             "Do not guess"))
+          (is (str/includes? bootstrap-text
+                             "error/repair evidence"))
+          (is (str/includes? bootstrap-text
+                             "disposable target"))
+          (is (str/includes? bootstrap-text
+                             "after-start evidence"))
+          (is (str/includes? bootstrap-text
+                             "after-repair evidence"))
+          (is (str/includes? bootstrap-text
+                             "fail loudly and do not start the child"))
+          (is (str/includes? bootstrap-text
+                             "Never stop or restart"))
+          (is (str/includes? bootstrap-text
+                             "Only after successful before, after-start, or after-repair evidence"))
+          (is (str/includes? bootstrap-text
+                             "choose the consumer's `greenfield` or `brownfield`"))
+          (is (str/includes? bootstrap-text
+                             "child run id"))
+          (is (str/includes? bootstrap-text
+                             "selected mode"))
+          (is (str/includes? bootstrap-text
+                             ":bootstrap-kondo-done true"))
+          (is (str/includes? bootstrap-text
+                             "Do not treat the runtime-routed child checkpoint as a return"))
+          (is (precedes? bootstrap-text
+                         "before evidence"
+                         "`mill/no-selected-weaver` as the normal clean-worktree"))
+          (is (precedes? bootstrap-text
+                         "`mill/no-selected-weaver` as the normal clean-worktree"
+                         "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
+          (is (precedes? bootstrap-text
+                         "`mill weaver start --workspace /tmp/consumer/.millstrand`"
+                         "after-start evidence"))
+          (is (precedes? bootstrap-text
+                         "after-start evidence"
+                         "Only when the startup failure proves an acquisition invariant"))
+          (is (precedes? bootstrap-text
+                         "Only when the startup failure proves an acquisition invariant"
+                         "after-repair evidence"))
+          (is (precedes? bootstrap-text
+                         "after-repair evidence"
+                         "Only after successful before, after-start, or after-repair evidence"))
+          (is (precedes? bootstrap-text
+                         "Only after successful before, after-start, or after-repair evidence"
+                         "child run id")))
         (is (= [:bootstrap-kondo]
                (:depends-on (step route :align-tools-deps))))
         (is (= [:configure-lsp] (:depends-on lint)))

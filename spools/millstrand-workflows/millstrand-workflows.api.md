@@ -271,7 +271,7 @@ Choose and configure tooling for a Millstrand consumer repository style.
   proving tools.deps, clojure-lsp, clj-kondo/lint, tests, and Weaver behavior
   through ordinary manual steps. It contains no executor gates and never
   restarts a Weaver.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L445-L499">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L452-L506">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app">`configure-consumer-tooling-app`</a>
 
@@ -283,7 +283,7 @@ Configure tooling for a non-Clojure product with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L501-L511">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L508-L518">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app">`configure-consumer-tooling-clojure-app`</a>
 
@@ -295,7 +295,7 @@ Configure tooling for a Clojure application with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L525-L535">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L532-L542">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool">`configure-consumer-tooling-spool`</a>
 
@@ -307,4 +307,4 @@ Configure tooling for a repository that owns Millstrand spool roots.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L513-L523">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L520-L530">Source</a></sub></p>
