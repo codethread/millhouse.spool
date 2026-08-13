@@ -90,8 +90,10 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
   LSP settings, so explicit bootstrap remains the sole import owner. Before any
-  refresh, the parent captures exact selected family/root/sync evidence. The
-  routes use that recorded evidence and never re-enter spool status after
+  coordinate edit or refresh, a standalone parent captures exact selected
+  family/root/sync evidence. A calling bump workflow instead supplies the exact
+  evidence it verified before its first coordinate mutation. The routes use
+  that recorded evidence and never re-enter spool status after mutation or
   refresh. A fully applied refresh uses active `sync.root` values.
 
   The only pending shape this workflow accepts is top-level `:status :partial`
@@ -177,7 +179,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   canonicalization, unreconcilable canonical ownership, and an empty filtered
   installed-spool contribution fail loudly. No cleanup-after-copy workaround is
   allowed. No repository hosting or release operation is part of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L398-L555">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L422-L588">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -188,7 +190,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
   This is the `brownfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L574-L589">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L607-L622">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -199,7 +201,7 @@ Establish a greenfield Kondo boundary and import Millstrand exports.
 
   This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L557-L572">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L590-L605">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
@@ -318,14 +320,16 @@ Bump selected spool families and configure consumer tooling.
      :direct-user-request false})
   ```
 
-  The caller supplies exact consumer paths and family names. Each bump uses
-  `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
-  and accepted. The shared bootstrap workflow handles greenfield or brownfield
-  Kondo adoption. Before the final refresh, an agent chooses the repository
-  style and manually aligns LSP, lint, tests, and Weaver proof without new
-  executor gates.
+  The caller supplies exact consumer paths and family names. Before the first
+  coordinate mutation, the workflow verifies and records one complete status
+  result, exact intended family/root set, and `[family root] -> sync.root` map.
+  Each bump then uses `spool bump FAMILY --latest sha`; an already-current
+  coordinate is recorded and accepted. The shared bootstrap and consumer
+  tooling workflows inherit the exact pre-bump evidence without another status
+  command. Before the final refresh, an agent chooses the repository style and
+  manually aligns LSP, lint, tests, and Weaver proof without new executor gates.
   Runtime cutover is offered only for a direct user request.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L41-L199">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj#L63-L238">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.consumer-tooling">millhouse.spools.millstrand-workflows.consumer-tooling</a>
@@ -356,8 +360,11 @@ Choose and configure tooling for a Millstrand consumer repository style.
   `millhouse/spools` family or a local Millhouse self root. The agent first
   acquires and verifies the exact consumer Weaver, then inspects the effective
   spool world and repository conventions before choosing `app`, `spool`, or
-  `clojure-app`. The selected continuation starts the registered
-  `bootstrap-kondo` workflow and records its exact family/root/sync evidence.
+  `clojure-app`. A calling bump workflow supplies the exact status evidence it
+  verified before its first coordinate mutation; tooling reuses that evidence
+  without another status command. The selected continuation starts the
+  registered `bootstrap-kondo` workflow and records or inherits its exact
+  family/root/sync evidence.
   It pauses that child before route preparation, manually aligns and proves
   activation and dependencies against the exact coordinate, refreshes, then
   resumes the same child without spool-status CLI re-entry. It then proves
@@ -413,7 +420,7 @@ Choose and configure tooling for a Millstrand consumer repository style.
   status after refresh. Weaver proof remains
   current-generation-only. It contains no executor gates and never restarts a
   Weaver.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L648-L772">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L700-L834">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app">`configure-consumer-tooling-app`</a>
 
@@ -425,7 +432,7 @@ Configure tooling for a non-Clojure product with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L774-L784">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L836-L846">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app">`configure-consumer-tooling-clojure-app`</a>
 
@@ -437,7 +444,7 @@ Configure tooling for a Clojure application with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L798-L808">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L860-L870">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool">`configure-consumer-tooling-spool`</a>
 
@@ -449,4 +456,4 @@ Configure tooling for a repository that owns Millstrand spool roots.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L786-L796">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L848-L858">Source</a></sub></p>

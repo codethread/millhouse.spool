@@ -57,6 +57,7 @@
 (s/def ::non-blank-string non-blank-string?)
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
+(s/def ::inherited-pre-refresh-evidence boolean?)
 (s/def ::kind ::non-blank-string)
 (s/def ::family ::non-blank-string)
 (s/def ::coordinate map?)
@@ -74,16 +75,16 @@
         :local-self-root ::local-self-root))
 (s/def ::consumer-tooling-params
   (s/and
-   (s/keys :req-un [::worktree ::workspace ::invocation-producer])
+   (s/keys :req-un [::worktree ::workspace ::invocation-producer]
+           :opt-un [::inherited-pre-refresh-evidence])
    consumer-world?))
 
 (defn- invocation-producer-instruction
-  [{:keys [worktree invocation-producer]}]
+  [{:keys [worktree invocation-producer inherited-pre-refresh-evidence]}]
   (fmt/reflow
    (format
     "|In worktree `%s` and selected workspace `%s`, require the preceding
-     |repository inspection and bootstrap preparation to have recorded the same
-     |pre-refresh spool-status evidence. Derive one exact intended family/root
+     |repository inspection and bootstrap preparation to %s. Derive one exact intended family/root
      |set from the selected activation and relevant producer metadata. Require
      |the recorded `:families` map and every nested `:roots` map to cover exactly
      |that set, with no missing, extra, or mismatched family/root. Every intended
@@ -92,9 +93,7 @@
      |`[family root] -> sync.root` map as pre-refresh current-root evidence.
      |Reject failed, conflicted, source-reload, partial, missing, extra, or
      |mismatched roots and absent, blank, or otherwise invalid `:sync.root`.
-     |Fail loudly when the two recorded status results, selected workspace,
-     |Weaver identity, intended set, root outcome, or sync evidence differ. Do
-     |all of this before any coordinate edit or runtime refresh. Then prove the
+     |Fail loudly when %s. %s Then prove the
      |consumer uses this exact invocation-producer contract: `%s`. For
      |`pinned-remote-family`, the contract is the complete `millhouse/spools`
      |family coordinate with its exact `git/url` and full lowercase `git/sha`.
@@ -180,13 +179,59 @@
      |status, any non-nil pending generation, or any absent, contradictory, or
      |malformed result loudly. Do not
      |infer the running workflow SHA, guess metadata, or automate these edits."
-    worktree (consumer-workspace worktree) (pr-str invocation-producer))))
+    worktree
+    (consumer-workspace worktree)
+    (if inherited-pre-refresh-evidence
+      (str "reuse the unchanged exact `:bump-pre-refresh-evidence` already "
+           "verified before the first coordinate mutation")
+      "have recorded the same pre-refresh spool-status evidence")
+    (if inherited-pre-refresh-evidence
+      (str "the inherited status result, selected workspace, Weaver identity, "
+           "intended set, root outcome, or sync evidence contradicts the exact "
+           "calling bump evidence")
+      (str "the two recorded status results, selected workspace, Weaver identity, "
+           "intended set, root outcome, or sync evidence differ"))
+    (if inherited-pre-refresh-evidence
+      (str "Do not run or re-enter `spool status`; carry that same evidence "
+           "through the following runtime refresh proof.")
+      "Do all of this before any coordinate edit or runtime refresh.")
+    (pr-str invocation-producer))))
 
 (defn- inspect-repository-instruction
-  [{:keys [worktree]}]
-  (fmt/reflow
-   (format
-    "|In worktree `%s` and selected workspace `%s`, acquire and verify the exact
+  [{:keys [worktree inherited-pre-refresh-evidence]}]
+  (if inherited-pre-refresh-evidence
+    (fmt/reflow
+     (format
+      "|In worktree `%s` and selected workspace `%s`, reuse only the complete
+       |`:bump-pre-refresh-evidence` recorded by the calling bump workflow before
+       |its first coordinate mutation. Do not run, retry, or otherwise re-enter
+       |`spool status`, and do not start or restart a Weaver. Require the evidence
+       |to contain the exact status command, complete structured result, worktree,
+       |selected workspace, Weaver identity, exact intended family/root set, and
+       |`[family root] -> sync.root` map. Verify that its worktree and workspace
+       |equal this exact consumer world and carry the same evidence through
+       |repository classification, producer alignment, bootstrap, and refresh
+       |proof without replacing, weakening, or recapturing it. Missing or
+       |contradictory inherited evidence fails loudly. Derive the exact intended
+       |family/root set again from the recorded selected activation and relevant
+       |producer metadata. Require `:families` and every nested `:roots` map to
+       |cover exactly that set. Every root must be `:status :synced` with a
+       |`:sync` map and nonempty `:sync.root`; require the inherited current-root
+       |map to equal that exact projection. Missing, extra, mismatched, failed,
+       |conflicted, source-reload, partial, or malformed roots fail loudly. Record
+       |each coordinate and the latest refresh and runtime generation state
+       |already present in that result. Do not edit a coordinate or call runtime
+       |refresh during this step. Inspect `deps.edn`, `.clj-kondo/config.edn`, test
+       |paths, Makefile, scripts, and CI or contributor guidance without editing
+       |them yet. Choose `app` when the product has no Clojure application source
+       |beyond Millstrand config, `spool` when this repository publishes one or
+       |more spool roots, or `clojure-app` when ordinary application Clojure source
+       |and Millstrand config coexist. Stop rather than guessing when more than one
+       |style owns the repository."
+      worktree (consumer-workspace worktree)))
+    (fmt/reflow
+     (format
+      "|In worktree `%s` and selected workspace `%s`, acquire and verify the exact
      |consumer Weaver before inspecting or classifying the repository. First run
      |the exact command `strand --workspace %s spool status` and record the
      |before evidence: command, structured result, selected workspace, and
@@ -214,8 +259,8 @@
      |repository publishes one or more spool roots, or `clojure-app` when ordinary
      |application Clojure source and Millstrand config coexist. Stop rather than
      |guessing when more than one style owns the repository."
-    worktree (consumer-workspace worktree) (consumer-workspace worktree)
-    (consumer-workspace worktree))))
+      worktree (consumer-workspace worktree) (consumer-workspace worktree)
+      (consumer-workspace worktree)))))
 
 (defn- basis-instruction
   [style {:keys [worktree]}]
@@ -530,18 +575,18 @@
 
 (defn- bootstrap-preparation-instruction
   "Return instructions that pause bootstrap after pre-refresh status capture."
-  [{:keys [worktree]}]
+  [{:keys [worktree inherited-pre-refresh-evidence]}]
   (fmt/reflow
    (format
     "|In worktree `%s`, derive the target consumer world as `%s` (`worktree/.millstrand`).
      |The separate child `bootstrap-kondo` run must receive and verify exactly
-     |`{:worktree \"%s\" :workspace \"%s\"}` before it runs any command; never
+     |`{:worktree \"%s\" :workspace \"%s\"%s}` before it runs any command; never
      |substitute the disposable workflow-host workspace. Start a separate
      |registered `bootstrap-kondo` run (for example, use a distinct run id such as
      |`consumer-kondo-<timestamp>`). Drive that child run through its ready
      |frontier through `select-world`, `capture-spool-status`, and the adoption
-     |checkpoint. The capture must run the exact status command while it is still
-     |available and must match the preceding repository inspection exactly. Stop
+     |checkpoint. The capture must %s and must match the preceding repository
+     |inspection exactly. Stop
      |the child before completing any route `prepare` step. Record the child run
      |id, selected mode, complete structured status evidence, exact intended
      |family/root set, `[family root] -> sync.root` map, selected workspace, and
@@ -549,7 +594,14 @@
      |may start only after this evidence is recorded. Never stop or restart a
      |canonical or already-running Weaver. Leave the child run available for the
      |post-refresh continuation."
-    worktree (consumer-workspace worktree) worktree (consumer-workspace worktree))))
+    worktree (consumer-workspace worktree) worktree (consumer-workspace worktree)
+    (if inherited-pre-refresh-evidence
+      " :inherited-pre-refresh-evidence true"
+      "")
+    (if inherited-pre-refresh-evidence
+      (str "reuse the calling bump workflow's exact `:bump-pre-refresh-evidence` "
+           "without running or re-entering `spool status`")
+      "run the exact status command while it is still available"))))
 
 (defn- bootstrap-completion-instruction
   "Return instructions that resume bootstrap from recorded pre-refresh evidence."
@@ -655,8 +707,11 @@
   `millhouse/spools` family or a local Millhouse self root. The agent first
   acquires and verifies the exact consumer Weaver, then inspects the effective
   spool world and repository conventions before choosing `app`, `spool`, or
-  `clojure-app`. The selected continuation starts the registered
-  `bootstrap-kondo` workflow and records its exact family/root/sync evidence.
+  `clojure-app`. A calling bump workflow supplies the exact status evidence it
+  verified before its first coordinate mutation; tooling reuses that evidence
+  without another status command. The selected continuation starts the
+  registered `bootstrap-kondo` workflow and records or inherits its exact
+  family/root/sync evidence.
   It pauses that child before route preparation, manually aligns and proves
   activation and dependencies against the exact coordinate, refreshes, then
   resumes the same child without spool-status CLI re-entry. It then proves
@@ -714,9 +769,10 @@
   Weaver."
   {:entrypoints #{:start :call}
    :param-spec ::consumer-tooling-params
-   :defaults {}
+   :defaults {:inherited-pre-refresh-evidence false}
    :example {:worktree "/abs/path/to/consumer-worktree"
              :workspace "/abs/path/to/consumer-worktree/.millstrand"
+             :inherited-pre-refresh-evidence false
              :invocation-producer
              {:kind "pinned-remote-family"
               :family "millhouse/spools"
@@ -724,6 +780,12 @@
                            :git/sha "0123456789012345678901234567890123456789"}}}
    :param-docs {:worktree "Exact consumer worktree to inspect and update."
                 :workspace "Derived consumer workspace; must equal worktree/.millstrand."
+                :inherited-pre-refresh-evidence
+                (fmt/reflow
+                 "|True only for a calling bump workflow that already recorded
+                  |complete exact pre-mutation status evidence in its run context.
+                  |Tooling and its bootstrap child must reuse that evidence without
+                  |another status command.")
                 :invocation-producer
                 (fmt/reflow
                  "|Required exact coordinate of the Millhouse workflow producer:

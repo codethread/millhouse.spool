@@ -21,8 +21,10 @@
 (s/def ::non-blank-string non-blank-string?)
 (s/def ::worktree ::non-blank-string)
 (s/def ::workspace ::non-blank-string)
+(s/def ::inherited-pre-refresh-evidence boolean?)
 (s/def ::bootstrap-kondo-params
-  (s/keys :req-un [::worktree ::workspace]))
+  (s/keys :req-un [::worktree ::workspace]
+          :opt-un [::inherited-pre-refresh-evidence]))
 
 (defn- copy-configs-instruction
   [{:keys [worktree]}]
@@ -208,11 +210,33 @@
     worktree workspace)))
 
 (defn- capture-spool-status-instruction
-  [{:keys [worktree workspace]}]
-  (fmt/reflow
-   (format
-    "|In `%s`, before any coordinate edit or runtime refresh, run exactly
-     |`strand --workspace %s spool status` once and record its complete
+  [{:keys [worktree workspace inherited-pre-refresh-evidence]}]
+  (if inherited-pre-refresh-evidence
+    (fmt/reflow
+     (format
+      "|In `%s`, reuse only the complete `:bump-pre-refresh-evidence` recorded
+       |by the calling bump workflow before its first coordinate mutation. Do
+       |not run, retry, or otherwise re-enter `spool status`. Require the
+       |evidence to contain the exact command, complete structured result,
+       |selected workspace, Weaver identity, intended family/root set, and
+       |`[family root] -> sync.root` map. Verify that its worktree is `%s` and
+       |its workspace is `%s`, then carry that same evidence through this run's
+       |refresh proof without replacing, weakening, or recapturing it. Reject
+       |missing or contradictory inherited evidence loudly. Derive one exact
+       |intended family/root set from the selected activation and relevant
+       |producer metadata. Require `:families` and every nested `:roots` map to
+       |cover exactly that set, with no missing, extra, or mismatched family/root.
+       |Every intended root must have `:status :synced`, a `:sync` map, and a
+       |nonempty `:sync.root`. Require the inherited `[family root] -> sync.root`
+       |map to equal that exact projection. Failed, conflicted, source-reload,
+       |partial, missing, extra, mismatched, blank, or malformed root evidence
+       |fails loudly. This inherited evidence is the only spool-status input
+       |used by the route after coordinate mutation or refresh."
+      worktree worktree workspace))
+    (fmt/reflow
+     (format
+      "|In `%s`, before any coordinate edit or runtime refresh, run exactly
+       |`strand --workspace %s spool status` once and record its complete
      |structured result, selected workspace, and Weaver identity. Derive one
      |exact intended family/root set from the selected activation and relevant
      |producer metadata. Require `:families` and every nested `:roots` map to
@@ -226,7 +250,7 @@
      |identity to match its repository inspection exactly. Do not continue on
      |any mismatch. This recorded evidence is the only spool-status input used by
      |the route after refresh."
-    worktree workspace)))
+      worktree workspace))))
 
 (defn- ensure-kondo-instruction
   [{:keys [worktree]}]
@@ -423,8 +447,10 @@
   preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
   LSP settings, so explicit bootstrap remains the sole import owner. Before any
-  refresh, the parent captures exact selected family/root/sync evidence. The
-  routes use that recorded evidence and never re-enter spool status after
+  coordinate edit or refresh, a standalone parent captures exact selected
+  family/root/sync evidence. A calling bump workflow instead supplies the exact
+  evidence it verified before its first coordinate mutation. The routes use
+  that recorded evidence and never re-enter spool status after mutation or
   refresh. A fully applied refresh uses active `sync.root` values.
 
   The only pending shape this workflow accepts is top-level `:status :partial`
@@ -512,11 +538,18 @@
   allowed. No repository hosting or release operation is part of this workflow."
   {:entrypoints #{:start :call}
    :param-spec ::bootstrap-kondo-params
-   :defaults {}
+   :defaults {:inherited-pre-refresh-evidence false}
    :example {:worktree "/abs/path/to/consumer-worktree"
-             :workspace "/abs/path/to/consumer-worktree/.millstrand"}
+             :workspace "/abs/path/to/consumer-worktree/.millstrand"
+             :inherited-pre-refresh-evidence false}
    :param-docs {:worktree "Exact consumer worktree to inspect and update."
-                :workspace "Exact Millstrand workspace selected for the consumer."}}
+                :workspace "Exact Millstrand workspace selected for the consumer."
+                :inherited-pre-refresh-evidence
+                (fmt/reflow
+                 "|True only for a calling bump workflow that already recorded
+                  |complete exact pre-mutation status evidence in its run context.
+                  |The bootstrap must reuse that evidence without another status
+                  |command.")}}
   (workflow/workflow
    "Bootstrap Millstrand clj-kondo support"
    (workflow/step :select-world

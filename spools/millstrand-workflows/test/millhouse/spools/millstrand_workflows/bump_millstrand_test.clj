@@ -122,7 +122,7 @@
     (is (= "/tmp/consumer/.millstrand" (:workspace child-params)))
     (is (not= (:workspace host-params) (:workspace child-params)))))
 
-(deftest pinned-path-uses-automatic-latest-sha-and-bootstrap
+(deftest pinned-path-inherits-pre-bump-capture-order
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
@@ -137,14 +137,46 @@
         (let [resolved (workflow/resolve-workflow :bump-millstrand-pinned)
               payload (workflow/compile (:value resolved) params)
               strands (into {} (map (juxt :ref identity) (:strands payload)))
+              edges (set (map (juxt :from :to :type) (:edges payload)))
+              capture-instruction
+              (get-in strands
+                      [:bump-spool--capture-pre-refresh-evidence :attributes
+                       "workflow/instruction"])
+              status-command
+              "strand --workspace /tmp/consumer/.millstrand spool status"
+              instruction-texts
+              (keep #(get-in % [:attributes "workflow/instruction"])
+                    (vals strands))
               bump-instruction (get-in strands
                                        [:bump-spool--bump-spool-1 :attributes
                                         "workflow/instruction"])]
           (is (= #{:continue} (:entrypoints resolved)))
           (is (= #'bump-spool/bump-spool
                  (:procedure (step (:value resolved) :bump-spool))))
+          (is (= [:capture-pre-refresh-evidence]
+                 (:depends-on
+                  (step @#'bump-spool/bump-spool :bump-spool))))
+          (is (contains? edges
+                         [:bump-spool--capture-pre-refresh-evidence
+                          :bump-spool--select-world
+                          "depends-on"]))
+          (is (contains? edges
+                         [:bump-spool--bump-spool-1
+                          :bump-spool--capture-pre-refresh-evidence
+                          "depends-on"]))
+          (is (contains? edges
+                         [:bump-spool--bootstrap-kondo--select-world
+                          :bump-spool--bump-spool-1
+                          "depends-on"]))
+          (is (str/includes? capture-instruction
+                             "before any `spool bump`, coordinate edit, or runtime refresh"))
+          (is (str/includes? capture-instruction
+                             status-command))
+          (is (= 1 (count (filter #(str/includes? % status-command)
+                                  instruction-texts))))
           (is (str/includes? bump-instruction
                              "strand --workspace /tmp/consumer/.millstrand spool bump io.millstrand/millstrand --latest sha"))
+          (is (str/includes? bump-instruction "`:bump-pre-refresh-evidence`"))
           (is (str/includes? bump-instruction "already current"))
           (is (contains? (set (keys strands)) :bump-spool--bootstrap-kondo--select-world))
           (is (contains? (set (keys strands))
@@ -154,6 +186,14 @@
           (let [inspect-instruction
                 (get-in strands
                         [:bump-spool--configure-consumer-tooling--inspect-repository
+                         :attributes "workflow/instruction"])
+                bootstrap-capture-instruction
+                (get-in strands
+                        [:bump-spool--bootstrap-kondo--capture-spool-status
                          :attributes "workflow/instruction"])]
             (is (str/includes? inspect-instruction (:worktree params)))
-            (is (str/includes? inspect-instruction (:workspace params)))))))))
+            (is (str/includes? inspect-instruction (:workspace params)))
+            (doseq [text [inspect-instruction bootstrap-capture-instruction]]
+              (is (str/includes? text "`:bump-pre-refresh-evidence`"))
+              (is (str/includes? text "Do not run"))
+              (is (not (str/includes? text status-command))))))))))

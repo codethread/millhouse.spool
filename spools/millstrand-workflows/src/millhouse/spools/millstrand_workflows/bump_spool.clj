@@ -38,6 +38,28 @@
   (s/keys :req-un [::families ::worktree ::workspace ::invocation-producer
                    ::direct-user-request]))
 
+(defn- capture-pre-refresh-evidence-instruction
+  [{:keys [worktree workspace]}]
+  (fmt/reflow
+   (format
+    "|In worktree `%s`, before any `spool bump`, coordinate edit, or runtime
+     |refresh, run exactly `strand --workspace %s spool status` once. Record one
+     |complete `:bump-pre-refresh-evidence` map in the workflow context containing
+     |the exact command, complete structured result, worktree, selected workspace,
+     |Weaver identity, exact intended family/root set, and exact
+     |`[family root] -> sync.root` map. Derive the intended set from the selected
+     |activation and relevant producer metadata. Require `:families` and every
+     |nested `:roots` map to cover exactly that set, with no missing, extra, or
+     |mismatched family/root. Every intended root must have `:status :synced`, a
+     |`:sync` map, and a nonempty `:sync.root`; the recorded current-root map must
+     |equal that exact projection. Failed, conflicted, source-reload, partial,
+     |missing, extra, mismatched, blank, or malformed evidence fails loudly before
+     |any coordinate mutation. Every later bootstrap, consumer-tooling, and
+     |refresh proof must reuse this exact context value without replacing,
+     |weakening, or recapturing it. Do not run, retry, or otherwise re-enter
+     |`spool status` later in this bump workflow."
+    worktree workspace)))
+
 (workflow/defworkflow bump-spool
   "Bump selected spool families and configure consumer tooling.
 
@@ -57,12 +79,14 @@
      :direct-user-request false})
   ```
 
-  The caller supplies exact consumer paths and family names. Each bump uses
-  `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
-  and accepted. The shared bootstrap workflow handles greenfield or brownfield
-  Kondo adoption. Before the final refresh, an agent chooses the repository
-  style and manually aligns LSP, lint, tests, and Weaver proof without new
-  executor gates.
+  The caller supplies exact consumer paths and family names. Before the first
+  coordinate mutation, the workflow verifies and records one complete status
+  result, exact intended family/root set, and `[family root] -> sync.root` map.
+  Each bump then uses `spool bump FAMILY --latest sha`; an already-current
+  coordinate is recorded and accepted. The shared bootstrap and consumer
+  tooling workflows inherit the exact pre-bump evidence without another status
+  command. Before the final refresh, an agent chooses the repository style and
+  manually aligns LSP, lint, tests, and Weaver proof without new executor gates.
   Runtime cutover is offered only for a direct user request."
   {:entrypoints #{:start :call}
    :param-spec ::spool-bump-params
@@ -114,11 +138,19 @@
                         |fall back to the process current directory or a canonical
                         |workspace."
                        worktree workspace)))})
+   (workflow/step :capture-pre-refresh-evidence
+                  "Capture exact spool roots before coordinate mutation"
+                  :self
+                  :depends-on [:select-world]
+                  :attributes
+                  {"workflow/action-ref"
+                   "millstrand-workflows.bump-spool.spool-status.capture"
+                   "workflow/instruction" capture-pre-refresh-evidence-instruction})
    (workflow/step :bump-spool
                   (fn [{:keys [item]}]
                     (str "Request remote default-branch HEAD SHA for " item))
                   :self
-                  :depends-on [:select-world]
+                  :depends-on [:capture-pre-refresh-evidence]
                   :loop {:each :families :chain true}
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.coordinate.bump"
@@ -126,7 +158,9 @@
                    (fn [{:keys [item worktree workspace]}]
                      (fmt/reflow
                       (format
-                       "|From worktree `%s`, run exactly `strand --workspace %s
+                       "|Require the exact `:bump-pre-refresh-evidence` recorded by
+                        |`capture-pre-refresh-evidence`; refuse to mutate a coordinate
+                        |when it is absent or malformed. From worktree `%s`, run exactly `strand --workspace %s
                         |spool bump %s --latest sha`. The explicit workspace is
                         |mandatory. Record the previous coordinate and resulting
                         |remote default-branch HEAD SHA. If the CLI reports that the coordinate is
@@ -135,7 +169,8 @@
    (workflow/call :bootstrap-kondo
                   #'bootstrap/bootstrap-kondo
                   {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [workspace]}] workspace)}
+                   :workspace (fn [{:keys [workspace]}] workspace)
+                   :inherited-pre-refresh-evidence (constantly true)}
                   :depends-on [:bump-spool])
    (workflow/call :configure-consumer-tooling
                   #'tooling/configure-consumer-tooling
@@ -143,7 +178,8 @@
                    :workspace (fn [{:keys [worktree]}]
                                 (str (java.io.File. ^String worktree ".millstrand")))
                    :invocation-producer (fn [{:keys [invocation-producer]}]
-                                          invocation-producer)}
+                                          invocation-producer)
+                   :inherited-pre-refresh-evidence (constantly true)}
                   :depends-on [:bootstrap-kondo])
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
@@ -155,7 +191,10 @@
                    (fn [{:keys [workspace]}]
                      (fmt/reflow
                       (format
-                       "|In the runtime for selected workspace `%s`, run
+                       "|Require and carry the unchanged exact
+                        |`:bump-pre-refresh-evidence` through the preceding bootstrap
+                        |and consumer-tooling proof. In the runtime for selected
+                        |workspace `%s`, run
                         |`(runtime/refresh! (current/runtime))`. Record the full
                         |result and whether the bumped coordinate is adopted or
                         |pending. Refresh does not itself authorize a stop or

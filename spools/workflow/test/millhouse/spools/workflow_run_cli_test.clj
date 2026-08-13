@@ -5,6 +5,7 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.cli.alpha :as cli-alpha]
             [millstrand.api.current.alpha :as current]
@@ -521,6 +522,7 @@
         (is (false? (:done after-bootstrap)))
         (is (= {:worktree "/tmp/consumer"
                 :workspace "/tmp/consumer/.millstrand"
+                :inherited-pre-refresh-evidence false
                 :invocation-producer {:kind "pinned-remote-family"
                                       :family "millhouse/spools"
                                       :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
@@ -531,6 +533,81 @@
                 :bootstrap-kondo-done true}
                (get-in (weaver/show rt (get-in after-bootstrap [:root :id]))
                        [:attributes :workflow/context])))))))
+
+(deftest bump-spool-run-captures-root-evidence-before-mutation-and-carries-it
+  (with-runtime
+    (fn [rt _]
+      (activate-cli! rt)
+      (activate-millstrand-workflows! rt)
+      (let [params {"families" ["io.millstrand/millstrand"]
+                    "worktree" "/tmp/consumer"
+                    "workspace" "/tmp/consumer/.millstrand"
+                    "invocation-producer" {"kind" "pinned-remote-family"
+                                           "family" "millhouse/spools"
+                                           "coordinate" {"git/url" "https://github.com/codethread/millhouse.spool.git"
+                                                         "git/sha" "0123456789012345678901234567890123456789"}}
+                    "direct-user-request" false}
+            evidence {:command (str "strand --workspace /tmp/consumer/.millstrand "
+                                    "spool status")
+                      :structured-result
+                      {:families
+                       {"io.millstrand/millstrand"
+                        {:roots
+                         {"io.millstrand/millstrand"
+                          {:status "synced"
+                           :sync {:root "/cache/millstrand-old"}}}}}}
+                      :worktree "/tmp/consumer"
+                      :workspace "/tmp/consumer/.millstrand"
+                      :weaver-identity "consumer-weaver"
+                      :intended-family-roots
+                      [["io.millstrand/millstrand" "io.millstrand/millstrand"]]
+                      :current-roots
+                      {"io.millstrand/millstrand|io.millstrand/millstrand"
+                       "/cache/millstrand-old"}}
+            started (started "run-bump-pre-refresh" :bump-spool :params params)
+            after-world (verb "complete" "run-bump-pre-refresh")
+            capture (first (:ready after-world))
+            after-capture
+            (invoke {:subcommand ["complete"]
+                     :run-id "run-bump-pre-refresh"
+                     :step (:id capture)
+                     :context {:bump-pre-refresh-evidence evidence}})
+            bump (first (:ready after-capture))
+            after-bump
+            (invoke {:subcommand ["complete"]
+                     :run-id "run-bump-pre-refresh"
+                     :step (:id bump)})
+            bootstrap-world (first (:ready after-bump))
+            after-bootstrap-world
+            (invoke {:subcommand ["complete"]
+                     :run-id "run-bump-pre-refresh"
+                     :step (:id bootstrap-world)})
+            bootstrap-capture (first (:ready after-bootstrap-world))]
+        (is (= ["Confirm the selected consumer worktree and workspace"]
+               (mapv :title (:ready started))))
+        (is (= "Capture exact spool roots before coordinate mutation"
+               (:title capture)))
+        (is (str/includes? (:instruction capture)
+                           "before any `spool bump`, coordinate edit, or runtime refresh"))
+        (is (= "Request remote default-branch HEAD SHA for io.millstrand/millstrand"
+               (:title bump)))
+        (is (str/includes? (:instruction bump)
+                           "Require the exact `:bump-pre-refresh-evidence`"))
+        (is (= (workflow/json->params
+                (json/read-str (json/write-str evidence)))
+               (get-in (weaver/show rt (get-in after-capture [:root :id]))
+                       [:attributes :workflow/context :bump-pre-refresh-evidence])))
+        (is (= "Confirm the selected consumer worktree and workspace"
+               (:title bootstrap-world)))
+        (is (= "Capture exact installed roots before refresh"
+               (:title bootstrap-capture)))
+        (is (str/includes? (:instruction bootstrap-capture)
+                           "reuse only the complete `:bump-pre-refresh-evidence`"))
+        (is (str/includes? (:instruction bootstrap-capture)
+                           "Do not run, retry, or otherwise re-enter `spool status`"))
+        (is (not (str/includes?
+                  (:instruction bootstrap-capture)
+                  "strand --workspace /tmp/consumer/.millstrand spool status")))))))
 
 (deftest configure-consumer-tooling-rejects-the-workflow-host-world
   (with-runtime

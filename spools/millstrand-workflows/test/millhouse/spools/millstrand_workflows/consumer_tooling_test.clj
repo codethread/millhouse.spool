@@ -169,6 +169,10 @@
 
 (deftest params-require-an-explicit-consumer-world-and-producer-coordinate
   (is (s/valid? ::tooling/consumer-tooling-params params))
+  (is (s/valid? ::tooling/consumer-tooling-params
+                (assoc params :inherited-pre-refresh-evidence true)))
+  (is (not (s/valid? ::tooling/consumer-tooling-params
+                     (assoc params :inherited-pre-refresh-evidence "true"))))
   (is (not (s/valid? ::tooling/consumer-tooling-params
                      (dissoc params :workspace))))
   (is (not (s/valid? ::tooling/consumer-tooling-params

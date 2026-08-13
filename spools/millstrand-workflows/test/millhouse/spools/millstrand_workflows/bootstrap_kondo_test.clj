@@ -41,6 +41,10 @@
 
 (deftest params-require-explicit-local-world
   (is (s/valid? ::bootstrap/bootstrap-kondo-params params))
+  (is (s/valid? ::bootstrap/bootstrap-kondo-params
+                (assoc params :inherited-pre-refresh-evidence true)))
+  (is (not (s/valid? ::bootstrap/bootstrap-kondo-params
+                     (assoc params :inherited-pre-refresh-evidence "true"))))
   (is (not (s/valid? ::bootstrap/bootstrap-kondo-params
                      (dissoc params :workspace))))
   (is (not (s/valid? ::bootstrap/bootstrap-kondo-params
