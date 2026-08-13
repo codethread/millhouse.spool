@@ -80,7 +80,41 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   cache hygiene manually, discover local quality checks, and leave a precise
   handover. Both route preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
-  LSP settings, so explicit bootstrap remains the sole import owner. Before
+  LSP settings, so explicit bootstrap remains the sole import owner. A fully
+  applied refresh uses active `sync.root` values. The only pending shape this
+  workflow accepts is top-level `:status :partial` with a nonempty module
+  outcome map. Every top-level `:modules` map key must equal its outcome
+  `:module/key`; reject any map-key identity mismatch. Every module outcome is
+  exactly one of unchanged with no
+  error/refusal/root outcome, a direct refused hard-conflict with the exact
+  `:root/outcome` and shared changed-root/residual classification, or a
+  failed/skipped missing-dependency wrapper whose
+  `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
+  hop. Wrapper chains are finite and acyclic and terminate in a direct refused
+  hard-conflict whose `:conflict` exactly matches that shared classification.
+  Every direct refused hard-conflict terminal, including one reached through a
+  missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
+  the declared nonempty changed-root set; reject any terminal whose `:root-lib`
+  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
+  cycle, unrelated terminal, or other refusal/error is allowed. Each
+  changed-root entry has exactly `:lib`,
+  `:previous-root`, and `:new-root`. Residuals must map one to one to those
+  entries, have nonempty providers, and use only `:root-repointed` or
+  `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
+  Binding and provider entries use `:root-lib`, equal the matched changed-root
+  `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
+  provider `:file` path. Unledgered residuals have no binding. Empty, vacuous,
+  duplicate, missing, extra, unrelated, or mixed mappings fail loudly, as do
+  wrong root-lib, root, namespace, or provider paths. The runtime status also
+  contains the matching pending-generation record, whose `:diff` exactly
+  equals the conflict classification including both `:changed-roots` and
+  `:namespace-residuals`. It records current and
+  prepared generations, validates each prepared root's coordinate, cache
+  provenance, `deps.edn`, and exports, and uses prepared roots for tooling
+  without claiming Weaver adoption. Other partial or error results fail
+  loudly. With no coordinate change, continue only for selected spool status
+  `:status :no-change` proving no active root coordinate changed and no pending
+  generation exists; otherwise fail loudly. Before
   resolving paths, the agent parses the selected spool metadata once into an
   `owned-roots` table. It canonicalizes every installed contribution entry,
   every consumer classpath entry, and every owned classpath/export comparison
@@ -119,7 +153,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   canonicalization, unreconcilable canonical ownership, and an empty filtered
   installed-spool contribution fail loudly. No cleanup-after-copy workaround is
   allowed. No repository hosting or release operation is part of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L269-L361">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L331-L457">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -130,7 +164,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
   This is the `brownfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L380-L395">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L476-L491">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -141,7 +175,7 @@ Establish a greenfield Kondo boundary and import Millstrand exports.
 
   This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L363-L378">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L459-L474">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
@@ -300,9 +334,44 @@ Choose and configure tooling for a Millstrand consumer repository style.
   `clojure-app`. The selected continuation manually aligns
   and proves activation and dependencies against that exact coordinate before
   composing the registered `bootstrap-kondo` workflow and proving tools.deps,
-  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary manual
-  steps. It contains no executor gates and never restarts a Weaver.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L535-L607">Source</a></sub></p>
+  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary
+  manual steps. When producer alignment changes an active coordinate, its proof
+  explicitly refreshes the runtime. A fully applied refresh continues normally;
+  the only accepted pending result is top-level `:status :partial` with a
+  nonempty module outcome map. Every top-level `:modules` map key must equal its
+  outcome `:module/key`; reject any map-key identity mismatch. Every module
+  outcome is exactly one of unchanged
+  with no error/refusal/root outcome, a direct refused hard-conflict with the
+  exact `:root/outcome` and shared changed-root/residual classification, or a
+  failed/skipped missing-dependency wrapper whose
+  `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
+  hop. Wrapper chains are finite and acyclic and terminate in a direct refused
+  hard-conflict whose `:conflict` exactly matches that shared classification.
+  Every direct refused hard-conflict terminal, including one reached through a
+  missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
+  the declared nonempty changed-root set; reject any terminal whose `:root-lib`
+  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
+  cycle, unrelated terminal, or other refusal/error is allowed. Each
+  changed-root entry has exactly
+  `:lib`, `:previous-root`, and `:new-root`. Residuals must map one to one to
+  those entries, have nonempty providers, and use only `:root-repointed` or
+  `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
+  Binding and provider entries use `:root-lib`, equal the matched changed-root
+  `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
+  provider `:file` path. Unledgered residuals have no binding. Empty,
+  vacuous, duplicate, missing, extra, unrelated, or mixed mappings fail
+  loudly, as do wrong root-lib, root, namespace, or provider paths. The runtime
+  status also contains the matching pending-generation record, whose `:diff`
+  exactly equals the conflict classification including both `:changed-roots`
+  and `:namespace-residuals`. It records
+  current and prepared generations and uses prepared roots for tooling without
+  claiming adoption. Other partial or error results fail loudly. With no
+  coordinate change, continue only for selected spool status `:status
+  :no-change` proving no active root coordinate changed and no pending
+  generation exists; otherwise fail loudly. Weaver proof remains
+  current-generation-only. It contains no executor gates and never restarts a
+  Weaver.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L599-L706">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app">`configure-consumer-tooling-app`</a>
 
@@ -314,7 +383,7 @@ Configure tooling for a non-Clojure product with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L609-L619">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L708-L718">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app">`configure-consumer-tooling-clojure-app`</a>
 
@@ -326,7 +395,7 @@ Configure tooling for a Clojure application with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L633-L643">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L732-L742">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool">`configure-consumer-tooling-spool`</a>
 
@@ -338,4 +407,4 @@ Configure tooling for a repository that owns Millstrand spool roots.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L621-L631">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L720-L730">Source</a></sub></p>

@@ -171,6 +171,54 @@
                           params)
                          "precise local handover")))))
 
+(deftest pending-root-repoint-uses-prepared-roots-without-adoption
+  (let [copy-text (instruction (definition #'bootstrap/bootstrap-kondo-greenfield)
+                               :copy-configs)]
+    (is (str/includes? copy-text "fully applied or unchanged refresh with no pending generation"))
+    (is (str/includes? copy-text "preceding refresh result must have top-level `:status :partial` and a nonempty `:modules` outcome map"))
+    (is (str/includes? copy-text "Every module outcome must be exactly one of three forms"))
+    (is (str/includes? copy-text
+                       "Every top-level `:modules` map key must equal its outcome `:module/key`; reject any map-key identity mismatch"))
+    (is (str/includes? copy-text "`:status :unchanged`, with no `:error`, refusal"))
+    (is (str/includes? copy-text "direct `:status :refused` and `:reason :hard-conflict`"))
+    (is (str/includes? copy-text
+                       "must carry `:root-lib` equal to exactly one `:lib` in the declared nonempty changed-root set"))
+    (is (str/includes? copy-text
+                       "reject any direct or terminal refusal whose `:root-lib` is outside or mismatched against the declared nonempty changed-root set"))
+    (is (str/includes? copy-text "`:status :failed` or `:status :skipped` with `:reason :missing-dependency`"))
+    (is (str/includes? copy-text "finite acyclic chain"))
+    (is (str/includes? copy-text "nested `:dependency/outcome` `:module/key` at every hop"))
+    (is (str/includes? copy-text "exact same shared classification"))
+    (is (str/includes? copy-text "`:applied` outcome"))
+    (is (str/includes? copy-text "unrelated terminal"))
+    (is (str/includes? copy-text "missing or mismatched dependency outcome"))
+    (is (str/includes? copy-text "root outcome's `:conflict` must contain exactly `:changed-roots` and `:namespace-residuals`"))
+    (is (str/includes? copy-text "`:changed-roots` must equal that exact declared set"))
+    (is (str/includes? copy-text "Each changed-root entry must have exactly `:lib`, `:previous-root`, and `:new-root`"))
+    (is (str/includes? copy-text "every allowed residual must have a nonempty `:namespace` and nonempty `:providers`"))
+    (is (str/includes? copy-text "residual must have exactly one old `:binding`"))
+    (is (str/includes? copy-text "provider must use `:root-lib` equal to the matched changed-root `:lib`"))
+    (is (str/includes? copy-text "Every binding and provider `:namespace` must equal the residual namespace"))
+    (is (str/includes? copy-text "Every binding and provider `:file` path must be nonempty"))
+    (is (str/includes? copy-text "empty `:providers` collection"))
+    (is (str/includes? copy-text "matching `:pending-generation` with exactly `:status`, `:generation`, `:diff`, `:approved-spools`, and `:remedy`"))
+    (is (str/includes? copy-text "select exactly one unambiguous prepared `new-root`"))
+    (is (str/includes? copy-text "declared family/root and coordinate"))
+    (is (str/includes? copy-text "matching cache provenance"))
+    (is (str/includes? copy-text "readable `deps.edn` and the required exports"))
+    (is (str/includes? copy-text "Never use the active old `sync.root` for a changed family"))
+    (is (str/includes? copy-text "Unchanged roots remain on active `sync.root`"))
+    (is (str/includes? copy-text "wrong provider path"))
+    (is (str/includes? copy-text "Kondo, LSP, and tools.deps all use these prepared roots"))
+    (is (str/includes? copy-text "Weaver proof remains current-generation-only"))
+    (is (str/includes? copy-text "makes no adoption claim"))
+    (is (str/includes? copy-text "Any other partial/error shape or any mismatch fails loudly"))
+    (is (str/includes? copy-text "`:status :no-change`"))
+    (is (precedes? copy-text "select exactly one unambiguous prepared `new-root`"
+                   "readable `deps.edn` and the required exports"))
+    (is (precedes? copy-text "Never use the active old `sync.root` for a changed family"
+                   "Kondo, LSP, and tools.deps all use these prepared roots"))))
+
 (deftest both-routes-require-no-self-import-before-during-and-after-quality
   (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
                           #'bootstrap/bootstrap-kondo-brownfield]]

@@ -17,6 +17,129 @@
 (def ^:private workflow-host-params
   (assoc params :workspace "/tmp/workflow-host/.millstrand"))
 
+(def ^:private captured-pending-conflict
+  {:changed-roots
+   [{:lib 'demo/root
+     :previous-root "/tmp/demo-v1"
+     :new-root "/tmp/demo-v2"}
+    {:lib 'demo/other-root
+     :previous-root "/tmp/other-v1"
+     :new-root "/tmp/other-v2"}]
+   :namespace-residuals
+   [{:reason :root-repointed
+     :namespace 'demo.ns
+     :binding {:namespace 'demo.ns
+               :root-lib 'demo/root
+               :root "/tmp/demo-v1"
+               :file "/tmp/demo-v1/src/demo/ns.clj"}
+     :providers [{:namespace 'demo.ns
+                  :root-lib 'demo/root
+                  :root "/tmp/demo-v2"
+                  :file "/tmp/demo-v2/src/demo/ns.clj"}]}
+    {:reason :unledgered-loaded-namespace
+     :namespace 'demo.other
+     :providers [{:namespace 'demo.other
+                  :root-lib 'demo/other-root
+                  :root "/tmp/other-v2"
+                  :file "/tmp/other-v2/src/demo/other.clj"}]}]})
+
+(def ^:private captured-direct-refusal
+  {:module/key 'demo/direct
+   :status :refused
+   :reason :hard-conflict
+   :root-lib 'demo/root
+   :root/outcome {:status :hard-conflict
+                  :conflict captured-pending-conflict}})
+
+(def ^:private captured-one-hop-wrapper
+  {:module/key 'demo/one-hop
+   :status :failed
+   :reason :missing-dependency
+   :dependency 'demo/direct
+   :dependency/outcome captured-direct-refusal})
+
+(def ^:private captured-multi-hop-wrapper
+  {:module/key 'demo/multi-hop
+   :status :skipped
+   :reason :missing-dependency
+   :dependency 'demo/one-hop
+   :dependency/outcome captured-one-hop-wrapper})
+
+(def ^:private captured-pending-refresh-fixture
+  {:declared-prepared-changed-roots (:changed-roots captured-pending-conflict)
+   :declared-prepared-conflict captured-pending-conflict
+   :refresh
+   {:status :partial
+    :mode :full
+    :modules
+    {'demo/unchanged {:module/key 'demo/unchanged
+                      :status :unchanged}
+     'demo/direct captured-direct-refusal
+     'demo/one-hop captured-one-hop-wrapper
+     'demo/multi-hop captured-multi-hop-wrapper}}
+   :runtime-status
+   {:pending-generation
+    {:status :pending
+     :generation "generation-1"
+     :diff captured-pending-conflict
+     :approved-spools #{'demo/root 'demo/other-root}
+     :remedy "recorded; takes effect at the next weaver generation"}}})
+
+(def ^:private rejected-pending-evidence-fixtures
+  [{:fixture :wrong-root-lib
+    :refresh (update-in (:refresh captured-pending-refresh-fixture)
+                        [:modules 'demo/direct :root-lib]
+                        (constantly 'unrelated/root))
+    :mutation-path [:modules 'demo/direct :root-lib]
+    :required-text "reject any direct or terminal refusal whose `:root-lib` is outside or mismatched against the declared nonempty changed-root set"}
+   {:fixture :empty-providers
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/direct :root/outcome :conflict
+                        :namespace-residuals 0 :providers]
+                       [])
+    :mutation-path [:modules 'demo/direct :root/outcome :conflict
+                    :namespace-residuals 0 :providers]
+    :required-text "empty `:providers`"}
+   {:fixture :mixed-applied
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/unchanged]
+                       {:module/key 'demo/applied :status :applied})
+    :mutation-path [:modules 'demo/unchanged]
+    :required-text "`:applied` outcome"}
+   {:fixture :mismatched-dependency
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/one-hop :dependency]
+                       'demo/unrelated)
+    :mutation-path [:modules 'demo/one-hop :dependency]
+    :required-text "missing or mismatched dependency outcome"}
+   {:fixture :unrelated-terminal
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/multi-hop :dependency/outcome
+                        :dependency/outcome]
+                       {:module/key 'demo/terminal :status :unchanged})
+    :mutation-path [:modules 'demo/multi-hop :dependency/outcome
+                    :dependency/outcome]
+    :required-text "unrelated terminal"}
+   {:fixture :top-level-module-key-mismatch
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/direct :module/key]
+                       'demo/not-direct)
+    :mutation-path [:modules 'demo/direct :module/key]
+    :required-text "reject any map-key identity mismatch"}
+   {:fixture :direct-terminal-root-lib-outside-changed-roots
+    :refresh (assoc-in (:refresh captured-pending-refresh-fixture)
+                       [:modules 'demo/one-hop :dependency/outcome :root-lib]
+                       'unrelated/root)
+    :mutation-path [:modules 'demo/one-hop :dependency/outcome :root-lib]
+    :required-text "reject any direct or terminal refusal whose `:root-lib` is outside or mismatched against the declared nonempty changed-root set"}
+   {:fixture :invalid-no-change
+    :refresh (assoc (:refresh captured-pending-refresh-fixture)
+                    :status :no-change
+                    :active-root-coordinate-changed? true
+                    :pending-generation {:status :pending})
+    :mutation-path [:status]
+    :required-text "no pending generation exists"}])
+
 (def ^:private routes
   [[:app #'tooling/configure-consumer-tooling-app]
    [:spool #'tooling/configure-consumer-tooling-spool]
@@ -134,6 +257,139 @@
     (is (precedes? inspect-text
                    "read shared and local spool approvals"
                    "Choose `app`"))))
+
+(deftest producer-alignment-fully-applied-refresh-continues
+  (doseq [[style definition-var] routes]
+    (testing (name style)
+      (let [text (instruction (definition definition-var)
+                              :prove-invocation-producer)]
+        (is (str/includes? text "run exactly `(runtime/refresh! (current/runtime))`"))
+        (is (str/includes? text "fully applied `:status :applied` result continues normally"))
+        (is (str/includes? text "If no coordinate changed, continue only when the selected spool status explicitly has `:status :no-change`"))
+        (is (precedes? text "run exactly `(runtime/refresh! (current/runtime))`"
+                       "fully applied `:status :applied` result continues normally"))))))
+
+(deftest producer-alignment-supported-pending-repoint-continues-tooling
+  (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (is (str/includes? text "pending next-generation result has top-level `:status :partial`"))
+    (is (str/includes? text "nonempty `:modules` outcome map"))
+    (is (str/includes? text "Every module outcome must be exactly one of three forms"))
+    (is (str/includes? text "`:status :unchanged`, with no `:error`, refusal"))
+    (is (str/includes? text "direct `:status :refused` and `:reason :hard-conflict`"))
+    (is (str/includes? text "`:status :failed` or `:status :skipped` with `:reason :missing-dependency`"))
+    (is (str/includes? text "finite acyclic chain"))
+    (is (str/includes? text "nested `:dependency/outcome` `:module/key` at every hop"))
+    (is (str/includes? text "exact same shared classification"))
+    (is (str/includes? text "`:applied` outcome"))
+    (is (str/includes? text "unrelated terminal"))
+    (is (str/includes? text "missing or mismatched dependency outcome"))
+    (is (str/includes? text "root outcome's `:conflict` must contain exactly `:changed-roots` and `:namespace-residuals`"))
+    (is (str/includes? text "`:changed-roots` must equal that exact declared set"))
+    (is (str/includes? text "Each changed-root entry must have exactly `:lib`, `:previous-root`, and `:new-root`"))
+    (is (str/includes? text "every allowed residual must have a nonempty `:namespace` and nonempty `:providers`"))
+    (is (str/includes? text "residual must have exactly one old `:binding`"))
+    (is (str/includes? text "provider must use `:root-lib` equal to the matched changed-root `:lib`"))
+    (is (str/includes? text "Every binding and provider `:namespace` must equal the residual namespace"))
+    (is (str/includes? text "Every binding and provider `:file` path must be nonempty"))
+    (is (str/includes? text "empty `:providers` collection"))
+    (is (str/includes? text "matching `:pending-generation` with exactly `:status`, `:generation`, `:diff`, `:approved-spools`, and `:remedy`"))
+    (is (str/includes? text "matching `:pending-generation`"))
+    (is (str/includes? text "Record the current generation, prepared generation"))
+    (is (str/includes? text "continue tooling against the prepared roots"))
+    (is (str/includes? text "without restarting or claiming adoption"))
+    (is (str/includes? text "no-change"))))
+
+(deftest producer-alignment-unsupported-partial-fails-loudly
+  (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (is (str/includes? text "Reject an empty `:providers` collection and every other empty or vacuous"))
+    (is (str/includes? text "duplicate, missing, extra, unrelated, or mixed mappings"))
+    (is (str/includes? text "wrong `:root-lib`, wrong root, wrong namespace, or wrong provider path"))
+    (is (str/includes? text "Any other partial, refused, per-root failure"))
+    (is (str/includes? text "missing pending record, refresh error, or ambiguous ownership fails loudly"))
+    (is (str/includes? text "without restarting or claiming adoption"))
+    (is (not (str/includes? text "restart to apply the pending generation")))))
+
+(deftest captured-pending-refresh-shape-drives-exact-evidence-contract
+  (let [fixture captured-pending-refresh-fixture
+        refresh (:refresh fixture)
+        unchanged (get-in refresh [:modules 'demo/unchanged])
+        module (get-in refresh [:modules 'demo/direct])
+        one-hop (get-in refresh [:modules 'demo/one-hop])
+        multi-hop (get-in refresh [:modules 'demo/multi-hop])
+        root-outcome (:root/outcome module)
+        conflict (:conflict root-outcome)
+        repointed (first (:namespace-residuals conflict))
+        unledgered (second (:namespace-residuals conflict))
+        pending-diff (get-in fixture [:runtime-status :pending-generation :diff])
+        text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (is (= :partial (:status refresh)))
+    (is (= 4 (count (:modules refresh))))
+    (is (every? (fn [[module-key outcome]]
+                  (= module-key (:module/key outcome)))
+                (:modules refresh)))
+    (is (= :unchanged (:status unchanged)))
+    (is (every? nil? (map unchanged [:error :reason :root/outcome
+                                     :dependency :dependency/outcome])))
+    (is (= :refused (:status module)))
+    (is (= :hard-conflict (:reason module)))
+    (is (= 'demo/direct (:module/key module)))
+    (is (= 'demo/root (:root-lib module)))
+    (is (= :hard-conflict (:status root-outcome)))
+    (is (= captured-pending-conflict conflict))
+    (is (= (:declared-prepared-changed-roots fixture)
+           (:changed-roots conflict)))
+    (is (= (:declared-prepared-conflict fixture) conflict))
+    (is (= captured-direct-refusal (:dependency/outcome one-hop)))
+    (is (= (:dependency one-hop)
+           (get-in one-hop [:dependency/outcome :module/key])))
+    (is (= captured-one-hop-wrapper (:dependency/outcome multi-hop)))
+    (is (= (:dependency multi-hop)
+           (get-in multi-hop [:dependency/outcome :module/key])))
+    (is (= captured-direct-refusal
+           (get-in multi-hop [:dependency/outcome :dependency/outcome])))
+    (is (= (:dependency one-hop)
+           (get-in multi-hop [:dependency/outcome :dependency/outcome :module/key])))
+    (is (= conflict pending-diff))
+    (is (= #{:changed-roots :namespace-residuals} (set (keys pending-diff))))
+    (is (seq (:namespace-residuals conflict)))
+    (is (= :root-repointed (:reason repointed)))
+    (is (= 'demo/root (get-in repointed [:binding :root-lib])))
+    (is (seq (:providers repointed)))
+    (is (= :unledgered-loaded-namespace (:reason unledgered)))
+    (is (nil? (:binding unledgered)))
+    (is (seq (:providers unledgered)))
+    (is (= :pending (get-in fixture [:runtime-status :pending-generation :status])))
+    (doseq [needle ["nonempty `:modules` outcome map"
+                    "nonempty prepared conflict classification"
+                    "exact declared set"
+                    "nonempty `:providers`"
+                    "exactly one old `:binding`"
+                    "use `:root-lib` equal to the matched changed-root `:lib`"
+                    "Every binding and provider `:namespace`"
+                    "Every binding and provider `:file` path"
+                    "no pending generation exists"]]
+      (is (str/includes? text needle) needle))))
+
+(deftest rejected-pending-fixtures-name-the-required-failures
+  (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
+                          :prove-invocation-producer)]
+    (doseq [{:keys [fixture refresh mutation-path required-text]}
+            rejected-pending-evidence-fixtures]
+      (testing (name fixture)
+        (is (map? refresh))
+        (is (some? (get-in (:refresh captured-pending-refresh-fixture)
+                           mutation-path))
+            (str "mutation path must exist in accepted fixture: " mutation-path))
+        (is (not= (get-in (:refresh captured-pending-refresh-fixture)
+                          mutation-path)
+                  (get-in refresh mutation-path))
+            (str "fixture must mutate accepted path: " mutation-path))
+        (is (str/includes? text required-text) required-text)))
+    (is (str/includes? text "no active root coordinate changed"))
+    (is (str/includes? text "absent, contradictory, or malformed no-change status fails loudly"))))
 
 (deftest every-route-is-an-ordinary-manual-sequence
   (doseq [[style definition-var] routes]

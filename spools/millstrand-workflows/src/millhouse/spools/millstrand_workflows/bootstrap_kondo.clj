@@ -31,7 +31,69 @@
     "|In `%s`, read the live resolved world before importing by running
      |`strand --workspace %s spool status` and inspecting its structured output.
      |Treat every intended installed root reported by that status as required:
-     |fail loudly if any root is unresolved or missing. Before resolving any
+     |fail loudly if any root is unresolved or missing. For a fully applied or
+     |unchanged refresh with no pending generation, each intended root uses its
+     |active `sync.root`. For the one supported pending next-generation shape,
+     |the preceding refresh result must have top-level `:status :partial` and a
+     |nonempty `:modules` outcome map. Every top-level `:modules` map key must
+     |equal its outcome `:module/key`; reject any map-key identity mismatch.
+     |Every module outcome must be exactly one
+     |of three forms: (a) `:status :unchanged`, with no `:error`, refusal,
+     |`:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
+     |`:status :refused` and `:reason :hard-conflict`, carrying the exact
+     |`:root/outcome`; or (c) `:status :failed` or `:status :skipped` with
+     |`:reason :missing-dependency`, whose `:dependency` equals the nested
+     |`:dependency/outcome` `:module/key` at every hop. Missing-dependency
+     |wrappers must form a finite acyclic chain of the same allowed wrapper
+     |shape and terminate in an exact direct refused hard-conflict outcome.
+     |The direct outcome has `:status :hard-conflict` and must carry `:root-lib`
+     |equal to exactly one `:lib` in the declared nonempty changed-root set;
+     |reject any direct or terminal refusal whose `:root-lib` is outside or
+     |mismatched against the declared nonempty changed-root set. No `:applied`
+     |outcome,
+     |other status or reason, unrelated terminal, missing or mismatched
+     |dependency outcome, cycle, or other refusal/error may be present.
+     |Declare one nonempty prepared conflict classification with exactly
+     |`:changed-roots` and `:namespace-residuals`. Every direct refusal and
+     |every terminal refusal reached through a wrapper chain must carry that
+     |exact same shared classification. Every such root outcome's `:conflict`
+     |must contain exactly `:changed-roots` and `:namespace-residuals`, and its
+     |`:changed-roots` must equal that exact declared set. Each changed-root
+     |entry must have exactly `:lib`, `:previous-root`, and `:new-root`.
+     |Accept residuals only when every one maps to exactly one changed-root
+     |entry. The only allowed residual reasons are `:root-repointed` and
+     |`:unledgered-loaded-namespace`; every allowed residual must have a
+     |nonempty `:namespace` and nonempty `:providers`. A `:root-repointed`
+     |residual must have exactly one old `:binding`; its binding and every
+     |provider must use `:root-lib` equal to the matched changed-root `:lib`.
+     |The binding `:root` must equal `:previous-root`, while every provider
+     |`:root` must equal `:new-root`. An
+     |`:unledgered-loaded-namespace` residual must have no binding, and every
+     |provider must use that same `:root-lib` and `:new-root`. Every binding and
+     |provider `:namespace` must equal the residual namespace. Every binding
+     |and provider `:file` path must be nonempty, canonical, and belong to its
+     |stated root; provider paths must be distinct. Reject an empty `:providers`
+     |collection and every other empty or vacuous,
+     |duplicate, missing, extra, unrelated, or mixed mappings, including a
+     |wrong `:root-lib`, wrong root, wrong namespace, or wrong provider path.
+     |An extra conflict or residual key or any mismatch fails loudly. Record the
+     |current and prepared generations and select
+     |exactly one unambiguous prepared `new-root` for every changed declared
+     |root. Verify that each prepared path exists, belongs to the declared
+     |family/root and coordinate, has matching cache provenance, and has
+     |readable `deps.edn` and the required exports. Never use the active old
+     |`sync.root` for a changed family. Unchanged roots remain on active
+     |`sync.root`. Any other partial/error shape or any mismatch fails loudly
+     |before import. The runtime status must also contain a matching
+     |`:pending-generation` with exactly `:status`, `:generation`, `:diff`,
+     |`:approved-spools`, and `:remedy`; its `:diff` must be the same changed-root
+     |and residual classification, including both `:changed-roots` and
+     |`:namespace-residuals`. If the selected spool status is explicitly
+     |`:status :no-change`, continue only when it proves that no active root
+     |coordinate changed and no pending generation exists. Any absent,
+     |contradictory, or malformed no-change status fails loudly. Kondo,
+     |LSP, and tools.deps all use these prepared roots; Weaver proof remains
+     |current-generation-only and makes no adoption claim. Before resolving any
      |classpath, parse the selected `spools.edn` and the consumer's producer
      |metadata once into an `owned-roots` table. Identify exact family/root
      |coordinates whose local coordinate resolves inside this worktree and whose
@@ -284,7 +346,41 @@
   cache hygiene manually, discover local quality checks, and leave a precise
   handover. Both route preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
-  LSP settings, so explicit bootstrap remains the sole import owner. Before
+  LSP settings, so explicit bootstrap remains the sole import owner. A fully
+  applied refresh uses active `sync.root` values. The only pending shape this
+  workflow accepts is top-level `:status :partial` with a nonempty module
+  outcome map. Every top-level `:modules` map key must equal its outcome
+  `:module/key`; reject any map-key identity mismatch. Every module outcome is
+  exactly one of unchanged with no
+  error/refusal/root outcome, a direct refused hard-conflict with the exact
+  `:root/outcome` and shared changed-root/residual classification, or a
+  failed/skipped missing-dependency wrapper whose
+  `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
+  hop. Wrapper chains are finite and acyclic and terminate in a direct refused
+  hard-conflict whose `:conflict` exactly matches that shared classification.
+  Every direct refused hard-conflict terminal, including one reached through a
+  missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
+  the declared nonempty changed-root set; reject any terminal whose `:root-lib`
+  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
+  cycle, unrelated terminal, or other refusal/error is allowed. Each
+  changed-root entry has exactly `:lib`,
+  `:previous-root`, and `:new-root`. Residuals must map one to one to those
+  entries, have nonempty providers, and use only `:root-repointed` or
+  `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
+  Binding and provider entries use `:root-lib`, equal the matched changed-root
+  `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
+  provider `:file` path. Unledgered residuals have no binding. Empty, vacuous,
+  duplicate, missing, extra, unrelated, or mixed mappings fail loudly, as do
+  wrong root-lib, root, namespace, or provider paths. The runtime status also
+  contains the matching pending-generation record, whose `:diff` exactly
+  equals the conflict classification including both `:changed-roots` and
+  `:namespace-residuals`. It records current and
+  prepared generations, validates each prepared root's coordinate, cache
+  provenance, `deps.edn`, and exports, and uses prepared roots for tooling
+  without claiming Weaver adoption. Other partial or error results fail
+  loudly. With no coordinate change, continue only for selected spool status
+  `:status :no-change` proving no active root coordinate changed and no pending
+  generation exists; otherwise fail loudly. Before
   resolving paths, the agent parses the selected spool metadata once into an
   `owned-roots` table. It canonicalizes every installed contribution entry,
   every consumer classpath entry, and every owned classpath/export comparison

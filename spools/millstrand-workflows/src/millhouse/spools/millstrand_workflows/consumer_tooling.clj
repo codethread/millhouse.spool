@@ -93,8 +93,67 @@
      |entries in `deps.edn` to the supplied contract, preserving each declared
      |`:deps/root`; record the before and after values. Show that shared roots use
      |one version-coherent family coordinate. Stop only when metadata is missing
-     |or incomparable, or the manual alignment cannot be verified. Do not infer
-     |the running workflow SHA, guess metadata, or automate these edits."
+     |or incomparable, or the manual alignment cannot be verified. When
+     |alignment changes an active coordinate, run exactly
+     |`(runtime/refresh! (current/runtime))` in the
+     |selected workspace before continuing and record its full result. A fully
+     |applied `:status :applied` result continues normally. The only supported
+     |pending next-generation result has top-level `:status :partial` and a
+     |nonempty `:modules` outcome map. Every top-level `:modules` map key must
+     |equal its outcome `:module/key`; reject any map-key identity mismatch.
+     |Every module outcome must be exactly one
+     |of three forms: (a) `:status :unchanged`, with no `:error`, refusal,
+     |`:root/outcome`, `:dependency`, or `:dependency/outcome`; (b) direct
+     |`:status :refused` and `:reason :hard-conflict`, carrying the exact
+     |`:root/outcome`; or (c) `:status :failed` or `:status :skipped` with
+     |`:reason :missing-dependency`, whose `:dependency` equals the nested
+     |`:dependency/outcome` `:module/key` at every hop. Missing-dependency
+     |wrappers must form a finite acyclic chain of the same allowed wrapper
+     |shape and terminate in an exact direct refused hard-conflict outcome.
+     |The direct outcome has `:status :hard-conflict` and must carry `:root-lib`
+     |equal to exactly one `:lib` in the declared nonempty changed-root set;
+     |reject any direct or terminal refusal whose `:root-lib` is outside or
+     |mismatched against the declared nonempty changed-root set. No `:applied`
+     |outcome,
+     |other status or reason, unrelated terminal, missing or mismatched
+     |dependency outcome, cycle, or other refusal/error may be present.
+     |Declare one nonempty prepared conflict classification with exactly
+     |`:changed-roots` and `:namespace-residuals`. Every direct refusal and
+     |every terminal refusal reached through a wrapper chain must carry that
+     |exact same shared classification. Every such root outcome's `:conflict`
+     |must contain exactly `:changed-roots` and `:namespace-residuals`, and its
+     |`:changed-roots` must equal that exact declared set. Each changed-root
+     |entry must have exactly `:lib`, `:previous-root`, and `:new-root`.
+     |Accept residuals only when every one maps to exactly one changed-root
+     |entry. The only allowed reasons are `:root-repointed` and
+     |`:unledgered-loaded-namespace`; every allowed residual must have a
+     |nonempty `:namespace` and nonempty `:providers`. A `:root-repointed`
+     |residual must have exactly one old `:binding`; its binding and every
+     |provider must use `:root-lib` equal to the matched changed-root `:lib`.
+     |The binding `:root` must equal `:previous-root`, while every provider
+     |`:root` must equal `:new-root`. An
+     |`:unledgered-loaded-namespace` residual must have no binding, and every
+     |provider must use that same `:root-lib` and `:new-root`. Every binding and
+     |provider `:namespace` must equal the residual namespace. Every binding
+     |and provider `:file` path must be nonempty, canonical, and belong to its
+     |stated root; provider paths must be distinct. Reject an empty `:providers`
+     |collection and every other empty or vacuous,
+     |duplicate, missing, extra, unrelated, or mixed mappings, including a
+     |wrong `:root-lib`, wrong root, wrong namespace, or wrong provider path.
+     |The runtime status must also contain a matching `:pending-generation` with
+     |exactly `:status`, `:generation`, `:diff`, `:approved-spools`, and
+     |`:remedy`; its `:diff` must have that same classification, including both
+     |`:changed-roots` and `:namespace-residuals`.
+     |Record the current generation, prepared generation, and every
+     |current/prepared root pair, then continue tooling against the prepared
+     |roots without restarting or claiming adoption. Any other partial,
+     |refused, per-root failure, missing pending record, refresh error, or
+     |ambiguous ownership fails loudly. If no coordinate changed, continue
+     |only when the selected spool status explicitly has `:status :no-change`,
+     |proves that no active root coordinate changed, and proves that no pending
+     |generation exists; an absent, contradictory, or malformed no-change
+     |status fails loudly. Do not
+     |infer the running workflow SHA, guess metadata, or automate these edits."
     worktree (consumer-workspace worktree) (pr-str invocation-producer))))
 
 (defn- inspect-repository-instruction
@@ -115,7 +174,10 @@
      |Only after successful before or after-start status evidence, read shared and
      |local spool approvals and inspect the structured result. Record every
      |current approved root, its coordinate and `sync.root`, the latest refresh
-     |result, and any pending generation. Inspect `deps.edn`, `.lsp/config.edn`,
+     |result, and any pending generation. When the preceding refresh recorded the
+     |supported pending root-repoint, tooling must use each recorded prepared
+     |`new-root` for the changed declared root and the active `sync.root` only for
+     |unchanged roots. Never call a prepared root adopted. Inspect `deps.edn`,
      |`.clj-kondo/config.edn`, test paths, Makefile, scripts, and CI or contributor
      |guidance without editing them yet. Choose `app` when the product has no
      |Clojure application source beyond Millstrand config, `spool` when this
@@ -416,7 +478,8 @@
        |as current-generation-only evidence, not adoption proof. Do not restart
        |the Weaver and do not call the new coordinate proved. Record which tooling
        |configuration is prepared and mark the exact probe against the adopted
-       |generation as unfinished until authorized cutover."
+       |generation as unfinished until authorized cutover. The Weaver probe uses
+       |only current-generation roots; it never proves or adopts a prepared root."
       (consumer-workspace worktree) style-proof))))
 
 (defn- handover-instruction
@@ -429,7 +492,8 @@
      |lint, verify-tests, and Weaver commands and results, preserving the test
      |result evidence and every unresolved mismatch.
      |Separate prepared configuration, current-generation proof, and adopted
-     |generation proof. If a pending generation remains, mark the style-specific
+     |generation proof. If a pending generation remains, record the current and
+     |prepared generations and mark the style-specific
      |post-cutover Weaver check as unfinished. Do not stop, restart, push, or
      |land from this step."
     (name style) worktree (consumer-workspace worktree))))
@@ -545,8 +609,43 @@
   `clojure-app`. The selected continuation manually aligns
   and proves activation and dependencies against that exact coordinate before
   composing the registered `bootstrap-kondo` workflow and proving tools.deps,
-  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary manual
-  steps. It contains no executor gates and never restarts a Weaver."
+  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary
+  manual steps. When producer alignment changes an active coordinate, its proof
+  explicitly refreshes the runtime. A fully applied refresh continues normally;
+  the only accepted pending result is top-level `:status :partial` with a
+  nonempty module outcome map. Every top-level `:modules` map key must equal its
+  outcome `:module/key`; reject any map-key identity mismatch. Every module
+  outcome is exactly one of unchanged
+  with no error/refusal/root outcome, a direct refused hard-conflict with the
+  exact `:root/outcome` and shared changed-root/residual classification, or a
+  failed/skipped missing-dependency wrapper whose
+  `:dependency` equals the nested `:dependency/outcome` `:module/key` at every
+  hop. Wrapper chains are finite and acyclic and terminate in a direct refused
+  hard-conflict whose `:conflict` exactly matches that shared classification.
+  Every direct refused hard-conflict terminal, including one reached through a
+  missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
+  the declared nonempty changed-root set; reject any terminal whose `:root-lib`
+  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
+  cycle, unrelated terminal, or other refusal/error is allowed. Each
+  changed-root entry has exactly
+  `:lib`, `:previous-root`, and `:new-root`. Residuals must map one to one to
+  those entries, have nonempty providers, and use only `:root-repointed` or
+  `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
+  Binding and provider entries use `:root-lib`, equal the matched changed-root
+  `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
+  provider `:file` path. Unledgered residuals have no binding. Empty,
+  vacuous, duplicate, missing, extra, unrelated, or mixed mappings fail
+  loudly, as do wrong root-lib, root, namespace, or provider paths. The runtime
+  status also contains the matching pending-generation record, whose `:diff`
+  exactly equals the conflict classification including both `:changed-roots`
+  and `:namespace-residuals`. It records
+  current and prepared generations and uses prepared roots for tooling without
+  claiming adoption. Other partial or error results fail loudly. With no
+  coordinate change, continue only for selected spool status `:status
+  :no-change` proving no active root coordinate changed and no pending
+  generation exists; otherwise fail loudly. Weaver proof remains
+  current-generation-only. It contains no executor gates and never restarts a
+  Weaver."
   {:entrypoints #{:start :call}
    :param-spec ::consumer-tooling-params
    :defaults {}
