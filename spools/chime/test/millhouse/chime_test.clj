@@ -519,7 +519,9 @@
     {:prefix "millstrand-chime-module"}
     (fn [rt config-dir]
       (is (= :applied
-             (:status (runtime/module! rt :chime {:ns 'millhouse.spools.chime}))))
+             (:status (test-support/with-module-activation
+                        #(runtime/module! rt :chime
+                                          {:ns 'millhouse.spools.chime})))))
       (is (= 1 (count (engine-handler-entries rt))))
       (is (= 1 (count (barrier-hook-entries rt))))
       (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)

@@ -2,6 +2,7 @@
   "Focused contract tests for the Millstrand-workflows publisher spool."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
+            [millhouse.test-support :as test-support]
             [millhouse.spools.millstrand-workflows]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -34,13 +35,15 @@
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
-      (runtime/module! rt :millhouse/workflow
-                       {:ns 'millhouse.spools.workflow})
-      (runtime/module! rt :millhouse/millstrand-workflows
-                       {:ns 'millhouse.spools.millstrand-workflows
-                        :spools ['millhouse.spools/millstrand-workflows
-                                 'millhouse.spools/workflow]
-                        :after [:millhouse/workflow]})
+      (test-support/with-module-activation
+        #(do
+           (runtime/module! rt :millhouse/workflow
+                            {:ns 'millhouse.spools.workflow})
+           (runtime/module! rt :millhouse/millstrand-workflows
+                            {:ns 'millhouse.spools.millstrand-workflows
+                             :spools ['millhouse.spools/millstrand-workflows
+                                      'millhouse.spools/workflow]
+                             :after [:millhouse/workflow]})))
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :publish-spool-kondo)
               bootstrap-resolved (workflow/resolve-workflow :bootstrap-kondo)

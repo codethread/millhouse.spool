@@ -3,6 +3,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [millhouse.test-support :as test-support]
             [millhouse.spools.millstrand-workflows.bootstrap-kondo]
             [millhouse.spools.millstrand-workflows.bump-millstrand :as bump]
             [millhouse.spools.millstrand-workflows.bump-spool :as bump-spool]
@@ -126,13 +127,15 @@
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]
     (let [rt (:runtime ctx)]
-      (runtime/module! rt :millhouse/workflow
-                       {:ns 'millhouse.spools.workflow})
-      (runtime/module! rt :millhouse/millstrand-workflows
-                       {:ns 'millhouse.spools.millstrand-workflows
-                        :spools ['millhouse.spools/millstrand-workflows
-                                 'millhouse.spools/workflow]
-                        :after [:millhouse/workflow]})
+      (test-support/with-module-activation
+        #(do
+           (runtime/module! rt :millhouse/workflow
+                            {:ns 'millhouse.spools.workflow})
+           (runtime/module! rt :millhouse/millstrand-workflows
+                            {:ns 'millhouse.spools.millstrand-workflows
+                             :spools ['millhouse.spools/millstrand-workflows
+                                      'millhouse.spools/workflow]
+                             :after [:millhouse/workflow]})))
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :bump-millstrand-pinned)
               payload (workflow/compile (:value resolved) params)
