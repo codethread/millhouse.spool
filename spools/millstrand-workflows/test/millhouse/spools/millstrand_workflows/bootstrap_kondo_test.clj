@@ -298,6 +298,46 @@
     (is (str/includes? validate-text "present exactly once"))
     (is (not (str/includes? validate-text "reject every Millhouse producer import")))))
 
+(deftest retained-dependency-exports-are-activated-exactly-once
+  (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
+                          #'bootstrap/bootstrap-kondo-brownfield]]
+    (let [definition (definition definition-var)
+          copy-text (instruction definition :copy-configs)
+          validate-text (instruction definition :validate)
+          handover-text (instruction definition :handover)]
+      (is (str/includes? copy-text ".clj-kondo/config.edn"))
+      (is (str/includes? copy-text "parse the consumer `.clj-kondo/config.edn` once"))
+      (is (str/includes? copy-text "inventory each `:config-paths` entry both as its original value and as its resolved target"))
+      (is (str/includes? copy-text "Preserve every existing local config-path entry byte for byte"))
+      (is (str/includes? copy-text "one repository-relative activation entry"))
+      (is (str/includes? copy-text "`imports/<group>/<artifact>`"))
+      (is (str/includes? copy-text "existing portable entry already resolves to the retained import"))
+      (is (str/includes? copy-text "do not append a duplicate"))
+      (is (str/includes? copy-text "Persist the relative entry, never its canonical or absolute target"))
+      (is (str/includes? copy-text "Canonicalize the resolved target only for provenance, ownership, ambiguity, and exact-once identity comparison"))
+      (is (str/includes? copy-text "An absolute or outside-repository activation fails loudly"))
+      (is (str/includes? copy-text "Do not discover a replacement path or edit this by script"))
+      (is (not (str/includes? copy-text "add its canonical copied")))
+      (is (precedes? copy-text
+                     "KONDO_CMD --lint RESOLVED_CLASSPATH"
+                     "After the import, manually merge one repository-relative activation entry"))
+      (is (str/includes? validate-text "Immediately after import, reread `.clj-kondo/config.edn`"))
+      (is (str/includes? validate-text "same canonical resolved targets recorded before import"))
+      (is (str/includes? validate-text "Existing local config-path entries and their values must remain byte-for-byte unchanged"))
+      (is (str/includes? validate-text "Every retained dependency producer export must have exactly one matching copied import path activated exactly once"))
+      (is (str/includes? validate-text "portable existing entry that resolves to a retained import is the one activation"))
+      (is (str/includes? validate-text "expected activation is missing"))
+      (is (str/includes? validate-text "appears more than once"))
+      (is (str/includes? validate-text "resolves to more than one copied export"))
+      (is (str/includes? validate-text "is absolute"))
+      (is (str/includes? validate-text "escapes the repository"))
+      (is (str/includes? validate-text "resolves to an owned producer export"))
+      (is (str/includes? validate-text "Canonicalization is for provenance, ownership, ambiguity, and exact-once identity comparison only"))
+      (is (str/includes? validate-text "every owned producer export is absent"))
+      (is (str/includes? validate-text "from `:config-paths`"))
+      (is (str/includes? handover-text "every retained repository-relative `:config-paths` activation exactly once"))
+      (is (str/includes? handover-text "preserved local config paths")))))
+
 (deftest bootstrap-does-not-fix-a-repository-quality-command
   (let [compiled (workflow/compile (definition #'bootstrap/bootstrap-kondo-greenfield)
                                    params)

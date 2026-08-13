@@ -160,10 +160,26 @@
      |relative non-escaping declaration that reconstructs `sync.root`; a readable
      |regular `BASE/deps.edn` containing valid EDN; the required export path; or at
      |least one installed-spool classpath directory. Never silently fall back.
+     |Before the one import, parse the consumer `.clj-kondo/config.edn` once and
+     |inventory each `:config-paths` entry both as its original value and as its
+     |resolved target. Preserve every existing local config-path entry byte for
+     |byte; do not remove, replace, rewrite, or silently deduplicate it. The
+     |retained dependency export inventory is the only set eligible for new
+     |activation.
      |Using the exact `KONDO_CMD` command prefix verified by the preceding step,
      |run exactly one import invocation:
      |`KONDO_CMD --lint RESOLVED_CLASSPATH --dependencies --parallel
-     |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`."
+     |--copy-configs --skip-lint`. Do not require GitHub, GitLab, or `jq`.
+     |After the import, manually merge one repository-relative
+     |activation entry for each retained dependency export, normally
+     |`imports/<group>/<artifact>`, resolved from `.clj-kondo/config.edn`. If an
+     |existing portable entry already resolves to the retained import, validate
+     |it as that one activation and do not append a duplicate. Persist the
+     |relative entry, never its canonical or absolute target. Canonicalize the
+     |resolved target only for provenance, ownership, ambiguity, and exact-once
+     |identity comparison. An absolute or outside-repository activation fails
+     |loudly; so does an absent, duplicate, ambiguous, or owned target. Do not
+     |discover a replacement path or edit this by script."
     worktree workspace)))
 
 (defn- select-world-instruction
@@ -237,10 +253,23 @@
      |the copied tree. Confirm every retained Millstrand and installed sibling
      |spool export has one provenance source, no duplicate config or hook mapping,
      |no overlapping consumer-owned remap, and no tracked `.clj-kondo/.cache` file.
+     |Immediately after import, reread `.clj-kondo/config.edn` and validate its
+     |`:config-paths` against the retained dependency export inventory and the
+     |same canonical resolved targets recorded before import. Every retained
+     |dependency producer export must have exactly one matching copied import
+     |path activated exactly once. Existing local config-path entries and their
+     |values must remain byte-for-byte unchanged. Fail loudly when an expected
+     |activation is missing, appears more than once, resolves to more than one
+     |copied export, is absolute, escapes the repository, or resolves to an
+     |owned producer export; do not accept an ambiguous path or silently repair
+     |it. A portable existing entry that resolves to a retained import is the one
+     |activation and must not be duplicated. Canonicalization is for provenance,
+     |ownership, ambiguity, and exact-once identity comparison only.
      |Identify the consumer repository's own producer namespace and import
      |coordinates through that table. Confirm every owned producer export is
-     |absent from `.clj-kondo/imports` and
-     |every retained dependency export expected by status is present exactly once.
+     |absent from `.clj-kondo/imports` and from `:config-paths`, and
+     |every retained dependency export expected by status is present exactly
+     |once and activated exactly once.
      |For a Millhouse local-self root, reject every repository-relative self-import;
      |for an ordinary pinned remote Millhouse family, retain and validate its
      |producer imports. Legitimate Millhouse and other producer imports remain
@@ -281,7 +310,9 @@
    (format
     "|Leave a precise local handover for worktree `%s` and workspace `%s`:
      |record greenfield/brownfield mode, files changed, every imported
-     |producer/provenance path, duplicate and overlap decisions, cache hygiene,
+     |producer/provenance path, every retained repository-relative
+     |`:config-paths` activation exactly once, preserved local config paths,
+     |duplicate and overlap decisions, cache hygiene,
      |the exact `.lsp/config.edn` `:copy-kondo-configs? false` setting, the
      |consumer self-import result before/during/after quality, the discovered
      |quality commands and results, and any pending local action. Keep
@@ -344,7 +375,16 @@
   Both routes import all eligible resolved dependency exports once, excluding
   consumer-owned producer roots, validate provenance, duplicate mappings, and
   cache hygiene manually, discover local quality checks, and leave a precise
-  handover. Both route preparations merge
+  handover. After import, each retained dependency export is manually activated
+  exactly once in the consumer `.clj-kondo/config.edn` `:config-paths` using a
+  repository-relative entry resolved from that config, normally
+  `imports/<group>/<artifact>`. Existing local entries remain byte-for-byte
+  preserved. An existing portable entry that resolves to the retained import is
+  validated as the one activation rather than duplicated. The workflow
+  canonicalizes resolved targets only for provenance, ownership, ambiguity, and
+  exact-once identity comparison; absolute or outside-repository activations,
+  missing, duplicate, ambiguous, or owned paths fail loudly. Both route
+  preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
   LSP settings, so explicit bootstrap remains the sole import owner. A fully
   applied refresh uses active `sync.root` values. The only pending shape this

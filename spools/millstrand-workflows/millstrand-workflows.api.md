@@ -78,7 +78,16 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   Both routes import all eligible resolved dependency exports once, excluding
   consumer-owned producer roots, validate provenance, duplicate mappings, and
   cache hygiene manually, discover local quality checks, and leave a precise
-  handover. Both route preparations merge
+  handover. After import, each retained dependency export is manually activated
+  exactly once in the consumer `.clj-kondo/config.edn` `:config-paths` using a
+  repository-relative entry resolved from that config, normally
+  `imports/<group>/<artifact>`. Existing local entries remain byte-for-byte
+  preserved. An existing portable entry that resolves to the retained import is
+  validated as the one activation rather than duplicated. The workflow
+  canonicalizes resolved targets only for provenance, ownership, ambiguity, and
+  exact-once identity comparison; absolute or outside-repository activations,
+  missing, duplicate, ambiguous, or owned paths fail loudly. Both route
+  preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
   LSP settings, so explicit bootstrap remains the sole import owner. A fully
   applied refresh uses active `sync.root` values. The only pending shape this
@@ -153,7 +162,7 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   canonicalization, unreconcilable canonical ownership, and an empty filtered
   installed-spool contribution fail loudly. No cleanup-after-copy workaround is
   allowed. No repository hosting or release operation is part of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L331-L457">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L362-L497">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -164,7 +173,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
   This is the `brownfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L476-L491">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L516-L531">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -175,7 +184,7 @@ Establish a greenfield Kondo boundary and import Millstrand exports.
 
   This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L459-L474">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L499-L514">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>
