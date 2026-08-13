@@ -49,25 +49,29 @@
      (format
       "|In `%s`, preserve the non-Clojure product's empty or existing product
        |classpath. If a tools.deps view is absent, prefer top-level `:paths []`.
-       |Add or adapt development aliases so Millstrand config, tests,
-       |Millstrand APIs, and source needed from the recorded approved roots are
-       |visible only when those aliases are selected. Derive root paths from
-       |the recorded spool status and each root's `deps.edn`; do not guess or
-       |treat the tools.deps view as runtime approval. Record the base and
-       |composed bases and prove the base excludes Millstrand config and spool
-       |source."
+       |Use a tooling project such as `.millstrand/deps.edn`, selected from the
+       |repository's root LSP config, or an equivalent explicit project that
+       |keeps Millstrand config off the product basis. Give that project pinned
+       |Millstrand and approved-root coordinates with each required `:deps/root`.
+       |Derive them from recorded spool status and root metadata; do not guess or
+       |treat the tools.deps view as runtime approval. Record the product and
+       |tooling bases. Prove the product excludes Millstrand config and spool
+       |source while the tooling basis can require every external namespace used
+       |by the workspace."
       worktree))
 
     :spool
     (fmt/reflow
      (format
       "|In `%s`, identify every spool root this repository owns. Validate each
-       |root's `deps.edn` `:paths` and Maven dependencies, then adapt the author
-       |project's tools.deps view so owned source roots, config, tests,
-       |Millstrand APIs, and required approved sibling roots are visible to
-       |development tools. Keep consumer approval in `spools.edn` and keep each
-       |root's `deps.edn` as the runtime source-path contract; the author basis
-       |is a tooling view, not a replacement approval graph. Record root,
+       |root's `deps.edn` `:paths` and Maven dependencies. Make the repository
+       |root `deps.edn` a portable authoring project: its selected tooling and
+       |test aliases must expose owned source roots, config, tests, Millstrand,
+       |and required approved sibling roots without depending on the author's
+       |sibling-checkout layout. A `:local/root` may be an explicit local
+       |development override, but it cannot be the only coordinate needed by a
+       |fresh Git checkout. Keep consumer approval in `spools.edn` and each
+       |root's `deps.edn` as the runtime source-path contract. Record root,
        |source-path, and dependency identities from both views and resolve any
        |mismatch before continuing."
       worktree))
@@ -76,13 +80,14 @@
     (fmt/reflow
      (format
       "|In `%s`, preserve the ordinary application's base `:paths`, `:deps`, and
-       |test entry point. Add or adapt development aliases so Millstrand config,
-       |config tests, Millstrand APIs, and source needed from recorded approved
-       |roots appear only in the composed Millstrand view. Derive approved-root
-       |paths from spool status and root `deps.edn`; do not guess or move them
-       |onto the base application classpath. Record and compare the base,
-       |ordinary-test, and Millstrand-plus-test bases, proving the base
-       |application remains usable without Millstrand."
+       |test entry point. Add or adapt a separate tooling alias so Millstrand
+       |config, config tests, and pinned approved-root coordinates appear only
+       |in the composed Millstrand view. Include each required `:deps/root`, and
+       |derive identities from spool status rather than moving spool source onto
+       |the base application classpath. Record and compare the base,
+       |ordinary-test, and Millstrand-plus-test bases. Prove the base application
+       |remains usable without the tooling alias, then directly require every
+       |external namespace used by the workspace through the composed basis."
       worktree))))
 
 (defn- lsp-instruction
@@ -92,25 +97,51 @@
     (fmt/reflow
      (format
       "|In `%s`, adapt the committed clojure-lsp configuration to select the
-       |Millstrand and test aliases explicitly. Include the config and test
-       |source paths and use a project classpath command when the repository's
-       |empty base would otherwise hide them. Do not assume clojure-lsp recurses
-       |through arbitrary aliases or reads `spools.edn`. Run repository-root
-       |diagnostics and a dump without a temporary CLI settings override; prove
-       |the committed config was consumed, required config/test namespaces and
-       |Millstrand APIs are present, and diagnostics are clean."
+       |explicit Millstrand tooling project and aliases. A root LSP config may
+       |select nested `.millstrand/deps.edn`; it remains the repository project
+       |until navigation enters an external checkout. A `:project-path` only
+       |matches that file; it does not change the working directory or basis used
+       |by `:classpath-cmd`. Commit an explicit command such as `clojure -Srepro
+       |-Sdeps .millstrand/deps.edn -Spath -M:lint` from the repository root
+       |when that is the selected project. Include config and test source paths,
+       |and do not assume clojure-lsp reads `spools.edn`. Start from a fresh LSP
+       |cache, run repository-root diagnostics and a dump without a temporary
+       |settings override, and inspect the command's actual classpath roots.
+       |Directly require the external namespaces and verify external var
+       |definitions in the fresh LSP index, recording each var and definition
+       |path. Broad editor search or source-path visibility is not proof. When
+       |the user is available and their editor supports it, walk through
+       |go-to-definition from representative workspace requires as best-effort
+       |human acceptance. Record the loaded config, selected project, command,
+       |classpath roots, indexed vars and definitions, diagnostics, and whether
+       |editor navigation was observed, skipped, or failed. Do not fail solely
+       |because no compatible editor is available; fail when machine resolution,
+       |classpath roots, direct require, or index proof is absent."
       worktree))
 
     :spool
     (fmt/reflow
      (format
       "|In `%s`, adapt the committed clojure-lsp configuration so its selected
-       |tools.deps view includes every owned spool source root, Millstrand
-       |config, tests, Millstrand APIs, and required approved sibling source.
-       |Do not rely on the Weaver's dynamic classloader or on an uncommitted
-       |`--settings` override. Run diagnostics and a dump from the repository
-       |root, then record the loaded config, selected aliases, source paths,
-       |classpath roots, owned namespaces, and any diagnostics."
+       |portable authoring view includes every owned spool source root,
+       |Millstrand config, tests, Millstrand, and required approved sibling
+       |source. Do not rely on the Weaver's classloader, a sibling checkout, a
+       |client's default aliases, or an uncommitted `--settings` override. From a
+       |fresh cache, run diagnostics and a dump at the repository root, directly
+       |require owned and approved namespaces, and record their indexed definition
+       |paths. Inspect the command's actual classpath roots rather than inferring
+       |them from source paths. Then materialize or locate a clean fetched Git
+       |checkout of the producer, run its committed LSP classpath command from
+       |that checkout root (explicitly selecting any nested deps file, for example
+       |with `-Sdeps <relative-deps-file>`), directly require Millstrand or another
+       |declared dependency, and prove a fresh LSP index contains that dependency's
+       |external var definitions and definition paths. Broad editor search or
+       |source-path visibility is not proof. When the user has a compatible editor,
+       |walk through both navigation hops as best-effort human acceptance. Record
+       |both LSP roots, commands, actual classpath roots, required vars and
+       |definitions, and whether editor navigation was observed, skipped, or
+       |failed. Editor absence alone does not fail the step; missing classpath,
+       |require, or index proof does."
       worktree))
 
     :clojure-app
@@ -118,11 +149,20 @@
      (format
       "|In `%s`, preserve ordinary application analysis and configure
        |clojure-lsp to compose the Millstrand and test aliases for config and
-       |config-test analysis. Confirm a dump contains application source,
-       |Millstrand config, tests, required approved-root source, and Millstrand
-       |APIs while the base application basis remains unchanged. Run diagnostics
-       |without a temporary settings override and record the committed config,
-       |selected aliases, paths, and result."
+       |config-test analysis. Start from a fresh LSP cache. Confirm a dump contains
+       |application source, Millstrand config, tests, required approved-root
+       |source, and Millstrand APIs while the base application basis remains
+       |unchanged. Ensure the committed `:classpath-cmd` selects the same project
+       |explicitly when it is nested; `:project-path` alone is not classpath proof.
+       |Directly require external workspace namespaces, inspect actual classpath
+       |roots, and prove external var definitions and definition paths in a fresh
+       |LSP index. Broad editor search or source-path visibility is not proof. When
+       |the user has a compatible editor, walk through representative
+       |go-to-definition calls as best-effort human acceptance. Run diagnostics
+       |without a temporary settings override. Record the committed config,
+       |selected project and aliases, command, classpath roots, indexed vars and
+       |definitions, result, and whether editor navigation was observed, skipped,
+       |or failed. Do not fail solely for absent editor support."
       worktree))))
 
 (defn- lint-instruction
@@ -169,36 +209,37 @@
     :app
     (fmt/reflow
      (format
-      "|In `%s`, discover the repository's test convention. Add or adapt focused
-       |tests for pure config behavior and a disposable unpublished Weaver world
-       |that loads the same workspace module shape and invokes a real operation.
-       |Keep test paths off the empty product base. Run the focused commands and
-       |record exact test and assertion counts, failures, errors, temporary-world
-       |isolation, and the operation result."
+      "|In `%s`, discover and run the repository's existing test command. Treat
+       |repository-owned test configuration as ordinary Clojure: do not prescribe
+       |a test runner or add test scaffolding. Record the exact command and test
+       |result evidence, including counts, failures, and errors. Only when this
+       |change alters runtime acquisition or adds Weaver-only behavior, follow the
+       |documented disposable-Weaver pattern and record its result; a coordinate or
+       |LSP projection alone does not require a new fixture."
       worktree))
 
     :spool
     (fmt/reflow
      (format
-      "|In `%s`, discover the repository's test convention and preserve its
-       |direct classpath or unit tier. Add or adapt a separate disposable-world
-       |test that approves the real spool root in fixture `spools.edn`, declares
-       |a module guarded by that root, and invokes a contributed operation or
-       |other public behavior. A direct `require` alone does not prove runtime
-       |acquisition. Run both tiers and record commands, root identity, module
-       |outcome, test counts, failures, errors, and runtime result."
+      "|In `%s`, discover and run the repository's existing test command. Treat
+       |repository-owned test configuration as ordinary Clojure: do not prescribe
+       |a test runner or add test scaffolding. Record the exact command and test
+       |result evidence, including counts, failures, and errors. Only when this
+       |change alters runtime acquisition or adds Weaver-only behavior, follow the
+       |documented disposable-Weaver pattern and record its result; a coordinate or
+       |LSP projection alone does not require a new fixture."
       worktree))
 
     :clojure-app
     (fmt/reflow
      (format
-      "|In `%s`, discover and preserve the ordinary application test command,
-       |then run it without selecting Millstrand and prove its basis excludes
-       |Millstrand config and APIs. Add or adapt a composed
-       |Millstrand-plus-test path for config tests and a disposable unpublished
-       |Weaver world whose configured operation reaches ordinary application
-       |code. Record both bases, commands, test counts, failures, errors, and the
-       |runtime result."
+      "|In `%s`, discover and run the repository's existing test command. Treat
+       |repository-owned test configuration as ordinary Clojure: do not prescribe
+       |a test runner or add test scaffolding. Record the exact command and test
+       |result evidence, including counts, failures, and errors. Only when this
+       |change alters runtime acquisition or adds Weaver-only behavior, follow the
+       |documented disposable-Weaver pattern and record its result; a coordinate or
+       |LSP projection alone does not require a new fixture."
       worktree))))
 
 (defn- weaver-instruction
@@ -235,7 +276,8 @@
     "|Leave a `%s` tooling handover for worktree `%s` and workspace `%s`.
      |Record the effective spool roots and refresh state, tools.deps views,
      |changed LSP and Kondo files, imported producer provenance, exact LSP,
-     |lint, test, and Weaver commands and results, and every unresolved mismatch.
+     |lint, verify-tests, and Weaver commands and results, preserving the test
+     |result evidence and every unresolved mismatch.
      |Separate prepared configuration, current-generation proof, and adopted
      |generation proof. If a pending generation remains, mark the style-specific
      |post-cutover Weaver check as unfinished. Do not stop, restart, push, or
@@ -274,20 +316,20 @@
                         (name style) ".lint")
                    "workflow/instruction" (fn [params]
                                             (lint-instruction style params))})
-   (workflow/step :configure-tests
-                  "Configure and run repository-appropriate tests"
+   (workflow/step :verify-tests
+                  "Verify repository tests"
                   :self
                   :depends-on [:configure-lint]
                   :attributes
                   {"workflow/action-ref"
                    (str "millstrand-workflows.consumer-tooling."
-                        (name style) ".tests")
+                        (name style) ".verify-tests")
                    "workflow/instruction" (fn [params]
                                             (test-instruction style params))})
    (workflow/step :verify-weaver
                   "Prove the selected Weaver behavior or record pending proof"
                   :self
-                  :depends-on [:configure-tests]
+                  :depends-on [:verify-tests]
                   :attributes
                   {"workflow/action-ref"
                    (str "millstrand-workflows.consumer-tooling."
