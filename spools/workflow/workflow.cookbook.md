@@ -563,7 +563,7 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
   fulfill it by spawning an agent-run run and closing the gate with the result — the
   workflow definition never names the run engine.
 
-Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstrand/workflows/common.clj`](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/workflows/common.clj) (chained `:subagent` gate loop with fn-valued `agent-run/*` attributes and a base-id fan-in to the accept checkpoint).
+Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstrand/workflows/common.clj`](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/workflows/common.clj) (chained `:subagent` gate loop with fn-valued `agent-run/*` attributes and a base-id fan-in to the accept checkpoint).
 
 ---
 

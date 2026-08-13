@@ -40,7 +40,7 @@ update. Chime deduplicates each `[rule strand]` while it matches, clears the
 mark when the condition stops matching, and baselines conditions already true
 when the rule is registered.
 
-The repository's [attention rules](https://github.com/codethread/millstrand/blob/aed95c22bbdb1fe5a916886e8ebda787d370173d/.millstrand/notifications/attention.clj)
+The repository's [attention rules](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/notifications/attention.clj)
 and the `registered-rules-fire-end-to-end` and `dedup-and-reset-seen` tests in
 [`test/millhouse/chime_test.clj`](./test/millhouse/chime_test.clj) are the
 load-bearing examples.
