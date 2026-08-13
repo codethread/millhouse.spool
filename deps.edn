@@ -1,8 +1,65 @@
 {:paths []
  :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
-                                  :git/sha "3bbe5dc15359975a8e8203ef47b3a7514177e75b"}}
+                                  :git/sha "3bbe5dc15359975a8e8203ef47b3a7514177e75b"
+                                  :deps/root "."}}
  :aliases
- {:test {:extra-paths ["test"
+ {:millstrand
+  {:extra-paths [".millstrand"]
+   :extra-deps
+   {ct.spools/agent-run
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "agent-run"}
+    ct.spools/harness-core
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "harness-core"}
+    ct.spools/claude-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "claude-harness"}
+    ct.spools/codex-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "codex-harness"}
+    ct.spools/pi-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "pi-harness"}
+    ct.spools/agent-cli
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "agent-cli"}
+    ct.spools/delegation
+    {:git/url "https://github.com/codethread/agent-harness.spool.git"
+     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :deps/root "delegation"}
+    codethread/agents
+    {:git/url "https://github.com/codethread/codethread.spool.git"
+     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
+     :deps/root "spools/agents"}
+    codethread/devflow-setup
+    {:git/url "https://github.com/codethread/codethread.spool.git"
+     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
+     :deps/root "spools/devflow-setup"}
+    codethread/ralph
+    {:git/url "https://github.com/codethread/codethread.spool.git"
+     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
+     :deps/root "spools/ralph"}
+    codethread/devflow
+    {:git/url "https://github.com/codethread/devflow.spool.git"
+     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+     :deps/root "."}
+    codethread/devflow-kanban-adapter
+    {:git/url "https://github.com/codethread/devflow.spool.git"
+     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+     :deps/root "kanban-adapter"}
+    codethread/kanban
+    {:git/url "https://github.com/codethread/kanban.spool.git"
+     :git/sha "87f61bc2750e7026f3650235907db25f19b1536e"
+     :deps/root "."}}}
+  :test {:extra-paths [".millstrand"
+                       "test"
                        "spools/chime/src"
                        "spools/chime/test"
                        "spools/cron/src"

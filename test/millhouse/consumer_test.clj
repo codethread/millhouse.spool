@@ -114,7 +114,8 @@
         config (edn/read-string config-text)
         config-paths (:config-paths config)
         self-imports (io/file root ".clj-kondo/imports/millhouse.spools")]
-    (is (= ["../spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow"
+    (is (= ["imports/io.millstrand/millstrand"
+            "../spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow"
             "../spools/chime/resources/clj-kondo.exports/millhouse.spools/chime"
             "../spools/cron/resources/clj-kondo.exports/millhouse.spools/cron"]
            config-paths))
