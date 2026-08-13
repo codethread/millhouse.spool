@@ -525,6 +525,15 @@
         (is (every? #(nil? (:procedure %)) steps))
         (is (not (str/includes? (pr-str payload) "workflow/gate")))))))
 
+(deftest every-route-rebuilds-only-the-project-local-lsp-cache
+  (doseq [[style definition-var] routes]
+    (testing (name style)
+      (let [text (instruction (definition definition-var) :configure-lsp)]
+        (is (str/includes? text "Stop the repository's clojure-lsp client"))
+        (is (str/includes? text "project-local `.lsp/.cache`"))
+        (is (str/includes? text "restart the client and let it rebuild"))
+        (is (str/includes? text "Do not remove anything under `.gitlibs`"))))))
+
 (deftest every-standalone-route-bootstraps-before-lint
   (doseq [[style definition-var] routes]
     (testing (name style)
@@ -601,7 +610,7 @@
     (is (str/includes? (instruction route :configure-lsp)
                        "`:project-path` only"))
     (is (str/includes? (instruction route :configure-lsp)
-                       "fresh LSP cache"))
+                       "project-local `.lsp/.cache`"))
     (is (str/includes? (instruction route :configure-lsp)
                        "external var definitions in the fresh LSP index"))
     (is (str/includes? (instruction route :configure-lsp)
@@ -664,7 +673,7 @@
     (is (str/includes? (instruction route :configure-lsp)
                        "clean fetched Git checkout"))
     (is (str/includes? (instruction route :configure-lsp)
-                       "cache-isolated directory"))
+                       "project-local `.lsp/.cache`"))
     (is (str/includes? (instruction route :configure-lsp)
                        "directly require every namespace in the inventory"))
     (is (str/includes? (instruction route :configure-lsp)
@@ -701,7 +710,7 @@
     (is (str/includes? (instruction route :configure-lsp)
                        "base application basis remains unchanged"))
     (is (str/includes? (instruction route :configure-lsp)
-                       "fresh LSP cache"))
+                       "project-local `.lsp/.cache`"))
     (is (str/includes? (instruction route :configure-lsp)
                        "actual classpath roots"))
     (is (str/includes? (instruction route :configure-lsp)

@@ -343,9 +343,12 @@
        |by `:classpath-cmd`. Commit an explicit command such as `clojure -Srepro
        |-Sdeps .millstrand/deps.edn -Spath -M:lint` from the repository root
        |when that is the selected project. Include config and test source paths,
-       |and do not assume clojure-lsp reads `spools.edn`. Start from a fresh LSP
-       |cache, run repository-root diagnostics and a dump without a temporary
-       |settings override, and inspect the command's actual classpath roots.
+       |and do not assume clojure-lsp reads `spools.edn`. Stop the repository's
+       |clojure-lsp client, remove only its project-local `.lsp/.cache`, then
+       |restart the client and let it rebuild. Do not remove anything under
+       |`.gitlibs`. Run repository-root diagnostics and a dump without a
+       |temporary settings override, and inspect the command's actual classpath
+       |roots.
        |Directly require the external namespaces and verify external var
        |definitions in the fresh LSP index, recording each var and definition
        |path. Broad editor search or source-path visibility is not proof. When
@@ -365,11 +368,12 @@
        |portable authoring view includes every owned spool source root,
        |Millstrand config, tests, Millstrand, and required approved sibling
        |source. Do not rely on the Weaver's classloader, a sibling checkout, a
-       |client's default aliases, or an uncommitted `--settings` override. Use a
-       |cache-isolated directory that has never indexed this worktree; remove
-       |or relocate any prior project cache and record the fresh cache path. Run
-       |diagnostics and a dump at the repository root with the committed config,
-       |then directly require every namespace in the inventory, including
+       |client's default aliases, or an uncommitted `--settings` override. Stop
+       |the repository's clojure-lsp client, remove only its project-local
+       |`.lsp/.cache`, then restart the client and let it rebuild. Do not remove
+       |anything under `.gitlibs`. Run diagnostics and a dump at the repository
+       |root with the committed config, then directly require every namespace in
+       |the inventory, including
        |representatives from `ct.spools/agent-run`, `ct.spools/delegation`, and
        |each other approved root actually required by `.millstrand/init.clj`.
        |Record the loaded config, exact require command and successful namespace
@@ -394,7 +398,9 @@
      (format
       "|In `%s`, preserve ordinary application analysis and configure
        |clojure-lsp to compose the Millstrand and test aliases for config and
-       |config-test analysis. Start from a fresh LSP cache. Confirm a dump contains
+       |config-test analysis. Stop the repository's clojure-lsp client, remove
+       |only its project-local `.lsp/.cache`, then restart the client and let it
+       |rebuild. Do not remove anything under `.gitlibs`. Confirm a dump contains
        |application source, Millstrand config, tests, required approved-root
        |source, and Millstrand APIs while the base application basis remains
        |unchanged. Ensure the committed `:classpath-cmd` selects the same project
