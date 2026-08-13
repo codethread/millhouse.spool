@@ -34,7 +34,7 @@ place any hook source under that export tree. Verify the resource from a clean
 consumer classpath with `io/resource`, then assert that the config maps each
 macro to the intended analysis form and hook namespace.
 
-For example, this Workflow root owns `defworkflow` and `defexecutor` and publishes:
+For example, this Workflow root owns `defworkflow`, `defworkflow!`, `use-workflow!`, `defexecutor`, `defexecutor!`, and `use-executor!` and publishes:
 
 ```text
 spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow/
@@ -161,10 +161,10 @@ Each stage is a `defworkflow` Var: a name, a doc, its declared entrypoints, and 
 (s/def ::proposal-params (s/keys :req-un [::feature] :opt-un [::revision]))
 (s/def ::abort-input (s/keys :req-un [::reason]))
 
-;; Register every stage under a stable name. A module owner gets this for free:
-;; a defworkflow form evaluated under the contribution collector declares its own
-;; entry, and dropping the form drops the entry. Direct and REPL code registers
-;; the Var's symbol itself, which is what this shows.
+;; Register every stage under a stable name. A module owner publishes a stage
+;; with use-workflow! or defworkflow!; the declaration form alone is inert, and
+;; omitting the selection retracts that owner's entry. Direct and REPL code
+;; registers the Var's symbol itself, which is what this shows.
 (def stage-workflows
   {:proposal  'my.ns/proposal
    :spec-plan 'my.ns/spec-plan
@@ -423,7 +423,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
 
 **Situation.** A workflow touches an external tool — a git forge, CI, a deploy target — but you want the *same* definition to run against GitHub for one user and GitLab for another, with no edit to the workflow.
 
-**Composition.** Steps name only a semantic `workflow/action-ref` (`"pr.ci.wait"`). The concrete command arrives through a **bindings map** (action-ref → attribute map) passed as pure data. An ordinary function builds the workflow from one bindings map, and `defworkflow` freezes a choice of bindings into a named Var. The definition each Var holds is still static — a reader sees the bound commands in `workflow show` — and a user who wants a different forge deep-merges an override and defines their own Var from the same builder.
+**Composition.** Steps name only a semantic `workflow/action-ref` (`"pr.ci.wait"`). The concrete command arrives through a **bindings map** (action-ref → attribute map) passed as pure data. An ordinary function builds the workflow from one bindings map, and `defworkflow!` freezes a choice of bindings into a named Var and publishes it. The definition each Var holds is still static — a reader sees the bound commands in `workflow show` — and a user who wants a different forge deep-merges an override and defines their own Var from the same builder.
 
 ```clojure
 (require '[clojure.spec.alpha :as s]

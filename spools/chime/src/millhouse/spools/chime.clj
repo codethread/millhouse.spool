@@ -6,9 +6,9 @@
   only weaver-lifetime runtime state and composes the public weaver/event API.
 
   Module authors normally use `defrule!` (or `defrule` plus `use-rule!`),
-  `set-notifier!`, and the direct rule seam (`register!`/`unregister!`). The lifecycle callbacks and `engine`
-  resource are public because the runtime resolves them by symbol; activation
-  owns their registration and cleanup."
+  `set-notifier!`, and the direct rule seam (`register!`/`unregister!`). The
+  lifecycle callbacks and `engine` resource are public because the runtime
+  resolves them by symbol; activation owns their registration and cleanup."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.authoring.alpha :as authoring]
@@ -45,6 +45,15 @@
 
 (s/def ::key keyword?)
 (s/def ::fn (s/and symbol? namespace))
+(s/def ::rule-name
+  (s/or :keyword keyword?
+        :symbol symbol?
+        :string (s/and string? #(not (str/blank? %)))))
+(s/def ::notifier-arg (s/and string? #(not (str/blank? %))))
+(s/def ::argv (s/coll-of ::notifier-arg :kind vector? :min-count 1))
+(s/def ::notifier
+  (s/and (s/keys :req-un [::argv])
+         #(= #{:argv} (set (keys %)))))
 (s/def ::rule-entry
   (s/and (s/keys :req-un [::key ::fn])
          #(and (keyword? (:key %))
@@ -177,15 +186,6 @@
   (reset! (scanned-batch-ids) [])
   {:seen 0})
 
-(defn- validate-notifier! [notifier]
-  (when-not (map? notifier)
-    (fail! "Notifier binding must be a map" {:binding notifier}))
-  (when-let [unknown (seq (remove #{:argv} (keys notifier)))]
-    (fail! "Notifier binding contains unknown keys" {:unknown (vec unknown)}))
-  (when-not (and (vector? (:argv notifier)) (seq (:argv notifier)) (every? non-blank-string? (:argv notifier)))
-    (fail! "Notifier :argv must be a non-empty vector of non-blank strings" {:argv (:argv notifier)}))
-  notifier)
-
 (defn set-notifier!
   "Bind the local notifier command for this weaver lifetime.
 
@@ -201,7 +201,8 @@
   The command runs with the local user's authority and must accept the title
   as its final argument."
   [notifier]
-  (reset! (notifier-binding) (validate-notifier! notifier))
+  (reset! (notifier-binding)
+          (require-valid! ::notifier notifier "Invalid Chime notifier binding"))
   {:notifier @(notifier-binding)})
 
 (defn notifier
@@ -274,15 +275,14 @@
         {:status :failed :failure failure}))))
 
 (defn- rule-name [name]
-  (cond
-    (keyword? name) name
-    (symbol? name) (keyword (str name))
-    (and (string? name) (not (str/blank? name))) (keyword name)
-    :else (fail! "Rule name must be a keyword, symbol, or non-blank string" {:name name})))
+  (let [name (require-valid! ::rule-name name
+                             "Rule name must be a keyword, symbol, or non-blank string")]
+    (cond
+      (keyword? name) name
+      (symbol? name) (keyword (str name))
+      (string? name) (keyword name))))
 
 (defn- resolve-rule-fn [fn-symbol]
-  (when-not (and (symbol? fn-symbol) (namespace fn-symbol))
-    (fail! "Rule fn must be a fully qualified symbol" {:fn fn-symbol}))
   (try
     (or (requiring-resolve fn-symbol)
         (fail! "Rule fn cannot be resolved" {:fn fn-symbol}))
@@ -307,7 +307,10 @@
   `defrule` so owner refresh can retract declarations."
   [name fn-symbol]
   (let [rule-key (rule-name name)
-        rule {:key rule-key :fn fn-symbol}
+        fn-symbol (require-valid! ::fn fn-symbol
+                                  "Rule fn must be a fully qualified symbol")
+        rule (require-valid! ::rule-entry {:key rule-key :fn fn-symbol}
+                             "Invalid Chime rule entry")
         visible (rule-registry)
         kinds (rule-kinds)]
     (resolve-rule-fn fn-symbol)

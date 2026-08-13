@@ -19,11 +19,7 @@ Activation publishes Cron's job declaration kind and reconciliation lifecycle. C
 
 ## 2. Jobs
 
-`defjob` is an inert declaration form: `(defjob name doc job)` defines a Var and
-contributes nothing. Select it with `use-job!`, optionally passing the closed
-`{:override? boolean}` selection map. `defjob!` defines and selects in one form,
-with either `(defjob! name doc job)` or `(defjob! name doc options job)`. Its
-generated API entry owns the complete job shape, options, and focused example.
+`defjob` is an inert declaration form: `(defjob name doc job)` defines a Var and contributes nothing. Select it with `use-job!`, optionally passing the closed `{:override? boolean}` selection map. `defjob!` defines and selects in one form, with either `(defjob! name doc job)` or `(defjob! name doc options job)`. Its generated API entry owns the complete job shape, options, and focused example.
 
 Owner-complete publication drives the job lifecycle:
 

@@ -67,6 +67,13 @@
 (defn- file-contains? [file text]
   (and (.exists file) (str/includes? (slurp file) text)))
 
+(defn- rejected-spec [thunk]
+  (try
+    (thunk)
+    ::no-error
+    (catch clojure.lang.ExceptionInfo error
+      (get-in (ex-data error) [:explain :clojure.spec.alpha/spec]))))
+
 (defn- await-notifier-threads!
   "Join every live chime notifier dispatch thread. `notify!` starts one daemon
   thread per dispatch synchronously, so once the scans that claim notifications
@@ -159,10 +166,10 @@
   (with-chime
     (fn [_ config-dir]
       (testing "binding validation fails loudly"
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown keys"
-                              (chime/set-notifier! {:argv ["x"] :extra true})))
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-empty"
-                              (chime/set-notifier! {:argv []})))
+        (is (= :millhouse.spools.chime/notifier
+               (rejected-spec #(chime/set-notifier! {:argv ["x"] :extra true}))))
+        (is (= :millhouse.spools.chime/notifier
+               (rejected-spec #(chime/set-notifier! {:argv []}))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-blank"
                               (chime/notify! {:body "no title"}))))
       (testing "notify! appends title and writes body to stdin"
@@ -192,8 +199,8 @@
 (deftest rule-registration-validation
   (with-chime
     (fn [_ _]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fully qualified"
-                            (chime/register! :bad 'not-qualified)))
+      (is (= :millhouse.spools.chime/fn
+             (rejected-spec #(chime/register! :bad 'not-qualified))))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cannot be resolved"
                             (chime/register! :bad 'missing.ns/fn)))
       (is (= :phase-failed (:key (chime/register! "phase-failed" 'millhouse.chime-test/phase-failed-rule))))
