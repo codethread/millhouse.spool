@@ -3,6 +3,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
             [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]))
 
@@ -56,7 +57,8 @@
       (let [route (definition definition-var)
             steps (:steps route)
             payload (workflow/compile route params)]
-        (is (= [:align-tools-deps
+        (is (= [:bootstrap-kondo
+                :align-tools-deps
                 :configure-lsp
                 :configure-lint
                 :verify-tests
@@ -64,6 +66,7 @@
                 :handover]
                (mapv :id steps)))
         (is (= [nil
+                [:bootstrap-kondo]
                 [:align-tools-deps]
                 [:configure-lsp]
                 [:configure-lint]
@@ -73,6 +76,30 @@
         (is (every? #(nil? (get-in % [:attributes "workflow/gate"])) steps))
         (is (every? #(nil? (get-in % [:attributes "shell/argv"])) steps))
         (is (not (str/includes? (pr-str payload) "workflow/gate")))))))
+
+(deftest every-standalone-route-bootstraps-before-lint
+  (doseq [[style definition-var] routes]
+    (testing (name style)
+      (let [route (definition definition-var)
+            steps (:steps route)
+            bootstrap-call (step route :bootstrap-kondo)
+            lint (step route :configure-lint)]
+        (is (= :bootstrap-kondo (:id (first steps))))
+        (is (= #'bootstrap/bootstrap-kondo (:procedure bootstrap-call)))
+        (is (= [:bootstrap-kondo]
+               (:depends-on (step route :align-tools-deps))))
+        (is (= [:configure-lsp] (:depends-on lint)))
+        (let [lint-text (instruction route :configure-lint)]
+          (is (str/includes? lint-text "preceding registered `bootstrap-kondo`"))
+          (is (str/includes? lint-text "missing import directories"))
+          (is (str/includes? lint-text "nonzero lint result"))
+          (is (str/includes? lint-text "cannot be handed over"))
+          (is (str/includes? lint-text "Explicitly lint and diagnose"))
+          (is (str/includes? lint-text "newly exposed `.millstrand`"))
+          (is (str/includes? lint-text "namespace/path mismatch"))
+          (is (str/includes? lint-text "coherent migration"))
+          (is (str/includes? lint-text "one-file opportunistic rename"))
+          (is (str/includes? lint-text "new-basis error")))))))
 
 (deftest application-route-preserves-an-empty-product-base
   (let [route (definition #'tooling/configure-consumer-tooling-app)]
@@ -123,11 +150,41 @@
     (is (str/includes? (instruction route :align-tools-deps)
                        "consumer approval in `spools.edn`"))
     (is (str/includes? (instruction route :align-tools-deps)
+                       "every external namespace required by `.millstrand/init.clj`"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "ct.spools.delegation"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "ct.spools/delegation"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "exact `:deps/root`"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       ":deps/root \"delegation\""))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       ":git/sha \"RECORDED_SHA\""))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "current spool status/root metadata"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "any unresolved placeholder in a"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "committed consumer coordinate must fail"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "RECORDED_SHA` is an example only"))
+    (is (str/includes? (instruction route :align-tools-deps)
+                       "stop on any missing namespace"))
+    (is (str/includes? (instruction route :align-tools-deps)
                        "portable authoring project"))
     (is (str/includes? (instruction route :align-tools-deps)
                        "cannot be the only coordinate"))
     (is (str/includes? (instruction route :configure-lsp)
                        "clean fetched Git checkout"))
+    (is (str/includes? (instruction route :configure-lsp)
+                       "cache-isolated directory"))
+    (is (str/includes? (instruction route :configure-lsp)
+                       "directly require every namespace in the inventory"))
+    (is (str/includes? (instruction route :configure-lsp)
+                       "ct.spools/delegation"))
+    (is (str/includes? (instruction route :configure-lsp)
+                       "cached/partial"))
     (is (str/includes? (instruction route :configure-lsp)
                        "fresh LSP index contains that dependency's external var definitions"))
     (is (str/includes? (instruction route :configure-lsp)

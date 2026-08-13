@@ -9,6 +9,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
+            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
             [millhouse.spools.workflow :as workflow]))
 
 (defn- non-blank-string?
@@ -63,17 +64,35 @@
     :spool
     (fmt/reflow
      (format
-      "|In `%s`, identify every spool root this repository owns. Validate each
-       |root's `deps.edn` `:paths` and Maven dependencies. Make the repository
-       |root `deps.edn` a portable authoring project: its selected tooling and
-       |test aliases must expose owned source roots, config, tests, Millstrand,
-       |and required approved sibling roots without depending on the author's
-       |sibling-checkout layout. A `:local/root` may be an explicit local
-       |development override, but it cannot be the only coordinate needed by a
-       |fresh Git checkout. Keep consumer approval in `spools.edn` and each
-       |root's `deps.edn` as the runtime source-path contract. Record root,
-       |source-path, and dependency identities from both views and resolve any
-       |mismatch before continuing."
+      "|In `%s`, identify every spool root this repository owns and every external
+       |namespace required by `.millstrand/init.clj`: inventory each module `:ns`
+       |and every namespace reached through its `:spools` declarations. Build an
+       |explicit namespace -> approved `spools.edn` root -> `sync.root` table;
+       |for example, map `ct.spools.delegation` to `ct.spools/delegation` and
+       |the exact root `delegation`, not merely to the agent-harness repository.
+       |Include every configured root, such as `ct.spools/agent-run`,
+       |`ct.spools/delegation`, `codethread/devflow`, `codethread/kanban`,
+       |`codethread/devflow-setup`, `codethread/agents`, and `codethread/ralph`,
+       |when the config requires them. Record the namespace, root coordinate,
+       |Git URL, Git SHA or tag, `sync.root`, `deps.edn` `:paths`, and the
+       |representative vars that will be required. A source-path search or a
+       |runtime classloader is not an inventory.
+       |Make the repository's selected tooling and test aliases a portable
+       |authoring project. For every approved external root, add a fetched Git
+       |coordinate with the exact `:deps/root` from the table, for example the
+       |approved delegation root:
+       |`{:git/url \"https://github.com/codethread/agent-harness.spool.git\"
+       |:git/sha \"RECORDED_SHA\"
+       |:deps/root \"delegation\"}`. Use the actual URL and SHA recorded by current spool status/root metadata;
+       |`RECORDED_SHA` is an example only; any unresolved placeholder in a committed consumer coordinate must fail.
+       |A `:local/root`
+       |may be an explicit local development override, but it cannot be the only
+       |coordinate needed by a fresh Git checkout, and the root project must not
+       |silently substitute `.` for a named approved root. Keep consumer approval
+       |in `spools.edn` and each root's `deps.edn` as the runtime source-path
+       |contract. Record root, source-path, dependency identities, and the
+       |portable coordinate from both views; stop on any missing namespace,
+       |unapproved root, omitted `:deps/root`, or mismatch."
       worktree))
 
     :clojure-app
@@ -126,22 +145,28 @@
        |portable authoring view includes every owned spool source root,
        |Millstrand config, tests, Millstrand, and required approved sibling
        |source. Do not rely on the Weaver's classloader, a sibling checkout, a
-       |client's default aliases, or an uncommitted `--settings` override. From a
-       |fresh cache, run diagnostics and a dump at the repository root, directly
-       |require owned and approved namespaces, and record their indexed definition
-       |paths. Inspect the command's actual classpath roots rather than inferring
-       |them from source paths. Then materialize or locate a clean fetched Git
-       |checkout of the producer, run its committed LSP classpath command from
+       |client's default aliases, or an uncommitted `--settings` override. Use a
+       |cache-isolated directory that has never indexed this worktree; remove
+       |or relocate any prior project cache and record the fresh cache path. Run
+       |diagnostics and a dump at the repository root with the committed config,
+       |then directly require every namespace in the inventory, including
+       |representatives from `ct.spools/agent-run`, `ct.spools/delegation`, and
+       |each other approved root actually required by `.millstrand/init.clj`.
+       |Record the loaded config, exact require command and successful namespace
+       |loads, indexed definition paths, and actual classpath roots; source-path
+       |visibility is not proof. Then materialize or locate a clean fetched Git
+       |checkout of each producer, run its committed LSP classpath command from
        |that checkout root (explicitly selecting any nested deps file, for example
-       |with `-Sdeps <relative-deps-file>`), directly require Millstrand or another
-       |declared dependency, and prove a fresh LSP index contains that dependency's
-       |external var definitions and definition paths. Broad editor search or
-       |source-path visibility is not proof. When the user has a compatible editor,
-       |walk through both navigation hops as best-effort human acceptance. Record
-       |both LSP roots, commands, actual classpath roots, required vars and
+       |with `-Sdeps <relative-deps-file>`), and repeat the direct require from a
+       |new cache. Prove a fresh LSP index contains that dependency's external var
+       |definitions and definition paths for every required producer. Broad editor
+       |search or a cached/partial index is not proof. When the user has a compatible
+       |editor, walk through
+       |both navigation hops as best-effort human acceptance. Record both LSP
+       |roots, cache paths, commands, actual classpath roots, required vars and
        |definitions, and whether editor navigation was observed, skipped, or
        |failed. Editor absence alone does not fail the step; missing classpath,
-       |require, or index proof does."
+       |direct require, fresh index, or definition proof does."
       worktree))
 
     :clojure-app
@@ -171,36 +196,78 @@
     :app
     (fmt/reflow
      (format
-      "|In `%s`, inspect the explicit Kondo imports produced by the preceding
-       |bootstrap and confirm the Millstrand authoring mappings came from
-       |producer exports in the effective spool world. Adapt the repository's
-       |lint alias or native command to lint Millstrand config and tests through
-       |the composed tools.deps view. Run the real command, prove macro-using
-       |files consumed the imported hooks, and record imports, command, errors,
-       |and warnings. Do not count syntax-only lint as hook proof."
+      "|In `%s`, require the preceding registered `bootstrap-kondo` call to have
+       |completed successfully before starting lint. Verify that the producer
+       |import directories exist and contain the expected files; missing import
+       |directories, missing producer exports, or a nonzero bootstrap result fail
+       |loudly and cannot be handed over as successful. Inspect the explicit Kondo
+       |imports and confirm the Millstrand authoring mappings came from producer
+       |exports in the effective spool world. Adapt the repository's lint alias or
+       |native command to lint Millstrand config and tests through the composed
+       |tools.deps view. Run the real command and require exit status zero; a
+       |nonzero lint result fails loudly and cannot be handed over. Prove
+       |macro-using files consumed the imported hooks. Explicitly lint and diagnose
+       |every newly exposed `.millstrand` config and test path through this same
+       |composed basis, even when the ordinary lint command excludes that directory;
+       |record each path and namespace result. For a namespace/path mismatch, accept
+       |only a coherent migration in which every affected namespace and path agrees
+       |and the mapping changes as one set. A one-file opportunistic rename is not
+       |proof; any new-basis error, including `namespace-name-mismatch`, fails
+       |loudly and cannot be handed over. Do not prescribe repo-specific renames;
+       |record the acceptance obligation for separately delegated consumer cleanup.
+       |Record imports, command, errors, and warnings. Do not count syntax-only lint
+       |as hook proof."
       worktree))
 
     :spool
     (fmt/reflow
      (format
-      "|In `%s`, confirm explicit Kondo bootstrap imported Millstrand and
-       |approved sibling producer exports without importing this repository's
-       |own producer coordinate or duplicating a producer mapping with a local
-       |remap. Adapt the repository's lint command to cover every owned spool
-       |source root, config, and tests through the author tools.deps view. Run
-       |the real lint command, prove authoring macros use producer hooks, and
-       |record provenance, self-import result, command, errors, and warnings."
+      "|In `%s`, require the preceding registered `bootstrap-kondo` call to have
+       |completed successfully before starting lint. Verify that the producer
+       |import directories exist and contain the expected files; missing import
+       |directories, missing producer exports, or a nonzero bootstrap result fail
+       |loudly and cannot be handed over as successful. Confirm explicit Kondo
+       |bootstrap imported Millstrand and approved sibling producer exports
+       |without importing this repository's own producer coordinate or duplicating
+       |a producer mapping with a local remap. Adapt the repository's lint command
+       |to cover every owned spool source root, config, and tests through the author
+       |tools.deps view. Run the real command and require exit status zero; a
+       |nonzero lint result fails loudly and cannot be handed over. Prove authoring
+       |macros use producer hooks. Explicitly lint and diagnose every newly exposed
+       |`.millstrand` config and test path through this same composed basis, even
+       |when ordinary lint excludes it; record each path and namespace result. For
+       |a namespace/path mismatch, accept only a coherent migration where every
+       |affected namespace and path agrees and the mapping changes as one set. A
+       |one-file opportunistic rename is not proof; any new-basis error, including
+       |`namespace-name-mismatch`, fails loudly and cannot be handed over. Do not
+       |prescribe repo-specific renames; record the acceptance obligation for
+       |separately delegated consumer cleanup. Record provenance, self-import
+       |result, command, errors, and warnings."
       worktree))
 
     :clojure-app
     (fmt/reflow
      (format
-      "|In `%s`, confirm the explicit Kondo imports came from producer exports
-       |in the effective spool world. Adapt the repository's lint alias or native
-       |command so application source, Millstrand config, and tests share the
-       |composed development basis while the base app remains unchanged. Run the
-       |real command, prove Millstrand macro-using config consumed its imported
-       |hooks, and record imports, command, errors, and warnings."
+      "|In `%s`, require the preceding registered `bootstrap-kondo` call to have
+       |completed successfully before starting lint. Verify that the producer
+       |import directories exist and contain the expected files; missing import
+       |directories, missing producer exports, or a nonzero bootstrap result fail
+       |loudly and cannot be handed over as successful. Confirm the explicit Kondo
+       |imports came from producer exports in the effective spool world. Adapt the
+       |repository's lint alias or native command so application source, Millstrand
+       |config, and tests share the composed development basis while the base app
+       |remains unchanged. Run the real command and require exit status zero; a
+       |nonzero lint result fails loudly and cannot be handed over. Prove Millstrand
+       |macro-using config consumed its imported hooks. Explicitly lint and diagnose
+       |every newly exposed `.millstrand` config and test path through this same
+       |composed basis, even when ordinary lint excludes it; record each path and
+       |namespace result. For a namespace/path mismatch, accept only a coherent
+       |migration where every affected namespace and path agrees and the mapping
+       |changes as one set. A one-file opportunistic rename is not proof; any
+       |new-basis error, including `namespace-name-mismatch`, fails loudly and
+       |cannot be handed over. Do not prescribe repo-specific renames; record the
+       |acceptance obligation for separately delegated consumer cleanup. Record
+       |imports, command, errors, and warnings."
       worktree))))
 
 (defn- test-instruction
@@ -287,9 +354,14 @@
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
   [style]
-  [(workflow/step :align-tools-deps
+  [(workflow/call :bootstrap-kondo
+                  #'bootstrap/bootstrap-kondo
+                  {:worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [workspace]}] workspace)})
+   (workflow/step :align-tools-deps
                   "Align the tools.deps view with the effective spool world"
                   :self
+                  :depends-on [:bootstrap-kondo]
                   :attributes
                   {"workflow/action-ref"
                    (str "millstrand-workflows.consumer-tooling."
@@ -353,7 +425,8 @@
   Start or call it with the exact consumer worktree and selected workspace. The
   agent first inspects the effective spool world and repository conventions,
   then chooses `app`, `spool`, or `clojure-app`. Each continuation aligns and
-  proves tools.deps, clojure-lsp, clj-kondo/lint, tests, and Weaver behavior
+  composes the registered `bootstrap-kondo` workflow before aligning and
+  proving tools.deps, clojure-lsp, clj-kondo/lint, tests, and Weaver behavior
   through ordinary manual steps. It contains no executor gates and never
   restarts a Weaver."
   {:entrypoints #{:start :call}
