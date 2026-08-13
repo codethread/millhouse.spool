@@ -192,6 +192,8 @@
   (doseq [[style definition-var] routes]
     (testing (name style)
       (let [route (definition definition-var)
+            prepare-text (instruction-with-params route :prepare-bootstrap-kondo
+                                                  workflow-host-params)
             bootstrap-text (instruction-with-params route :bootstrap-kondo
                                                     workflow-host-params)
             inspect-text (instruction-with-params (definition #'tooling/configure-consumer-tooling)
@@ -199,32 +201,36 @@
                                                   workflow-host-params)
             handover-text (instruction-with-params route :handover
                                                    workflow-host-params)]
-        (is (str/includes? bootstrap-text
+        (is (str/includes? prepare-text
                            "derive the target consumer world as `/tmp/consumer/.millstrand`"))
-        (is (str/includes? bootstrap-text
+        (is (str/includes? prepare-text
                            "{:worktree \"/tmp/consumer\" :workspace \"/tmp/consumer/.millstrand\"}"))
-        (is (str/includes? bootstrap-text "never substitute the disposable workflow-host workspace"))
+        (is (str/includes? prepare-text
+                           "never substitute the disposable workflow-host workspace"))
         (is (str/includes? inspect-text "/tmp/consumer/.millstrand"))
         (is (str/includes? handover-text "/tmp/consumer/.millstrand"))
+        (is (not (str/includes? prepare-text "/tmp/workflow-host/.millstrand")))
         (is (not (str/includes? bootstrap-text "/tmp/workflow-host/.millstrand")))
         (is (not (str/includes? inspect-text "/tmp/workflow-host/.millstrand")))
         (is (not (str/includes? handover-text "/tmp/workflow-host/.millstrand")))))))
 
-(deftest unchanged-refresh-proof-uses-runtime-and-spool-contract-shapes
-  (let [{:keys [refresh runtime-status spool-status]} unchanged-proof/refresh-fixture]
+(deftest unchanged-refresh-proof-uses-pre-refresh-roots-and-runtime-evidence
+  (let [{:keys [refresh runtime-status pre-refresh-status current-roots]}
+        unchanged-proof/refresh-fixture]
     (is (= :unchanged (:status refresh)))
     (is (= :full (:mode refresh)))
     (is (unchanged-proof/valid? unchanged-proof/refresh-fixture))
     (is (every? #(= :unchanged (:status %)) (vals (:modules refresh))))
     (is (nil? (:pending-generation runtime-status)))
-    (is (map? (:families spool-status)))
-    (is (map? (get-in spool-status [:families 'demo/family :roots])))
-    (is (= :synced (get-in spool-status [:families 'demo/family :roots
-                                         'demo/root :status])))
+    (is (= "/tmp/demo" (get current-roots ['demo/family 'demo/root])))
+    (is (map? (:families pre-refresh-status)))
+    (is (map? (get-in pre-refresh-status [:families 'demo/family :roots])))
+    (is (= :synced (get-in pre-refresh-status [:families 'demo/family :roots
+                                               'demo/root :status])))
     (is (= "/tmp/demo"
-           (get-in spool-status [:families 'demo/family :roots
-                                 'demo/root :sync :root])))
-    (is (not (contains? spool-status :status)))))
+           (get-in pre-refresh-status [:families 'demo/family :roots
+                                       'demo/root :sync :root])))
+    (is (not (contains? pre-refresh-status :status)))))
 
 (deftest unchanged-refresh-proof-rejects-every-requested-malformed-shape
   (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
@@ -234,12 +240,13 @@
         (is (not (unchanged-proof/valid? proof)))))
     (doseq [needle ["missing or mismatched map-key identity"
                     "no `:error`, `:reason`, refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`"
+                    "pre-refresh spool-status evidence"
                     "cover exactly that set"
                     "no missing, extra, or mismatched family/root"
-                    "`:status :synced`, a `:sync` map"
-                    "nonempty `:sync.root`"
-                    "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"
-                    "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+                    "Every intended root outcome must have `:status :synced`, a `:sync` map"
+                    "`[family root] -> sync.root` map as pre-refresh current-root evidence"
+                    "Reject failed, conflicted, source-reload, partial, missing, extra"
+                    "absent, blank, or otherwise invalid `:sync.root`"]]
       (is (str/includes? text needle) needle))))
 
 (deftest repository-style-choice-is-explicit
@@ -274,6 +281,12 @@
     (is (str/includes? inspect-text "Rerun the same exact status command"))
     (is (str/includes? inspect-text "read shared and local spool approvals"))
     (is (str/includes? inspect-text "inspect the structured result"))
+    (is (str/includes? inspect-text "one exact intended family/root set"))
+    (is (str/includes? inspect-text "cover exactly that set"))
+    (is (str/includes? inspect-text "`[family root] -> sync.root` map"))
+    (is (str/includes? inspect-text "pre-refresh current-root evidence"))
+    (is (str/includes? inspect-text
+                       "Do not edit a coordinate or call runtime refresh during this step"))
     (is (str/includes? inspect-text "Never start or restart a canonical or already-running Weaver"))
     (is (precedes? inspect-text
                    "First run the exact command"
@@ -289,6 +302,12 @@
                    "read shared and local spool approvals"))
     (is (precedes? inspect-text
                    "read shared and local spool approvals"
+                   "one exact intended family/root set"))
+    (is (precedes? inspect-text
+                   "pre-refresh current-root evidence"
+                   "Do not edit a coordinate or call runtime refresh"))
+    (is (precedes? inspect-text
+                   "Do not edit a coordinate or call runtime refresh"
                    "Choose `app`"))))
 
 (deftest producer-alignment-fully-applied-refresh-continues
@@ -313,7 +332,13 @@
                            "top-level `:status :unchanged`, every entry in its `:modules` map has the exact unchanged shape above"))
         (is (str/includes? text "runtime status has `:pending-generation nil`"))
         (is (str/includes? text "cover exactly that set"))
+        (is (str/includes? text "exact pre-refresh current-root evidence"))
+        (is (str/includes? text "without another spool-status command"))
+        (is (not (str/includes? text
+                                "strand --workspace <workspace> spool status")))
         (is (not (str/includes? text ":status :no-change")))
+        (is (precedes? text "pre-refresh spool-status evidence"
+                       "runtime/refresh!"))
         (is (precedes? text "If no coordinate changed, run exactly"
                        "top-level `:status :unchanged`"))
         (is (precedes? text "top-level `:status :unchanged`"
@@ -347,6 +372,14 @@
     (is (str/includes? text "root outcome's `:conflict` must contain exactly `:changed-roots` and `:namespace-residuals`"))
     (is (str/includes? text "`:changed-roots` must equal that exact declared set"))
     (is (str/includes? text "Each changed-root entry must have exactly `:lib`, `:previous-root`, and `:new-root`"))
+    (is (str/includes? text
+                       "Resolve every changed `:lib` to exactly one family/root in the pre-refresh current-root evidence"))
+    (is (str/includes? text
+                       "`:previous-root` must equal that recorded `sync.root`"))
+    (is (str/includes? text
+                       "changed-root set must equal the prepared-root set exactly"))
+    (is (str/includes? text
+                       "Reject any missing, extra, ambiguous, or mismatched current, changed, or prepared root"))
     (is (str/includes? text "every allowed residual must have a nonempty `:namespace` and nonempty `:providers`"))
     (is (str/includes? text "residual must have exactly one old `:binding`"))
     (is (str/includes? text "provider must use `:root-lib` equal to the matched changed-root `:lib`"))
@@ -359,6 +392,12 @@
     (is (str/includes? text "continue tooling against the prepared roots"))
     (is (str/includes? text "without restarting or claiming adoption"))
     (is (str/includes? text "cover exactly that set"))))
+
+(deftest pending-roots-must-match-pre-refresh-and-runtime-evidence
+  (is (unchanged-proof/pending-valid? unchanged-proof/pending-fixture))
+  (doseq [{:keys [fixture proof]} unchanged-proof/pending-negative-fixtures]
+    (testing (name fixture)
+      (is (not (unchanged-proof/pending-valid? proof))))))
 
 (deftest producer-alignment-unsupported-partial-fails-loudly
   (let [text (instruction (definition #'tooling/configure-consumer-tooling-app)
@@ -457,7 +496,8 @@
       (let [route (definition definition-var)
             steps (:steps route)
             payload (workflow/compile route params)]
-        (is (= [:prove-invocation-producer
+        (is (= [:prepare-bootstrap-kondo
+                :prove-invocation-producer
                 :bootstrap-kondo
                 :align-tools-deps
                 :configure-lsp
@@ -467,6 +507,7 @@
                 :handover]
                (mapv :id steps)))
         (is (= [nil
+                [:prepare-bootstrap-kondo]
                 [:prove-invocation-producer]
                 [:bootstrap-kondo]
                 [:align-tools-deps]
@@ -487,8 +528,18 @@
             steps (:steps route)
             bootstrap-step (step route :bootstrap-kondo)
             lint (step route :configure-lint)]
-        (is (= :prove-invocation-producer (:id (first steps))))
+        (is (= :prepare-bootstrap-kondo (:id (first steps))))
         (is (nil? (:procedure bootstrap-step)))
+        (let [prepare-text (instruction route :prepare-bootstrap-kondo)]
+          (is (str/includes? prepare-text
+                             "separate child `bootstrap-kondo` run"))
+          (is (str/includes? prepare-text "`capture-spool-status`"))
+          (is (str/includes? prepare-text
+                             "Stop the child before completing any route `prepare` step"))
+          (is (str/includes? prepare-text
+                             "`[family root] -> sync.root` map"))
+          (is (str/includes? prepare-text
+                             "Coordinate alignment and refresh may start only after")))
         (let [producer-text (instruction route :prove-invocation-producer)]
           (is (str/includes? producer-text "exact invocation-producer contract"))
           (is (str/includes? producer-text "pinned-remote-family"))
@@ -502,25 +553,19 @@
           (is (str/includes? producer-text "Do not infer the running workflow SHA"))
           (is (str/includes? producer-text "automate these edits")))
         (let [bootstrap-text (instruction route :bootstrap-kondo)]
+          (is (str/includes? bootstrap-text "resume the exact child"))
           (is (str/includes? bootstrap-text
-                             "separate registered `bootstrap-kondo` run"))
+                             "equal the repository-inspection evidence exactly"))
           (is (str/includes? bootstrap-text
-                             "Confirm the exact target acquired by the preceding repository inspection"))
+                             "preceding producer refresh result and runtime status"))
           (is (str/includes? bootstrap-text
-                             "`strand --workspace /tmp/consumer/.millstrand spool status`"))
-          (is (str/includes? bootstrap-text "idempotent confirmation"))
-          (is (str/includes? bootstrap-text
-                             "If status reports `mill/no-selected-weaver`, fail loudly"))
-          (is (str/includes? bootstrap-text "do not start or restart a Weaver here"))
-          (is (str/includes? bootstrap-text "Never stop or restart"))
-          (is (precedes? bootstrap-text
-                         "Confirm the exact target acquired"
-                         "If status reports `mill/no-selected-weaver`"))
-          (is (precedes? bootstrap-text
-                         "If status reports `mill/no-selected-weaver`"
-                         "start a separate registered"))
+                             "Do not run, retry, or otherwise re-enter `spool status` after refresh"))
+          (is (not (str/includes? bootstrap-text
+                                  "strand --workspace /tmp/consumer/.millstrand spool status")))
           (is (not (str/includes? bootstrap-text
                                   "mill weaver start --workspace /tmp/consumer/.millstrand"))))
+        (is (= [:prepare-bootstrap-kondo]
+               (:depends-on (step route :prove-invocation-producer))))
         (is (= [:prove-invocation-producer]
                (:depends-on (step route :bootstrap-kondo))))
         (is (= [:bootstrap-kondo]

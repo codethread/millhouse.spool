@@ -25,12 +25,13 @@
   (s/keys :req-un [::worktree ::workspace]))
 
 (defn- copy-configs-instruction
-  [{:keys [worktree workspace]}]
+  [{:keys [worktree]}]
   (fmt/reflow
    (format
-    "|In `%s`, read the live resolved world before importing by running
-     |`strand --workspace %s spool status` and inspecting its structured output.
-     |Treat every intended installed root reported by that status as required:
+    "|In `%s`, use only the pre-refresh spool-status evidence recorded by
+     |`capture-spool-status`; do not run, retry, or otherwise re-enter that CLI
+     |operation after refresh. Treat every intended installed root reported by
+     |the recorded structured result as required:
      |fail loudly if any root is unresolved or missing. For a fully applied or
      |unchanged refresh with no pending generation, each intended root uses its
      |active `sync.root`. For the one supported pending next-generation shape,
@@ -60,6 +61,12 @@
      |must contain exactly `:changed-roots` and `:namespace-residuals`, and its
      |`:changed-roots` must equal that exact declared set. Each changed-root
      |entry must have exactly `:lib`, `:previous-root`, and `:new-root`.
+     |Resolve every changed `:lib` to exactly one family/root in the pre-refresh
+     |current-root evidence. Its `:previous-root` must equal that recorded
+     |`sync.root`; its `:new-root` is the prepared-root evidence. The changed-root
+     |set must equal the prepared-root set exactly. Unchanged intended roots stay
+     |on their recorded pre-refresh current roots. Reject any missing, extra,
+     |ambiguous, or mismatched current, changed, or prepared root.
      |Accept residuals only when every one maps to exactly one changed-root
      |entry. The only allowed residual reasons are `:root-repointed` and
      |`:unledgered-loaded-namespace`; every allowed residual must have a
@@ -93,15 +100,10 @@
      |:unchanged`, every entry in `:modules` having the exact unchanged shape
      |above, and
      |the recorded `(runtime/status (current/runtime))` result having
-     |`:pending-generation nil`. Derive one exact intended family/root set from
-     |the selected activation and relevant producer metadata, then require spool
-     |status `:families` and each `:roots` map to cover exactly that set: no
-     |missing, extra, or mismatched family/root. Every intended root outcome must
-     |have `:status :synced`, a `:sync` map, and a nonempty `:sync.root` (the
-     |`:root` inside `:sync`) equal to the recorded active-root evidence for that
-     |family/root. Failed, conflicted, source-reload, partial, missing, extra, or
-     |mismatched roots, and absent, blank, or otherwise invalid `:sync.root` fail
-     |loudly. Reject `:status :applied`,
+     |`:pending-generation nil`. Combine those results with the exact intended
+     |family/root set and `[family root] -> sync.root` current-root evidence from
+     |the pre-refresh capture. The unchanged refresh proves that every recorded
+     |active root remains current. Reject `:status :applied`,
      |`:status :partial`, `:status :refused`, refresh errors, other module
      |statuses, non-nil pending generation, or absent, contradictory, or
      |malformed evidence. Kondo,
@@ -193,7 +195,7 @@
      |identity comparison. An absolute or outside-repository activation fails
      |loudly; so does an absent, duplicate, ambiguous, or owned target. Do not
      |discover a replacement path or edit this by script."
-    worktree workspace)))
+    worktree)))
 
 (defn- select-world-instruction
   [{:keys [worktree workspace]}]
@@ -203,6 +205,27 @@
      |worktree is the intended consumer checkout and the workspace is its
      |selected `.millstrand` world. Do not fall back to the process current
      |directory or a canonical workspace."
+    worktree workspace)))
+
+(defn- capture-spool-status-instruction
+  [{:keys [worktree workspace]}]
+  (fmt/reflow
+   (format
+    "|In `%s`, before any coordinate edit or runtime refresh, run exactly
+     |`strand --workspace %s spool status` once and record its complete
+     |structured result, selected workspace, and Weaver identity. Derive one
+     |exact intended family/root set from the selected activation and relevant
+     |producer metadata. Require `:families` and every nested `:roots` map to
+     |cover exactly that set, with no missing, extra, or mismatched family/root.
+     |Every intended root must have `:status :synced`, a `:sync` map, and a
+     |nonempty `:sync.root`. Record the exact `[family root] -> sync.root` map as
+     |pre-refresh current-root evidence. Failed, conflicted, source-reload,
+     |partial, missing, extra, mismatched, blank, or malformed root evidence
+     |fails loudly. When this run belongs to `configure-consumer-tooling`, require
+     |the complete result, intended set, current-root map, workspace, and Weaver
+     |identity to match its repository inspection exactly. Do not continue on
+     |any mismatch. This recorded evidence is the only spool-status input used by
+     |the route after refresh."
     worktree workspace)))
 
 (defn- ensure-kondo-instruction
@@ -399,10 +422,13 @@
   missing, duplicate, ambiguous, or owned paths fail loudly. Both route
   preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
-  LSP settings, so explicit bootstrap remains the sole import owner. A fully
-  applied refresh uses active `sync.root` values. The only pending shape this
-  workflow accepts is top-level `:status :partial` with a nonempty module
-  outcome map. Every top-level `:modules` map key must equal its outcome
+  LSP settings, so explicit bootstrap remains the sole import owner. Before any
+  refresh, the parent captures exact selected family/root/sync evidence. The
+  routes use that recorded evidence and never re-enter spool status after
+  refresh. A fully applied refresh uses active `sync.root` values.
+
+  The only pending shape this workflow accepts is top-level `:status :partial`
+  with a nonempty module outcome map. Every top-level `:modules` map key equals its outcome
   `:module/key`; reject any missing or mismatched map-key identity. Every
   unchanged module must have `:status :unchanged` and no `:error`, `:reason`,
   refusal, `:root/outcome`, `:dependency`, or `:dependency/outcome`. Every other
@@ -415,11 +441,13 @@
   Every direct refused hard-conflict terminal, including one reached through a
   missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
   the declared nonempty changed-root set; reject any terminal whose `:root-lib`
-  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
-  cycle, unrelated terminal, or other refusal/error is allowed. Each
-  changed-root entry has exactly `:lib`,
-  `:previous-root`, and `:new-root`. Residuals must map one to one to those
-  entries, have nonempty providers, and use only `:root-repointed` or
+  is outside or mismatched against that set. No applied outcome, other status
+  or reason, missing or mismatched dependency, cycle, unrelated terminal, or
+  other refusal/error is allowed. Each
+  changed-root entry has exactly `:lib`, `:previous-root`, and `:new-root`.
+  Every previous root equals its unique pre-refresh current-root evidence, and
+  the changed-root set equals the prepared-root set. Residuals map one to one
+  to those entries, have nonempty providers, and use only `:root-repointed` or
   `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
   Binding and provider entries use `:root-lib`, equal the matched changed-root
   `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
@@ -436,9 +464,9 @@
   `(runtime/refresh! (current/runtime))` result with top-level refresh `:status
   :unchanged`, every module in `:modules` with the exact unchanged shape above,
   and runtime `:pending-generation nil`. The selected activation and relevant
-  producer metadata define one exact intended family/root set; spool status
-  `:families` and every `:roots` map must cover exactly that set, with no
-  missing, extra, or mismatched family/root. Every root outcome must be
+  producer metadata define one exact intended family/root set before refresh;
+  the recorded status `:families` and every `:roots` map cover exactly that
+  set, with no missing, extra, or mismatched family/root. Every root outcome must be
   `:status :synced` with a `:sync` map whose nonempty `:root` (`:sync.root`)
   equals the recorded active-root evidence for that family/root. Failed,
   conflicted, source-reload, partial, missing, extra, or mismatched roots, and
@@ -455,10 +483,9 @@
   before `KONDO_CMD` using only canonical paths that no owned export remains. It
   fails loudly on ambiguous or unreconcilable canonical ownership. The explicit
   `millstrand/source-root` contribution and its `BASE`-derived paths remain
-  retained even under the worktree. The agent-owned import runs
-  `strand --workspace
-  <workspace> spool status`, derives every installed root's classpath from its
-  `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
+  retained even under the worktree. The agent-owned import derives every
+  installed root's classpath from the recorded pre-refresh `sync.root` evidence
+  and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
   path while preserving explicit `[]`. A declared `millstrand/source-root`
   coordinate is special: derive `BASE` by removing exactly its relative path
   segments from the end of `sync.root`, validate that `BASE` joined with the
@@ -498,10 +525,17 @@
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.world"
                    "workflow/instruction" select-world-instruction})
+   (workflow/step :capture-spool-status
+                  "Capture exact installed roots before refresh"
+                  :self
+                  :depends-on [:select-world]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.spool-status.capture"
+                   "workflow/instruction" capture-spool-status-instruction})
    (workflow/checkpoint :adoption-mode
                         "Choose the consumer's Kondo adoption mode"
                         :kind :agent
-                        :depends-on [:select-world]
+                        :depends-on [:capture-spool-status]
                         :choices [{:key :greenfield
                                    :label "Greenfield"
                                    :description (fmt/reflow

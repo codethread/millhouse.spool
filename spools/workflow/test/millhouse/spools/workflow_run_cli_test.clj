@@ -487,7 +487,16 @@
                                  :run-id "run-configure-consumer-tooling"
                                  :step style
                                  :choice "spool"})
-            producer-step (item-id after-style
+            prepare-step (item-id after-style
+                                  "Capture bootstrap spool evidence before producer alignment")
+            after-prepare
+            (invoke {:subcommand ["complete"]
+                     :run-id "run-configure-consumer-tooling"
+                     :step prepare-step
+                     :context {:bootstrap-kondo-run-id "consumer-kondo-brownfield"
+                               :bootstrap-kondo-mode "brownfield"
+                               :pre-refresh-root-evidence "recorded"}})
+            producer-step (item-id after-prepare
                                    "Prove the consumer uses the invocation producer coordinate")
             after-producer (invoke {:subcommand ["complete"]
                                     :run-id "run-configure-consumer-tooling"
@@ -498,13 +507,13 @@
             (invoke {:subcommand ["complete"]
                      :run-id "run-configure-consumer-tooling"
                      :step bootstrap-step
-                     :context {:bootstrap-kondo-run-id "consumer-kondo-brownfield"
-                               :bootstrap-kondo-mode "brownfield"
-                               :bootstrap-kondo-done true}})]
+                     :context {:bootstrap-kondo-done true}})]
         (is (= ["Inspect the effective spool world and classify the repository"]
                (mapv :title (:ready started))))
-        (is (= ["Prove the consumer uses the invocation producer coordinate"]
+        (is (= ["Capture bootstrap spool evidence before producer alignment"]
                (mapv :title (:ready after-style))))
+        (is (= ["Prove the consumer uses the invocation producer coordinate"]
+               (mapv :title (:ready after-prepare))))
         (is (= ["Bootstrap Kondo in a separate registered run"]
                (mapv :title (:ready after-producer))))
         (is (= ["Align the tools.deps view with the effective spool world"]
@@ -518,6 +527,7 @@
                                                    :git/sha "0123456789012345678901234567890123456789"}}
                 :bootstrap-kondo-run-id "consumer-kondo-brownfield"
                 :bootstrap-kondo-mode "brownfield"
+                :pre-refresh-root-evidence "recorded"
                 :bootstrap-kondo-done true}
                (get-in (weaver/show rt (get-in after-bootstrap [:root :id]))
                        [:attributes :workflow/context])))))))

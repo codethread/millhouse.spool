@@ -201,8 +201,8 @@
   "Configure an explicitly approved local Millstrand checkout.
 
   This continuation preserves the local coordinate, runs shared bootstrap,
-  refreshes the selected runtime, and configures repository-style tooling before
-  handing over or cutting over."
+  configures repository-style tooling, and then refreshes the selected runtime
+  before handing over or cutting over."
   {:entrypoints #{:continue}
    :param-spec ::millstrand-bump-params}
   (workflow/workflow
@@ -218,13 +218,6 @@
                   {:worktree (fn [{:keys [worktree]}] worktree)
                    :workspace (fn [{:keys [workspace]}] workspace)}
                   :depends-on [:record-local-choice])
-   (workflow/step :refresh-runtime
-                  "Refresh the selected runtime after local validation"
-                  :self
-                  :depends-on [:bootstrap-kondo]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.refresh"
-                   "workflow/instruction" refresh-instruction})
    (workflow/call :configure-consumer-tooling
                   #'tooling/configure-consumer-tooling
                   {:worktree (fn [{:keys [worktree]}] worktree)
@@ -232,11 +225,18 @@
                                 (str (java.io.File. ^String worktree ".millstrand")))
                    :invocation-producer (fn [{:keys [invocation-producer]}]
                                           invocation-producer)}
-                  :depends-on [:refresh-runtime])
+                  :depends-on [:bootstrap-kondo])
+   (workflow/step :refresh-runtime
+                  "Refresh the selected runtime after local validation"
+                  :self
+                  :depends-on [:configure-consumer-tooling]
+                  :attributes
+                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.refresh"
+                   "workflow/instruction" refresh-instruction})
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"
                   :self
-                  :depends-on [:configure-consumer-tooling]
+                  :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request true]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.cutover"
@@ -244,7 +244,7 @@
    (workflow/step :handover-runtime-generation-evidence
                   "Hand over adopted or pending runtime generation evidence"
                   :self
-                  :depends-on [:configure-consumer-tooling]
+                  :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request false]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.handover"

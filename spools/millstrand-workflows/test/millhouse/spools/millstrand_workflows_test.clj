@@ -65,7 +65,7 @@
           (is (= #{:continue} (:entrypoints tooling-clojure-app-resolved)))
           (is (= 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
                  (:definition bootstrap-resolved)))
-          (is (= [:select-world :adoption-mode]
+          (is (= [:select-world :capture-spool-status :adoption-mode]
                  (mapv :id (:steps bootstrap-definition))))
           (is (= 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool
                  (:definition bump-resolved)))

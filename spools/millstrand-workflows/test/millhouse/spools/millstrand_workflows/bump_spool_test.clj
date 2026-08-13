@@ -61,7 +61,7 @@
     (is (= "/tmp/consumer/.millstrand" (:workspace child-params)))
     (is (not= (:workspace host-params) (:workspace child-params)))))
 
-(deftest bump-loop-reuses-bootstrap-before-consumer-tooling
+(deftest bump-loop-captures-tooling-evidence-before-final-refresh
   (let [bump-step (step :bump-spool)
         bootstrap-call (step :bootstrap-kondo)
         tooling-call (step :configure-consumer-tooling)]
@@ -69,14 +69,14 @@
     (is (= #'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
            (:procedure bootstrap-call)))
     (is (= [:bump-spool] (:depends-on bootstrap-call)))
-    (is (= [:bootstrap-kondo]
+    (is (= [:configure-consumer-tooling]
            (:depends-on (step :refresh-runtime))))
     (is (= #'tooling/configure-consumer-tooling
            (:procedure tooling-call)))
-    (is (= [:refresh-runtime] (:depends-on tooling-call)))
-    (is (= [:configure-consumer-tooling]
+    (is (= [:bootstrap-kondo] (:depends-on tooling-call)))
+    (is (= [:refresh-runtime]
            (:depends-on (step :assess-authorized-cutover))))
-    (is (= [:configure-consumer-tooling]
+    (is (= [:refresh-runtime]
            (:depends-on (step :handover-runtime-generation-evidence))))))
 
 (deftest compiled-bootstrap-cannot-begin-before-bump-loop-terminal

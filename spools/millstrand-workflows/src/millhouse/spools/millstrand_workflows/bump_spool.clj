@@ -60,8 +60,9 @@
   The caller supplies exact consumer paths and family names. Each bump uses
   `spool bump FAMILY --latest sha`; an already-current coordinate is recorded
   and accepted. The shared bootstrap workflow handles greenfield or brownfield
-  Kondo adoption. After refresh, an agent chooses the repository style and
-  manually aligns LSP, lint, tests, and Weaver proof without new executor gates.
+  Kondo adoption. Before the final refresh, an agent chooses the repository
+  style and manually aligns LSP, lint, tests, and Weaver proof without new
+  executor gates.
   Runtime cutover is offered only for a direct user request."
   {:entrypoints #{:start :call}
    :param-spec ::spool-bump-params
@@ -136,10 +137,18 @@
                   {:worktree (fn [{:keys [worktree]}] worktree)
                    :workspace (fn [{:keys [workspace]}] workspace)}
                   :depends-on [:bump-spool])
+   (workflow/call :configure-consumer-tooling
+                  #'tooling/configure-consumer-tooling
+                  {:worktree (fn [{:keys [worktree]}] worktree)
+                   :workspace (fn [{:keys [worktree]}]
+                                (str (java.io.File. ^String worktree ".millstrand")))
+                   :invocation-producer (fn [{:keys [invocation-producer]}]
+                                          invocation-producer)}
+                  :depends-on [:bootstrap-kondo])
    (workflow/step :refresh-runtime
                   "Refresh the selected runtime and record generation state"
                   :self
-                  :depends-on [:bootstrap-kondo]
+                  :depends-on [:configure-consumer-tooling]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.refresh"
                    "workflow/instruction"
@@ -152,18 +161,10 @@
                         |pending. Refresh does not itself authorize a stop or
                        |restart."
                        workspace)))})
-   (workflow/call :configure-consumer-tooling
-                  #'tooling/configure-consumer-tooling
-                  {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [worktree]}]
-                                (str (java.io.File. ^String worktree ".millstrand")))
-                   :invocation-producer (fn [{:keys [invocation-producer]}]
-                                          invocation-producer)}
-                  :depends-on [:refresh-runtime])
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"
                   :self
-                  :depends-on [:configure-consumer-tooling]
+                  :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request true]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.cutover"
@@ -182,7 +183,7 @@
    (workflow/step :handover-runtime-generation-evidence
                   "Hand over adopted or pending runtime generation evidence"
                   :self
-                  :depends-on [:configure-consumer-tooling]
+                  :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request false]
                   :attributes
                   {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.handover"

@@ -81,7 +81,20 @@
   [{:keys [worktree invocation-producer]}]
   (fmt/reflow
    (format
-    "|In worktree `%s` and selected workspace `%s`, before bootstrap, prove the
+    "|In worktree `%s` and selected workspace `%s`, require the preceding
+     |repository inspection and bootstrap preparation to have recorded the same
+     |pre-refresh spool-status evidence. Derive one exact intended family/root
+     |set from the selected activation and relevant producer metadata. Require
+     |the recorded `:families` map and every nested `:roots` map to cover exactly
+     |that set, with no missing, extra, or mismatched family/root. Every intended
+     |root outcome must have `:status :synced`, a `:sync` map, and a nonempty
+     |`:sync.root` (the `:root` inside `:sync`). Record the exact
+     |`[family root] -> sync.root` map as pre-refresh current-root evidence.
+     |Reject failed, conflicted, source-reload, partial, missing, extra, or
+     |mismatched roots and absent, blank, or otherwise invalid `:sync.root`.
+     |Fail loudly when the two recorded status results, selected workspace,
+     |Weaver identity, intended set, root outcome, or sync evidence differ. Do
+     |all of this before any coordinate edit or runtime refresh. Then prove the
      |consumer uses this exact invocation-producer contract: `%s`. For
      |`pinned-remote-family`, the contract is the complete `millhouse/spools`
      |family coordinate with its exact `git/url` and full lowercase `git/sha`.
@@ -124,6 +137,12 @@
      |must contain exactly `:changed-roots` and `:namespace-residuals`, and its
      |`:changed-roots` must equal that exact declared set. Each changed-root
      |entry must have exactly `:lib`, `:previous-root`, and `:new-root`.
+     |Resolve every changed `:lib` to exactly one family/root in the pre-refresh
+     |current-root evidence. Its `:previous-root` must equal that recorded
+     |`sync.root`; its `:new-root` is the prepared-root evidence. The changed-root
+     |set must equal the prepared-root set exactly. Unchanged intended roots stay
+     |on their recorded pre-refresh current roots. Reject any missing, extra,
+     |ambiguous, or mismatched current, changed, or prepared root.
      |Accept residuals only when every one maps to exactly one changed-root
      |entry. The only allowed reasons are `:root-repointed` and
      |`:unledgered-loaded-namespace`; every allowed residual must have a
@@ -149,20 +168,14 @@
      |roots without restarting or claiming adoption. Any other partial,
      |refused, per-root failure, missing pending record, refresh error, or
      |ambiguous ownership fails loudly. If no coordinate changed, run exactly
-     |the same `(runtime/refresh! (current/runtime))` and record its full result,
-     |the read-only `(runtime/status (current/runtime))` result, and the
-     |selected `strand --workspace <workspace> spool status` result. Continue
+     |the same `(runtime/refresh! (current/runtime))` and record its full result
+     |and the read-only `(runtime/status (current/runtime))` result. Continue
      |only when the refresh result has top-level `:status :unchanged`, every
      |entry in its `:modules` map has the exact unchanged shape above, and
-     |runtime status has `:pending-generation nil`. Derive one exact intended
-     |family/root set from the selected activation and relevant producer
-     |metadata, then require spool status `:families` and each `:roots` map to
-     |cover exactly that set: no missing, extra, or mismatched family/root.
-     |Every intended root outcome must have `:status :synced`, a `:sync` map,
-     |and a nonempty `:sync.root` (the `:root` inside `:sync`) equal to the
-     |recorded active-root evidence for that family/root. Failed, conflicted,
-     |source-reload, partial, missing, extra, or mismatched roots, and absent,
-     |blank, or otherwise invalid `:sync.root` fail loudly. Reject `:status :applied`,
+     |runtime status has `:pending-generation nil`. Combine those two results
+     |with the exact pre-refresh current-root evidence; the unchanged refresh
+     |proves that every recorded active root remains current without another
+     |spool-status command. Reject `:status :applied`,
      |`:status :partial`, `:status :refused`, any refresh error, any other module
      |status, any non-nil pending generation, or any absent, contradictory, or
      |malformed result loudly. Do not
@@ -185,12 +198,16 @@
      |target as-is and record its identity. Any other status failure stops this
      |step. Never start or restart a canonical or already-running Weaver.
      |Only after successful before or after-start status evidence, read shared and
-     |local spool approvals and inspect the structured result. Record every
-     |current approved root, its coordinate and `sync.root`, the latest refresh
-     |result, and any pending generation. When the preceding refresh recorded the
-     |supported pending root-repoint, tooling must use each recorded prepared
-     |`new-root` for the changed declared root and the active `sync.root` only for
-     |unchanged roots. Never call a prepared root adopted. Inspect `deps.edn`,
+     |local spool approvals and inspect the structured result. Derive one exact
+     |intended family/root set from the selected activation and relevant producer
+     |metadata. Require `:families` and every nested `:roots` map to cover exactly
+     |that set. Every root must be `:status :synced` with a `:sync` map and a
+     |nonempty `:sync.root`. Record the complete structured result and the exact
+     |`[family root] -> sync.root` map as pre-refresh current-root evidence.
+     |Missing, extra, mismatched, failed, conflicted, source-reload, partial, or
+     |malformed roots fail loudly. Record each coordinate and the latest refresh
+     |and runtime generation state already present in that result. Do not edit a
+     |coordinate or call runtime refresh during this step. Inspect `deps.edn`,
      |`.clj-kondo/config.edn`, test paths, Makefile, scripts, and CI or contributor
      |guidance without editing them yet. Choose `app` when the product has no
      |Clojure application source beyond Millstrand config, `spool` when this
@@ -511,44 +528,63 @@
      |land from this step."
     (name style) worktree (consumer-workspace worktree))))
 
-(defn- bootstrap-composition-instruction
-  "Return the manual handoff instructions for the separate bootstrap run."
+(defn- bootstrap-preparation-instruction
+  "Return instructions that pause bootstrap after pre-refresh status capture."
   [{:keys [worktree]}]
   (fmt/reflow
    (format
     "|In worktree `%s`, derive the target consumer world as `%s` (`worktree/.millstrand`).
      |The separate child `bootstrap-kondo` run must receive and verify exactly
      |`{:worktree \"%s\" :workspace \"%s\"}` before it runs any command; never
-     |substitute the disposable workflow-host workspace. Confirm the exact target
-     |acquired by the preceding repository inspection with
-     |`strand --workspace %s spool status`, and record the structured result,
-     |selected workspace, and Weaver/root identities as idempotent confirmation.
-     |If status reports `mill/no-selected-weaver`, fail loudly and return to the
-     |inspection acquisition step; do not start or restart a Weaver here. If status
-     |selects a Weaver, use that exact target as-is. Never stop or restart a
-     |canonical or already-running Weaver. Only after successful confirmation,
-     |start a separate registered
-     |`bootstrap-kondo` run (for example, use a distinct run id such as
+     |substitute the disposable workflow-host workspace. Start a separate
+     |registered `bootstrap-kondo` run (for example, use a distinct run id such as
      |`consumer-kondo-<timestamp>`). Drive that child run through its ready
-     |frontier: choose the consumer's `greenfield` or `brownfield` adoption mode,
-     |then complete every route step until the child result reports `:done true`.
-     |Do not treat the runtime-routed child checkpoint as a return from this
-     |workflow; complete this composition only after the child is done. Before
+     |frontier through `select-world`, `capture-spool-status`, and the adoption
+     |checkpoint. The capture must run the exact status command while it is still
+     |available and must match the preceding repository inspection exactly. Stop
+     |the child before completing any route `prepare` step. Record the child run
+     |id, selected mode, complete structured status evidence, exact intended
+     |family/root set, `[family root] -> sync.root` map, selected workspace, and
+     |Weaver identity. Any mismatch fails loudly. Coordinate alignment and refresh
+     |may start only after this evidence is recorded. Never stop or restart a
+     |canonical or already-running Weaver. Leave the child run available for the
+     |post-refresh continuation."
+    worktree (consumer-workspace worktree) worktree (consumer-workspace worktree))))
+
+(defn- bootstrap-completion-instruction
+  "Return instructions that resume bootstrap from recorded pre-refresh evidence."
+  [{:keys [worktree]}]
+  (fmt/reflow
+   (format
+    "|In worktree `%s`, resume the exact child `bootstrap-kondo` run and adoption
+     |mode recorded by `prepare-bootstrap-kondo`. Require its pre-refresh status,
+     |intended family/root set, current-root map, selected workspace, and Weaver
+     |identity to equal the repository-inspection evidence exactly. Combine that
+     |recorded evidence with the preceding producer refresh result and runtime
+     |status. Do not run, retry, or otherwise re-enter `spool status` after
+     |refresh. Drive every route step until the child result reports `:done true`.
+     |Do not treat the routed checkpoint as a return from this workflow. Before
      |completing this step, record the child run id, selected mode, and explicit
      |done evidence, for example `{:bootstrap-kondo-run-id \"child-run\"
-     |:bootstrap-kondo-mode \"brownfield\" :bootstrap-kondo-done true}`. Alignment
-     |starts only after that evidence and the successful handover. Leave the
-     |separate child run available for audit and preserve its exact command and
-     |result evidence."
-    worktree (consumer-workspace worktree) worktree (consumer-workspace worktree)
-    (consumer-workspace worktree))))
+     |:bootstrap-kondo-mode \"brownfield\" :bootstrap-kondo-done true}`. Leave
+     |the child run available for audit and preserve its exact command and result
+     |evidence."
+    worktree)))
 
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
   [style]
-  [(workflow/step :prove-invocation-producer
+  [(workflow/step :prepare-bootstrap-kondo
+                  "Capture bootstrap spool evidence before producer alignment"
+                  :self
+                  :attributes
+                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
+                                              (name style) ".bootstrap-kondo.prepare")
+                   "workflow/instruction" bootstrap-preparation-instruction})
+   (workflow/step :prove-invocation-producer
                   "Prove the consumer uses the invocation producer coordinate"
                   :self
+                  :depends-on [:prepare-bootstrap-kondo]
                   :attributes
                   {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
                                               (name style) ".invocation-producer")
@@ -560,7 +596,7 @@
                   :attributes
                   {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
                                               (name style) ".bootstrap-kondo")
-                   "workflow/instruction" bootstrap-composition-instruction})
+                   "workflow/instruction" bootstrap-completion-instruction})
    (workflow/step :align-tools-deps
                   "Align the tools.deps view with the effective spool world"
                   :self
@@ -619,11 +655,13 @@
   `millhouse/spools` family or a local Millhouse self root. The agent first
   acquires and verifies the exact consumer Weaver, then inspects the effective
   spool world and repository conventions before choosing `app`, `spool`, or
-  `clojure-app`. The selected continuation manually aligns
-  and proves activation and dependencies against that exact coordinate before
-  composing the registered `bootstrap-kondo` workflow and proving tools.deps,
-  clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary
-  manual steps. When producer alignment changes an active coordinate, its proof
+  `clojure-app`. The selected continuation starts the registered
+  `bootstrap-kondo` workflow and records its exact family/root/sync evidence.
+  It pauses that child before route preparation, manually aligns and proves
+  activation and dependencies against the exact coordinate, refreshes, then
+  resumes the same child without spool-status CLI re-entry. It then proves
+  tools.deps, clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through
+  ordinary manual steps. When producer alignment changes an active coordinate, its proof
   explicitly refreshes the runtime. A fully applied refresh continues normally;
   the only accepted pending result is top-level `:status :partial` with a
   nonempty module outcome map. Every top-level `:modules` map key must equal its
@@ -639,11 +677,13 @@
   Every direct refused hard-conflict terminal, including one reached through a
   missing-dependency chain, carries `:root-lib` equal to exactly one `:lib` in
   the declared nonempty changed-root set; reject any terminal whose `:root-lib`
-  is outside or mismatched against that set. No applied outcome, other status/reason, missing or mismatched dependency,
-  cycle, unrelated terminal, or other refusal/error is allowed. Each
-  changed-root entry has exactly
-  `:lib`, `:previous-root`, and `:new-root`. Residuals must map one to one to
-  those entries, have nonempty providers, and use only `:root-repointed` or
+  is outside or mismatched against that set. No applied outcome, other status
+  or reason, missing or mismatched dependency, cycle, unrelated terminal, or
+  other refusal/error is allowed. Each
+  changed-root entry has exactly `:lib`, `:previous-root`, and `:new-root`.
+  Every previous root must equal its unique pre-refresh current-root evidence;
+  the changed-root set and prepared-root set must be exact. Residuals map one to
+  one to those entries, have nonempty providers, and use only `:root-repointed` or
   `:unledgered-loaded-namespace`; root-repointed has exactly one old binding.
   Binding and provider entries use `:root-lib`, equal the matched changed-root
   `:lib`, and reconcile every namespace, old/new root, and nonempty distinct
@@ -655,21 +695,21 @@
   and `:namespace-residuals`. It records
   current and prepared generations and uses prepared roots for tooling without
   claiming adoption. Other partial or error results fail loudly. With no
-  coordinate change, the
-  workflow runs the same full `(runtime/refresh! (current/runtime))` and
-  records that result together with `(runtime/status (current/runtime))` and
-  read-only `spool status`. It accepts only top-level refresh `:status
+  coordinate change, the workflow runs the same full
+  `(runtime/refresh! (current/runtime))` and records that result together with
+  `(runtime/status (current/runtime))`. It accepts only top-level refresh `:status
   :unchanged`, a `:modules` map whose every module has the exact unchanged shape
-  above, and runtime `:pending-generation nil`. The selected activation and
-  relevant producer metadata define one exact intended family/root set; spool
-  status `:families` and every `:roots` map must cover exactly that set, with no
-  missing, extra, or mismatched family/root. Every root outcome must be
-  `:status :synced` with a `:sync` map whose nonempty `:root` (`:sync.root`)
+  above, and runtime `:pending-generation nil`. Before refresh, the selected
+  activation and relevant producer metadata define one exact intended
+  family/root set. The recorded status `:families` and every `:roots` map cover
+  exactly that set, with no missing, extra, or mismatched family/root. Every root
+  outcome is `:status :synced` with a `:sync` map whose nonempty `:root` (`:sync.root`)
   equals the recorded active-root evidence for that family/root. Failed,
   conflicted, source-reload, partial, missing, extra, or mismatched roots, and
   absent, blank, or otherwise invalid `:sync.root`, fail loudly. Applied,
   partial, refused, error, other module statuses, non-nil pending generation, or
-  malformed and contradictory results fail loudly. Weaver proof remains
+  malformed and contradictory results fail loudly. No step re-enters spool
+  status after refresh. Weaver proof remains
   current-generation-only. It contains no executor gates and never restarts a
   Weaver."
   {:entrypoints #{:start :call}

@@ -48,9 +48,11 @@
 
 (deftest adoption-mode-is-asked-before-route-specific-work
   (let [main (definition #'bootstrap/bootstrap-kondo)
+        capture (step main :capture-spool-status)
         checkpoint (step main :adoption-mode)
         choices (get-in checkpoint [:attributes "workflow/choice-details"])]
-    (is (= [:select-world] (:depends-on checkpoint)))
+    (is (= [:select-world] (:depends-on capture)))
+    (is (= [:capture-spool-status] (:depends-on checkpoint)))
     (is (= ":bootstrap-kondo-greenfield"
            (get-in choices ["greenfield" "next"])))
     (is (= ":bootstrap-kondo-brownfield"
@@ -59,6 +61,21 @@
                        "minimal"))
     (is (str/includes? (get-in choices ["brownfield" "description"])
                        "Inventory"))))
+
+(deftest exact-spool-status-is-captured-before-any-refresh
+  (let [main (definition #'bootstrap/bootstrap-kondo)
+        capture-text (instruction main :capture-spool-status)]
+    (is (str/includes? capture-text
+                       "before any coordinate edit or runtime refresh"))
+    (is (str/includes? capture-text
+                       "`strand --workspace /tmp/consumer/.millstrand spool status` once"))
+    (is (str/includes? capture-text "one exact intended family/root set"))
+    (is (str/includes? capture-text "cover exactly that set"))
+    (is (str/includes? capture-text "`[family root] -> sync.root` map"))
+    (is (str/includes? capture-text "pre-refresh current-root evidence"))
+    (is (str/includes? capture-text "Do not continue on any mismatch"))
+    (is (str/includes? capture-text
+                       "only spool-status input used by the route after refresh"))))
 
 (deftest every-bootstrap-route-is-agent-led
   (doseq [definition-var bootstrap-routes]
@@ -110,7 +127,11 @@
       (is (nil? (get-in copy [:attributes "shell/cwd"])))
       (let [instruction ((get-in copy [:attributes "workflow/instruction"]) params)]
         (is (str/includes? instruction
-                           "strand --workspace /tmp/consumer/.millstrand spool status"))
+                           "pre-refresh spool-status evidence recorded by `capture-spool-status`"))
+        (is (str/includes? instruction
+                           "do not run, retry, or otherwise re-enter that CLI operation after refresh"))
+        (is (not (str/includes? instruction
+                                "strand --workspace /tmp/consumer/.millstrand spool status")))
         (is (str/includes? instruction "sync.root"))
         (is (str/includes? instruction "deps.edn"))
         (is (str/includes? instruction ":paths"))
@@ -197,6 +218,12 @@
     (is (str/includes? copy-text "root outcome's `:conflict` must contain exactly `:changed-roots` and `:namespace-residuals`"))
     (is (str/includes? copy-text "`:changed-roots` must equal that exact declared set"))
     (is (str/includes? copy-text "Each changed-root entry must have exactly `:lib`, `:previous-root`, and `:new-root`"))
+    (is (str/includes? copy-text
+                       "Resolve every changed `:lib` to exactly one family/root in the pre-refresh current-root evidence"))
+    (is (str/includes? copy-text
+                       "`:previous-root` must equal that recorded `sync.root`"))
+    (is (str/includes? copy-text
+                       "changed-root set must equal the prepared-root set exactly"))
     (is (str/includes? copy-text "every allowed residual must have a nonempty `:namespace` and nonempty `:providers`"))
     (is (str/includes? copy-text "residual must have exactly one old `:binding`"))
     (is (str/includes? copy-text "provider must use `:root-lib` equal to the matched changed-root `:lib`"))
@@ -219,13 +246,11 @@
                        "recorded full `(runtime/refresh! (current/runtime))` result"))
     (is (str/includes? copy-text
                        "top-level `:status :unchanged`, every entry in `:modules` having the exact unchanged shape above"))
-    (is (str/includes? copy-text
-                       "`:pending-generation nil`. Derive one exact intended family/root set"))
-    (is (str/includes? copy-text "cover exactly that set"))
-    (is (str/includes? copy-text "have `:status :synced`, a `:sync` map"))
-    (is (str/includes? copy-text "nonempty `:sync.root`"))
-    (is (str/includes? copy-text "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"))
-    (is (str/includes? copy-text "absent, blank, or otherwise invalid `:sync.root`"))
+    (is (str/includes? copy-text "`:pending-generation nil`"))
+    (is (str/includes? copy-text "exact intended family/root set"))
+    (is (str/includes? copy-text "`[family root] -> sync.root` current-root evidence"))
+    (is (str/includes? copy-text "pre-refresh capture"))
+    (is (str/includes? copy-text "every recorded active root remains current"))
     (is (not (str/includes? copy-text ":status :no-change")))
     (is (precedes? copy-text "select exactly one unambiguous prepared `new-root`"
                    "readable `deps.edn` and the required exports"))
@@ -239,12 +264,10 @@
       (doseq [needle ["Every top-level `:modules` map key must equal its outcome `:module/key`"
                       "missing or mismatched map-key identity"
                       "unchanged module with `:status :unchanged` and no `:error`, `:reason`"
-                      "one exact intended family/root set"
-                      "cover exactly that set"
-                      "Every intended root outcome must have `:status :synced`, a `:sync` map"
-                      "nonempty `:sync.root`"
-                      "Failed, conflicted, source-reload, partial, missing, extra, or mismatched roots"
-                      "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+                      "exact intended family/root set"
+                      "`[family root] -> sync.root` current-root evidence"
+                      "pre-refresh capture"
+                      "every recorded active root remains current"]]
         (is (str/includes? copy-text needle) needle)))))
 
 (deftest both-bootstrap-routes-reject-malformed-unchanged-proof-fixtures
@@ -254,10 +277,24 @@
       (doseq [{:keys [fixture proof]} unchanged-proof/negative-fixtures]
         (testing (name fixture)
           (is (not (unchanged-proof/valid? proof)))))
-      (doseq [needle ["one exact intended family/root set"
-                      "cover exactly that set"
-                      "Every intended root outcome must have `:status :synced`, a `:sync` map"
-                      "absent, blank, or otherwise invalid `:sync.root` fail loudly"]]
+      (doseq [needle ["exact intended family/root set"
+                      "`[family root] -> sync.root` current-root evidence"
+                      "pre-refresh capture"
+                      "every recorded active root remains current"]]
+        (is (str/includes? copy-text needle) needle)))))
+
+(deftest both-bootstrap-routes-reject-pending-root-mismatches
+  (doseq [definition-var [#'bootstrap/bootstrap-kondo-greenfield
+                          #'bootstrap/bootstrap-kondo-brownfield]]
+    (let [copy-text (instruction (definition definition-var) :copy-configs)]
+      (is (unchanged-proof/pending-valid? unchanged-proof/pending-fixture))
+      (doseq [{:keys [fixture proof]} unchanged-proof/pending-negative-fixtures]
+        (testing (name fixture)
+          (is (not (unchanged-proof/pending-valid? proof)))))
+      (doseq [needle ["pre-refresh current-root evidence"
+                      "`:previous-root` must equal that recorded `sync.root`"
+                      "changed-root set must equal the prepared-root set exactly"
+                      "missing, extra, ambiguous, or mismatched current, changed, or prepared root"]]
         (is (str/includes? copy-text needle) needle)))))
 
 (deftest both-routes-require-no-self-import-before-during-and-after-quality

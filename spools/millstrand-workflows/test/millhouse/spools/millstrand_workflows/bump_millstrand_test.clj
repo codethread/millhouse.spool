@@ -72,7 +72,7 @@
          (get-in local-choices ["move-forward" "description"])
          "bootstrap"))))
 
-(deftest local-path-configures-consumer-tooling-after-refresh
+(deftest local-path-captures-consumer-tooling-before-final-refresh
   (let [local (definition #'bump/bump-millstrand-local-validate)
         bootstrap-call (step local :bootstrap-kondo)
         refresh (step local :refresh-runtime)
@@ -81,11 +81,11 @@
         refs (set (map :ref (:strands compiled)))]
     (is (= #'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
            (:procedure bootstrap-call)))
-    (is (= [:bootstrap-kondo] (:depends-on refresh)))
+    (is (= [:configure-consumer-tooling] (:depends-on refresh)))
     (is (= #'tooling/configure-consumer-tooling
            (:procedure tooling-call)))
-    (is (= [:refresh-runtime] (:depends-on tooling-call)))
-    (is (= [:configure-consumer-tooling]
+    (is (= [:bootstrap-kondo] (:depends-on tooling-call)))
+    (is (= [:refresh-runtime]
            (:depends-on (step local :handover-runtime-generation-evidence))))
     (is (str/includes?
          ((get-in (step local :assess-authorized-cutover)
