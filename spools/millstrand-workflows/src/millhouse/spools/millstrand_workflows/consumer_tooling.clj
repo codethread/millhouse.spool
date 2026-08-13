@@ -355,8 +355,22 @@
   [{:keys [worktree workspace]}]
   (fmt/reflow
    (format
-    "|In worktree `%s`, start a separate registered `bootstrap-kondo` run for
-     |workspace `%s` (for example, use a distinct run id such as
+    "|In worktree `%s`, first attempt exact target status for workspace `%s` with
+     |`strand --workspace %s spool status`. Record the before evidence: the exact
+     |command, structured result, selected workspace, and current Weaver/root
+     |identities. If status reports no Weaver or target startup fails, stop before
+     |bootstrap and capture the exact structured startup failure, including the
+     |offending acquisition coordinate and invariant. Repair only that proven
+     |`spools.edn` acquisition coordinate, using approved remote root metadata
+     |from the failed status or the authorized root metadata source. Do not guess
+     |a URL, SHA, root, or source path, and do not edit any other acquisition,
+     |runtime, or tooling setting. Record the before coordinate, failure, approved
+     |metadata, and exact repair as error/repair evidence. Start the repaired
+     |workspace as a disposable target, rerun the same exact status command, and
+     |record the after evidence; if it still fails, fail loudly and do not start
+     |the child. Never stop or restart the canonical Weaver.
+     |Only after successful after evidence, start a separate registered
+     |`bootstrap-kondo` run (for example, use a distinct run id such as
      |`consumer-kondo-<timestamp>`). Drive that child run through its ready
      |frontier: choose the consumer's `greenfield` or `brownfield` adoption mode,
      |then complete every route step until the child result reports `:done true`.
@@ -368,7 +382,7 @@
      |starts only after that evidence and the successful handover. Leave the
      |separate child run available for audit and preserve its exact command and
      |result evidence."
-    worktree workspace)))
+    worktree workspace workspace)))
 
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
