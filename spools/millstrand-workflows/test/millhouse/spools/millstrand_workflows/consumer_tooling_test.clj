@@ -14,6 +14,9 @@
                          :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
                                       :git/sha "0123456789012345678901234567890123456789"}}})
 
+(def ^:private workflow-host-params
+  (assoc params :workspace "/tmp/workflow-host/.millstrand"))
+
 (def ^:private routes
   [[:app #'tooling/configure-consumer-tooling-app]
    [:spool #'tooling/configure-consumer-tooling-spool]
@@ -26,8 +29,11 @@
   (some #(when (= id (:id %)) %) (:steps definition)))
 
 (defn- instruction [definition id]
+  ((get-in (step definition id) [:attributes "workflow/instruction"]) params))
+
+(defn- instruction-with-params [definition id instruction-params]
   ((get-in (step definition id) [:attributes "workflow/instruction"])
-   params))
+   instruction-params))
 
 (defn- precedes?
   [text first-needle second-needle]
@@ -56,6 +62,28 @@
                                          :git/sha "18f2f43"}))))
   (is (not (s/valid? ::tooling/consumer-tooling-params
                      (assoc params :worktree " ")))))
+
+(deftest consumer-world-cannot-be-confused-with-workflow-host
+  (is (not (s/valid? ::tooling/consumer-tooling-params workflow-host-params)))
+  (doseq [[style definition-var] routes]
+    (testing (name style)
+      (let [route (definition definition-var)
+            bootstrap-text (instruction-with-params route :bootstrap-kondo
+                                                    workflow-host-params)
+            inspect-text (instruction-with-params route :prove-invocation-producer
+                                                  workflow-host-params)
+            handover-text (instruction-with-params route :handover
+                                                   workflow-host-params)]
+        (is (str/includes? bootstrap-text
+                           "derive the target consumer world as `/tmp/consumer/.millstrand`"))
+        (is (str/includes? bootstrap-text
+                           "{:worktree \"/tmp/consumer\" :workspace \"/tmp/consumer/.millstrand\"}"))
+        (is (str/includes? bootstrap-text "never substitute the disposable workflow-host workspace"))
+        (is (str/includes? inspect-text "/tmp/consumer/.millstrand"))
+        (is (str/includes? handover-text "/tmp/consumer/.millstrand"))
+        (is (not (str/includes? bootstrap-text "/tmp/workflow-host/.millstrand")))
+        (is (not (str/includes? inspect-text "/tmp/workflow-host/.millstrand")))
+        (is (not (str/includes? handover-text "/tmp/workflow-host/.millstrand")))))))
 
 (deftest repository-style-choice-is-explicit
   (let [parent (definition #'tooling/configure-consumer-tooling)

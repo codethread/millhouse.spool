@@ -522,6 +522,22 @@
                (get-in (weaver/show rt (get-in after-bootstrap [:root :id]))
                        [:attributes :workflow/context])))))))
 
+(deftest configure-consumer-tooling-rejects-the-workflow-host-world
+  (with-runtime
+    (fn [rt _]
+      (activate-cli! rt)
+      (activate-millstrand-workflows! rt)
+      (let [params {"worktree" "/tmp/consumer"
+                    "workspace" "/tmp/workflow-host/.millstrand"
+                    "invocation-producer" {"kind" "pinned-remote-family"
+                                           "family" "millhouse/spools"
+                                           "coordinate" {"git/url" "https://github.com/codethread/millhouse.spool.git"
+                                                         "git/sha" "0123456789012345678901234567890123456789"}}}]
+        (is (= :workflow/params-invalid
+               (reason-of #(started "run-configure-consumer-tooling-host-world"
+                                    :configure-consumer-tooling
+                                    :params params))))))))
+
 (deftest choose-refuses-a-frontier-without-a-checkpoint
   (with-runtime
     (fn [rt _]

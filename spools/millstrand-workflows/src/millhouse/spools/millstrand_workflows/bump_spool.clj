@@ -155,7 +155,8 @@
    (workflow/call :configure-consumer-tooling
                   #'tooling/configure-consumer-tooling
                   {:worktree (fn [{:keys [worktree]}] worktree)
-                   :workspace (fn [{:keys [workspace]}] workspace)
+                   :workspace (fn [{:keys [worktree]}]
+                                (str (java.io.File. ^String worktree ".millstrand")))
                    :invocation-producer (fn [{:keys [invocation-producer]}]
                                           invocation-producer)}
                   :depends-on [:refresh-runtime])

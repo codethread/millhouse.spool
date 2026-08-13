@@ -47,6 +47,20 @@
     (is (str/includes? text "remote default-branch HEAD SHA"))
     (is (not (str/includes? text "--to")))))
 
+(deftest consumer-tooling-child-receives-the-consumer-world
+  (let [host-params {:worktree "/tmp/consumer"
+                     :workspace "/tmp/workflow-host/.millstrand"
+                     :invocation-producer invocation-producer
+                     :families ["io.millstrand/millstrand"]
+                     :direct-user-request false}
+        call (step :configure-consumer-tooling)
+        child-params (into {}
+                           (map (fn [[key value]] [key (value host-params)]))
+                           (:params call))]
+    (is (= "/tmp/consumer" (:worktree child-params)))
+    (is (= "/tmp/consumer/.millstrand" (:workspace child-params)))
+    (is (not= (:workspace host-params) (:workspace child-params)))))
+
 (deftest bump-loop-reuses-bootstrap-before-consumer-tooling
   (let [bump-step (step :bump-spool)
         bootstrap-call (step :bootstrap-kondo)

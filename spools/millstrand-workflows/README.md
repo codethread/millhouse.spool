@@ -41,6 +41,8 @@ The import records exact roots, derivations, the verified Kondo command, and the
 
 After refresh, `configure-consumer-tooling` inspects the repository and asks the agent to choose one style:
 
+The consumer-tooling continuation derives its target workspace as `worktree/.millstrand` and verifies that world before the routed bootstrap. A disposable workflow-host workspace is never forwarded to the consumer tooling child.
+
 - `app`: a non-Clojure product that uses Clojure only for Millstrand config, tooling, and tests;
 - `spool`: a repository that owns and publishes one or more spool roots;
 - `clojure-app`: an ordinary Clojure application that also has Millstrand config.

@@ -111,6 +111,17 @@
       (is (str/includes? inspect-instruction (:workspace params))))
     (is (not-any? #(str/includes? (name %) "quality") refs))))
 
+(deftest local-path-binds-derived-consumer-workspace
+  (let [local (definition #'bump/bump-millstrand-local-validate)
+        call (step local :configure-consumer-tooling)
+        host-params (assoc params :workspace "/tmp/workflow-host/.millstrand")
+        child-params (into {}
+                           (map (fn [[key value]] [key (value host-params)]))
+                           (:params call))]
+    (is (= "/tmp/consumer" (:worktree child-params)))
+    (is (= "/tmp/consumer/.millstrand" (:workspace child-params)))
+    (is (not= (:workspace host-params) (:workspace child-params)))))
+
 (deftest pinned-path-uses-automatic-latest-sha-and-bootstrap
   (t/with-weaver-world [ctx {:storage :sqlite-memory
                              :spools-edn spools-edn}]

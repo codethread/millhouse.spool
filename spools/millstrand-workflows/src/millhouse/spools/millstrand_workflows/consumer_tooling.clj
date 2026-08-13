@@ -23,6 +23,18 @@
   (and (string? value)
        (boolean (re-matches #"[0-9a-f]{40}" value))))
 
+(defn- consumer-workspace
+  "Return the Millstrand workspace belonging to consumer `worktree`."
+  [^String worktree]
+  (str (java.io.File. worktree ".millstrand")))
+
+(defn- consumer-world?
+  "Return true when the declared workspace is the consumer worktree's world."
+  [{:keys [worktree workspace]}]
+  (and (non-blank-string? worktree)
+       (non-blank-string? workspace)
+       (= workspace (consumer-workspace worktree))))
+
 (defn- pinned-remote-family?
   "Return true when `value` names a pinned remote Millhouse family."
   [{:keys [kind family coordinate root]}]
@@ -61,10 +73,12 @@
   (s/or :pinned-remote-family ::pinned-remote-family
         :local-self-root ::local-self-root))
 (s/def ::consumer-tooling-params
-  (s/keys :req-un [::worktree ::workspace ::invocation-producer]))
+  (s/and
+   (s/keys :req-un [::worktree ::workspace ::invocation-producer])
+   consumer-world?))
 
 (defn- invocation-producer-instruction
-  [{:keys [worktree workspace invocation-producer]}]
+  [{:keys [worktree invocation-producer]}]
   (fmt/reflow
    (format
     "|In worktree `%s` and selected workspace `%s`, before bootstrap, prove the
@@ -81,10 +95,10 @@
      |one version-coherent family coordinate. Stop only when metadata is missing
      |or incomparable, or the manual alignment cannot be verified. Do not infer
      |the running workflow SHA, guess metadata, or automate these edits."
-    worktree workspace (pr-str invocation-producer))))
+    worktree (consumer-workspace worktree) (pr-str invocation-producer))))
 
 (defn- inspect-repository-instruction
-  [{:keys [worktree workspace]}]
+  [{:keys [worktree]}]
   (fmt/reflow
    (format
     "|In worktree `%s` and selected workspace `%s`, inspect the repository before
@@ -99,7 +113,7 @@
      |`clojure-app` when ordinary application Clojure source and Millstrand
      |config coexist. Stop rather than guessing when more than one style owns
      |the repository."
-    worktree workspace workspace)))
+    worktree (consumer-workspace worktree) (consumer-workspace worktree))))
 
 (defn- basis-instruction
   [style {:keys [worktree]}]
@@ -369,7 +383,7 @@
       worktree))))
 
 (defn- weaver-instruction
-  [style {:keys [workspace]}]
+  [style {:keys [worktree]}]
   (let [style-proof
         (case style
           :app
@@ -393,10 +407,10 @@
        |the Weaver and do not call the new coordinate proved. Record which tooling
        |configuration is prepared and mark the exact probe against the adopted
        |generation as unfinished until authorized cutover."
-      workspace style-proof))))
+      (consumer-workspace worktree) style-proof))))
 
 (defn- handover-instruction
-  [style {:keys [worktree workspace]}]
+  [style {:keys [worktree]}]
   (fmt/reflow
    (format
     "|Leave a `%s` tooling handover for worktree `%s` and workspace `%s`.
@@ -408,15 +422,18 @@
      |generation proof. If a pending generation remains, mark the style-specific
      |post-cutover Weaver check as unfinished. Do not stop, restart, push, or
      |land from this step."
-    (name style) worktree workspace)))
+    (name style) worktree (consumer-workspace worktree))))
 
 (defn- bootstrap-composition-instruction
   "Return the manual handoff instructions for the separate bootstrap run."
-  [{:keys [worktree workspace]}]
+  [{:keys [worktree]}]
   (fmt/reflow
    (format
-    "|In worktree `%s`, first attempt exact target status for workspace `%s` with
-     |`strand --workspace %s spool status`. Record the before evidence: the exact
+    "|In worktree `%s`, derive the target consumer world as `%s` (`worktree/.millstrand`).
+     |The separate child `bootstrap-kondo` run must receive and verify exactly
+     |`{:worktree \"%s\" :workspace \"%s\"}` before it runs any command; never
+     |substitute the disposable workflow-host workspace. Record the first attempt exact target status
+     |with `strand --workspace %s spool status`. Record the before evidence: the exact
      |command, structured result, selected workspace, and current Weaver/root
      |identities. Treat `mill/no-selected-weaver` as the normal clean-worktree
      |state, not an acquisition failure: explicitly start that exact worktree
@@ -449,7 +466,8 @@
      |starts only after that evidence and the successful handover. Leave the
      |separate child run available for audit and preserve its exact command and
      |result evidence."
-    worktree workspace workspace workspace)))
+    worktree (consumer-workspace worktree) worktree (consumer-workspace worktree)
+    (consumer-workspace worktree) (consumer-workspace worktree))))
 
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
@@ -520,8 +538,10 @@
 (workflow/defworkflow configure-consumer-tooling
   "Choose and configure tooling for a Millstrand consumer repository style.
 
-  Start or call it with the exact consumer worktree, selected workspace, and
-  invocation-producer coordinate. The coordinate must be either a pinned remote
+  Start or call it with the exact consumer worktree, its derived
+  `worktree/.millstrand` workspace, and invocation-producer coordinate. The
+  workspace is verified against the worktree and never taken from a disposable
+  workflow host. The coordinate must be either a pinned remote
   `millhouse/spools` family or a local Millhouse self root. The agent first
   inspects the effective spool world and repository conventions, then chooses
   `app`, `spool`, or `clojure-app`. The selected continuation manually aligns
@@ -540,7 +560,7 @@
               :coordinate {:git/url "https://github.com/codethread/millhouse.spool.git"
                            :git/sha "0123456789012345678901234567890123456789"}}}
    :param-docs {:worktree "Exact consumer worktree to inspect and update."
-                :workspace "Exact selected Millstrand workspace for the consumer."
+                :workspace "Derived consumer workspace; must equal worktree/.millstrand."
                 :invocation-producer
                 (fmt/reflow
                  "|Required exact coordinate of the Millhouse workflow producer:
