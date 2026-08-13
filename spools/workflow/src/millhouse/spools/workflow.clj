@@ -1445,7 +1445,7 @@
   :entry-spec :millhouse.spools.workflow.internal.registry/executor-entry
   :binding-moment :gate-evaluation})
 
-(lifecycle/defseed workflow-vocabulary
+(lifecycle/defseed! workflow-vocabulary
   "Seed the process-lifetime Workflow attribute vocabulary."
   {:apply 'millhouse.spools.workflow/seed-workflow-vocab!})
 

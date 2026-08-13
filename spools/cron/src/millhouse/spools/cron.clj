@@ -469,7 +469,7 @@
                   {:reconciled :cron :jobs []}
                   "Invalid Cron removal result"))
 
-(lifecycle/defreconcile scheduled-jobs
+(lifecycle/defreconcile! scheduled-jobs
   "Lifecycle declaration that keeps durable Cron wakes converged on the
   effective `job-kind` registry.
 

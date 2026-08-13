@@ -395,7 +395,7 @@
                  {:gate (:id gate) :error (attr gate :gate/error)})]
     (require-valid! ::stall-detail result "Invalid shell gate stall detail")))
 
-(millstrand/defquery stalled-shell-gates
+(millstrand/defquery! stalled-shell-gates
   "Return active shell gates carrying a durable error stamp.
 
   The query is the persistence-side companion to `shell-stalled?`:
@@ -495,13 +495,13 @@
                   {:unregistered :shell/engine}
                   "Invalid shell handler close result"))
 
-(lifecycle/defresource shell-pool
+(lifecycle/defresource! shell-pool
   "Own the shell worker pool for the lifetime of the runtime."
   {:open 'millhouse.spools.executors.shell/open-shell-pool!
    :close 'millhouse.spools.executors.shell/close-shell-pool!
    :scope :runtime})
 
-(lifecycle/defresource shell-handler
+(lifecycle/defresource! shell-handler
   "Own the shell event handler for the lifetime of the module."
   {:open 'millhouse.spools.executors.shell/open-shell-handler!
    :close 'millhouse.spools.executors.shell/close-shell-handler!

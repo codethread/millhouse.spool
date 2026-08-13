@@ -694,14 +694,14 @@
                      |:spools ['millhouse.spools/kanban] :required? true}) before
                      |activating the kanban peering module.")})))
 
-(millstrand/defop kanban-peers
+(millstrand/defop! kanban-peers
   "List sibling weavers and whether each accepts peered kanban cards."
   {:arg-spec kanban-peers-arg-spec
    :returns kanban-peers-returns}
   [ctx]
   (peers-result ctx))
 
-(millstrand/defop kanban-send
+(millstrand/defop! kanban-send
   "Send a pending or refinement card (or epic bundle) to a sibling weaver's board."
   {:arg-spec kanban-send-arg-spec
    :returns kanban-send-returns}
@@ -733,7 +733,7 @@
   [_context]
   {:closed :kanban-peering})
 
-(lifecycle/defresource kanban-peering-receiver
+(lifecycle/defresource! kanban-peering-receiver
   "Own guarded Guild receiver registration for the peering module lifetime."
   {:open 'millhouse.spools.kanban.peering/open-peering!
    :close 'millhouse.spools.kanban.peering/close-peering!})

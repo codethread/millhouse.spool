@@ -602,7 +602,7 @@
                             visible
                             (registry/effective (rule-kinds) rule-kind))]])))))))
 
-(lifecycle/defresource engine
+(lifecycle/defresource! engine
   "Own Chime's handler, mutation barrier, and visible rule view atomically.
 
   Activation applies this resource; removing it unregisters the event handler

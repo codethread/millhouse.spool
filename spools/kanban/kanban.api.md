@@ -162,6 +162,15 @@ Close a kanban card with an explicit outcome, polymorphic on `kanban/type`.
   Reopen is paired with abandon only; a completed epic remains closed.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L541-L567">Source</a></sub></p>
 
+## <a name="millhouse.spools.kanban/kanban">`kanban`</a>
+``` clojure
+(kanban ctx)
+```
+Function.
+
+Manage the user-facing kanban work board.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1627-L1631">Source</a></sub></p>
+
 ## <a name="millhouse.spools.kanban/kanban-batch">`kanban-batch`</a>
 ``` clojure
 (kanban-batch {:keys [input]})
@@ -212,23 +221,14 @@ Open the interactive Kanban board in the caller's terminal.
 Select active pending cards hanging directly under one epic.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1656-L1663">Source</a></sub></p>
 
-## <a name="millhouse.spools.kanban/kanban-export-op">`kanban-export-op`</a>
+## <a name="millhouse.spools.kanban/kanban-export">`kanban-export`</a>
 ``` clojure
-(kanban-export-op ctx)
+(kanban-export ctx)
 ```
 Function.
 
 Return a card's full parent-of subtree with its internal depends-on edges.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1633-L1637">Source</a></sub></p>
-
-## <a name="millhouse.spools.kanban/kanban-op">`kanban-op`</a>
-``` clojure
-(kanban-op ctx)
-```
-Function.
-
-Manage the user-facing kanban work board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1627-L1631">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-pending">`kanban-pending`</a>
 

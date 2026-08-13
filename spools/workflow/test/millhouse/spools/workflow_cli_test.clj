@@ -148,11 +148,11 @@
 
 (defn- listed
   ([] (listed {}))
-  ([args] (:definitions (cli/workflow-op {:op/args (assoc args :subcommand ["list"])}))))
+  ([args] (:definitions (cli/workflow {:op/args (assoc args :subcommand ["list"])}))))
 
 (defn- shown
   [name]
-  (cli/workflow-op {:op/args {:subcommand ["show"] :workflow (clojure.core/name name)}}))
+  (cli/workflow {:op/args {:subcommand ["show"] :workflow (clojure.core/name name)}}))
 
 (defn- wire-value
   [value]
@@ -182,7 +182,7 @@
       (let [entry (weaver/resolve-op rt 'workflow)]
         (is (= "workflow" (:name entry)))
         (is (= 'millhouse.spools.workflow.cli (:provenance entry)))
-        (is (= 'millhouse.spools.workflow.cli/workflow-op (:fn entry)))
+        (is (= 'millhouse.spools.workflow.cli/workflow (:fn entry)))
         (testing "both verbs declare their own classes on the arg-spec leaf"
           (doseq [verb ["list" "show"]]
             (let [leaf (get-in entry [:arg-spec :subcommands verb])]
@@ -460,7 +460,7 @@
                                     :after [:millhouse/spools-workflow])
       (workflow/register-executor! :bare-sym 'millhouse.spools.workflow-cli-test/never-stalled)
       (workflow/register-executor! :raw-fn (constantly nil))
-      (let [result (cli/workflow-op {:op/args {:subcommand ["executors"]}})
+      (let [result (cli/workflow {:op/args {:subcommand ["executors"]}})
             items (:executors result)
             by-waiter (into {} (map (juxt :waiter identity)) items)]
         (is (= "workflow executors" (:operation result)))
@@ -496,7 +496,7 @@
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :spike)
-      (let [list-result (cli/workflow-op {:op/args {:subcommand ["list"]}})]
+      (let [list-result (cli/workflow {:op/args {:subcommand ["list"]}})]
         (is (= "workflow list" (:operation list-result)))
         (test-alpha/check-op-return! rt 'workflow {:subcommand ["list"]}
                                      (wire-value list-result)))
@@ -506,7 +506,7 @@
       (workflow/register-executor! :bare-sym 'millhouse.spools.workflow-cli-test/never-stalled)
       (test-alpha/check-op-return!
        rt 'workflow {:subcommand ["executors"]}
-       (wire-value (cli/workflow-op {:op/args {:subcommand ["executors"]}}))))))
+       (wire-value (cli/workflow {:op/args {:subcommand ["executors"]}}))))))
 
 (deftest declared-args-carry-argv-to-the-verbs
   ;; The op is reached as argv, so the declared arg-spec is the real entrance:
@@ -523,7 +523,7 @@
         (is (= {:subcommand ["executors"]} (parse ["executors"])))
         (is (= ["build" "review"]
                (mapv :name (listed (parse ["list" "--entrypoint" "call"])))))
-        (is (= "spike" (:name (cli/workflow-op {:op/args (parse ["show" "spike"])}))))
+        (is (= "spike" (:name (cli/workflow {:op/args (parse ["show" "spike"])}))))
         (testing "the parser refuses what the surface does not declare"
           (is (thrown? clojure.lang.ExceptionInfo (parse ["show"])))
           (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--all"])))
@@ -535,4 +535,4 @@
     (fn [rt _]
       (activate-cli! rt)
       (is (thrown? clojure.lang.ExceptionInfo
-                   (cli/workflow-op {:op/args {:subcommand ["explain"]}}))))))
+                   (cli/workflow {:op/args {:subcommand ["explain"]}}))))))

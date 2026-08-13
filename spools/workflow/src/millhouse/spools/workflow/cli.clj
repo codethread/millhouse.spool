@@ -534,7 +534,7 @@
    {:name "workflow/step-not-defer"
     :definition "The step named for workflow defer holds another role."}])
 
-(millstrand/defop workflow
+(millstrand/defop! workflow
   "Discover and drive the workflows this weaver has registered: list the catalogue, show one definition, then start a run and move it through its ready frontier."
   (merge {:arg-spec workflow-arg-spec
           :returns workflow-returns
@@ -583,6 +583,6 @@
      runtime (assoc outcome :owner 'millhouse.spools.workflow.cli)))
   {:seeded :workflow-cli-glossary})
 
-(lifecycle/defseed workflow-glossary-seed
+(lifecycle/defseed! workflow-glossary-seed
   "Seed the process-lifetime Workflow CLI failure glossary."
   {:apply 'millhouse.spools.workflow.cli/seed-workflow-glossary!})

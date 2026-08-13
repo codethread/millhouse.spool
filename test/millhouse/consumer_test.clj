@@ -67,18 +67,26 @@
       :after [:millhouse/workflow]
       :required? true})")
 
-(deftest family-syncs-and-activates-all-roots
+(deftest family-syncs-activates-and-publishes-all-roots
   (test-alpha/with-weaver-world
     [ctx {:spools-edn {:spools {'millhouse/spools
                                 {:local/root (repository-root)
                                  :roots roots}}}
           :init init}]
-    (let [status (test-alpha/repl!
-                  ctx
-                  '(do
-                     (require '[millstrand.api.current.alpha :as current]
-                              '[millstrand.api.runtime.alpha :as runtime])
-                     (runtime/status (current/runtime))))
+    (let [{:keys [status op-names glossary-outcomes workflow-names]}
+          (test-alpha/repl!
+           ctx
+           '(do
+              (require '[millhouse.spools.workflow :as workflow]
+                       '[millstrand.api.current.alpha :as current]
+                       '[millstrand.api.runtime.alpha :as runtime]
+                       '[millstrand.api.runtime.glossary.alpha :as glossary]
+                       '[millstrand.api.weaver.alpha :as weaver])
+              (let [rt (current/runtime)]
+                {:status (runtime/status rt)
+                 :op-names (set (map :name (weaver/ops rt)))
+                 :glossary-outcomes (set (map :name (glossary/glossary-outcomes rt)))
+                 :workflow-names (set (keys (workflow/workflows)))})))
           outcomes (:module/outcomes status)]
       (is (= #{:applied}
              (set (map :status (vals outcomes)))))
@@ -90,7 +98,13 @@
                :millhouse/shell-executor
                :millhouse/kanban
                :millhouse/millstrand-workflows}
-             (set (keys outcomes)))))))
+             (set (keys outcomes))))
+      (is (contains? op-names "workflow"))
+      (is (contains? glossary-outcomes "workflow/ready-next-absent"))
+      (is (= :applied
+             (get-in status [:lifecycle/outcomes :millhouse/workflow-cli
+                             :workflow-glossary-seed :status])))
+      (is (contains? workflow-names :publish-spool-kondo)))))
 
 (deftest repository-kondo-config-keeps-producer-ownership
   (let [root (io/file (repository-root))
@@ -262,7 +276,7 @@
           source-file (io/file consumer "src/consumer/forms.clj")
           spool-classpath (resolved-spool-classpath root)]
       (try
-        (is (= "fb6c9057d594bfa4b5ea8531b9774b5e9a23a4b4"
+        (is (= "3bbe5dc15359975a8e8203ef47b3a7514177e75b"
                (:git/sha millstrand-dep)))
         (portable-consumer-bin! bin-dir)
         (write-file! kondo-config "{}")

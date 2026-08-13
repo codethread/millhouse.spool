@@ -20,11 +20,11 @@
   (some-> (ns-resolve 'millhouse.spools.kanban.peering var-sym) var-get))
 
 (defn- peers-op [context]
-  ((public-value 'kanban-peers-op) context))
+  ((public-value 'kanban-peers) context))
 
 (deftest authored-module-exposes-forms-without-legacy-entry-points
-  (is (fn? (public-value 'kanban-peers-op)))
-  (is (fn? (public-value 'kanban-send-op)))
+  (is (fn? (public-value 'kanban-peers)))
+  (is (fn? (public-value 'kanban-send)))
   (is (= {:kind :resource
           :open 'millhouse.spools.kanban.peering/open-peering!
           :close 'millhouse.spools.kanban.peering/close-peering!

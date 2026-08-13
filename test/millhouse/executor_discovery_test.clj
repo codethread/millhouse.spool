@@ -24,7 +24,7 @@
   (with-runtime
     (fn [runtime _]
       (activate-executors! runtime)
-      (let [items (:executors (cli/workflow-op {:op/args {:subcommand ["executors"]}}))
+      (let [items (:executors (cli/workflow {:op/args {:subcommand ["executors"]}}))
             by-waiter (into {} (map (juxt :waiter identity)) items)]
         (testing "shell"
           (let [request (:request (by-waiter "shell"))]

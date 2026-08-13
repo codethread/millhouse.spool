@@ -70,18 +70,18 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
 Own guarded Guild receiver registration for the peering module lifetime.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L736-L739">Source</a></sub></p>
 
-## <a name="millhouse.spools.kanban.peering/kanban-peers-op">`kanban-peers-op`</a>
+## <a name="millhouse.spools.kanban.peering/kanban-peers">`kanban-peers`</a>
 ``` clojure
-(kanban-peers-op ctx)
+(kanban-peers ctx)
 ```
 Function.
 
 List sibling weavers and whether each accepts peered kanban cards.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L697-L702">Source</a></sub></p>
 
-## <a name="millhouse.spools.kanban.peering/kanban-send-op">`kanban-send-op`</a>
+## <a name="millhouse.spools.kanban.peering/kanban-send">`kanban-send`</a>
 ``` clojure
-(kanban-send-op ctx)
+(kanban-send ctx)
 ```
 Function.
 

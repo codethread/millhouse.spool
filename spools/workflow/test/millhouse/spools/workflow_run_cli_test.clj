@@ -134,7 +134,7 @@
   "Call the op handler the way the weaver does, with parsed args and the argv they
   were parsed from (which `--attr` duplicate detection is the only reader of)."
   ([args] (invoke args []))
-  ([args argv] (cli/workflow-op {:op/args args :op/argv argv})))
+  ([args argv] (cli/workflow {:op/args args :op/argv argv})))
 
 (defn- from-argv
   "Parse real argv against the registered arg-spec and invoke the handler with

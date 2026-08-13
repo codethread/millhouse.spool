@@ -17,8 +17,8 @@
   (some-> (ns-resolve 'millhouse.spools.kanban var-sym) var-get))
 
 (deftest authored-module-exposes-forms-without-legacy-entry-points
-  (is (fn? (public-value 'kanban-op)))
-  (is (fn? (public-value 'kanban-export-op)))
+  (is (fn? (public-value 'kanban)))
+  (is (fn? (public-value 'kanban-export)))
   (is (fn? (public-value 'kanban-batch)))
   (is (= {:name "kanban-dash"
           :doc "Open the interactive Kanban board in the caller's terminal."
