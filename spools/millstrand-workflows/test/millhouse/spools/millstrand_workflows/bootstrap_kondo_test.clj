@@ -16,6 +16,9 @@
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
 
+(defn- instruction [definition id]
+  ((get-in (step definition id) [:attributes "workflow/instruction"]) params))
+
 (def ^:private bootstrap-routes
   [#'bootstrap/bootstrap-kondo
    #'bootstrap/bootstrap-kondo-greenfield
@@ -27,6 +30,13 @@
 
 (defn- has-executor-attribute? [step]
   (some #(contains? (:attributes step) %) executor-attributes))
+
+(defn- precedes? [text first-needle second-needle]
+  (let [first-index (str/index-of text first-needle)
+        second-index (str/index-of text second-needle)]
+    (and (some? first-index)
+         (some? second-index)
+         (< first-index second-index))))
 
 (deftest params-require-explicit-local-world
   (is (s/valid? ::bootstrap/bootstrap-kondo-params params))
@@ -131,7 +141,7 @@
         (is (= 1 (count (re-seq #"KONDO_CMD --lint" instruction))))
         (is (not (str/includes? instruction
                                 "clj-kondo --lint \"$(clojure -Spath)\"")))
-        (is (str/includes? instruction "exact roots and final classpath"))
+        (is (str/includes? instruction "exact roots and final canonical classpath"))
         (is (str/includes? instruction "Do not require GitHub, GitLab, or `jq`")))
       (let [validate-instruction ((get-in validate [:attributes
                                                     "workflow/instruction"])
@@ -181,6 +191,64 @@
                          "immediately after import"))
       (is (str/includes? handover-instruction
                          "consumer self-import result before/during/after quality")))))
+
+(deftest local-self-filters-owned-producer-roots-before-copy
+  (let [definition (definition #'bootstrap/bootstrap-kondo-greenfield)
+        copy-text (instruction definition :copy-configs)
+        validate-text (instruction definition :validate)]
+    (is (str/includes? copy-text "owned-roots"))
+    (is (str/includes? copy-text "Millhouse local-self"))
+    (is (str/includes? copy-text "owned producer classpath or export path"))
+    (is (str/includes? copy-text "fail loudly before import"))
+    (is (precedes? copy-text "owned producer classpath or export path"
+                   "KONDO_CMD --lint RESOLVED_CLASSPATH"))
+    (is (str/includes? copy-text "do not copy first and remove self-imports afterward"))
+    (is (str/includes? validate-text "Reuse the exact `owned-roots` table"))
+    (is (str/includes? validate-text "every owned producer export is absent"))
+    (is (str/includes? validate-text "For a Millhouse local-self root"))))
+
+(deftest final-classpath-filters-consumer-reintroduction-before-command
+  (let [copy-text (instruction (definition #'bootstrap/bootstrap-kondo-greenfield)
+                               :copy-configs)]
+    (is (str/includes? copy-text
+                       "Canonicalize every installed contribution entry"))
+    (is (str/includes? copy-text
+                       "every entry in the consumer Clojure classpath"))
+    (is (str/includes? copy-text
+                       "every owned producer classpath or export comparison path"))
+    (is (precedes? copy-text "Canonicalize every installed contribution entry"
+                   "Combine the canonical contributions"))
+    (is (precedes? copy-text
+                   "every owned producer classpath or export comparison path"
+                   "Combine the canonical contributions"))
+    (is (str/includes? copy-text "Any failed canonicalization is a loud pre-copy failure"))
+    (is (str/includes? copy-text
+                       "apply ownership classification to that final combined classpath"))
+    (is (str/includes? copy-text "consumer `clojure -Spath` reintroduction"))
+    (is (str/includes? copy-text "descendant of one"))
+    (is (str/includes? copy-text "cannot be canonicalized or reconciled"))
+    (is (precedes? copy-text "final combined classpath"
+                   "KONDO_CMD --lint RESOLVED_CLASSPATH"))
+    (is (str/includes? copy-text
+                       "Immediately before `KONDO_CMD`, assert"))
+    (is (str/includes? copy-text
+                       "assert using only canonical paths"))
+    (is (str/includes? copy-text
+                       "Every `RESOLVED_CLASSPATH` entry must be canonical"))
+    (is (str/includes? copy-text
+                       "canonical owned export paths themselves are absent"))))
+
+(deftest ordinary-remote-retains-dependency-producer-exports
+  (let [definition (definition #'bootstrap/bootstrap-kondo-greenfield)
+        copy-text (instruction definition :copy-configs)
+        validate-text (instruction definition :validate)]
+    (is (str/includes? copy-text "Keep every non-owned dependency export"))
+    (is (str/includes? copy-text "including a pinned remote `millhouse/spools` family"))
+    (is (str/includes? copy-text "Keep the explicit `millstrand/source-root` contribution"))
+    (is (str/includes? validate-text
+                       "for an ordinary pinned remote Millhouse family, retain"))
+    (is (str/includes? validate-text "present exactly once"))
+    (is (not (str/includes? validate-text "reject every Millhouse producer import")))))
 
 (deftest bootstrap-does-not-fix-a-repository-quality-command
   (let [compiled (workflow/compile (definition #'bootstrap/bootstrap-kondo-greenfield)

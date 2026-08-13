@@ -2,10 +2,11 @@
   "Bootstrap Millstrand clj-kondo support in an explicitly selected consumer.
 
   The workflow asks whether the consumer is greenfield or brownfield before it
-  gives configuration instructions. Both routes import the complete resolved
-  classpath once, make explicit bootstrap the sole Kondo import owner, manually
-  validate provenance and cache hygiene, and hand back the local quality command
-  for the consumer rather than guessing one."
+  gives configuration instructions. Both routes import the complete eligible
+  resolved classpath once, excluding consumer-owned producer roots, make
+  explicit bootstrap the sole Kondo import owner, manually validate provenance
+  and cache hygiene, and hand back the local quality command for the consumer
+  rather than guessing one."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.format.alpha :as fmt]
@@ -30,11 +31,21 @@
     "|In `%s`, read the live resolved world before importing by running
      |`strand --workspace %s spool status` and inspecting its structured output.
      |Treat every intended installed root reported by that status as required:
-     |fail loudly if any root is unresolved or missing. For each resolved root,
-     |record its exact identity and reported `sync.root`, read that root's
-     |`deps.edn`, and resolve its `:paths` relative to `sync.root`. For every
-     |declared `millstrand/source-root` coordinate, handle the source-root
-     |specially while still processing its installed spool root normally. Treat
+     |fail loudly if any root is unresolved or missing. Before resolving any
+     |classpath, parse the selected `spools.edn` and the consumer's producer
+     |metadata once into an `owned-roots` table. Identify exact family/root
+     |coordinates whose local coordinate resolves inside this worktree and whose
+     |declared root is a consumer-owned producer root. Record each exact key,
+     |coordinate, canonical owner path, reported `sync.root`, and export
+     |directory. Match by exact family/root and coordinate; do not infer
+     |ownership from namespace text or path resemblance. Every candidate owned
+     |root must match exactly one status root; fail loudly before import when it
+     |matches zero or more than one, reporting the candidates and permitted
+     |ownership invariant. For each resolved root, record its exact identity and
+     |reported `sync.root`, read that root's `deps.edn`, and resolve its `:paths`
+     |relative to `sync.root`. For every declared `millstrand/source-root`
+     |coordinate, handle the source-root specially while still processing its
+     |installed spool root normally. Treat
      |the declaration as a relative path and derive `BASE` by removing exactly
      |its path segments from the end of the reported `sync.root`; validate that
      |normalized `BASE` joined with the declared path is exactly `sync.root`.
@@ -48,13 +59,40 @@
      |export at `BASE/resources/clj-kondo.exports/io.millstrand/millstrand/`;
      |fail loudly when that resource is absent. Match the runtime for ordinary
      |roots too: absent `:paths` defaults to the `src` path, while explicit
-     |`:paths []` remains empty. Do not guess paths. Combine those actual root
-     |and Millstrand base directories with the consumer Clojure classpath, and
-     |record the exact roots and final classpath, including each source-root/base
-     |derivation. The plain consumer `clojure -Spath` alone is
-     |insufficient and must be explicitly rejected, including when the consumer
-     |`deps.edn` has `:paths []`. Fail loudly when the installed-spool contribution
-     |is empty. Every failure above must report the exact family/root coordinate,
+     |`:paths []` remains empty. Do not guess paths. Canonicalize every installed
+     |contribution entry, every entry in the consumer Clojure classpath, and every
+     |owned producer classpath or export comparison path with the same canonical
+     |path operation used for the owned-root table, before taking the union or
+     |applying ownership filtering. Any failed canonicalization is a loud
+     |pre-copy failure. Combine the canonical contributions and apply ownership
+     |classification to that final combined classpath: exclude an entry when it
+     |is exactly an owned producer classpath or export path, or is a descendant of
+     |one, according to the canonical owned-root table. This final pass must
+     |remove a consumer `clojure -Spath` reintroduction even when the same owned
+     |path was already removed from the installed contribution. If a classpath
+     |entry cannot be canonicalized or reconciled with the table, fail loudly; do
+     |not compare raw strings, infer ownership from a path prefix, or silently
+     |retain an ambiguous entry. Apply this rule to every consumer-owned producer
+     |export in a Millhouse local-self world. Keep every non-owned dependency
+     |export, including a pinned
+     |remote `millhouse/spools` family. Keep the explicit `millstrand/source-root`
+     |contribution and its `BASE`-derived paths as the declared exception: they are
+     |retained even when under the worktree and are not owned producer paths merely
+     |because of that location. Record the owned roots, retained dependency roots,
+     |and final canonical classpath. Record the exact roots and final canonical
+     |classpath. The plain consumer
+     |`clojure -Spath` alone is insufficient and
+     |must be explicitly rejected, including when the consumer `deps.edn` has
+     |`:paths []`. Fail loudly when the filtered installed-spool contribution is
+     |empty. `RESOLVED_CLASSPATH` must be this final canonical-filtered
+     |classpath; do not copy first and remove self-imports afterward. Every
+     |`RESOLVED_CLASSPATH` entry must be canonical. Immediately before
+     |`KONDO_CMD`, assert using only canonical paths that no owned producer
+     |classpath or export path, nor any descendant, remains in
+     |`RESOLVED_CLASSPATH`, and that the canonical owned export paths themselves
+     |are absent. If the canonical-only assertion or its ownership check cannot be
+     |reconciled, fail loudly. Every failure above must report the exact family/root
+     |coordinate,
      |status, `sync.root`, declaration, derived `BASE`, and failing path as
      |applicable, plus the permitted corrective invariant: a synced root; a
      |relative non-escaping declaration that reconstructs `sync.root`; a readable
@@ -132,15 +170,20 @@
   (fmt/reflow
    (format
     "|In `%s`, validate the imported `.clj-kondo` tree against the resolved
-     |classpath and producer `clj-kondo.exports` resources. Confirm every
-     |Millstrand and installed sibling spool export has one provenance source,
-     |no duplicate config or hook mapping, no overlapping consumer-owned remap,
-     |and no tracked `.clj-kondo/.cache` file. Identify the consumer repository's
-     |own producer namespace and import coordinates from its project metadata and
-     |producer exports, then confirm those coordinates are absent from
-     |`.clj-kondo/imports`; reject only that repository-relative self-import.
-     |Legitimate Millhouse and other producer imports in a consumer are expected
-     |and must not be rejected. Record the self-import result before import,
+     |classpath and producer `clj-kondo.exports` resources. Reuse the exact
+     |`owned-roots` table parsed before import; do not rediscover ownership from
+     |the copied tree. Confirm every retained Millstrand and installed sibling
+     |spool export has one provenance source, no duplicate config or hook mapping,
+     |no overlapping consumer-owned remap, and no tracked `.clj-kondo/.cache` file.
+     |Identify the consumer repository's own producer namespace and import
+     |coordinates through that table. Confirm every owned producer export is
+     |absent from `.clj-kondo/imports` and
+     |every retained dependency export expected by status is present exactly once.
+     |For a Millhouse local-self root, reject every repository-relative self-import;
+     |for an ordinary pinned remote Millhouse family, retain and validate its
+     |producer imports. Legitimate Millhouse and other producer imports remain
+     |valid. Any missing, duplicate, or ambiguous ownership result fails loudly.
+     |Record the self-import result before import,
      |immediately after import, and after quality. Confirm `.lsp/config.edn`
      |exists and records `:copy-kondo-configs? false`, proving explicit bootstrap
      |remains the sole import owner. Record the producer path for each imported
@@ -236,12 +279,24 @@
      :workspace \"/abs/path/to/consumer-worktree/.millstrand\"})
   ```
 
-  Both routes import all resolved dependency exports once, validate provenance,
-  duplicate mappings, and cache hygiene manually, discover local quality checks,
-  and leave a precise handover. Both route preparations merge
+  Both routes import all eligible resolved dependency exports once, excluding
+  consumer-owned producer roots, validate provenance, duplicate mappings, and
+  cache hygiene manually, discover local quality checks, and leave a precise
+  handover. Both route preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
-  LSP settings, so explicit bootstrap remains the sole import owner. The
-  agent-owned import runs `strand --workspace
+  LSP settings, so explicit bootstrap remains the sole import owner. Before
+  resolving paths, the agent parses the selected spool metadata once into an
+  `owned-roots` table. It canonicalizes every installed contribution entry,
+  every consumer classpath entry, and every owned classpath/export comparison
+  path with one path operation before union and ownership filtering. A failed
+  canonicalization is a loud pre-copy failure. It filters the final combined
+  classpath for exact owned producer classpath/export paths and their
+  descendants, retains true remote dependency exports, and asserts immediately
+  before `KONDO_CMD` using only canonical paths that no owned export remains. It
+  fails loudly on ambiguous or unreconcilable canonical ownership. The explicit
+  `millstrand/source-root` contribution and its `BASE`-derived paths remain
+  retained even under the worktree. The agent-owned import runs
+  `strand --workspace
   <workspace> spool status`, derives every installed root's classpath from its
   `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
   path while preserving explicit `[]`. A declared `millstrand/source-root`
@@ -255,14 +310,19 @@
   readable regular file, or invalid EDN, or a missing export; do not search
   upward or guess. Failures report the exact coordinate, source-root values,
   failing path, and permitted corrective invariant. The installed source-root
-  spool is still resolved normally. It combines those directories with the
-  consumer classpath and records the exact roots and classpath, including each
-  base derivation, before one
+  spool is still resolved normally. It canonicalizes every installed directory,
+  consumer classpath entry, and owned classpath/export comparison path with the
+  same operation before union and filtering, then records the exact roots and
+  final canonical-filtered classpath, including each base derivation, before one
   `KONDO_CMD --lint RESOLVED_CLASSPATH
-  --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
-  consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
-  installed-spool contribution fail loudly. No repository hosting or release
-  operation is part of this workflow."
+  --dependencies --parallel --copy-configs --skip-lint` invocation. Immediately
+  before it, the agent asserts using only canonical paths that no owned producer
+  classpath or export path, or descendant, remains in `RESOLVED_CLASSPATH`, and
+  that every owned export path is absent. Plain consumer `clojure -Spath` alone
+  is insufficient; unresolved or ambiguously owned roots, failed
+  canonicalization, unreconcilable canonical ownership, and an empty filtered
+  installed-spool contribution fail loudly. No cleanup-after-copy workaround is
+  allowed. No repository hosting or release operation is part of this workflow."
   {:entrypoints #{:start :call}
    :param-spec ::bootstrap-kondo-params
    :defaults {}

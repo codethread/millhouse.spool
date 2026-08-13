@@ -49,10 +49,11 @@ Publish clj-kondo support for a macro-owning spool root.
 Bootstrap Millstrand clj-kondo support in an explicitly selected consumer.
 
   The workflow asks whether the consumer is greenfield or brownfield before it
-  gives configuration instructions. Both routes import the complete resolved
-  classpath once, make explicit bootstrap the sole Kondo import owner, manually
-  validate provenance and cache hygiene, and hand back the local quality command
-  for the consumer rather than guessing one.
+  gives configuration instructions. Both routes import the complete eligible
+  resolved classpath once, excluding consumer-owned producer roots, make
+  explicit bootstrap the sole Kondo import owner, manually validate provenance
+  and cache hygiene, and hand back the local quality command for the consumer
+  rather than guessing one.
 
 
 
@@ -74,12 +75,24 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
      :workspace "/abs/path/to/consumer-worktree/.millstrand"})
   ```
 
-  Both routes import all resolved dependency exports once, validate provenance,
-  duplicate mappings, and cache hygiene manually, discover local quality checks,
-  and leave a precise handover. Both route preparations merge
+  Both routes import all eligible resolved dependency exports once, excluding
+  consumer-owned producer roots, validate provenance, duplicate mappings, and
+  cache hygiene manually, discover local quality checks, and leave a precise
+  handover. Both route preparations merge
   `:copy-kondo-configs? false` into `.lsp/config.edn` without overwriting other
-  LSP settings, so explicit bootstrap remains the sole import owner. The
-  agent-owned import runs `strand --workspace
+  LSP settings, so explicit bootstrap remains the sole import owner. Before
+  resolving paths, the agent parses the selected spool metadata once into an
+  `owned-roots` table. It canonicalizes every installed contribution entry,
+  every consumer classpath entry, and every owned classpath/export comparison
+  path with one path operation before union and ownership filtering. A failed
+  canonicalization is a loud pre-copy failure. It filters the final combined
+  classpath for exact owned producer classpath/export paths and their
+  descendants, retains true remote dependency exports, and asserts immediately
+  before `KONDO_CMD` using only canonical paths that no owned export remains. It
+  fails loudly on ambiguous or unreconcilable canonical ownership. The explicit
+  `millstrand/source-root` contribution and its `BASE`-derived paths remain
+  retained even under the worktree. The agent-owned import runs
+  `strand --workspace
   <workspace> spool status`, derives every installed root's classpath from its
   `sync.root` and `deps.edn` `:paths`, defaulting absent `:paths` to the `src`
   path while preserving explicit `[]`. A declared `millstrand/source-root`
@@ -93,15 +106,20 @@ Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
   readable regular file, or invalid EDN, or a missing export; do not search
   upward or guess. Failures report the exact coordinate, source-root values,
   failing path, and permitted corrective invariant. The installed source-root
-  spool is still resolved normally. It combines those directories with the
-  consumer classpath and records the exact roots and classpath, including each
-  base derivation, before one
+  spool is still resolved normally. It canonicalizes every installed directory,
+  consumer classpath entry, and owned classpath/export comparison path with the
+  same operation before union and filtering, then records the exact roots and
+  final canonical-filtered classpath, including each base derivation, before one
   `KONDO_CMD --lint RESOLVED_CLASSPATH
-  --dependencies --parallel --copy-configs --skip-lint` invocation. Plain
-  consumer `clojure -Spath` alone is insufficient; unresolved roots and an empty
-  installed-spool contribution fail loudly. No repository hosting or release
-  operation is part of this workflow.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L226-L301">Source</a></sub></p>
+  --dependencies --parallel --copy-configs --skip-lint` invocation. Immediately
+  before it, the agent asserts using only canonical paths that no owned producer
+  classpath or export path, or descendant, remains in `RESOLVED_CLASSPATH`, and
+  that every owned export path is absent. Plain consumer `clojure -Spath` alone
+  is insufficient; unresolved or ambiguously owned roots, failed
+  canonicalization, unreconcilable canonical ownership, and an empty filtered
+  installed-spool contribution fail loudly. No cleanup-after-copy workaround is
+  allowed. No repository hosting or release operation is part of this workflow.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L269-L361">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-brownfield">`bootstrap-kondo-brownfield`</a>
 
@@ -112,7 +130,7 @@ Inventory and merge an existing Kondo boundary before importing exports.
 
   This is the `brownfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L320-L335">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L380-L395">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo-greenfield">`bootstrap-kondo-greenfield`</a>
 
@@ -123,7 +141,7 @@ Establish a greenfield Kondo boundary and import Millstrand exports.
 
   This is the `greenfield` continuation selected by `bootstrap-kondo`; callers
   normally start the parent workflow so adoption mode is recorded first.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L303-L318">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj#L363-L378">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.millstrand-workflows.bump-millstrand">millhouse.spools.millstrand-workflows.bump-millstrand</a>

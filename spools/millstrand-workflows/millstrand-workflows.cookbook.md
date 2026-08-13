@@ -6,9 +6,9 @@ Recipes here combine multiple workflow families; parameter shapes and focused st
 
 **Situation.** A macro-owning spool has changed its public forms and a consumer must adopt the export without taking ownership of producer mappings.
 
-**Composition.** Run `publish-spool-kondo` in the producer checkout, review its export and tests, then run `bootstrap-kondo` in the consumer. Select `greenfield` only for a missing local boundary; select `brownfield` to inventory and merge an existing one. The consumer bootstrap consumes the resolved dependency classpath, validates provenance and cache hygiene, and discovers the consumer's own quality checks.
+**Composition.** Run `publish-spool-kondo` in the producer checkout, review its export and tests, then run `bootstrap-kondo` in the consumer. Select `greenfield` only for a missing local boundary; select `brownfield` to inventory and merge an existing one. The consumer bootstrap parses owned roots once, removes consumer-owned producer exports before its one resolved-classpath copy, retains true dependency exports, validates provenance and cache hygiene, and discovers the consumer's own quality checks.
 
-**Why this shape.** Publication establishes one producer source of truth before adoption. Keeping the two workflows in separate worktrees makes ownership, self-import checks, and pending local work explicit.
+**Why this shape.** Publication establishes one producer source of truth before adoption. Keeping the two workflows in separate worktrees makes ownership, self-import checks, and pending local work explicit. A local-self consumer excludes its own producer exports before copying; an ordinary remote consumer keeps the pinned producer exports as dependencies. Ambiguous ownership stops the import before it can write config.
 
 ## Bump a pinned family and adopt its exports
 
