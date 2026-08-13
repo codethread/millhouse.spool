@@ -70,7 +70,8 @@
       (let [route (definition definition-var)
             bootstrap-text (instruction-with-params route :bootstrap-kondo
                                                     workflow-host-params)
-            inspect-text (instruction-with-params route :prove-invocation-producer
+            inspect-text (instruction-with-params (definition #'tooling/configure-consumer-tooling)
+                                                  :inspect-repository
                                                   workflow-host-params)
             handover-text (instruction-with-params route :handover
                                                    workflow-host-params)]
@@ -102,6 +103,37 @@
     (is (str/includes? inspect-text "app"))
     (is (str/includes? inspect-text "spool"))
     (is (str/includes? inspect-text "clojure-app"))))
+
+(deftest inspection-acquires-exact-consumer-weaver-before-classification
+  (let [parent (definition #'tooling/configure-consumer-tooling)
+        inspect-text (instruction parent :inspect-repository)]
+    (is (str/includes? inspect-text
+                       "First run the exact command `strand --workspace /tmp/consumer/.millstrand spool status`"))
+    (is (str/includes? inspect-text
+                       "If the result is `mill/no-selected-weaver`"))
+    (is (str/includes? inspect-text
+                       "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
+    (is (str/includes? inspect-text "record the start command, PID"))
+    (is (str/includes? inspect-text "Weaver/root identities"))
+    (is (str/includes? inspect-text "Rerun the same exact status command"))
+    (is (str/includes? inspect-text "read shared and local spool approvals"))
+    (is (str/includes? inspect-text "inspect the structured result"))
+    (is (str/includes? inspect-text "Never start or restart a canonical or already-running Weaver"))
+    (is (precedes? inspect-text
+                   "First run the exact command"
+                   "If the result is `mill/no-selected-weaver`"))
+    (is (precedes? inspect-text
+                   "If the result is `mill/no-selected-weaver`"
+                   "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
+    (is (precedes? inspect-text
+                   "`mill weaver start --workspace /tmp/consumer/.millstrand`"
+                   "Rerun the same exact status command"))
+    (is (precedes? inspect-text
+                   "Rerun the same exact status command"
+                   "read shared and local spool approvals"))
+    (is (precedes? inspect-text
+                   "read shared and local spool approvals"
+                   "Choose `app`"))))
 
 (deftest every-route-is-an-ordinary-manual-sequence
   (doseq [[style definition-var] routes]
@@ -157,72 +189,22 @@
           (is (str/includes? bootstrap-text
                              "separate registered `bootstrap-kondo` run"))
           (is (str/includes? bootstrap-text
-                             "first attempt exact target status"))
+                             "Confirm the exact target acquired by the preceding repository inspection"))
           (is (str/includes? bootstrap-text
                              "`strand --workspace /tmp/consumer/.millstrand spool status`"))
+          (is (str/includes? bootstrap-text "idempotent confirmation"))
           (is (str/includes? bootstrap-text
-                             "before evidence"))
-          (is (str/includes? bootstrap-text
-                             "`mill/no-selected-weaver` as the normal clean-worktree"))
-          (is (str/includes? bootstrap-text
-                             "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
-          (is (str/includes? bootstrap-text
-                             "after-start evidence"))
-          (is (str/includes? bootstrap-text
-                             "exact structured startup failure"))
-          (is (str/includes? bootstrap-text
-                             "Only when the startup failure proves an acquisition invariant"))
-          (is (str/includes? bootstrap-text
-                             "only that proven `spools.edn` acquisition coordinate"))
-          (is (str/includes? bootstrap-text
-                             "approved remote root metadata"))
-          (is (str/includes? bootstrap-text
-                             "Do not guess"))
-          (is (str/includes? bootstrap-text
-                             "error/repair evidence"))
-          (is (str/includes? bootstrap-text
-                             "disposable target"))
-          (is (str/includes? bootstrap-text
-                             "after-start evidence"))
-          (is (str/includes? bootstrap-text
-                             "after-repair evidence"))
-          (is (str/includes? bootstrap-text
-                             "fail loudly and do not start the child"))
-          (is (str/includes? bootstrap-text
-                             "Never stop or restart"))
-          (is (str/includes? bootstrap-text
-                             "Only after successful before, after-start, or after-repair evidence"))
-          (is (str/includes? bootstrap-text
-                             "choose the consumer's `greenfield` or `brownfield`"))
-          (is (str/includes? bootstrap-text
-                             "child run id"))
-          (is (str/includes? bootstrap-text
-                             "selected mode"))
-          (is (str/includes? bootstrap-text
-                             ":bootstrap-kondo-done true"))
-          (is (str/includes? bootstrap-text
-                             "Do not treat the runtime-routed child checkpoint as a return"))
+                             "If status reports `mill/no-selected-weaver`, fail loudly"))
+          (is (str/includes? bootstrap-text "do not start or restart a Weaver here"))
+          (is (str/includes? bootstrap-text "Never stop or restart"))
           (is (precedes? bootstrap-text
-                         "before evidence"
-                         "`mill/no-selected-weaver` as the normal clean-worktree"))
+                         "Confirm the exact target acquired"
+                         "If status reports `mill/no-selected-weaver`"))
           (is (precedes? bootstrap-text
-                         "`mill/no-selected-weaver` as the normal clean-worktree"
-                         "`mill weaver start --workspace /tmp/consumer/.millstrand`"))
-          (is (precedes? bootstrap-text
-                         "`mill weaver start --workspace /tmp/consumer/.millstrand`"
-                         "after-start evidence"))
-          (is (precedes? bootstrap-text
-                         "after-start evidence"
-                         "Only when the startup failure proves an acquisition invariant"))
-          (is (precedes? bootstrap-text
-                         "Only when the startup failure proves an acquisition invariant"
-                         "after-repair evidence"))
-          (is (precedes? bootstrap-text
-                         "after-repair evidence"
-                         "Only after successful before, after-start, or after-repair evidence"))
-          (is (precedes? bootstrap-text
-                         "Only after successful before, after-start, or after-repair evidence"
-                         "child run id")))
+                         "If status reports `mill/no-selected-weaver`"
+                         "start a separate registered"))
+          (is (not (str/includes? bootstrap-text
+                                  "mill weaver start --workspace /tmp/consumer/.millstrand"))))
         (is (= [:prove-invocation-producer]
                (:depends-on (step route :bootstrap-kondo))))
         (is (= [:bootstrap-kondo]

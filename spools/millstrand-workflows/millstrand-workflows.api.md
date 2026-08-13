@@ -277,13 +277,14 @@ Choose and configure tooling for a Millstrand consumer repository style.
   workspace is verified against the worktree and never taken from a disposable
   workflow host. The coordinate must be either a pinned remote
   `millhouse/spools` family or a local Millhouse self root. The agent first
-  inspects the effective spool world and repository conventions, then chooses
-  `app`, `spool`, or `clojure-app`. The selected continuation manually aligns
+  acquires and verifies the exact consumer Weaver, then inspects the effective
+  spool world and repository conventions before choosing `app`, `spool`, or
+  `clojure-app`. The selected continuation manually aligns
   and proves activation and dependencies against that exact coordinate before
   composing the registered `bootstrap-kondo` workflow and proving tools.deps,
   clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary manual
   steps. It contains no executor gates and never restarts a Weaver.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L538-L609">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L535-L607">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app">`configure-consumer-tooling-app`</a>
 
@@ -295,7 +296,7 @@ Configure tooling for a non-Clojure product with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L611-L621">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L609-L619">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app">`configure-consumer-tooling-clojure-app`</a>
 
@@ -307,7 +308,7 @@ Configure tooling for a Clojure application with Millstrand config.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L635-L645">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L633-L643">Source</a></sub></p>
 
 ## <a name="millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool">`configure-consumer-tooling-spool`</a>
 
@@ -319,4 +320,4 @@ Configure tooling for a repository that owns Millstrand spool roots.
   This continuation is selected by `configure-consumer-tooling`; callers
   normally start the parent so repository inspection and style choice are
   recorded before the continuation's producer-coordinate proof.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L623-L633">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj#L621-L631">Source</a></sub></p>

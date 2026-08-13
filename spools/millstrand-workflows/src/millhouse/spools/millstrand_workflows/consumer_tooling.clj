@@ -101,19 +101,29 @@
   [{:keys [worktree]}]
   (fmt/reflow
    (format
-    "|In worktree `%s` and selected workspace `%s`, inspect the repository before
-     |choosing a style. Read shared and local spool approvals, then run
-     |`strand --workspace %s spool status` and inspect the structured result.
-     |Record every current approved root, its coordinate and `sync.root`, the
-     |latest refresh result, and any pending generation. Inspect `deps.edn`,
-     |`.lsp/config.edn`, `.clj-kondo/config.edn`, test paths, Makefile, scripts,
-     |and CI or contributor guidance without editing them yet. Choose
-     |`app` when the product has no Clojure application source beyond Millstrand
-     |config, `spool` when this repository publishes one or more spool roots, or
-     |`clojure-app` when ordinary application Clojure source and Millstrand
-     |config coexist. Stop rather than guessing when more than one style owns
-     |the repository."
-    worktree (consumer-workspace worktree) (consumer-workspace worktree))))
+    "|In worktree `%s` and selected workspace `%s`, acquire and verify the exact
+     |consumer Weaver before inspecting or classifying the repository. First run
+     |the exact command `strand --workspace %s spool status` and record the
+     |before evidence: command, structured result, selected workspace, and
+     |current Weaver/root identities. If the result is `mill/no-selected-weaver`,
+     |explicitly start only that worktree workspace as a disposable Weaver with
+     |`mill weaver start --workspace %s`; record the start command, PID, and
+     |Weaver/root identities. Rerun the same exact status command and record the
+     |after-start evidence. If status already selects a Weaver, use that exact
+     |target as-is and record its identity. Any other status failure stops this
+     |step. Never start or restart a canonical or already-running Weaver.
+     |Only after successful before or after-start status evidence, read shared and
+     |local spool approvals and inspect the structured result. Record every
+     |current approved root, its coordinate and `sync.root`, the latest refresh
+     |result, and any pending generation. Inspect `deps.edn`, `.lsp/config.edn`,
+     |`.clj-kondo/config.edn`, test paths, Makefile, scripts, and CI or contributor
+     |guidance without editing them yet. Choose `app` when the product has no
+     |Clojure application source beyond Millstrand config, `spool` when this
+     |repository publishes one or more spool roots, or `clojure-app` when ordinary
+     |application Clojure source and Millstrand config coexist. Stop rather than
+     |guessing when more than one style owns the repository."
+    worktree (consumer-workspace worktree) (consumer-workspace worktree)
+    (consumer-workspace worktree))))
 
 (defn- basis-instruction
   [style {:keys [worktree]}]
@@ -432,28 +442,15 @@
     "|In worktree `%s`, derive the target consumer world as `%s` (`worktree/.millstrand`).
      |The separate child `bootstrap-kondo` run must receive and verify exactly
      |`{:worktree \"%s\" :workspace \"%s\"}` before it runs any command; never
-     |substitute the disposable workflow-host workspace. Record the first attempt exact target status
-     |with `strand --workspace %s spool status`. Record the before evidence: the exact
-     |command, structured result, selected workspace, and current Weaver/root
-     |identities. Treat `mill/no-selected-weaver` as the normal clean-worktree
-     |state, not an acquisition failure: explicitly start that exact worktree
-     |workspace as a disposable Weaver with `mill weaver start --workspace %s`,
-     |then rerun the same exact status command and record the after-start evidence.
-     |If that disposable startup fails, capture the exact structured startup
-     |failure. Only
-     |when the startup failure proves an acquisition invariant may the one-coordinate
-     |recovery branch run: repair only that proven `spools.edn` acquisition
-     |coordinate, using approved remote root metadata from the failure or the
-     |authorized root metadata source. Do not guess a URL, SHA, root, or source
-     |path, and do not edit any other acquisition, runtime, or tooling setting.
-     |Record the before coordinate, failure, approved metadata, and exact repair as
-     |error/repair evidence. Start the repaired workspace as a disposable target,
-     |rerun the same exact status command, and record the after-repair evidence; if
-     |it still fails, fail loudly and do not start the child. If status already
-     |selects a Weaver, use that exact running target as-is. Never stop or restart
-     |a canonical or already-running Weaver.
-     |Only after successful before, after-start, or after-repair evidence, start a separate
-     |registered
+     |substitute the disposable workflow-host workspace. Confirm the exact target
+     |acquired by the preceding repository inspection with
+     |`strand --workspace %s spool status`, and record the structured result,
+     |selected workspace, and Weaver/root identities as idempotent confirmation.
+     |If status reports `mill/no-selected-weaver`, fail loudly and return to the
+     |inspection acquisition step; do not start or restart a Weaver here. If status
+     |selects a Weaver, use that exact target as-is. Never stop or restart a
+     |canonical or already-running Weaver. Only after successful confirmation,
+     |start a separate registered
      |`bootstrap-kondo` run (for example, use a distinct run id such as
      |`consumer-kondo-<timestamp>`). Drive that child run through its ready
      |frontier: choose the consumer's `greenfield` or `brownfield` adoption mode,
@@ -467,7 +464,7 @@
      |separate child run available for audit and preserve its exact command and
      |result evidence."
     worktree (consumer-workspace worktree) worktree (consumer-workspace worktree)
-    (consumer-workspace worktree) (consumer-workspace worktree))))
+    (consumer-workspace worktree))))
 
 (defn- route-steps
   "Return the ordinary agent-owned setup steps for repository `style`."
@@ -543,8 +540,9 @@
   workspace is verified against the worktree and never taken from a disposable
   workflow host. The coordinate must be either a pinned remote
   `millhouse/spools` family or a local Millhouse self root. The agent first
-  inspects the effective spool world and repository conventions, then chooses
-  `app`, `spool`, or `clojure-app`. The selected continuation manually aligns
+  acquires and verifies the exact consumer Weaver, then inspects the effective
+  spool world and repository conventions before choosing `app`, `spool`, or
+  `clojure-app`. The selected continuation manually aligns
   and proves activation and dependencies against that exact coordinate before
   composing the registered `bootstrap-kondo` workflow and proving tools.deps,
   clojure-lsp, clj-kondo/lint, tests, and Weaver behavior through ordinary manual
