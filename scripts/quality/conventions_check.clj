@@ -13,6 +13,7 @@
    "spools/workflow/src"
    "spools/code-executor/src"
    "spools/shell-executor/src"
+   "spools/kanban/src"
    "spools/millstrand-workflows/src"
    ".millstrand"
    "test"])
@@ -24,6 +25,7 @@
     "spools/workflow/src"
     "spools/code-executor/src"
     "spools/shell-executor/src"
+    "spools/kanban/src"
     "spools/millstrand-workflows/src"})
 
 (def ^:private core-macro-names

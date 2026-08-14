@@ -1237,165 +1237,37 @@
   [runtime]
   (println (board-str (board runtime))))
 
-(defn about
-  "Return the kanban convention and installed helper surface."
-  [_runtime]
-  {:summary "Kanban cards are the user<->agent work board; agents working directly with a user work under a claimed card."
-   :lanes {:refinement "not actionable until an explicit human `kanban promote`"
-           :pending "actionable queue; `kanban next` serves the highest-priority (p1 first) oldest feature"
-           :claimed "work started; owner/branch (and worktree) stamped at claim"
-           :in_review "work is under review; rework returns it to claimed, finish closes it"
-           :closed "finished with kanban/outcome recording the result (done, abandoned, ...)"}
-   :priorities {:p1 "immediate blocker; must be done first — e.g. anything requiring a mill/weaver restart or a breaking change"
-                :p2 "high value bug fixes or high leverage features"
-                :p3 "the default: most things"
-                :p4 "maybe one day — the never-ending someday list"}
-   :attributes {card-attr "true"
-                type-attr "feature (default) | epic (grouping; parent-of its features)"
-                lane-attr "refinement|pending|claimed|in_review (active cards only)"
-                outcome-attr "explicit finish outcome on closed cards (done|abandoned)"
-                restore-lane-attr "reversibility marker: lane an abandon cascade closed a card from, so `kanban reopen` restores exactly what it closed"
-                priority-attr "p1|p2|p3|p4 (default p3); orders lanes and `kanban next`"
-                task-attr "true on task strands (parent-of children of a feature card; status derived)"
-                run-id-attr "optional opaque run pointer; agents query its workflow directly"
-                :kanban/source "optional path or URL for design context"
-                :kanban.label/* "one key per label, value \"true\"; free-form cross-cutting axis, no registered vocabulary"
-                :owner "claimant, required at claim"
-                :branch "work branch, required at claim"
-                :worktree "optional worktree path"}
-   :convention (fmt/reflow "
-                 |The card is the work root: claim stamps owner/branch, and execution strands hang
-                 |under it with parent-of. Kanban complements the engines that produce them; it never
-                 |tracks their runs directly.")
-   :note-discipline (fmt/reflow "
-                      |Note as you go, on the doing-TASK: `kanban note <task-id> \"...\" --by
-                      |<name> [--kind activity|decision|review-dump|summary]` records each
-                      |significant decision, step, and gotcha while the work is fresh, and
-                      |surfaces as that task's `latest-note`. Card notes stay lean handover
-                      |summaries; bulk content (review findings, pasted output) belongs on a task
-                      |note via `strand --stdin kanban note <task-id> :stdin --by <name> --kind
-                      |review-dump` — views clip note text past a cap. A cold agent resumes from
-                      |the doing-task and its `latest-note` via `kanban board` -> `kanban card
-                      |<id>`.")
-   :discovery {:help "strand help kanban"
-               :prime "strand kanban prime"
-               :batch-pattern "strand pattern explain kanban-batch"}
-   :commands [{:verb "about" :purpose "Return the kanban convention and installed helper surface."}
-              {:verb "prime" :purpose "Full agent priming: working discipline plus command surface."}
-              {:verb "add" :purpose "Create a feature or epic card."}
-              {:verb "board" :purpose "Return the grouped board snapshot."}
-              {:verb "card" :purpose "Show one card with notes, active work, related cards, and ready frontier."}
-              {:verb "next" :purpose "Return the next pending feature card by priority and age."}
-              {:verb "priority" :purpose "Change a card's p1..p4 ordering priority."}
-              {:verb "label" :purpose "Add, remove, or list the free-form labels that cut across lanes and epics."}
-              {:verb "promote" :purpose "Move a refinement card into the pending lane."}
-              {:verb "claim" :purpose "Move a card into claimed and stamp owner/branch/worktree."}
-              {:verb "note" :purpose "Append an immutable note to a card or task (the doing-task is the resume read)."}
-              {:verb "task" :purpose "Add or list a feature card's tasks with their derived statuses."}
-              {:verb "review" :purpose "Move a claimed card into in_review."}
-              {:verb "rework" :purpose "Move an in_review card back to claimed."}
-              {:verb "finish" :purpose "Close a card with an explicit outcome (feature from claimed/in_review; epic from refinement/pending — done requires closed children, abandoned cascades reversibly)."}
-              {:verb "reopen" :purpose "Reopen an abandoned epic, reversing exactly the cascade the matching abandon closed."}
-              {:repl "millhouse.spools.kanban/print-board! runtime" :purpose "ASCII board from mill weaver repl; CLI output stays JSON-only."}]
-   :patterns [{:name "kanban-batch"
-               :input {:items [{:key "slug"
-                                :title "Feature title"
-                                :body "optional body"
-                                :priority "optional p1|p2|p3|p4 (default p3)"
-                                :depends-on ["sibling-key-or-existing-strand-id"]}]}}]})
+(def ^:private kanban-about
+  "Cross-verb narrative projected by `strand about kanban`."
+  (fmt/reflow "
+    |Kanban cards are the user-to-agent work board. Active cards move through refinement,
+    |pending, claimed, and in_review before finish closes them with an explicit outcome.
+    |A card is the work root: claim stamps owner and branch, while tasks and ordinary
+    |execution strands hang beneath it with parent-of. Kanban owns board projections and
+    |guarded card transitions; use the Batteries add, update, note, list, ready, show,
+    |query, and weave operations for the generic graph behavior they already name."))
 
-(defn prime
-  "Return the full agent-priming payload for working the kanban board.
-
-  The single source of truth for kanban usage discipline: repo agent docs
-  point here (`strand kanban prime`) rather than duplicating conventions that
-  then drift from the spool. A superset of `about` — it reuses the same lane,
-  attribute, command, and pattern surface and adds the working agreement,
-  pick-up flow, note discipline, adjacent-work awareness, and branch
-  visibility that an agent needs before touching the board."
-  [runtime]
-  (assoc (about runtime)
-         :working-agreement
-         (fmt/fill "
-               |Every user request is a feature card; occasionally group related cards under an
-               |`epic` (`--type epic`, link features with `--epic <id>`).
-               |
-               |Every agent working directly with the user works under a claimed card — claim
-               |before starting user work.
-               |
-               |Execution strands hang beneath a card via `parent-of` — kanban complements the
-               |engines that produce them, it never tracks their runs directly.
-               |
-               |Half-formed ideas go to the refinement lane (`kanban add \"...\" --lane
-               |refinement`); they stay inert until a human `kanban promote`s them.")
-         :pick-up-next-card
-         (fmt/fill "
-               |`kanban next` serves the highest-priority pending feature card (p1 first, oldest
-               |first within a priority). p1 is an immediate blocker and must be done before
-               |anything else; reprioritise with `kanban priority <id> <p1|p2|p3|p4>`.
-               |
-               |Claim it: `kanban claim <id> --owner <name> --branch <branch> [--worktree
-               |<path>]` — owner and branch are mandatory; the claim is what makes branch work
-               |discoverable.
-               |
-               |Decompose the feature into tasks before working: `kanban task add <feature>
-               |\"<title>\" [--depends-on <id>]` slices the work into the derived-status DAG,
-               |and the task you are driving is the board's doing-task signal. Other
-               |execution strands still hang under the card via `parent-of` — the card is the
-               |parent/audit root, the tasks are the driveable slices.
-               |
-               |`kanban review <id>` when work enters review, `kanban rework <id>` when it
-               |needs changes, and `kanban finish <id> [--outcome done|abandoned]` after
-               |merge, archive, or explicit abandonment.")
-         :note-discipline
-         (fmt/fill "
-               |Note as you go, on the doing-TASK: `kanban note <task-id> \"...\" --by
-               |<name>` records each significant decision, step, and gotcha while the work is
-               |fresh — do not save it for a stopping point. Task notes surface as that task's
-               |`latest-note`; the card's own note trail stays a lean handover summary.
-               |
-               |Bulk content never goes on the card: review findings, pasted command output,
-               |and long dumps belong on a task note via `strand --stdin kanban note <task-id>
-               |:stdin --by <name> --kind review-dump`. Other view hints are
-               |activity|decision|summary. Views clip note text past a cap; `strand show
-               |<note-id>` returns the full text.
-               |
-               |Tasks are the resume point. A cold agent resumes from the doing-task and its
-               |`latest-note`: `kanban board` shows claimed and in-review cards with their
-               |doing-task; `kanban card <id>` returns the card, its tasks (each carrying its
-               |`latest-note`), notes, active work, and ready frontier. Even with no notes
-               |yet, the doing-task's body, dependencies, and lane name the next move.")
-         :staying-aware
-         (fmt/fill "
-               |`kanban board` returns `needs-review`: the human-review frontier aggregated
-               |across claimed and in-review cards (ready hitl/review work grouped by card and
-               |branch).
-               |
-               |Inside a feature branch, `strand branches \"$(git branch --show-current)\"`
-               |shows the feature cards worked on there and their substrands.
-               |
-               |Relate adjacent work with `depends-on` edges (`strand update <a> --edge
-               |depends-on:<b>`) and check `related` in `kanban card <id>` when claiming or
-               |resuming, so blockers and dependents surface.")
-         :branch-visibility
-         (fmt/reflow "
-               |Every piece of work on a branch has exactly one active work root strand stamped
-               |`branch` (plus `owner`, and `worktree` when one exists), with execution strands
-               |beneath it via `parent-of`. `kanban claim` stamps card roots; for non-card roots
-               |(ad hoc execution roots, coordination strands) stamp them yourself: `strand
-               |update <root-id> --attr branch=<branch> --attr owner=<name>`. Children are
-               |reachable from the root and need no `branch` attr of their own.")))
+(def ^:private kanban-prime
+  "Run-first discipline projected by `strand prime kanban`."
+  (fmt/reflow "
+    |Start with `strand help kanban`, then inspect `strand pattern explain kanban-batch`
+    |and the kanban queries through `strand query list` and `strand query explain <name>`.
+    |Every direct user request is a feature card; group related cards under an epic only
+    |when that grouping is useful. Half-formed ideas belong in refinement and require an
+    |explicit promote. Before starting a pending feature, claim it with owner and branch.
+    |Put ordinary execution work beneath the card with Batteries add and update, relate
+    |blockers with depends-on, and use Batteries note for progress and handover memory;
+    |the card and board projections surface that work. Use `strand weave --pattern
+    |kanban-batch` for atomic backlog creation and `strand list` or `strand ready` with
+    |the registered kanban queries for generic selection. Move claimed work to review,
+    |rework it when necessary, and finish only after its declared outcome is known."))
 
 (def ^:private kanban-arg-spec
   "Declared command surface for the `kanban` op."
   {:op "kanban"
-   :doc "Manage the user-facing kanban work board. Run `strand kanban about` for the convention manual."
+   :doc "Manage the user-facing kanban work board. Run `strand prime kanban` for its working discipline."
    :subcommands
-   {"about" {:doc "Return the kanban convention and installed helper surface."
-             :hook-class :read :deadline-class :standard}
-    "prime" {:doc "Return full agent priming for working the kanban board."
-             :hook-class :read :deadline-class :standard}
-    "add" {:doc "Create a feature or epic card."
+   {"add" {:doc "Create a feature or epic card."
            :flags {:body {:doc "Longer card context."}
                    :source {:doc "Path or URL for design context."}
                    :lane {:doc "Initial lane: pending or refinement."}
@@ -1476,7 +1348,9 @@
     "rework" {:doc "Move an in_review card back to claimed for rework."
               :positionals [{:name :id :required? true :doc "Kanban card id."}]
               :hook-class :mutating :deadline-class :standard}
-    "finish" {:doc "Close a card with an explicit outcome. Features close from claimed/in_review; epics close from refinement/pending (done requires closed feature children, abandoned cascades reversibly)."
+    "finish" {:doc (str "Close a card with an explicit outcome. Features close from claimed/in_review; "
+                        "epics close from refinement/pending (done requires closed feature children, "
+                        "abandoned cascades reversibly).")
               :flags {:outcome {:doc "Closed outcome; defaults to done. For an epic: done|abandoned."}}
               :positionals [{:name :id :required? true :doc "Kanban card id."}]
               :hook-class :mutating :deadline-class :standard}
@@ -1500,8 +1374,6 @@
   [{:op/keys [args runtime]}]
   (let [flags (legacy-flags args)]
     (case (:subcommand args)
-      ["about"] (about runtime)
-      ["prime"] (prime runtime)
       ["add"] (add! runtime (str/join " " (:title args)) flags)
       ["board"] (board runtime
                        (get flags "--label")
@@ -1618,7 +1490,9 @@
 
 (def ^:private kanban-op-options
   {:arg-spec kanban-arg-spec
-   :returns kanban-returns})
+   :returns kanban-returns
+   :about kanban-about
+   :prime kanban-prime})
 
 (def ^:private kanban-export-op-options
   {:arg-spec kanban-export-arg-spec

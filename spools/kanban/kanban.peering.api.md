@@ -34,19 +34,25 @@ Opt-in board peering: the RECEIVE guild op plus the SEND-side local ops.
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L240-L240">Source</a></sub></p>
+
+Peer Guild-listing seam used by peering tests.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L243-L245">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/*list-peers*">`*list-peers*`</a>
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L239-L239">Source</a></sub></p>
+
+Peer-listing seam used by peering tests.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L239-L241">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/*send-card*">`*send-card*`</a>
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L241-L241">Source</a></sub></p>
+
+Peer card-send seam used by peering tests.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L247-L249">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/close-peering!">`close-peering!`</a>
 ``` clojure
@@ -60,7 +66,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
   baseline. Its own lifecycle reset removes receivers; this close therefore
   preserves the established process-lifetime receiver behavior while static
   peering operations retract with their module owner.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L726-L734">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L734-L742">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peering-receiver">`kanban-peering-receiver`</a>
 
@@ -68,7 +74,7 @@ Close peering's module resource without claiming Guild's dispatch-table teardown
 
 
 Own guarded Guild receiver registration for the peering module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L736-L739">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L744-L747">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-peers">`kanban-peers`</a>
 ``` clojure
@@ -77,7 +83,7 @@ Own guarded Guild receiver registration for the peering module lifetime.
 Function.
 
 List sibling weavers and whether each accepts peered kanban cards.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L697-L702">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L705-L710">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/kanban-send">`kanban-send`</a>
 ``` clojure
@@ -86,7 +92,7 @@ List sibling weavers and whether each accepts peered kanban cards.
 Function.
 
 Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L704-L709">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L712-L717">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/open-peering!">`open-peering!`</a>
 ``` clojure
@@ -95,7 +101,7 @@ Send a pending or refinement card (or epic bundle) to a sibling weaver's board.
 Function.
 
 Register the guarded `kanban.send.v1` receiver through Guild's supported seam.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L711-L724">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban/peering.clj#L719-L732">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban.peering/send-op">`send-op`</a>
 ``` clojure

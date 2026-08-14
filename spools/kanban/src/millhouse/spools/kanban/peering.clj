@@ -236,9 +236,17 @@
   [peerish json-arg]
   (peers/call! peerish "kanban.send.v1" {:argv [json-arg]}))
 
-(def ^:dynamic *list-peers* list-peers*)
-(def ^:dynamic *list-peer-guild* list-peer-guild*)
-(def ^:dynamic *send-card* send-card*)
+(def ^:dynamic *list-peers*
+  "Peer-listing seam used by peering tests."
+  list-peers*)
+
+(def ^:dynamic *list-peer-guild*
+  "Peer Guild-listing seam used by peering tests."
+  list-peer-guild*)
+
+(def ^:dynamic *send-card*
+  "Peer card-send seam used by peering tests."
+  send-card*)
 
 ;; guild list rides back through peers/call! JSON-decoded, so its envelope
 ;; and op entries are string-keyed. The shape is a contract: a well-formed reply

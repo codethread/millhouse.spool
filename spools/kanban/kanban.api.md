@@ -25,15 +25,6 @@ User-facing kanban board over Millstrand strands.
 
 
 
-## <a name="millhouse.spools.kanban/about">`about`</a>
-``` clojure
-(about _runtime)
-```
-Function.
-
-Return the kanban convention and installed helper surface.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1240-L1305">Source</a></sub></p>
-
 ## <a name="millhouse.spools.kanban/add!">`add!`</a>
 ``` clojure
 (add! runtime title flags)
@@ -135,7 +126,7 @@ Claim a pending feature card, stamping the work-root attributes.
 Function.
 
 Close Kanban's module resource without retracting process-lifetime state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1673-L1676">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1547-L1550">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/finish!">`finish!`</a>
 ``` clojure
@@ -169,7 +160,7 @@ Close a kanban card with an explicit outcome, polymorphic on `kanban/type`.
 Function.
 
 Manage the user-facing kanban work board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1627-L1631">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1501-L1505">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-batch">`kanban-batch`</a>
 ``` clojure
@@ -203,7 +194,7 @@ Create pending feature cards with bodies and depends-on edges.
 
 
 Select every Kanban card strand.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1644-L1647">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1518-L1521">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-dash">`kanban-dash`</a>
 
@@ -211,7 +202,7 @@ Select every Kanban card strand.
 
 
 Open the interactive Kanban board in the caller's terminal.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1639-L1642">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1513-L1516">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-epic-pending">`kanban-epic-pending`</a>
 
@@ -219,7 +210,7 @@ Open the interactive Kanban board in the caller's terminal.
 
 
 Select active pending cards hanging directly under one epic.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1656-L1663">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1530-L1537">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-export">`kanban-export`</a>
 ``` clojure
@@ -228,7 +219,7 @@ Select active pending cards hanging directly under one epic.
 Function.
 
 Return a card's full parent-of subtree with its internal depends-on edges.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1633-L1637">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1507-L1511">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-pending">`kanban-pending`</a>
 
@@ -236,7 +227,7 @@ Return a card's full parent-of subtree with its internal depends-on edges.
 
 
 Select active Kanban cards in the pending lane.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1649-L1654">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1523-L1528">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-runtime">`kanban-runtime`</a>
 
@@ -244,7 +235,7 @@ Select active Kanban cards in the pending lane.
 
 
 Own Kanban vocabulary and runtime-state setup for the module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1678-L1681">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1552-L1555">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/label-add!">`label-add!`</a>
 ``` clojure
@@ -339,23 +330,7 @@ Append a note to a card or task via the blessed notes relation.
 Function.
 
 Declare Kanban vocabulary and materialize its process-lifetime runtime state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1665-L1671">Source</a></sub></p>
-
-## <a name="millhouse.spools.kanban/prime">`prime`</a>
-``` clojure
-(prime runtime)
-```
-Function.
-
-Return the full agent-priming payload for working the kanban board.
-
-  The single source of truth for kanban usage discipline: repo agent docs
-  point here (`strand kanban prime`) rather than duplicating conventions that
-  then drift from the spool. A superset of `about` — it reuses the same lane,
-  attribute, command, and pattern surface and adds the working agreement,
-  pick-up flow, note discipline, adjacent-work awareness, and branch
-  visibility that an agent needs before touching the board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1307-L1387">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1539-L1545">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/print-board!">`print-board!`</a>
 ``` clojure

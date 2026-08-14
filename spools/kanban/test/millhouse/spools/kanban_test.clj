@@ -210,19 +210,22 @@
         (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"}
                (set (keys (:queries surface)))))))))
 
-(deftest kanban-about-commands-match-declared-subcommands
+(deftest kanban-publishes-canonical-discovery-metadata
   (with-kanban
     (fn [rt]
-      (let [detail (weaver/resolve-op rt 'kanban)
-            manual-entries (-> (kanban/about rt) :commands)
-            manual-commands (set (keep :verb manual-entries))
-            declared-commands (set (keys (get-in detail [:arg-spec :subcommands])))]
-        (is (every? #(or (:verb %) (:repl %)) manual-entries)
-            "every kanban about command entry must carry :verb or documented :repl")
-        (is (empty? (set/difference manual-commands declared-commands))
-            (str "kanban about commands missing from arg-spec: " (sort (set/difference manual-commands declared-commands))))
-        (is (empty? (set/difference declared-commands manual-commands))
-            (str "kanban arg-spec subcommands missing from about: " (sort (set/difference declared-commands manual-commands))))))))
+      (let [entry (weaver/resolve-op rt 'kanban)
+            subcommands (set (keys (get-in entry [:arg-spec :subcommands])))]
+        (testing "cross-verb narrative is op metadata for the built-in meta-verbs"
+          (is (str/includes? (:about entry) "Kanban cards"))
+          (is (str/includes? (:about entry) "Batteries"))
+          (is (str/includes? (:prime entry) "strand help kanban"))
+          (is (str/includes? (:prime entry) "strand weave --pattern kanban-batch")))
+        (testing "the built-in meta-verbs project Kanban's metadata"
+          (is (= (:about entry) (:about (weaver/op! rt 'about ["kanban"]))))
+          (is (= (:prime entry) (:prime (weaver/op! rt 'prime ["kanban"])))))
+        (testing "about and prime are not domain subcommands"
+          (is (not (contains? subcommands "about")))
+          (is (not (contains? subcommands "prime"))))))))
 
 (deftest kanban-add-next-claim-and-finish-round-trip
   (with-kanban
@@ -278,8 +281,8 @@
         (let [detail (weaver/op! rt 'help ["kanban"])
               children (get-in detail [:node :children])
               verbs (mapv :name children)]
-          (is (= ["about" "add" "board" "card" "claim" "finish" "label" "next" "note" "prime" "priority" "promote" "reopen" "review" "rework" "task"] verbs))
-          (is (some #(= "about" (:name %)) children))))
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "promote" "reopen" "review" "rework" "task"] verbs))
+          (is (not-any? #(contains? #{"about" "prime"} (:name %)) children))))
       (testing "depth-N help resolves task add to its classified leaf"
         (let [detail (weaver/op! rt 'help ["kanban" "task" "add"])
               node (:node detail)]
@@ -301,46 +304,21 @@
                                             (op! rt "bogus")))]
           (is (= :missing-subcommand (:reason (ex-data missing))))
           (is (= :unknown-subcommand (:reason (ex-data unknown))))
-          (is (= ["about" "add" "board" "card" "claim" "finish" "label" "next" "note" "prime" "priority" "promote" "reopen" "review" "rework" "task"]
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "promote" "reopen" "review" "rework" "task"]
                  (:available (ex-data missing))))
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
 
-(deftest kanban-prime-supersets-about-with-working-discipline
-  (with-kanban
-    (fn [rt]
-      (let [prime (op! rt "prime")
-            about (op! rt "about")]
-        (is (not (contains? (kanban/prime rt) :operation)))
-        (testing "prime reuses about's command/lane/attribute surface"
-          (is (= (:commands about) (:commands prime)))
-          (is (= (:lanes about) (:lanes prime)))
-          (is (= (:attributes about) (:attributes prime))))
-        (testing "prime carries the working discipline about does not"
-          (is (seq (:working-agreement prime)))
-          (is (seq (:pick-up-next-card prime)))
-          (is (seq (:note-discipline prime)))
-          (is (seq (:staying-aware prime)))
-          (is (string? (:branch-visibility prime)))
-          (is (nil? (:working-agreement about))))
-        (testing "prime's fill-authored blocks wrap into single-line prose items"
-          (is (= 4 (count (:working-agreement prime))))
-          (is (= 3 (count (:staying-aware prime))))
-          (is (every? #(nil? (re-find #"\n" %)) (:staying-aware prime))))
-        (testing "prime advertises itself in the command surface without duplicating usage"
-          (is (some #(= "prime" (:verb %)) (:commands prime)))
-          (is (= "strand help kanban" (get-in prime [:discovery :help]))))))))
-
 (deftest fill-wraps-prose-and-preserves-indented-blocks
   (testing "flush-left lines soft-wrap; a bare bar starts a new item; an indented line keeps the item verbatim"
     (is (= ["Prose that is long enough to wrap across two source lines."
-            "Before running:\n    strand kanban prime\n    strand kanban board"]
+            "Before running:\n    strand prime kanban\n    strand kanban board"]
            (fmt/fill "
                      |Prose that is long enough to
                      |wrap across two source lines.
                      |
                      |Before running:
-                     |    strand kanban prime
+                     |    strand prime kanban
                      |    strand kanban board"))))
   (testing "reflow soft-wraps a single-paragraph block into one string"
     (is (= "One sentence spread over two source lines."
@@ -407,9 +385,7 @@
           (op! rt "claim" blocker "--owner" "agent" "--branch" "priority-x")
           (op! rt "finish" blocker)
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be active"
-                                (op! rt "priority" blocker "p1"))))
-        (testing "about documents the priority ladder"
-          (is (= #{:p1 :p2 :p3 :p4} (set (keys (:priorities (op! rt "about")))))))))))
+                                (op! rt "priority" blocker "p1"))))))))
 
 (deftest kanban-labels-cut-across-lanes-and-epics
   (with-kanban

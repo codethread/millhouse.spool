@@ -77,8 +77,13 @@ substrands stamped for the current branch.
 
 ## 4. Command and viewing surfaces
 
-The CLI is JSON-only. The declared command tree is available through
-`strand help kanban`; its main flow is:
+The CLI is JSON-only. Use Millstrand's canonical discovery tiers:
+`strand help kanban`, `strand about kanban`, and `strand prime kanban`.
+`about` and `prime` are op metadata consumed by the built-in meta-operations,
+not Kanban subcommands.
+
+The declared command tree is available through `strand help kanban`; its main
+flow is:
 
 ```text
 add · board · card · next · priority · label · promote · claim · note · task
@@ -89,6 +94,12 @@ Use `board` for the grouped lanes, epics, closed count, and cross-card
 `needs-review` frontier. Use `card <id>` for the resume view: tasks, notes,
 active work, ready work, and related cards. Repeated `--label` flags intersect;
 `label list` discovers labels already used on active cards.
+
+Kanban does not rename generic graph operations. Use Batteries `add`, `update`,
+`note`, and `show` for ordinary execution strands; apply `kanban-batch` through
+`weave`; discover the registered Kanban queries through `query`; and consume
+them through `list` or `ready`. The `kanban` verbs are the board-specific
+projections and guarded card transitions layered on those primitives.
 
 The REPL-only `print-board!` and pure `board-str` render a human ASCII board.
 The `kanban-dash` binary provides a polling terminal dashboard with optional
