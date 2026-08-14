@@ -53,11 +53,7 @@
     codethread/devflow-kanban-adapter
     {:git/url "https://github.com/codethread/devflow.spool.git"
      :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
-     :deps/root "kanban-adapter"}
-    codethread/kanban
-    {:git/url "https://github.com/codethread/kanban.spool.git"
-     :git/sha "87f61bc2750e7026f3650235907db25f19b1536e"
-     :deps/root "."}}}
+     :deps/root "kanban-adapter"}}}
   :test {:extra-paths [".millstrand"
                        "test"
                        "spools/chime/src"

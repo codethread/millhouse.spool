@@ -291,7 +291,7 @@
        |for example, map `ct.spools.delegation` to `ct.spools/delegation` and
        |the exact root `delegation`, not merely to the agent-harness repository.
        |Include every configured root, such as `ct.spools/agent-run`,
-       |`ct.spools/delegation`, `codethread/devflow`, `codethread/kanban`,
+       |`ct.spools/delegation`, `codethread/devflow`, `millhouse.spools/kanban`,
        |`codethread/devflow-setup`, `codethread/agents`, and `codethread/ralph`,
        |when the config requires them. Record the namespace, root coordinate,
        |Git URL, Git SHA or tag, `sync.root`, `deps.edn` `:paths`, and the

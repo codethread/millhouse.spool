@@ -1152,7 +1152,7 @@
             "no failed claim moved the card")))))
 
 (defn -main
-  "Run the standalone kanban.spool test suite."
+  "Run the standalone Millhouse Kanban spool test suite."
   [& _args]
   (let [summary (clojure.test/run-tests 'millhouse.spools.kanban-test)]
     (System/exit (if (pos? (+ (:fail summary) (:error summary))) 1 0))))

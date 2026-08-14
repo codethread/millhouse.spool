@@ -52,24 +52,24 @@
                   :after [:millstrand/spools-agent-run]
                   :required? true})
 
-;; --- external Kanban + Devflow adapter -------------------------------------
+;; --- Local Kanban + Devflow adapter ----------------------------------------
 (runtime/module! runtime :devflow
                  {:ns 'ct.spools.devflow
                   :spools ['codethread/devflow 'millhouse.spools/workflow]
                   :after [:millhouse/spools-workflow]
                   :required? true})
-(runtime/module! runtime :millstrand/spools-kanban
-                 {:ns 'ct.spools.kanban
-                  :spools ['codethread/kanban]
+(runtime/module! runtime :millhouse/spools-kanban
+                 {:ns 'millhouse.spools.kanban
+                  :spools ['millhouse.spools/kanban]
                   :required? true})
 (runtime/module! runtime :devflow/kanban-adapter
                  {:ns 'ct.spools.devflow-kanban-adapter
                   :spools ['codethread/devflow-kanban-adapter
                            'codethread/devflow
-                           'codethread/kanban
+                           'millhouse.spools/kanban
                            'millhouse.spools/workflow]
                   :after [:devflow
-                          :millstrand/spools-kanban
+                          :millhouse/spools-kanban
                           :millhouse/spools-workflow]
                   :required? true})
 
