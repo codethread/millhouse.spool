@@ -217,8 +217,14 @@
             subcommands (set (keys (get-in entry [:arg-spec :subcommands])))]
         (testing "cross-verb narrative is op metadata for the built-in meta-verbs"
           (is (str/includes? (:about entry) "Kanban cards"))
+          (is (str/includes? (:about entry) "p1 is an immediate blocker"))
+          (is (str/includes? (:about entry) "kanban-batch"))
           (is (str/includes? (:about entry) "Batteries"))
           (is (str/includes? (:prime entry) "strand help kanban"))
+          (is (str/includes? (:prime entry) "Every agent doing direct user work"))
+          (is (str/includes? (:prime entry) "decompose the feature into tasks"))
+          (is (str/includes? (:prime entry) "latest note is the resume read"))
+          (is (str/includes? (:prime entry) "exactly one active work root"))
           (is (str/includes? (:prime entry) "strand weave --pattern kanban-batch")))
         (testing "the built-in meta-verbs project Kanban's metadata"
           (is (= (:about entry) (:about (weaver/op! rt 'about ["kanban"]))))

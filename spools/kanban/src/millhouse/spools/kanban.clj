@@ -1240,12 +1240,29 @@
 (def ^:private kanban-about
   "Cross-verb narrative projected by `strand about kanban`."
   (fmt/reflow "
-    |Kanban cards are the user-to-agent work board. Active cards move through refinement,
-    |pending, claimed, and in_review before finish closes them with an explicit outcome.
-    |A card is the work root: claim stamps owner and branch, while tasks and ordinary
-    |execution strands hang beneath it with parent-of. Kanban owns board projections and
-    |guarded card transitions; use the Batteries add, update, note, list, ready, show,
-    |query, and weave operations for the generic graph behavior they already name."))
+    |Kanban cards are the user-to-agent work board. Every card is a feature by default;
+    |an epic is a grouping card whose direct feature children use parent-of. Active cards
+    |move through refinement (awaiting explicit promote), pending (the actionable queue),
+    |claimed, and in_review before finish closes them with an explicit outcome. Epics are
+    |never claimed: finish them from refinement or pending; done requires closed feature
+    |children, while abandoned reversibly closes still-open children.
+    |
+    |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
+    |someday work. `kanban next` returns the highest-priority pending feature, oldest
+    |first within its priority. A claim stamps owner and branch, plus worktree when one
+    |exists; run-id is an optional opaque workflow pointer. Card state lives in
+    |kanban/card, kanban/type, kanban/lane, kanban/outcome, kanban/priority,
+    |kanban/source, kanban/task, kanban/run-id, and kanban/abandon-restore-lane.
+    |Labels are open kanban.label/<slug>=true markers rather than a fixed vocabulary.
+    |
+    |Kanban owns board projections and guarded card transitions: add, board, card, next,
+    |priority, label, promote, claim, task, note, review, rework, finish, and reopen.
+    |`kanban-batch` atomically creates pending feature cards from items with key, title,
+    |optional body and priority, and sibling-key or durable-id depends-on references.
+    |Use Batteries add, update, note, list, ready, show, query, and weave for the generic
+    |graph behavior they already name. Run `strand help kanban` for exact invocation,
+    |`strand prime kanban` for working discipline, and `strand pattern explain
+    |kanban-batch` for the live batch contract."))
 
 (def ^:private kanban-prime
   "Run-first discipline projected by `strand prime kanban`."
@@ -1254,13 +1271,24 @@
     |and the kanban queries through `strand query list` and `strand query explain <name>`.
     |Every direct user request is a feature card; group related cards under an epic only
     |when that grouping is useful. Half-formed ideas belong in refinement and require an
-    |explicit promote. Before starting a pending feature, claim it with owner and branch.
-    |Put ordinary execution work beneath the card with Batteries add and update, relate
-    |blockers with depends-on, and use Batteries note for progress and handover memory;
-    |the card and board projections surface that work. Use `strand weave --pattern
-    |kanban-batch` for atomic backlog creation and `strand list` or `strand ready` with
-    |the registered kanban queries for generic selection. Move claimed work to review,
-    |rework it when necessary, and finish only after its declared outcome is known."))
+    |explicit promote. Every agent doing direct user work works under a claimed feature
+    |card: claim the pending card with owner and branch before starting.
+    |
+    |Before execution, decompose the feature into tasks. Tasks are the driveable slices;
+    |the card remains the audit root, and depends-on edges define the concurrency DAG.
+    |Put other execution work beneath the card with Batteries add and update, and relate
+    |blockers with depends-on.
+    |
+    |Record decisions, progress, and gotchas as they happen on the task being driven; its
+    |latest note is the resume read. Keep card notes to lean handover summaries, and put
+    |review findings or command output on a task note rather than the card. Every branch
+    |has exactly one active work root stamped with branch and owner (and worktree when it
+    |exists); its children inherit that context through parent-of.
+    |
+    |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
+    |list` or `strand ready` with the registered kanban queries for generic selection.
+    |Move claimed work to review, rework it when necessary, and finish only after its
+    |declared outcome is known."))
 
 (def ^:private kanban-arg-spec
   "Declared command surface for the `kanban` op."
