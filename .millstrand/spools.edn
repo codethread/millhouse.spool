@@ -30,4 +30,6 @@
    :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
    :roots {codethread/agents "spools/agents"
            codethread/devflow-setup "spools/devflow-setup"
-           codethread/ralph "spools/ralph"}}}}
+           codethread/ralph "spools/ralph"}}
+  codethread/config
+  {:local/root "../../codethread.spool/spools/config"}}}

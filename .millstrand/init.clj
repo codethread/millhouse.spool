@@ -13,8 +13,9 @@
                  {:ns 'millstrand.spools.batteries
                   :spools ['millstrand.spools/batteries]})
 
-(runtime/module! runtime :module-adapters
-                 {:file "ct/adapters/help.clj"
+(runtime/module! runtime :codethread/config
+                 {:ns 'ct.spools.codethread.config
+                  :spools ['codethread/config 'millstrand.spools/batteries]
                   :after [:millstrand/spools-batteries]})
 
 ;; --- Workflow and shell provider surfaces ----------------------------------
