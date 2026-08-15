@@ -13,11 +13,6 @@
                  {:ns 'millstrand.spools.batteries
                   :spools ['millstrand.spools/batteries]})
 
-(runtime/module! runtime :codethread/config
-                 {:ns 'ct.spools.codethread.config
-                  :spools ['codethread/config 'millstrand.spools/batteries]
-                  :after [:millstrand/spools-batteries]})
-
 ;; --- Workflow and shell provider surfaces ----------------------------------
 (runtime/module! runtime :millhouse/spools-workflow
                  {:ns 'millhouse.spools.workflow
@@ -75,19 +70,32 @@
                   :required? true})
 
 ;; --- Codethread shared roots, in dependency order --------------------------
-(runtime/module! runtime :codethread/agents
-                 {:ns 'ct.spools.codethread.agents
-                  :spools ['codethread/agents
-                           'ct.spools/agent-run
-                           'ct.spools/delegation]
-                  :after [:millstrand/spools-agent-run
-                          :millstrand/spools-delegation]
-                  :required? true})
-(runtime/module! runtime :codethread/devflow-setup
-                 {:ns 'ct.spools.codethread.devflow-setup
-                  :spools ['codethread/devflow-setup]
-                  :after [:devflow/kanban-adapter]
-                  :required? true})
+(runtime/module! runtime :codethread/config-agents
+  {:ns 'ct.spools.codethread.agents
+   :spools ['codethread/config 'ct.spools/agent-run]
+   :after [:millstrand/spools-agent-run]
+   :required? true})
+(runtime/module! runtime :codethread/config-help
+  {:ns 'ct.spools.codethread.help
+   :spools ['codethread/config 'millstrand.spools/batteries]
+   :after [:millstrand/spools-batteries]
+   :required? true})
+(runtime/module! runtime :codethread/config-devflow
+  {:ns 'ct.spools.codethread.devflow
+   :spools ['codethread/config]
+   :required? true})
+(runtime/module! runtime :codethread/config
+  {:ns 'ct.spools.codethread.config
+   :spools ['codethread/config 'millstrand.spools/batteries
+            'ct.spools/agent-run 'ct.spools/delegation]
+   :after [:codethread/config-agents
+           :codethread/config-help
+           :codethread/config-devflow
+           :millstrand/spools-batteries
+           :millstrand/spools-agent-run
+           :millstrand/spools-delegation
+           :devflow/kanban-adapter]
+   :required? true})
 (runtime/module! runtime :codethread/ralph
                  {:ns 'ct.spools.codethread.ralph
                   :spools ['codethread/ralph 'millhouse.spools/workflow]
@@ -100,6 +108,6 @@
                            'millhouse.spools/workflow]
                   :after [:millstrand/spools-agent-run
                           :millhouse/spools-workflow
-                          :codethread/agents
+                          :codethread/config
                           :devflow/kanban-adapter]
                   :required? true})

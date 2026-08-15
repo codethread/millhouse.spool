@@ -8,43 +8,39 @@
    :extra-deps
    {ct.spools/agent-run
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "agent-run"}
     ct.spools/harness-core
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "harness-core"}
     ct.spools/claude-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "claude-harness"}
     ct.spools/codex-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "codex-harness"}
     ct.spools/pi-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "pi-harness"}
     ct.spools/agent-cli
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "agent-cli"}
     ct.spools/delegation
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "911bc4cb3364ce23516963761820ca0a55d01a39"
+     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
      :deps/root "delegation"}
-    codethread/agents
+    codethread/config
     {:git/url "https://github.com/codethread/codethread.spool.git"
-     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
-     :deps/root "spools/agents"}
-    codethread/devflow-setup
-    {:git/url "https://github.com/codethread/codethread.spool.git"
-     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
-     :deps/root "spools/devflow-setup"}
+     :git/sha "09eab40d06c97adcdca4de2c7372ca7fd530ecf6"
+     :deps/root "spools/config"}
     codethread/ralph
     {:git/url "https://github.com/codethread/codethread.spool.git"
-     :git/sha "26fdf691649e8c92ae6366c627e0a77cd8219549"
+     :git/sha "09eab40d06c97adcdca4de2c7372ca7fd530ecf6"
      :deps/root "spools/ralph"}
     codethread/devflow
     {:git/url "https://github.com/codethread/devflow.spool.git"
