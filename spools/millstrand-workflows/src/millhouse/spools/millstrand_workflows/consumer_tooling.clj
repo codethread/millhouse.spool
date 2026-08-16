@@ -635,74 +635,47 @@
   [(workflow/step :prepare-bootstrap-kondo
                   "Capture bootstrap spool evidence before producer alignment"
                   :self
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".bootstrap-kondo.prepare")
-                   "workflow/instruction" bootstrap-preparation-instruction})
+                  bootstrap-preparation-instruction)
    (workflow/step :prove-invocation-producer
                   "Prove the consumer uses the invocation producer coordinate"
                   :self
                   :depends-on [:prepare-bootstrap-kondo]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".invocation-producer")
-                   "workflow/instruction" invocation-producer-instruction})
+                  invocation-producer-instruction)
    (workflow/step :bootstrap-kondo
                   "Bootstrap Kondo in a separate registered run"
                   :self
                   :depends-on [:prove-invocation-producer]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".bootstrap-kondo")
-                   "workflow/instruction" bootstrap-completion-instruction})
+                  bootstrap-completion-instruction)
    (workflow/step :align-tools-deps
                   "Align the tools.deps view with the effective spool world"
                   :self
                   :depends-on [:bootstrap-kondo]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".tools-deps")
-                   "workflow/instruction" (fn [params] (basis-instruction style params))})
+                  (fn [params] (basis-instruction style params)))
    (workflow/step :configure-lsp
                   "Configure and prove clojure-lsp analysis"
                   :self
                   :depends-on [:align-tools-deps]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".lsp")
-                   "workflow/instruction" (fn [params] (lsp-instruction style params))})
+                  (fn [params] (lsp-instruction style params)))
    (workflow/step :configure-lint
                   "Configure and prove lint and clj-kondo analysis"
                   :self
                   :depends-on [:configure-lsp]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".lint")
-                   "workflow/instruction" (fn [params] (lint-instruction style params))})
+                  (fn [params] (lint-instruction style params)))
    (workflow/step :verify-tests
                   "Verify repository tests"
                   :self
                   :depends-on [:configure-lint]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".verify-tests")
-                   "workflow/instruction" (fn [params] (test-instruction style params))})
+                  (fn [params] (test-instruction style params)))
    (workflow/step :verify-weaver
                   "Prove the selected Weaver behavior or record pending proof"
                   :self
                   :depends-on [:verify-tests]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".weaver")
-                   "workflow/instruction" (fn [params] (weaver-instruction style params))})
+                  (fn [params] (weaver-instruction style params)))
    (workflow/step :handover
                   "Hand over repository tooling and generation evidence"
                   :self
                   :depends-on [:verify-weaver]
-                  :attributes
-                  {"workflow/action-ref" (str "millstrand-workflows.consumer-tooling."
-                                              (name style) ".handover")
-                   "workflow/instruction" (fn [params] (handover-instruction style params))})])
+                  (fn [params] (handover-instruction style params)))])
 (workflow/defworkflow configure-consumer-tooling
   "Choose and configure tooling for a Millstrand consumer repository style.
 
@@ -805,10 +778,7 @@
    (workflow/step :inspect-repository
                   "Inspect the effective spool world and classify the repository"
                   :self
-                  :attributes
-                  {"workflow/action-ref"
-                   "millstrand-workflows.consumer-tooling.repository.inspect"
-                   "workflow/instruction" inspect-repository-instruction})
+                  inspect-repository-instruction)
    (workflow/checkpoint
     :repository-style
     "Choose the consumer repository style"

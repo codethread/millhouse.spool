@@ -126,46 +126,37 @@
    (workflow/step :select-world
                   "Confirm the selected consumer worktree and workspace"
                   :self
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.world.select"
-                   "workflow/instruction"
-                   (fn [{:keys [worktree workspace]}]
-                     (fmt/reflow
-                      (format
-                       "|Use worktree `%s` and workspace `%s` exactly. Confirm the
+                  (fn [{:keys [worktree workspace]}]
+                    (fmt/reflow
+                     (format
+                      "|Use worktree `%s` and workspace `%s` exactly. Confirm the
                         |worktree is the intended consumer checkout and that the
                         |workspace is its selected `.millstrand` world. Refuse to
                         |fall back to the process current directory or a canonical
                         |workspace."
-                       worktree workspace)))})
+                      worktree workspace))))
    (workflow/step :capture-pre-refresh-evidence
                   "Capture exact spool roots before coordinate mutation"
                   :self
                   :depends-on [:select-world]
-                  :attributes
-                  {"workflow/action-ref"
-                   "millstrand-workflows.bump-spool.spool-status.capture"
-                   "workflow/instruction" capture-pre-refresh-evidence-instruction})
+                  capture-pre-refresh-evidence-instruction)
    (workflow/step :bump-spool
                   (fn [{:keys [item]}]
                     (str "Request remote default-branch HEAD SHA for " item))
                   :self
                   :depends-on [:capture-pre-refresh-evidence]
                   :loop {:each :families :chain true}
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.coordinate.bump"
-                   "workflow/instruction"
-                   (fn [{:keys [item worktree workspace]}]
-                     (fmt/reflow
-                      (format
-                       "|Require the exact `:bump-pre-refresh-evidence` recorded by
+                  (fn [{:keys [item worktree workspace]}]
+                    (fmt/reflow
+                     (format
+                      "|Require the exact `:bump-pre-refresh-evidence` recorded by
                         |`capture-pre-refresh-evidence`; refuse to mutate a coordinate
                         |when it is absent or malformed. From worktree `%s`, run exactly `strand --workspace %s
                         |spool bump %s --latest sha`. The explicit workspace is
                         |mandatory. Record the previous coordinate and resulting
                         |remote default-branch HEAD SHA. If the CLI reports that the coordinate is
                         |already current, record that outcome and continue."
-                       worktree workspace item)))})
+                      worktree workspace item))))
    (workflow/call :bootstrap-kondo
                   #'bootstrap/bootstrap-kondo
                   {:worktree (fn [{:keys [worktree]}] worktree)
@@ -185,13 +176,10 @@
                   "Refresh the selected runtime and record generation state"
                   :self
                   :depends-on [:configure-consumer-tooling]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.refresh"
-                   "workflow/instruction"
-                   (fn [{:keys [workspace]}]
-                     (fmt/reflow
-                      (format
-                       "|Require and carry the unchanged exact
+                  (fn [{:keys [workspace]}]
+                    (fmt/reflow
+                     (format
+                      "|Require and carry the unchanged exact
                         |`:bump-pre-refresh-evidence` through the preceding bootstrap
                         |and consumer-tooling proof. In the runtime for selected
                         |workspace `%s`, run
@@ -199,17 +187,14 @@
                         |result and whether the bumped coordinate is adopted or
                         |pending. Refresh does not itself authorize a stop or
                        |restart."
-                       workspace)))})
+                      workspace))))
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"
                   :self
                   :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request true]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.cutover"
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|This step is present only for a direct user request. Inspect
+                  (fmt/reflow
+                   "|This step is present only for a direct user request. Inspect
                      |the recorded refresh and tooling evidence first. If no pending
                      |generation exists, do not stop or start anything; record that
                      |the adopted-generation Weaver proof is already complete. If a
@@ -218,21 +203,18 @@
                      |workspace/PID. Reconnect, verify the bumped coordinate is
                      |adopted with no pending generation, and repeat the selected
                      |repository-style Weaver check. Never infer restart authority
-                     |from an agent, scheduled, or nested workflow call.")})
+                     |from an agent, scheduled, or nested workflow call."))
    (workflow/step :handover-runtime-generation-evidence
                   "Hand over adopted or pending runtime generation evidence"
                   :self
                   :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request false]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-spool.runtime.handover"
-                   "workflow/instruction"
-                   (fmt/reflow
-                    "|Do not stop or restart any runtime. Record the bump results,
+                  (fmt/reflow
+                   "|Do not stop or restart any runtime. Record the bump results,
                      |bootstrap and repository-tooling handovers, refresh result,
                      |generation state, and exact selected workspace. If no pending
                      |generation exists, record that no cutover is required and the
                      |adopted-generation Weaver proof is complete. If a generation
                      |is pending, mark the selected repository-style Weaver check
                      |after cutover as unfinished and hand over that a direct user
-                     |request is required before runtime cutover.")})))
+                     |request is required before runtime cutover."))))

@@ -148,9 +148,7 @@
    (workflow/step :inspect-deps
                   "Inspect the consumer Millstrand coordinate"
                   :self
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.deps.inspect"
-                   "workflow/instruction" inspect-deps-instruction})
+                  inspect-deps-instruction)
    (workflow/checkpoint :coordinate-classification
                         "Record the inspected Millstrand coordinate type"
                         :kind :agent
@@ -210,9 +208,7 @@
    (workflow/step :record-local-choice
                   "Record the approved local-checkout path"
                   :self
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.approve"
-                   "workflow/instruction" local-validation-instruction})
+                  local-validation-instruction)
    (workflow/call :bootstrap-kondo
                   #'bootstrap/bootstrap-kondo
                   {:worktree (fn [{:keys [worktree]}] worktree)
@@ -230,25 +226,19 @@
                   "Refresh the selected runtime after local validation"
                   :self
                   :depends-on [:configure-consumer-tooling]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.refresh"
-                   "workflow/instruction" refresh-instruction})
+                  refresh-instruction)
    (workflow/step :assess-authorized-cutover
                   "Assess generation state and use authorized cutover only when pending"
                   :self
                   :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request true]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.cutover"
-                   "workflow/instruction" (fn [_] (cutover-instruction))})
+                  (fn [_] (cutover-instruction)))
    (workflow/step :handover-runtime-generation-evidence
                   "Hand over adopted or pending runtime generation evidence"
                   :self
                   :depends-on [:refresh-runtime]
                   :condition [:= :direct-user-request false]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bump-millstrand.local.runtime.handover"
-                   "workflow/instruction" (fn [_] (handover-instruction))})))
+                  (fn [_] (handover-instruction)))))
 
 (workflow/defworkflow bump-millstrand-pinned
   "Delegate a Git/SHA-pinned Millstrand update to registered bump-spool.

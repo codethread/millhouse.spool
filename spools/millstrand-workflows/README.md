@@ -68,7 +68,7 @@ Runtime refresh and cutover retain the direct-user boundary. When refresh report
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
 | Workflow registry | `workflow/definition-kind` owned by `millhouse.spools.millstrand-workflows` | Publishes the producer, bootstrap, bump, tooling-choice, and continuation workflow definitions during module refresh. |
-| Agent instructions | `workflow/action-ref` on each workflow step | Exposes the exact producer, classpath, LSP, lint, test, Weaver, and handover obligation for the driving agent. |
+| Agent instructions | The final `workflow/step` instruction argument | Exposes the exact producer, classpath, LSP, lint, test, Weaver, and handover obligation for the driving agent through `workflow/instruction`. |
 | Repository style | Agent choice in `configure-consumer-tooling` | Selects `app`, `spool`, or `clojure-app`; its setup steps are manual and add no executor gate. |
 | Kondo import boundary | `.lsp/config.edn :copy-kondo-configs? false` | Keeps explicit bootstrap as the sole consumer-side import owner. |
 | Runtime cutover boundary | `:direct-user-request` | Allows stop/restart instructions only for a direct user request; other callers receive a handover. |

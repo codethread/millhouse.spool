@@ -387,37 +387,27 @@
                   "Ensure the clj-kondo binary is available"
                   :self
                   :depends-on [:prepare]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.ensure-kondo"
-                   "workflow/instruction" ensure-kondo-instruction})
+                  ensure-kondo-instruction)
    (workflow/step :copy-configs
                   "Resolve installed spool classpaths and import Kondo configs"
                   :self
                   :depends-on [:ensure-kondo]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.copy"
-                   "workflow/instruction" copy-configs-instruction})
+                  copy-configs-instruction)
    (workflow/step :validate
                   "Validate Kondo provenance, duplicates, and cache hygiene"
                   :self
                   :depends-on [:copy-configs]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.validate"
-                   "workflow/instruction" validate-instruction})
+                  validate-instruction)
    (workflow/step :discover-quality
                   "Discover and run appropriate local quality checks"
                   :self
                   :depends-on [:validate]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.quality"
-                   "workflow/instruction" quality-discovery-instruction})
+                  quality-discovery-instruction)
    (workflow/step :handover
                   "Leave the local Kondo bootstrap handover"
                   :self
                   :depends-on [:discover-quality]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.handover"
-                   "workflow/instruction" handover-instruction})])
+                  handover-instruction)])
 
 (workflow/defworkflow bootstrap-kondo
   "Choose a greenfield or brownfield Kondo bootstrap for a consumer checkout.
@@ -555,16 +545,12 @@
    (workflow/step :select-world
                   "Confirm the selected consumer worktree and workspace"
                   :self
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.world"
-                   "workflow/instruction" select-world-instruction})
+                  select-world-instruction)
    (workflow/step :capture-spool-status
                   "Capture exact installed roots before refresh"
                   :self
                   :depends-on [:select-world]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.spool-status.capture"
-                   "workflow/instruction" capture-spool-status-instruction})
+                  capture-spool-status-instruction)
    (workflow/checkpoint :adoption-mode
                         "Choose the consumer's Kondo adoption mode"
                         :kind :agent
@@ -599,9 +585,7 @@
          (workflow/step :prepare
                         "Establish minimal Kondo config and cache ignore"
                         :self
-                        :attributes
-                        {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.greenfield"
-                         "workflow/instruction" greenfield-instruction})
+                        greenfield-instruction)
          (shared-steps)))
 
 (workflow/defworkflow bootstrap-kondo-brownfield
@@ -616,7 +600,5 @@
          (workflow/step :prepare
                         "Inventory and safely merge existing Kondo config"
                         :self
-                        :attributes
-                        {"workflow/action-ref" "millstrand-workflows.bootstrap-kondo.brownfield"
-                         "workflow/instruction" brownfield-instruction})
+                        brownfield-instruction)
          (shared-steps)))

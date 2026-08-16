@@ -1131,6 +1131,35 @@
         (is (= [:depend-on] (:unknown (ex-data e))))
         (is (contains? (:allowed (ex-data e)) :depends-on))))))
 
+(deftest workflow-step-and-gate-accept-final-instruction
+  (let [render-instruction (fn [{:keys [feature]}] (str "Build " feature))]
+    (is (= {:id :a
+            :title "A"
+            :depends-on [:prepare]
+            :attributes {"workflow/instruction" render-instruction}}
+           (workflow/step :a "A" :self
+                          :depends-on [:prepare]
+                          render-instruction)))
+    (is (= {:id :ci
+            :title "CI"
+            :attributes {"workflow/instruction" "Wait for CI."
+                         "workflow/gate" "ci"}}
+           (workflow/gate :ci "CI" :ci "Wait for CI.")))))
+
+(deftest workflow-step-and-gate-reject-duplicate-instruction
+  (doseq [attributes [{"workflow/instruction" "Attribute instruction."}
+                      {:workflow/instruction "Attribute instruction."}]]
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"cannot be authored both positionally and in :attributes"
+         (workflow/step :a "A" :self
+                        :attributes attributes
+                        "Positional instruction."))))
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"instruction must be a non-blank string or rendering function"
+       (workflow/gate :ci "CI" :ci ""))))
+
 (deftest workflow-step-requires-self-waiter
   (testing "only :self is accepted; any other waiter fails loudly, directing to gate"
     (is (= {:id :a :title "A"} (workflow/step :a "A" :self)))

@@ -157,64 +157,47 @@
    (workflow/step :inspect-spool-root
                   "Inspect the macro-owning spool root"
                   :self
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.root"
-                   "workflow/instruction" root-instruction})
+                  root-instruction)
    (workflow/step :publish-root-classpath
                   "Publish resources on the spool root classpath"
                   :self
                   :depends-on [:inspect-spool-root]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.classpath"
-                   "workflow/instruction" classpath-instruction})
+                  classpath-instruction)
    (workflow/step :publish-kondo-export
                   "Publish the explicit clj-kondo export"
                   :self
                   :depends-on [:publish-root-classpath]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.kondo-export"
-                   "workflow/instruction" export-instruction})
+                  export-instruction)
    (workflow/step :publish-kondo-hooks
                   "Publish hooks for each macro shape"
                   :self
                   :depends-on [:publish-kondo-export]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.kondo-hooks"
-                   "workflow/instruction" hook-instruction})
+                  hook-instruction)
    (workflow/step :review-import-boundary
                   "Review external imports and consumer remaps"
                   :self
                   :depends-on [:publish-kondo-hooks]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.import-review"
-                   "workflow/instruction"
-                   (format-alpha/reflow
-                    "|Use the producer resource directory as the one source for
+                  (format-alpha/reflow
+                   "|Use the producer resource directory as the one source for
                      |this export. Review external dependency imports separately,
                      |inspect import drift, and reject any consumer config remap
                      |that overlaps the producer mapping. Remove generated
-                     |self-imports and any tracked `.clj-kondo/.cache` file.")})
+                     |self-imports and any tracked `.clj-kondo/.cache` file."))
    (workflow/step :test-kondo-export
                   "Test the exported clj-kondo contract"
                   :self
                   :depends-on [:review-import-boundary]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.tests"
-                   "workflow/instruction" test-instruction})
+                  test-instruction)
    (workflow/step :document-kondo-export
                   "Document the exported macro contract"
                   :self
                   :depends-on [:test-kondo-export]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.docs"
-                   "workflow/instruction" docs-instruction})
+                  docs-instruction)
    (workflow/step :verify-clean-status
                   "Verify clean final Git status"
                   :self
                   :depends-on [:document-kondo-export]
-                  :attributes
-                  {"workflow/action-ref" "millstrand-workflows.publish.clean-status"
-                   "workflow/instruction" final-status-instruction})))
+                  final-status-instruction)))
 
 (workflow/use-workflow!
  bootstrap/bootstrap-kondo

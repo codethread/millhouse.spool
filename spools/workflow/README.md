@@ -43,15 +43,21 @@ procedure selected by a worker at run time.
 ```clojure
 (workflow/workflow
   "Ship an artifact"
-  (workflow/step :build "Build the artifact" :self)
-  (workflow/gate :ci "Wait for CI" :ci :depends-on [:build])
+  (workflow/step :build "Build the artifact" :self "Build and verify the artifact.")
+  (workflow/gate :ci "Wait for CI" :ci
+                 :depends-on [:build]
+                 "Wait for the CI provider to report success.")
   (workflow/checkpoint :release "Release?"
                        :depends-on [:ci]
                        :choices [:yes :no]))
 ```
 
-Every step has an id and title. `:depends-on` gives ordinary graph ordering;
-absence of an edge permits parallel ready work. Conditions remove steps at
+Every step has an id and title. `step` and `gate` also accept an optional final
+instruction string or rendering function; it is stored as
+`workflow/instruction` and surfaced as `:instruction` in ready views. Existing
+keyword options remain optional and precede the instruction. Setting the same
+instruction through `:attributes` as well fails loudly. `:depends-on` gives
+ordinary graph ordering; absence of an edge permits parallel ready work. Conditions remove steps at
 compile time. A dependent of a removed step is spliced onto that step's own
 dependencies, so a conditional branch cannot leave a dangling blocker. Unknown
 references and a step id colliding with the root fail before materialization.

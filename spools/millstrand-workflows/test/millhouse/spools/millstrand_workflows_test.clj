@@ -106,9 +106,6 @@
                   :document-kondo-export
                   :verify-clean-status]
                  ids))
-          (is (= "millstrand-workflows.publish.kondo-export"
-                 (get-in (step definition :publish-kondo-export)
-                         [:attributes "workflow/action-ref"])))
           (is (= :review-import-boundary
                  (first (:depends-on (step definition :test-kondo-export)))))
           (let [review (get-in (step definition :review-import-boundary)

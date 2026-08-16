@@ -49,6 +49,7 @@
          explain-step explain-gate explain-checkpoint explain-call explain-workflow
          explain-definition explain-defer
          reject-unknown-keys! validate-param-authoring! step* bind-defer-step
+         parse-instruction-opts
          step-opt-keys checkpoint-opt-keys call-opt-keys workflow-opt-keys
          defer-opt-keys advance-opt-keys
          choice-name choice-details-attr reject-unknown-choice-keys!
@@ -121,13 +122,20 @@
   step. The result is plain data and may be passed to `workflow` or
   transformed by user code before compilation.
 
-  Example: `(step :build title :self :depends-on [:prepare])`."
-  [id title waiter & {:as opts}]
-  (reject-unknown-keys! opts step-opt-keys :step)
-  (when-not (s/valid? ::self-waiter waiter)
-    (fail! "Step waiter must be :self; use gate for a step an external actor owns"
-           {:id id :waiter waiter :explain (s/explain-data ::self-waiter waiter)}))
-  (step* id title opts))
+  `instruction` is an optional final non-blank string or rendering function. It
+  is stored as `workflow/instruction`, while all existing keyword options remain
+  optional. Authoring the instruction both positionally and in `:attributes`
+  fails loudly.
+
+  Examples: `(step :build title :self instruction)` and
+  `(step :build title :self :depends-on [:prepare] instruction)`."
+  [id title waiter & args]
+  (let [opts (parse-instruction-opts args :step)]
+    (reject-unknown-keys! opts step-opt-keys :step)
+    (when-not (s/valid? ::self-waiter waiter)
+      (fail! "Step waiter must be :self; use gate for a step an external actor owns"
+             {:id id :waiter waiter :explain (s/explain-data ::self-waiter waiter)}))
+    (step* id title opts)))
 
 (defn gate
   "Return a workflow gate step definition — a step whose completion belongs to
@@ -142,15 +150,18 @@
   `await!` can stay silent on a healthy executor-owned gate. Accepts the same
   opts as `step`.
 
-  Example: `(gate :ci title :ci :depends-on [:push])`; a fulfiller closes the
-  ready gate with `(complete! run-id {:step gate-id :by actor})`."
-  [id title waiter & {:as opts}]
-  (reject-unknown-keys! opts step-opt-keys :gate)
-  (when-not (s/valid? ::external-waiter waiter)
-    (fail! "Gate waiter must be a keyword, symbol, or non-blank string other than :self"
-           {:id id :waiter waiter :explain (s/explain-data ::external-waiter waiter)}))
-  (-> (step* id title opts)
-      (update :attributes merge {"workflow/gate" (name waiter)})))
+  Like `step`, a gate accepts an optional final instruction after its keyword
+  options. Example: `(gate :ci title :ci :depends-on [:push] instruction)`; a
+  fulfiller closes the ready gate with
+  `(complete! run-id {:step gate-id :by actor})`."
+  [id title waiter & args]
+  (let [opts (parse-instruction-opts args :gate)]
+    (reject-unknown-keys! opts step-opt-keys :gate)
+    (when-not (s/valid? ::external-waiter waiter)
+      (fail! "Gate waiter must be a keyword, symbol, or non-blank string other than :self"
+             {:id id :waiter waiter :explain (s/explain-data ::external-waiter waiter)}))
+    (-> (step* id title opts)
+        (update :attributes merge {"workflow/gate" (name waiter)}))))
 
 (defn checkpoint
   "Return a workflow checkpoint step definition.
@@ -1946,14 +1957,20 @@
                                 (fn [{:keys [feature]}] (str "Implement " feature))
                                 :self
                                 :depends-on [:design]
-                                :attributes {"skills" "clojure"}))
+                                :attributes {"skills" "clojure"}
+                                (fn [{:keys [feature]}]
+                                  (str "Implement and verify " feature))))
    :fields {:id "Stable local ref, keyword/symbol/string."
-            :title "Human-readable instruction."
+            :title "Human-readable short title."
             :waiter (fmt/reflow "
                      |Must be :self — the driving agent does the work itself. Any
                      |other value fails loudly and directs to gate. :self carries no
                      |workflow/gate attribute, so compiled output is identical to a
                      |bare step.")
+            :instruction (fmt/reflow "
+                         |Optional final non-blank string or rendering function, stored as
+                         |workflow/instruction and surfaced as :instruction in ready views.
+                         |Do not also set workflow/instruction in :attributes.")
             :depends-on "Vector of local refs this step waits for."
             :attributes "Plain metadata stored on the materialized strand."
             :condition "Keyword param truthiness, or [:= :param value] / [:!= :param value]."
@@ -1976,15 +1993,17 @@
                          |A gate returns step data with a workflow/gate actor hint. Its required
                          |waiter is separately validated against ::external-waiter: a keyword,
                          |symbol, or non-blank string, never :self. It takes the same optional
-                         |fields as a step.")
-                         '(gate :ci-green "Wait for CI to pass" :ci :depends-on [:push]))
+                         |fields and optional final instruction as a step.")
+                         '(gate :ci-green "Wait for CI to pass" :ci
+                                :depends-on [:push]
+                                "Wait for the CI provider to report success."))
    :fields {:waiter (fmt/reflow "
                      |Freeform actor hint (keyword/symbol/string) stored as workflow/gate, e.g.
                      |:ci, :human, :subagent; never :self. register-executor! keys a stall
                      |predicate by this same name.")
             :others (fmt/reflow "
-                     |Same optional fields as step: :depends-on, :attributes, :condition, :loop,
-                     |:description, :state.")
+                     |Same optional fields and final instruction as step: :depends-on,
+                     |:attributes, :condition, :loop, :description, :state, then instruction.")
             :workflow/gate (fmt/reflow "
                             |Marks the step an external wait point, surfaced by
                             |step-view as :gate; complete! requires :by to close it. A
@@ -2230,6 +2249,28 @@
     (fail! "Unknown workflow option keys"
            {:context context :unknown (vec unknown) :allowed allowed}))
   m)
+
+(defn- parse-instruction-opts
+  "Parse keyword options followed by an optional positional instruction."
+  [args context]
+  (let [instruction? (odd? (count args))
+        instruction (when instruction? (last args))
+        option-args (if instruction? (butlast args) args)]
+    (when (and instruction?
+               (not (or (non-blank-string? instruction) (fn? instruction))))
+      (fail! "Workflow instruction must be a non-blank string or rendering function"
+             {:context context :instruction instruction}))
+    (let [opts (apply hash-map option-args)
+          attributes (:attributes opts)]
+      (when (and instruction?
+                 (or (contains? attributes "workflow/instruction")
+                     (contains? attributes :workflow/instruction)))
+        (fail! "Workflow instruction cannot be authored both positionally and in :attributes"
+               {:context context :instruction instruction}))
+      (cond-> opts
+        instruction? (update :attributes #(assoc (or % {})
+                                                 "workflow/instruction"
+                                                 instruction))))))
 
 (def ^:private step-opt-keys #{:description :attributes :state :depends-on :condition :loop})
 (def ^:private checkpoint-opt-keys (into step-opt-keys #{:kind :choices}))
