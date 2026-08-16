@@ -1,50 +1,51 @@
 .PHONY: test test-local api-docs docs-site docs-serve docs-check fmt-check lint lint-clj lint-splint lint-conventions reflect-check kanban-dash-check kanban-export kanban-serve quality
 
 MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.millstrand/millstrand {:local/root "$(MILLSTRAND_ROOT)"}}}}}'
+RUN_CHECK = python3 scripts/run_quality_check.py
 
 test:
-	clojure -M:test
+	@$(RUN_CHECK) test clojure -M:test
 
 test-local:
 	@test -n "$(strip $(MILLSTRAND_ROOT))" || { echo "MILLSTRAND_ROOT is required (for example: make test-local MILLSTRAND_ROOT=/path/to/millstrand)" >&2; exit 2; }
-	clojure $(MILLSTRAND_OVERRIDE) -M:test:millstrand-root
+	@$(RUN_CHECK) test-local clojure $(MILLSTRAND_OVERRIDE) -M:test:millstrand-root
 
 api-docs:
-	clojure -M:api-docs
+	@$(RUN_CHECK) api-docs clojure -M:api-docs
 
 docs-site:
-	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs build --strict
+	@$(RUN_CHECK) docs-site uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs build --strict
 
 docs-serve:
 	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs serve --dev-addr 0.0.0.0:8000
 
 docs-check:
 	$(MAKE) api-docs
-	git diff --exit-code -- 'spools/*/*.api.md'
-	python3 scripts/check_markdown_links.py
+	@git diff --quiet -- 'spools/*/*.api.md' || { echo "API docs are stale; run 'make api-docs' and commit the regenerated files." >&2; exit 1; }
+	@$(RUN_CHECK) markdown-links python3 scripts/check_markdown_links.py
 	$(MAKE) docs-site
 
 fmt-check:
-	clojure -M:format
+	@$(RUN_CHECK) format clojure -M:format
 
 lint: lint-clj lint-splint lint-conventions
 
 lint-clj:
-	clojure -M:lint/clj-kondo
+	@$(RUN_CHECK) clj-kondo clojure -M:lint/clj-kondo
 
 lint-splint:
-	clojure -M:lint/splint
+	@$(RUN_CHECK) splint clojure -M:lint/splint
 
 lint-conventions:
-	clojure -M:lint/conventions
+	@$(RUN_CHECK) conventions clojure -M:lint/conventions
 
 reflect-check:
-	clojure -M:reflect-check
+	@$(RUN_CHECK) reflect clojure -M:reflect-check
 
 kanban-dash-check:
-	go build -C spools/kanban/scripts/agent-dash ./...
-	go vet -C spools/kanban/scripts/agent-dash ./...
-	go test -C spools/kanban/scripts/agent-dash ./...
+	@$(RUN_CHECK) kanban-dash-build go build -C spools/kanban/scripts/agent-dash ./...
+	@$(RUN_CHECK) kanban-dash-vet go vet -C spools/kanban/scripts/agent-dash ./...
+	@$(RUN_CHECK) kanban-dash-test go test -C spools/kanban/scripts/agent-dash ./...
 
 kanban-export:
 	@test -n "$(ID)" || { echo "make kanban-export: pass a card id, e.g. make kanban-export ID=abc12 [ARGS='--open']" >&2; exit 2; }
