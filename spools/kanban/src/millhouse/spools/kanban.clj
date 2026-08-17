@@ -22,7 +22,6 @@
             [millstrand.api.notes.alpha :as notes]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.lifecycle.alpha :as lifecycle]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.runtime.alpha :as runtime]
@@ -1499,23 +1498,6 @@
               :parent-of-edges {:type :collection :items :json}
               :depends-on-edges {:type :collection :items :json}}})
 
-(def ^:private kanban-vocab
-  {:kind :attr-namespace
-   :name "kanban"
-   :owner :millhouse/spools-kanban
-   :keys ["kanban/card" "kanban/lane" "kanban/outcome" "kanban/type"
-          "kanban/priority" "kanban/source" "kanban/task"
-          "kanban/run-id" "kanban/from" "kanban/abandon-restore-lane"]
-   :doc "Kanban card state attributes written by millhouse.spools.kanban/add!."})
-
-(def ^:private kanban-label-vocab
-  ;; No advisory :keys list: the label namespace is deliberately open, so the
-  ;; keys in use are whatever the board's cards carry (`kanban label list`).
-  {:kind :attr-namespace
-   :name label-ns
-   :owner :millhouse/spools-kanban
-   :doc "Open per-label marker keys: `kanban.label/<slug>` is \"true\" on every card carrying <slug>."})
-
 (def ^:private kanban-op-options
   {:arg-spec kanban-arg-spec
    :returns kanban-returns
@@ -1565,10 +1547,8 @@
            [:edge/in "parent-of" [:= :id [:param :epic]]]]})
 
 (defn open-kanban!
-  "Declare Kanban vocabulary and materialize its process-lifetime runtime state."
+  "Materialize Kanban's process-lifetime runtime state."
   [{:keys [runtime]}]
-  (vocab/declare! runtime kanban-vocab)
-  (vocab/declare! runtime kanban-label-vocab)
   (runtime/spool-state runtime ::state {:version state-version} new-state)
   {:opened :kanban})
 
@@ -1578,6 +1558,6 @@
   {:closed :kanban})
 
 (lifecycle/defresource! kanban-runtime
-  "Own Kanban vocabulary and runtime-state setup for the module lifetime."
+  "Own Kanban runtime-state setup for the module lifetime."
   {:open 'millhouse.spools.kanban/open-kanban!
    :close 'millhouse.spools.kanban/close-kanban!})

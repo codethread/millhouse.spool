@@ -26,7 +26,7 @@ Fulfil workflow `:shell` gates by running their command off the event thread.
 
 
 Runtime captured for asynchronous shell-executor worker threads.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L51-L53">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L50-L52">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/close-shell-handler!">`close-shell-handler!`</a>
 ``` clojure
@@ -35,7 +35,7 @@ Runtime captured for asynchronous shell-executor worker threads.
 Function.
 
 Unregister shell scanning when the module is removed.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L489-L496">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L473-L480">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/close-shell-pool!">`close-shell-pool!`</a>
 ``` clojure
@@ -44,7 +44,7 @@ Unregister shell scanning when the module is removed.
 Function.
 
 Close the runtime-lifetime shell worker pool.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L465-L472">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L450-L457">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/non-blank-string?">`non-blank-string?`</a>
 ``` clojure
@@ -56,7 +56,7 @@ Return true when `value` is a non-blank string.
 
   The shell request spec uses this predicate for the optional `shell/cwd`
   attribute.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L111-L117">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L110-L116">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/on-event">`on-event`</a>
 ``` clojure
@@ -65,7 +65,7 @@ Return true when `value` is a non-blank string.
 Function.
 
 Weaver event handler: graph changes may make a `:shell` gate ready.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L354-L357">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L353-L356">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/open-shell-handler!">`open-shell-handler!`</a>
 ``` clojure
@@ -73,8 +73,8 @@ Weaver event handler: graph changes may make a `:shell` gate ready.
 ```
 Function.
 
-Declare shell vocabulary, register scanning, and run the initial scan.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L474-L487">Source</a></sub></p>
+Register shell scanning and run the initial scan.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L459-L471">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/open-shell-pool!">`open-shell-pool!`</a>
 ``` clojure
@@ -83,7 +83,7 @@ Declare shell vocabulary, register scanning, and run the initial scan.
 Function.
 
 Open the runtime-lifetime shell worker pool.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L455-L463">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L440-L448">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/scan!">`scan!`</a>
 ``` clojure
@@ -98,7 +98,7 @@ Dispatch every ready `:shell` gate not already claimed or errored.
   accepted gate receives a `shell/running` claim before its process is submitted
   to the worker pool; the event thread never waits for the child. Scans run on
   relevant graph changes and once during handler activation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L332-L352">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L331-L351">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-handler">`shell-handler`</a>
 
@@ -106,7 +106,7 @@ Dispatch every ready `:shell` gate not already claimed or errored.
 
 
 Own the shell event handler for the lifetime of the module.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L504-L508">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L488-L492">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-pool">`shell-pool`</a>
 
@@ -114,7 +114,7 @@ Own the shell event handler for the lifetime of the module.
 
 
 Own the shell worker pool for the lifetime of the runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L498-L502">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L482-L486">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-stalled?">`shell-stalled?`</a>
 ``` clojure
@@ -149,7 +149,7 @@ Return durable stall detail for a ready `:shell` gate view, or nil.
   `{:gate gate-id :error detail}`. Remove the `gate/error` attribute (and any
   stale `shell/running` claim after a crash) to re-arm the next scan; a blank
   string is still present data.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L362-L396">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L361-L395">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/stalled-shell-gates">`stalled-shell-gates`</a>
 
@@ -175,4 +175,4 @@ Return active shell gates carrying a durable error stamp.
 
   Rewrite request attributes in the same update when fixing the underlying
   command or working directory.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L398-L421">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/shell-executor/src/millhouse/spools/executors/shell.clj#L397-L420">Source</a></sub></p>

@@ -2,8 +2,6 @@
   "Tests for the workflow-gate to in-process Clojure executor."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [millstrand.api.events.alpha :as events]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.spools.executors.code :as code]
             [millhouse.test-support :as test-support :refer [with-runtime]]
@@ -352,27 +350,3 @@
   (test-support/assert-state-shape
    #'code/new-state
    #{:scan-monitor :resources :close-fn}))
-
-(deftest forms-publish-vocabulary-handler-and-resources
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-      (test-support/activate-spool! rt :millhouse/spools-code 'millhouse.spools.executors.code
-                                    :after [:millhouse/spools-workflow])
-      (let [pool (:worker-executor
-                  (with-bindings {#'code/*runtime* rt} (#'code/resources)))
-            declaration (first (filter #(= "code" (:name %))
-                                       (vocab/declarations
-                                        rt {:kind :attr-namespace})))]
-        (is (= :millhouse/spools-code (:owner declaration)))
-        (is (= #{"code/fn" "code/params" "code/timeout-secs"
-                 "code/running" "code/result"}
-               (set (:keys declaration))))
-        (is (some #(= :code/engine (:key %)) (events/handlers rt)))
-        (is (= "code" (:waiter (first (workflow/executor-catalog)))))
-        (test-support/activate-spool! rt :millhouse/spools-code 'millhouse.spools.executors.code
-                                      :after [:millhouse/spools-workflow])
-        (is (identical? pool
-                        (:worker-executor
-                         (with-bindings {#'code/*runtime* rt} (#'code/resources)))))
-        "unchanged refresh preserves the worker pool"))))

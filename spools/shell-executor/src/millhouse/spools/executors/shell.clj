@@ -22,8 +22,7 @@
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.current.alpha :as current]
-            [millstrand.api.runtime.alpha :as runtime]
-            [millstrand.api.vocab.alpha :as vocab])
+            [millstrand.api.runtime.alpha :as runtime])
   (:import [java.lang ProcessHandle]
            [java.nio.charset StandardCharsets]
            [java.time Instant]
@@ -420,20 +419,6 @@
    [:= [:attr "workflow/gate"] "shell"]
    [:exists [:attr "gate/error"]]])
 
-(defn- declare-shell-vocab!
-  "Declare the `shell` attribute namespace on `runtime`.
-
-  Failure detail is written as the subagent executor's inherited `gate/error`,
-  whose namespace that spool owns."
-  [runtime]
-  (vocab/declare! runtime
-                  {:kind :attr-namespace
-                   :name "shell"
-                   :owner :millhouse/spools-shell
-                   :keys ["shell/argv" "shell/cwd" "shell/timeout-secs"
-                          "shell/running" "shell/exit-code" "shell/output"]
-                   :doc "Shell-gate command inputs and process outcome attributes stamped by the shell executor."}))
-
 (defn- register-shell-handler!
   "Register the graph-change event handler that drives shell-gate scans."
   [runtime]
@@ -472,13 +457,12 @@
                   "Invalid shell pool close result"))
 
 (defn open-shell-handler!
-  "Declare shell vocabulary, register scanning, and run the initial scan."
+  "Register shell scanning and run the initial scan."
   [ctx]
   (require-valid! ::open-context ctx "Invalid shell handler open context")
   (let [runtime (:runtime ctx)
         result (current/with-runtime runtime
                  (binding [*runtime* runtime]
-                   (declare-shell-vocab! runtime)
                    (register-shell-handler! runtime)
                    (scan!)
                    {:registered :shell/engine}))]

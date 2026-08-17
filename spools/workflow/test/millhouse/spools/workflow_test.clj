@@ -14,7 +14,6 @@
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.runtime.alpha :as runtime]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support :refer [assert-state-shape with-runtime]]
             [millhouse.spools.workflow :as workflow]
@@ -120,16 +119,6 @@
              (get-in config-data
                      [:hooks :analyze-call
                       'millhouse.spools.workflow/use-executor!]))))))
-
-(deftest workflow-module-declares-workflow-attr-namespace
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-      (let [decl (some #(when (= [:attr-namespace "workflow"] [(:kind %) (:name %)]) %)
-                       (vocab/declarations rt))]
-        (is (= :attr-namespace (:kind decl)))
-        (is (= :millhouse/spools-workflow (:owner decl))
-            "workflow module reconcile owns the workflow/* namespace via its module key")))))
 
 (deftest workflow-spool-explains-public-input-shapes
   (let [contract (workflow/explain)]

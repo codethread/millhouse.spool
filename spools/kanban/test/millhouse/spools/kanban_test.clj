@@ -6,7 +6,6 @@
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.runtime.alpha :as runtime]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.spool.alpha :as spool]
@@ -180,20 +179,6 @@
           (swap! checked conj leaf))
         (is (= required @checked))
         (is (empty? (set/difference required @checked)))))))
-
-(deftest activation-declares-kanban-attr-namespace
-  (with-kanban
-    (fn [rt]
-      (let [decl (->> (vocab/declarations rt {:kind :attr-namespace})
-                      (filter #(= "kanban" (:name %)))
-                      first)]
-        (is (some? decl) "the module resource declares the kanban/* attribute namespace")
-        (is (= :millhouse/spools-kanban (:owner decl))
-            "kanban/* is owned by the single verified use-key :millhouse/spools-kanban")
-        (is (every? #(str/starts-with? % "kanban/") (:keys decl))
-            "advisory :keys all live under the kanban/ prefix")
-        (is (contains? (set (:keys decl)) "kanban/task")
-            "the task-tier marker attr is declared in the vocab registry")))))
 
 (deftest kanban-owner-contribution-covers-every-board-declaration
   ;; A module publication replaces this owner partition as a whole.  Keep this

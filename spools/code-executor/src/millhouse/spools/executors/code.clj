@@ -15,7 +15,6 @@
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.spools.workflow :as workflow])
   (:import [java.util UUID]
@@ -71,8 +70,7 @@
 (s/def ::error any?)
 (s/def ::stall-detail (s/nilable (s/keys :req-un [::gate ::error])))
 
-(declare attr stamped? scan! declare-code-vocab! register-code-handler!
-         ensure-resources! state)
+(declare attr stamped? scan! register-code-handler! ensure-resources! state)
 
 (defn on-event
   "Scan for ready `:code` gates after a graph mutation.
@@ -121,16 +119,14 @@
 (defn open-code-engine!
   "Open the code executor handler and worker resources.
 
-  This lifecycle callback declares the `code/*` vocabulary, registers the
-  `:code/engine` graph handler, creates the bounded worker and timeout pools,
-  scans existing ready gates, and returns the engine handle owned by
-  `code-engine`."
+  This lifecycle callback registers the `:code/engine` graph handler, creates
+  the bounded worker and timeout pools, scans existing ready gates, and returns
+  the engine handle owned by `code-engine`."
   [ctx]
   (require-valid! ::open-context ctx "Invalid code engine open context")
   (let [runtime (:runtime ctx)
         result (current/with-runtime runtime
                  (binding [*runtime* runtime]
-                   (declare-code-vocab! runtime)
                    (register-code-handler! runtime)
                    (ensure-resources!)
                    (scan!)
@@ -150,11 +146,10 @@
                   "Invalid code engine close result"))
 
 (lifecycle/defresource! code-engine
-  "Own the code executor's vocabulary, event handler, and worker resources.
+  "Own the code executor's event handler and worker resources.
 
-  Opening this module resource publishes the `code/*` attributes and `:code`
-  workflow executor; closing it unregisters graph scanning and stops both
-  executor pools."
+  Opening this module resource registers the `:code` workflow executor; closing
+  it unregisters graph scanning and stops both executor pools."
   {:open 'millhouse.spools.executors.code/open-code-engine!
    :close 'millhouse.spools.executors.code/close-code-engine!})
 
@@ -396,15 +391,6 @@
                 :when (= "code" (:gate step))]
           (claim-and-dispatch! runtime run-id step))
         {:scanned true}))))
-
-(defn- declare-code-vocab! [runtime]
-  (vocab/declare! runtime
-                  {:kind :attr-namespace
-                   :name "code"
-                   :owner :millhouse/spools-code
-                   :keys ["code/fn" "code/params" "code/timeout-secs"
-                          "code/running" "code/result"]
-                   :doc "Code-gate function inputs, claim token, and result stamped by the code executor."}))
 
 (defn- register-code-handler! [runtime]
   (events/register-handler! runtime :code/engine event-types

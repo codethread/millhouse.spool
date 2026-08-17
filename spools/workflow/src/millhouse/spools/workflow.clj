@@ -28,11 +28,9 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.graph.alpha :as graph]
-            [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [fail! require-valid! attr-key->str
                                                 poll-until!]]
-            [millstrand.api.vocab.alpha :as vocab]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.spools.workflow.internal.compile :as cmp]
             [millhouse.spools.workflow.internal.definitions :as defs]
@@ -1405,37 +1403,6 @@
   [name]
   (defs/resolve-registered (current/runtime) name))
 
-(defn seed-workflow-vocab!
-  "Seed the `workflow/*` attribute namespace into `rt`'s vocabulary registry,
-  owned by this spool, so the attributes `compile` and the builders write are
-  discoverable data."
-  [{:keys [runtime]}]
-  (vocab/declare!
-   runtime
-   {:kind :attr-namespace
-    :name "workflow"
-    :owner :millhouse/spools-workflow
-    :keys ["workflow/role" "workflow/form" "workflow/run-id"
-           "workflow/family" "workflow/definition" "workflow/definition-name"
-           "workflow/context"
-           "workflow/gate" "workflow/checkpoint"
-           "workflow/checkpoint-kind" "workflow/choices"
-           "workflow/defer" "workflow/defer-workflows" "workflow/defer-path"
-           "workflow/deferred-workflow" "workflow/deferred-definition"
-           "workflow/deferred-fingerprint" "workflow/deferred-params"
-           "workflow/deferred-by"
-           "workflow/choice-details" "workflow/procedure" "workflow/outcome"
-           "workflow/outcome-by" "workflow/outcome-input"
-           "workflow/summary" "workflow/stage-params" "workflow/squashed-root"
-           "workflow/squashed-count" "workflow/artifact" "workflow/decision-point"
-           "workflow/action-ref" "workflow/instruction" "workflow/bond"]
-    :doc (fmt/reflow "
-          |Workflow molecule/wisp attributes written by the workflow spool's
-          |compile and builders. A step closed before the outcome cutover may
-          |also carry workflow/outcome-notes, which the engine no longer writes;
-          |it reads back as an ordinary historical attribute.")})
-  {:seeded :workflow})
-
 (runtime/collect-kind!
  :millhouse.spools.workflow.internal.registry/registry
  {:id definition-kind
@@ -1449,10 +1416,6 @@
  {:id executor-kind
   :entry-spec :millhouse.spools.workflow.internal.registry/executor-entry
   :binding-moment :gate-evaluation})
-
-(lifecycle/defseed! workflow-vocabulary
-  "Seed the process-lifetime Workflow attribute vocabulary."
-  {:apply 'millhouse.spools.workflow/seed-workflow-vocab!})
 
 ;; --- input contract specs -------------------------------------------------
 
