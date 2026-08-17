@@ -13,7 +13,7 @@
    millhouse.spools/kanban "spools/kanban"}},
  ct.spools/agent-run
  {:git/url "https://github.com/codethread/agent-harness.spool.git",
-  :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f",
+  :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
   :roots
   {ct.spools/agent-run "agent-run",
    ct.spools/harness-core "harness-core",

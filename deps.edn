@@ -8,31 +8,31 @@
    :extra-deps
    {ct.spools/agent-run
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "agent-run"}
     ct.spools/harness-core
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "harness-core"}
     ct.spools/claude-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "claude-harness"}
     ct.spools/codex-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "codex-harness"}
     ct.spools/pi-harness
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "pi-harness"}
     ct.spools/agent-cli
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "agent-cli"}
     ct.spools/delegation
     {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "1f06dfd046828f86c262537c190f854b87d90f6f"
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "delegation"}
     codethread/config
     {:git/url "https://github.com/codethread/codethread.spool.git"
