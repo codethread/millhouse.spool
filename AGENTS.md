@@ -23,6 +23,5 @@ Focused runs are serial. Stress mode launches each parallel iteration in a fresh
 
 This repo uses Millstrand strands to track work. Orientation ships in the `mill` CLI:
 
-- `mill prime strand` — the day-to-day strand workflow; run it before multi-step work.
-- `mill prime millstrand` — read on demand, only when building on this repo's `.millstrand/` config or spools.
+Start with `strand --help`. Run `mill prime millstrand` on demand when building on this repo's `.millstrand/` config or spools.
 <!-- /mill:millstrand-prime -->
