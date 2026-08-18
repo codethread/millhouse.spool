@@ -19,6 +19,7 @@
     millhouse.spools.executors.code-test
     millhouse.spools.executors.shell-test
     millhouse.spools.kanban-test
+    millhouse.spools.identity-test
     millhouse.spools.millstrand-workflows-test
     millhouse.spools.millstrand-workflows.bootstrap-kondo-test
     millhouse.spools.millstrand-workflows.consumer-tooling-test

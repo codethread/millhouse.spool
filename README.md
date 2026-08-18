@@ -18,6 +18,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 | [Millstrand workflows](spools/millstrand-workflows/README.md) (`millhouse.spools.millstrand-workflows`) | Reuse guided workflows for publishing clj-kondo support and adopting or updating approved spool families.                                    | [contract](spools/millstrand-workflows/README.md) · [cookbook](spools/millstrand-workflows/millstrand-workflows.cookbook.md) · [API](spools/millstrand-workflows/millstrand-workflows.api.md) |
 | [Chime](spools/chime/README.md) (`millhouse.spools.chime`)                                              | Turn meaningful graph events into local notifications with workspace-owned rules and your preferred notifier.                                | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md)                                                                            |
 | [Cron](spools/cron/README.md) (`millhouse.spools.cron`)                                                 | Run durable, interval-based jobs through Millstrand's scheduler, with optional jitter and reloadable handlers.                               | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md)                                                                                 |
+| [Identity](spools/identity/README.md) (`millhouse.spools.identity`)                                         | Give each logical harness session a friendly identity and connect it to the runs it performs.                                                   | [contract](spools/identity/README.md)                                                                                                                                                      |
 | [Kanban](spools/kanban/README.md) (`millhouse.spools.kanban`)                                           | Manage user–agent work as a shared board with priorities, handoffs, task dependencies, review, and optional peer-to-peer card transfer.      | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md) · [peering API](spools/kanban/kanban.peering.api.md)                  |
 
 ## Consumption
@@ -35,6 +36,7 @@ Millhouse is untagged work in progress. Consumers pin one commit and select the 
            millhouse.spools.executors/code "spools/code-executor"
            millhouse.spools.executors/shell "spools/shell-executor"
            millhouse.spools/kanban "spools/kanban"
+           millhouse.spools/identity "spools/identity"
            millhouse.spools/millstrand-workflows "spools/millstrand-workflows"}}}}
 ```
 

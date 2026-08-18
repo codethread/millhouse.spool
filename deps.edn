@@ -35,13 +35,9 @@
      :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
      :deps/root "delegation"}
     codethread/config
-    {:git/url "https://github.com/codethread/codethread.spool.git"
-     :git/sha "cdded90bba0009377c2d9e58021735d5baa5cf88"
-     :deps/root "spools/config"}
+    {:local/root "../codethread.spool/spools/config"}
     codethread/ralph
-    {:git/url "https://github.com/codethread/codethread.spool.git"
-     :git/sha "cdded90bba0009377c2d9e58021735d5baa5cf88"
-     :deps/root "spools/ralph"}
+    {:local/root "../codethread.spool/spools/ralph"}
     codethread/devflow
     {:git/url "https://github.com/codethread/devflow.spool.git"
      :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
@@ -65,6 +61,8 @@
                        "spools/shell-executor/test"
                        "spools/kanban/src"
                        "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
@@ -78,6 +76,8 @@
                        "spools/shell-executor/test"
                        "spools/kanban/src"
                        "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]}
   :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
@@ -89,6 +89,8 @@
                            "spools/shell-executor/test"
                        "spools/kanban/src"
                        "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]}
   :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
@@ -100,6 +102,8 @@
                                "spools/shell-executor/test"
                        "spools/kanban/src"
                        "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]}
   :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
@@ -111,6 +115,8 @@
                             "spools/shell-executor/test"
                        "spools/kanban/src"
                        "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"
                        "spools/millstrand-workflows/src"
                        "spools/millstrand-workflows/test"]}
   :lint/conventions {:extra-paths ["scripts"
@@ -127,7 +133,9 @@
                                    "spools/millstrand-workflows/src"
                                    "spools/millstrand-workflows/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]
+                       "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"]
                      :extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
                      :main-opts ["-m" "quality.conventions-check"]}
   :reflect-check {:extra-paths ["scripts"
@@ -144,7 +152,9 @@
                                 "spools/millstrand-workflows/src"
                                 "spools/millstrand-workflows/test"
                        "spools/kanban/src"
-                       "spools/kanban/test"]
+                       "spools/kanban/test"
+                       "spools/identity/src"
+                       "spools/identity/test"]
                   :main-opts ["-m" "quality.reflect-check"]}
   :api-docs {:extra-deps {io.github.borkdude/quickdoc {:git/tag "v0.2.6"
                                                         :git/sha "ce86780"}}

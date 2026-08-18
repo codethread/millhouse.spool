@@ -10,10 +10,10 @@
    millhouse.spools/cron "spools/cron",
    millhouse.spools.executors/code "spools/code-executor",
    millhouse.spools.executors/shell "spools/shell-executor",
-   millhouse.spools/kanban "spools/kanban"}},
+   millhouse.spools/kanban "spools/kanban",
+   millhouse.spools/identity "spools/identity"}},
  ct.spools/agent-run
- {:git/url "https://github.com/codethread/agent-harness.spool.git",
-  :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+ {:local/root "/Users/ct/dev/projects/agent-harness.spool",
   :roots
   {ct.spools/agent-run "agent-run",
    ct.spools/harness-core "harness-core",
@@ -29,8 +29,7 @@
   {codethread/devflow ".",
    codethread/devflow-kanban-adapter "kanban-adapter"}},
  codethread/spools
- {:git/url "https://github.com/codethread/codethread.spool.git",
-  :git/sha "cdded90bba0009377c2d9e58021735d5baa5cf88",
+ {:local/root "../../codethread.spool",
   :roots
   {codethread/config "spools/config",
    codethread/ralph "spools/ralph"}},}}

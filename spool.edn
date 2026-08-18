@@ -5,4 +5,5 @@
          millhouse.spools.executors/code {:root "spools/code-executor"}
          millhouse.spools.executors/shell {:root "spools/shell-executor"}
          millhouse.spools/kanban {:root "spools/kanban"}
+         millhouse.spools/identity {:root "spools/identity"}
          millhouse.spools/millstrand-workflows {:root "spools/millstrand-workflows"}}}
