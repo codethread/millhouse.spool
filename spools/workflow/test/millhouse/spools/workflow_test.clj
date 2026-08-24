@@ -19,7 +19,7 @@
             [millhouse.spools.workflow :as workflow]
             [millhouse.spools.workflow.internal.registry :as wf-registry]
             [millstrand.test.alpha :as test-alpha])
-  (:import [java.time Instant]))
+  (:import [java.time Duration Instant]))
 
 (defn- failure-reason [f]
   (:reason (ex-data (try (f) (catch clojure.lang.ExceptionInfo e e)))))
@@ -1940,6 +1940,58 @@
             explicit (workflow/await! rt "await-explicit-runtime" {:timeout-secs 1})]
         (is (= :done (:reason explicit)))
         (is (= ambient explicit))))))
+
+(deftest await-rearms-once-for-an-accepted-weaver-restart
+  (with-runtime
+    (fn [rt _]
+      (let [calls (atom [])]
+        (let [result (with-redefs-fn {#'millhouse.spools.workflow/attention
+                                      (fn [_runtime run-id]
+                                        (swap! calls conj run-id)
+                                        (if (= 1 (count @calls))
+                                          (throw (ex-info "peer Weaver restarted"
+                                                          {:code :weaver/restarted}))
+                                          {:reason :done :done true}))}
+                       #(workflow/await! rt "await-restarted"
+                                         {:timeout-secs 1 :poll-ms 1}))]
+          (is (= :done (:reason result))))
+        (is (= ["await-restarted" "await-restarted"] @calls))))))
+
+(deftest await-rethrows-a-second-weaver-restart
+  (with-runtime
+    (fn [rt _]
+      (let [calls (atom [])
+            failure (with-redefs-fn {#'millhouse.spools.workflow/attention
+                                     (fn [_runtime run-id]
+                                       (swap! calls conj run-id)
+                                       (throw (ex-info "peer Weaver restarted"
+                                                       {:code :weaver/restarted})))}
+                      #(try
+                         (workflow/await! rt "await-restarted-twice"
+                                          {:timeout-secs 1 :poll-ms 1})
+                         nil
+                         (catch clojure.lang.ExceptionInfo e e)))]
+        (is (= :weaver/restarted (:code (ex-data failure))))
+        (is (= ["await-restarted-twice" "await-restarted-twice"] @calls))))))
+
+(deftest await-restart-keeps-the-original-time-budget
+  (with-runtime
+    (fn [rt _]
+      (test-alpha/set-clock! rt (test-alpha/manual-clock Instant/EPOCH))
+      (let [calls (atom 0)
+            result (with-redefs-fn {#'millhouse.spools.workflow/attention
+                                    (fn [_runtime _run-id]
+                                      (swap! calls inc)
+                                      (if (= 1 @calls)
+                                        (do (test-alpha/advance! rt (Duration/ofMillis 900))
+                                            (throw (ex-info "peer Weaver restarted"
+                                                            {:code :weaver/restarted})))
+                                        (do (test-alpha/advance! rt (Duration/ofMillis 200))
+                                            {:reason :waiting})))}
+                     #(workflow/await! rt "await-restart-budget"
+                                       {:timeout-secs 1 :poll-ms 1}))]
+        (is (= :timeout (:reason result)))
+        (is (= 2 @calls))))))
 
 (deftest await!-fails-loudly-for-malformed-timeout-secs-or-poll-ms
   (with-runtime

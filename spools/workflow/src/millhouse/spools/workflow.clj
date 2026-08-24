@@ -872,6 +872,10 @@
   the agent-run await surface). `:timeout-secs` must be a non-negative integer;
   `:poll-ms` must be a positive integer.
 
+  If an accepted read reports `:weaver/restarted`, reissue that read once for
+  the same run within the original timeout budget. A second restart and every
+  other error remain loud.
+
   The three-arg `(runtime run-id opts)` arity threads the target runtime
   explicitly; the shorter arities resolve `current/runtime` as the ergonomic
   default for trusted in-process callers."
@@ -881,14 +885,32 @@
    (await! (current/runtime) run-id opts))
   ([runtime run-id opts]
    (let [timeout-secs (timeout-secs-opt opts)
-         poll-ms (poll-ms-opt opts)]
-     (poll-until!
-      (runtime/clock runtime)
-      {:timeout-ms (* 1000 (long timeout-secs))
-       :poll-ms poll-ms
-       :check #(attention runtime run-id)
-       :pred->result (fn [state] (when (not= :waiting (:reason state)) state))
-       :on-timeout (fn [state] (assoc state :reason :timeout))}))))
+         poll-ms (poll-ms-opt opts)
+         deadline (.plusMillis ^java.time.Instant (runtime/now runtime)
+                               (* 1000 (long timeout-secs)))]
+     ;; A peer call can be accepted by the old Weaver and then report only
+     ;; `weaver/restarted` after that Weaver disappears.  Reissue this one
+     ;; safe read once, with the same run id and the original deadline.  No
+     ;; other error is retryable here.
+     (letfn [(await-with-restart [restarts]
+               (try
+                 (let [remaining-ms (- (.toEpochMilli ^java.time.Instant deadline)
+                                       (.toEpochMilli ^java.time.Instant
+                                        (runtime/now runtime)))]
+                   (poll-until!
+                    (runtime/clock runtime)
+                    {:timeout-ms (max 0 remaining-ms)
+                     :poll-ms poll-ms
+                     :check #(attention runtime run-id)
+                     :pred->result (fn [state]
+                                     (when (not= :waiting (:reason state)) state))
+                     :on-timeout (fn [state] (assoc state :reason :timeout))}))
+                 (catch clojure.lang.ExceptionInfo e
+                   (if (and (zero? restarts)
+                            (= :weaver/restarted (:code (ex-data e))))
+                     (await-with-restart 1)
+                     (throw e)))))]
+       (await-with-restart 0)))))
 
 (defn squash-run!
   "Squash a finished run's molecules into one closed digest strand and return it.

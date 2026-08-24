@@ -84,10 +84,7 @@ terminate child processes; code that starts one must clean it up itself.
 
 ## 5. Failure and recovery
 
-Exceptions, invalid requests, unresolved functions, invalid results, and
-timeouts leave the gate active and ready with `gate/error`. Later scans skip a
-gate while that key is present. A blank error is still present data and does
-not re-arm the gate.
+Exceptions, invalid requests, unresolved functions, invalid results, and timeouts leave the gate active and ready with `gate/error`. An interrupted in-JVM callback is different: its matching `code/running` claim is cleared without an error stamp, leaving the gate retryable. Later scans skip a gate while that key is present. A blank error is still present data and does not re-arm the gate.
 
 After fixing the function or request data, a coordinator removes
 `gate/error`. The next scan resolves the current Var and retries the poured
