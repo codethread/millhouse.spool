@@ -21,12 +21,14 @@
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.process.alpha :as process]
+            [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.spool.alpha :refer [fail! attr-get require-valid!]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime])
   (:import [java.nio.charset StandardCharsets]
+           [java.time Instant]
            [java.util.concurrent Executors ExecutorService ThreadFactory TimeUnit]))
 
 (def ^:private event-types
@@ -43,6 +45,11 @@
   :millhouse/shell-executor)
 
 (def ^:private process-poll-ms 100)
+
+(def ^:private timeout-deadline-attribute "shell/timeout-deadline")
+(def ^:private timeout-intent-attribute "shell/timeout-intent")
+(def ^:private timeout-handler
+  'millhouse.spools.executors.shell/timeout-wake)
 
 (def ^:dynamic *runtime*
   "Runtime captured for asynchronous shell-executor worker threads."
@@ -172,6 +179,45 @@
                    {:gate (:id gate) :value v :spec :shell/cwd
                     :explain (s/explain-str :shell/cwd v)}))))
 
+(defn- timeout-key [attempt-id]
+  (str "shell-timeout/" attempt-id))
+
+(defn- deadline-string [^Instant deadline]
+  (str deadline))
+
+(defn- parse-deadline [value]
+  (when (string? value)
+    (try
+      (Instant/parse value)
+      (catch java.time.format.DateTimeParseException _
+        nil))))
+
+(defn- timeout-deadline
+  [runtime timeout-secs]
+  (when timeout-secs
+    (.plusSeconds ^Instant (runtime/now runtime) (long timeout-secs))))
+
+(defn- timeout-wake-pending?
+  [runtime attempt-id]
+  (some #(= (timeout-key attempt-id) (:key %))
+        (scheduler/pending runtime)))
+
+(defn- arm-timeout!
+  "Persist and arm the timeout for one durable attempt at its original bound."
+  [runtime attempt-id handle deadline]
+  (when (and handle deadline)
+    (scheduler/schedule!
+     runtime
+     {:key (timeout-key attempt-id)
+      :wake-at deadline
+      :handler timeout-handler
+      :payload {:attempt-id attempt-id :handle handle}})))
+
+(defn- cancel-timeout!
+  [runtime attempt-id]
+  (when (timeout-wake-pending? runtime attempt-id)
+    (scheduler/cancel! runtime (timeout-key attempt-id))))
+
 ;; ---------------------------------------------------------------------------
 ;; Process execution (worker thread only)
 
@@ -245,13 +291,15 @@
   [record]
   (= :terminal (:phase record)))
 
+(declare cancel-attempt-at-timeout!)
+
 (defn- await-custody-terminal!
   "Poll one retained process record until Mill reports its terminal fact.
 
   The process itself is owned by Mill; this wait is only a convenience for the
   current generation. If Weaver replacement interrupts this worker, the durable
   attempt and Mill record remain for `reconcile-shell-attempts!`."
-  [runtime handle timeout-secs]
+  [runtime gate-id attempt-id handle timeout-secs]
   (let [deadline (when timeout-secs
                    (+ (System/nanoTime)
                       (* (long timeout-secs) 1000000000)))]
@@ -262,7 +310,7 @@
         (if (and deadline (not cancelled?)
                  (>= (System/nanoTime) deadline))
           (do
-            (process/cancel! runtime custody-owner handle)
+            (cancel-attempt-at-timeout! runtime gate-id attempt-id handle)
             (recur (process/get runtime handle) true))
           (do
             (Thread/sleep (long process-poll-ms))
@@ -329,7 +377,10 @@
         (if (and (:exit record) (zero? (terminal-exit record)))
           (pass! run-id gate-id attempt-id custody-handle 0 output)
           (fail-attempt! gate-id attempt-id custody-handle
-                         (terminal-error record timed-out?)
+                         (terminal-error record
+                                         (or timed-out?
+                                             (= "timed-out"
+                                                (attr gate :shell/timeout-intent))))
                          (terminal-exit record) output))
         :committed))
     :stale))
@@ -351,10 +402,35 @@
       (case commit
         :stale :stale
         (do
+          ;; Keep the durable timeout wake from racing a terminal commit. A
+          ;; failed cancellation leaves the fact unacknowledged for the next
+          ;; reconciliation, just like any other failed custody step.
+          (cancel-timeout! runtime attempt-id)
           (process/acknowledge! runtime custody-owner custody-handle)
           (if (clear-attempt! gate-id attempt-id custody-handle)
             :acknowledged
             :stale))))))
+
+(defn- mark-timeout!
+  "Record timeout intent before asking Mill to cancel the retained process."
+  [gate-id attempt-id custody-handle]
+  (stamp-attempt! gate-id attempt-id custody-handle
+                  {timeout-intent-attribute "timed-out"}))
+
+(defn- cancel-attempt-at-timeout!
+  [runtime gate-id attempt-id custody-handle]
+  (when (and gate-id attempt-id custody-handle)
+    (when (mark-timeout! gate-id attempt-id custody-handle)
+      (process/cancel! runtime custody-owner custody-handle))))
+
+(defn- enforce-timeout!
+  "Rearm the original timeout after replacement, or cancel when it is due."
+  [runtime attempt handle]
+  (when-let [deadline (parse-deadline (:timeout-deadline attempt))]
+    (if-not (.isAfter ^Instant deadline ^Instant (runtime/now runtime))
+      (cancel-attempt-at-timeout! runtime (:gate-id attempt)
+                                  (:attempt-id attempt) handle)
+      (arm-timeout! runtime (:attempt-id attempt) handle deadline))))
 
 (defn- run-gate!
   "Launch one claimed shell attempt through Mill custody and reconcile its fact."
@@ -364,16 +440,23 @@
           _ (require-request! gate)
           raw-argv (parse-argv gate)
           timeout-secs (parse-timeout gate)
+          deadline (or (parse-deadline (attr gate :shell/timeout-deadline))
+                       (timeout-deadline runtime timeout-secs))
           argv raw-argv
           cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
           process-record (process/launch! runtime custody-owner attempt-id
                                           {:argv argv :cwd cwd :env {}})
           custody-handle (:handle process-record)]
       (persist-custody-handle! gate-id attempt-id custody-handle)
+      (when (and deadline (nil? (attr gate :shell/timeout-deadline)))
+        (stamp-attempt! gate-id attempt-id custody-handle
+                        {timeout-deadline-attribute (deadline-string deadline)}))
+      (arm-timeout! runtime attempt-id custody-handle deadline)
       (let [{:keys [record timed-out?]}
             (if (process-terminal? process-record)
               {:record process-record :timed-out? false}
-              (await-custody-terminal! runtime custody-handle timeout-secs))]
+              (await-custody-terminal! runtime gate-id attempt-id custody-handle
+                                       timeout-secs))]
         (terminal-reconcile! runtime run-id gate-id attempt-id custody-handle
                              record timed-out?)))
     (catch InterruptedException _
@@ -410,8 +493,15 @@
                (not (stamped? gate :shell/running))
                (not (stamped? gate :shell/custody-handle)))
       (let [attempt-id (str (java.util.UUID/randomUUID))]
-        (stamp! (:id gate) {"shell/running" attempt-id
-                            "shell/attempt-id" attempt-id})
+        (let [timeout-secs (let [value (attr gate :shell/timeout-secs)]
+                             (when (s/valid? :shell/timeout-secs value)
+                               (long value)))
+              deadline (timeout-deadline runtime timeout-secs)]
+          (stamp! (:id gate)
+                  (cond-> {"shell/running" attempt-id
+                           "shell/attempt-id" attempt-id}
+                    deadline (assoc timeout-deadline-attribute
+                                    (deadline-string deadline)))))
         (.execute (worker-executor)
                   ^Runnable (fn []
                               (current/with-runtime runtime
@@ -465,12 +555,37 @@
            :state (:state gate)
            :attempt-id (attr gate :shell/attempt-id)
            :custody-handle (attr gate :shell/custody-handle)
+           :timeout-deadline (attr gate :shell/timeout-deadline)
+           :timeout-intent (attr gate :shell/timeout-intent)
            :error (attr gate :gate/error)})
         (filter #(some? (attr % :shell/attempt-id))
                 (shell-gates runtime))))
 
+(defn timeout-wake
+  "Cancel a shell attempt when its durable absolute timeout is due.
+
+  The wake is deliberately keyed by attempt identity. A terminal commit cancels
+  it; a stale delivery re-reads the gate and therefore cannot cancel a newer
+  attempt that reused the workflow gate."
+  [{:keys [runtime payload]}]
+  (let [attempt-id (:attempt-id payload)
+        attempt (some #(when (= attempt-id (:attempt-id %)) %)
+                      (read-shell-attempts {:runtime runtime}))]
+    (when (and attempt
+               (= "active" (:state attempt))
+               (= (:handle payload) (:custody-handle attempt))
+               (parse-deadline (:timeout-deadline attempt)))
+      (cancel-attempt-at-timeout! runtime (:gate-id attempt) attempt-id
+                                  (:custody-handle attempt))))
+  nil)
+
 (defn read-shell-custody
-  "Return all unacknowledged Mill custody records for this shell owner."
+  "Return custody records, or an explicit deferred result when Mill custody is
+  temporarily unavailable during Weaver replacement.
+
+  Other listing failures remain loud: an empty durable-attempt set is not a
+  reason to reinterpret an unavailable custody read as a successful empty
+  listing."
   [{:keys [runtime]}]
   (try
     (process/list-owned runtime custody-owner)
@@ -479,11 +594,13 @@
       ;; replacement) Mill may not yet admit this runtime to its process-control
       ;; socket. Keep the durable attempt for the next generation; do not turn
       ;; a transport seam into a false custody acknowledgement.
-      (let [code (:code (ex-data throwable))
-            deferred? (or (= "process/control-unavailable" code)
-                          (= "process/stale-weaver" code)
-                          (empty? (read-shell-attempts {:runtime runtime})))]
-        (if deferred? [] (throw throwable))))))
+      (let [code (:code (ex-data throwable))]
+        (if (contains? #{"process/control-unavailable" "process/stale-weaver"}
+                       code)
+          {:status :deferred
+           :reason (keyword (str/replace code #"/" "-"))
+           :facts []}
+          (throw throwable))))))
 
 (defn- owner-local-failure!
   [attempt detail]
@@ -513,16 +630,38 @@
           (locking (scan-monitor)
             (stamp-attempt! (:gate-id attempt) (:attempt-id attempt) nil
                             {"shell/custody-handle" handle})))
+        (enforce-timeout! runtime attempt handle)
         {:attempt-id (:attempt-id attempt) :phase (:phase fact)})
 
       :else
-      (let [commit (terminal-reconcile! runtime (:run-id attempt) (:gate-id attempt)
-                                        (:attempt-id attempt) handle fact false)]
-        (if (= :stale commit)
-          {:attempt-id (:attempt-id attempt) :stale true}
-          {:attempt-id (:attempt-id attempt)
-           :phase :terminal
-           :acknowledged true})))))
+      (try
+        (let [commit (terminal-reconcile! runtime (:run-id attempt) (:gate-id attempt)
+                                          (:attempt-id attempt) handle fact
+                                          (= "timed-out" (:timeout-intent attempt)))]
+          (if (= :stale commit)
+            {:attempt-id (:attempt-id attempt)
+             :stale true
+             :error (str "stale shell custody fact for attempt "
+                         (:attempt-id attempt))}
+            {:attempt-id (:attempt-id attempt)
+             :phase :terminal
+             :acknowledged true}))
+        (catch Throwable throwable
+          (owner-local-failure!
+           attempt
+           (str "shell custody fact could not be reconciled for attempt "
+                (:attempt-id attempt) ": " (ex-message throwable))))))))
+
+(defn- deferred-custody-read?
+  [actual]
+  (and (map? actual)
+       (contains? #{:deferred :unknown} (:status actual))))
+
+(defn- custody-facts
+  [actual]
+  (if (map? actual)
+    (vec (or (:facts actual) (:records actual) []))
+    actual))
 
 (defn apply-shell-attempts!
   "Reconcile durable shell attempts with retained Mill custody facts.
@@ -534,45 +673,55 @@
   [{:keys [runtime] :as context}]
   (let [desired (:desired context)
         actual (:actual context)
+        deferred? (deferred-custody-read? actual)
+        actual (custody-facts actual)
         by-key (group-by :key actual)
         desired-keys (set (keep :attempt-id desired))
-        results (mapv (fn [attempt]
-                        (let [facts (get by-key (:attempt-id attempt))]
-                          (cond
-                            (nil? (:attempt-id attempt))
-                            {:gate-id (:gate-id attempt) :ignored true}
+        results (if deferred?
+                  (mapv (fn [attempt]
+                          {:attempt-id (:attempt-id attempt)
+                           :deferred true})
+                        desired)
+                  (mapv (fn [attempt]
+                          (let [facts (get by-key (:attempt-id attempt))]
+                            (cond
+                              (nil? (:attempt-id attempt))
+                              {:gate-id (:gate-id attempt) :ignored true}
 
-                            (empty? facts)
-                            (if (= "closed" (:state attempt))
-                              #_{:splint/disable [lint/locking-object]}
-                              (if (locking (scan-monitor)
-                                    (clear-attempt! (:gate-id attempt)
-                                                    (:attempt-id attempt)
-                                                    (:custody-handle attempt)))
-                                {:attempt-id (:attempt-id attempt)
-                                 :recovered :closed-without-custody-fact}
-                                {:attempt-id (:attempt-id attempt)
-                                 :stale true})
+                              (empty? facts)
+                              (if (= "closed" (:state attempt))
+                                #_{:splint/disable [lint/locking-object]}
+                                (if (locking (scan-monitor)
+                                      (clear-attempt! (:gate-id attempt)
+                                                      (:attempt-id attempt)
+                                                      (:custody-handle attempt)))
+                                  {:attempt-id (:attempt-id attempt)
+                                   :recovered :closed-without-custody-fact}
+                                  {:attempt-id (:attempt-id attempt)
+                                   :stale true})
+                                (owner-local-failure!
+                                 attempt
+                                 (str "missing shell custody fact for attempt "
+                                      (:attempt-id attempt))))
+
+                              (> (count facts) 1)
                               (owner-local-failure!
                                attempt
-                               (str "missing shell custody fact for attempt "
-                                    (:attempt-id attempt))))
+                               (str "multiple shell custody facts for attempt "
+                                    (:attempt-id attempt)))
 
-                            (> (count facts) 1)
-                            (owner-local-failure!
-                             attempt
-                             (str "multiple shell custody facts for attempt "
-                                  (:attempt-id attempt)))
-
-                            :else
-                            (reconcile-fact! runtime attempt (first facts)))))
-                      desired)
-        orphan-errors (mapv (fn [fact]
-                              {:attempt-id (:key fact)
-                               :handle (:handle fact)
-                               :error "shell custody fact has no matching durable attempt"})
-                            (remove #(contains? desired-keys (:key %)) actual))]
+                              :else
+                              (reconcile-fact! runtime attempt (first facts)))))
+                        desired))
+        orphan-errors (if deferred?
+                        []
+                        (mapv (fn [fact]
+                                {:attempt-id (:key fact)
+                                 :handle (:handle fact)
+                                 :error "shell custody fact has no matching durable attempt"})
+                              (remove #(contains? desired-keys (:key %)) actual)))]
     {:reconciled :shell-attempts
+     :status (if deferred? :deferred :applied)
      :attempts results
      :errors (vec (concat (filter :error results) orphan-errors))}))
 

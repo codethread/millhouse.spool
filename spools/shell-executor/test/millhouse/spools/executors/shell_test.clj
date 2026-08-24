@@ -10,6 +10,7 @@
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.process.alpha :as process]
+            [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.io File]))
@@ -220,6 +221,138 @@
                            :stderr-ref "/tmp/orphan.stderr"}}]
         (with-redefs [process/list-owned (fn [_ _] [fact])]
           (is (= [fact] (shell/read-shell-custody {:runtime rt}))))))))
+
+(deftest custody-listing-defer-is-preserved-through-apply
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt {:title "Deferred custody"
+                                  :attributes {"workflow/gate" "shell"
+                                               "shell/attempt-id" "attempt-deferred"
+                                               "shell/custody-handle" "handle-deferred"
+                                               "shell/running" "attempt-deferred"}})
+            deferred (with-redefs [process/list-owned
+                                   (fn [_ _]
+                                     (throw (ex-info "stale Weaver"
+                                                     {:code "process/stale-weaver"})))]
+                       (shell/read-shell-custody {:runtime rt}))
+            result (shell/apply-shell-attempts!
+                    {:runtime rt
+                     :desired (shell/read-shell-attempts {:runtime rt})
+                     :actual deferred})]
+        (is (= :deferred (:status deferred)))
+        (is (= :deferred (:status result)))
+        (is (= [{:attempt-id "attempt-deferred" :deferred true}]
+               (:attempts result)))
+        (is (empty? (:errors result)))
+        (is (= "attempt-deferred"
+               (attr (weaver/show rt (:id gate)) :shell/attempt-id)))))))
+
+(deftest custody-listing-rethrows-unrelated-failure-with-empty-desired
+  (with-runtime
+    (fn [rt _]
+      (let [failure (ex-info "broken listing" {:code "process/broken"})]
+        (with-redefs [process/list-owned (fn [_ _] (throw failure))]
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                #"broken listing"
+                                (shell/read-shell-custody {:runtime rt}))))))))
+
+(deftest unreadable-custody-output-is-contained-per-attempt
+  (with-runtime
+    (fn [rt _]
+      (let [bad (weaver/add! rt {:title "Unreadable custody"
+                                 :attributes {"workflow/gate" "shell"
+                                              "shell/attempt-id" "attempt-bad-output"
+                                              "shell/custody-handle" "handle-bad-output"}})
+            good (weaver/add! rt {:title "Readable custody"
+                                  :attributes {"workflow/gate" "shell"
+                                               "shell/attempt-id" "attempt-good-output"
+                                               "shell/custody-handle" "handle-good-output"}})
+            stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            acknowledged (atom [])]
+        (spit stdout "ok")
+        (spit stderr "")
+        (with-redefs [process/acknowledge!
+                      (fn [_ _ handle]
+                        (swap! acknowledged conj handle)
+                        {:acknowledged true :handle handle})]
+          (let [result (shell/apply-shell-attempts!
+                        {:runtime rt
+                         :desired [{:gate-id (:id bad)
+                                    :run-id "unreadable"
+                                    :state "active"
+                                    :attempt-id "attempt-bad-output"
+                                    :custody-handle "handle-bad-output"}
+                                   {:gate-id (:id good)
+                                    :run-id "readable"
+                                    :state "active"
+                                    :attempt-id "attempt-good-output"
+                                    :custody-handle "handle-good-output"}]
+                         :actual [{:handle "handle-bad-output"
+                                   :key "attempt-bad-output"
+                                   :phase :terminal
+                                   :output {:stdout-ref "/missing/stdout"
+                                            :stderr-ref "/missing/stderr"}
+                                   :exit {:code 0}}
+                                  {:handle "handle-good-output"
+                                   :key "attempt-good-output"
+                                   :phase :terminal
+                                   :output {:stdout-ref (.getAbsolutePath stdout)
+                                            :stderr-ref (.getAbsolutePath stderr)}
+                                   :exit {:code 1}}
+                                  {:handle "orphan-output"
+                                   :key "orphan-output"
+                                   :phase :running}]})]
+            (is (some #(= "attempt-bad-output" (:attempt-id %)) (:errors result)))
+            (is (some #(= "orphan-output" (:attempt-id %)) (:errors result)))
+            (is (some #(and (= "attempt-good-output" (:attempt-id %))
+                            (:acknowledged %))
+                      (:attempts result)))
+            (is (= ["handle-good-output"] @acknowledged))))))))
+
+(deftest retained-mismatch-is-visible-without-touching-newer-gate
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt {:title "Newer attempt"
+                                  :attributes {"workflow/gate" "shell"
+                                               "shell/attempt-id" "attempt-new"
+                                               "shell/custody-handle" "handle-new"}})
+            result (shell/apply-shell-attempts!
+                    {:runtime rt
+                     :desired [{:gate-id (:id gate)
+                                :state "active"
+                                :attempt-id "attempt-old"
+                                :custody-handle "handle-old"}]
+                     :actual [{:handle "handle-other"
+                               :key "attempt-old"
+                               :phase :running}]})
+            after (weaver/show rt (:id gate))]
+        (is (some #(= "attempt-old" (:attempt-id %)) (:errors result)))
+        (is (= "attempt-new" (attr after :shell/attempt-id)))
+        (is (= "handle-new" (attr after :shell/custody-handle)))
+        (is (nil? (attr after :gate/error)))))))
+
+(deftest running-fact-rearms-original-absolute-timeout
+  (with-runtime
+    (fn [rt _]
+      (let [deadline "2999-01-01T00:00:00Z"
+            scheduled (atom nil)]
+        (with-redefs [scheduler/schedule!
+                      (fn [_ wake] (reset! scheduled wake) wake)]
+          (shell/apply-shell-attempts!
+           {:runtime rt
+            :desired [{:gate-id "gate-timeout"
+                       :state "active"
+                       :attempt-id "attempt-timeout"
+                       :custody-handle "handle-timeout"
+                       :timeout-deadline deadline}]
+            :actual [{:handle "handle-timeout"
+                      :key "attempt-timeout"
+                      :phase :running}]}))
+        (is (= "shell-timeout/attempt-timeout" (:key @scheduled)))
+        (is (= (java.time.Instant/parse deadline) (:wake-at @scheduled)))
+        (is (= {:attempt-id "attempt-timeout" :handle "handle-timeout"}
+               (:payload @scheduled)))))))
 
 (def ^:private canonical-m0-producer
   "6f265f45f894859c74dfd7c6bf32a94c48cb32d0")
