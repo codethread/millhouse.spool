@@ -1,6 +1,6 @@
 {:paths []
  :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
-                                  :git/sha "9bc90d1c8e421699f72098a8ca59a058be6ff88b"
+                                  :git/sha "6f265f45f894859c74dfd7c6bf32a94c48cb32d0"
                                   :deps/root "."}}
  :aliases
  {:millstrand
