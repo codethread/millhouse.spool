@@ -1,6 +1,9 @@
 (ns millhouse.spools.executors.shell-test
   "Tests for the workflow-gate to shell-command executor."
-  (:require [clojure.string :as str]
+  (:require [clojure.edn :as edn]
+            [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [millhouse.spools.executors.shell :as shell]
             [millhouse.spools.workflow :as workflow]
@@ -95,6 +98,259 @@
 (defn- temp-file [suffix]
   (doto (File/createTempFile "shell-test" suffix)
     (.deleteOnExit)))
+
+(def ^:private canonical-m0-producer
+  "6f265f45f894859c74dfd7c6bf32a94c48cb32d0")
+
+(defn- millstrand-source-root []
+  (test-alpha/spool-checkout-root "millstrand/api/process/alpha.clj"))
+
+(declare run-command-result!)
+
+(defn- run-command!
+  "Run one isolated command and return its merged output, failing on nonzero exit."
+  [command cwd environment stdin]
+  (let [{:keys [output exit-code]} (run-command-result! command cwd environment stdin)]
+    (is (zero? exit-code)
+        (str "command failed: " (pr-str command) "\n" output))
+    (when-not (zero? exit-code)
+      (throw (ex-info "Isolated command failed" {:command command :exit-code exit-code
+                                                 :output output})))
+    output))
+
+(defn- run-command-result!
+  "Run one isolated command and return its merged output and exit code."
+  [command cwd environment stdin]
+  (let [builder (doto (ProcessBuilder. ^java.util.List command)
+                  (.redirectErrorStream true))
+        _ (when cwd (.directory builder (io/file cwd)))
+        _ (doseq [[key value] environment]
+            (.put (.environment builder) key value))
+        process (.start builder)]
+    (when stdin
+      (with-open [writer (io/writer (.getOutputStream process))]
+        (.write writer stdin)))
+    (let [output (slurp (.getInputStream process))
+          exit-code (.waitFor process)]
+      {:output output :exit-code exit-code})))
+
+(defn- mill-environment [source state-home]
+  {"MILLSTRAND_SOURCE" (.getCanonicalPath (io/file source))
+   "XDG_STATE_HOME" (.getCanonicalPath (io/file state-home))})
+
+(defn- mill-command!
+  ([mill source state-home workspace args]
+   (mill-command! mill source state-home workspace args nil))
+  ([mill source state-home workspace args stdin]
+   (run-command! (into [mill]
+                       (if (= ["status"] args)
+                         args
+                         (concat args ["--workspace" workspace])))
+                 source
+                 (mill-environment source state-home)
+                 stdin)))
+
+(defn- weaver-repl! [mill source state-home workspace form]
+  (edn/read-string
+   (mill-command! mill source state-home workspace
+                  ["weaver" "repl" "--stdin"]
+                  form)))
+
+(defn- weaver-status! [mill source state-home workspace]
+  (json/read-str (mill-command! mill source state-home workspace
+                                ["weaver" "status"])
+                 :key-fn keyword))
+
+(defn- build-mill! [source target state-home]
+  (run-command! ["go" "build" "-o" (.getCanonicalPath (io/file target))
+                 "./cli/cmd/mill"]
+                source
+                (mill-environment source state-home)
+                nil)
+  (.getCanonicalPath (io/file target)))
+
+(defn- start-mill! [mill source state-home log-file]
+  (let [builder (doto (ProcessBuilder. [mill "start"])
+                  (.redirectErrorStream true)
+                  (.redirectOutput (io/file log-file)))
+        _ (doseq [[key value] (mill-environment source state-home)]
+            (.put (.environment builder) key value))]
+    (.start builder)))
+
+(defn- millhouse-source-root []
+  (-> (test-alpha/spool-checkout-root "millhouse/spools/workflow.clj")
+      .getParentFile
+      .getParentFile
+      .getCanonicalPath))
+
+(defn- short-disposable-root []
+  (let [root (io/file "/tmp" (str "ms" (.pid (java.lang.ProcessHandle/current))))]
+    (when (.exists root)
+      (throw (ex-info "Short disposable root is already in use"
+                      {:root (.getCanonicalPath root)})))
+    (when-not (.mkdirs root)
+      (throw (ex-info "Could not create short disposable root"
+                      {:root (.getCanonicalPath root)})))
+    root))
+
+(def ^:private shell-acceptance-roots
+  {'millhouse.spools/workflow "spools/workflow"
+   'millhouse.spools.executors/shell "spools/shell-executor"})
+
+(defn- shell-acceptance-spools-edn [root]
+  (pr-str {:spools {'millhouse/spools {:local/root root
+                                       :roots shell-acceptance-roots}}}))
+
+(def ^:private shell-acceptance-init
+  "(require '[millstrand.api.current.alpha :as current]
+            '[millstrand.api.runtime.alpha :as runtime])
+   (def rt (current/runtime))
+   (runtime/module! rt :millhouse/spools-workflow
+     {:ns 'millhouse.spools.workflow
+      :spools ['millhouse.spools/workflow]
+      :required? true})
+   (runtime/module! rt :millhouse/spools-shell
+     {:ns 'millhouse.spools.executors.shell
+      :spools ['millhouse.spools.executors/shell
+               'millhouse.spools/workflow]
+      :after [:millhouse/spools-workflow]
+      :required? true})")
+
+(defn- workflow-shell-gate-form [release-marker]
+  (str "(do
+     (require '[millhouse.spools.workflow :as workflow]
+              '[millhouse.spools.executors.shell :as shell])
+     (let [result
+           (workflow/start! \"shell-replacement\"
+             (workflow/workflow
+               \"Shell replacement\"
+               (workflow/gate :check \"Run shell check\" :shell
+                 :attributes {\"test/run-id\" \"shell-replacement\"
+                              \"shell/argv\" [\"sh\" \"-c\" \"while [ ! -f "
+       release-marker
+       " ]; do sleep 0.1; done; printf shell-ok\"]})
+               (workflow/step :after \"After\" :self :depends-on [:check]))
+             {})]
+       (shell/scan!)
+       result))"))
+
+(defn- shell-gate-probe-form []
+  "(do
+     (require '[millstrand.api.current.alpha :as current]
+              '[millstrand.api.weaver.alpha :as weaver]
+              '[millhouse.spools.workflow :as workflow])
+     (let [rt (current/runtime)
+           gate (first (weaver/list rt
+                                   [:and
+                                    [:= [:attr \"workflow/gate\"] \"shell\"]
+                                    [:= [:attr \"test/run-id\"] \"shell-replacement\"]]
+                                   {}))]
+       {:generation (:generation-id rt)
+        :gate (select-keys gate [:id :state :attributes])
+        :ready (workflow/ready \"shell-replacement\")}))")
+
+(deftest shell-gate-reaches-next-frontier-across-planned-weaver-replacement
+  (let [source (millstrand-source-root)
+        consumer-root (millhouse-source-root)
+        disposable-root (short-disposable-root)
+        state-home (io/file disposable-root "state")
+        workspace (io/file disposable-root ".millstrand")
+        release-marker (io/file disposable-root "release")
+        mill-target (io/file disposable-root "mill")
+        mill-log (io/file disposable-root "mill.log")
+        mill-process (atom nil)
+        started-result (atom nil)
+        last-probe (atom nil)
+        after-probe (atom nil)]
+    (try
+      (is (= canonical-m0-producer
+             (str/trim (run-command! ["git" "-C" (.getCanonicalPath (io/file source))
+                                      "rev-parse" "HEAD"]
+                                     nil {} nil)))
+          "the acceptance world is built from the canonical M0 producer")
+      (let [mill (build-mill! source mill-target state-home)
+            workspace-path (.getCanonicalPath workspace)]
+        (reset! mill-process (start-mill! mill source state-home mill-log))
+        (test-support/poll-until
+         #(zero? (:exit-code
+                  (run-command-result! [mill "status"]
+                                       source
+                                       (mill-environment source state-home)
+                                       nil)))
+         {:timeout-ms (test-support/await-budget-ms 30000)
+          :interval-ms 100
+          :on-timeout #(throw (ex-info "Timed out waiting for disposable Mill" {}))})
+        (mill-command! mill source state-home workspace-path ["init"])
+        (spit (io/file workspace "spools.edn")
+              (str (shell-acceptance-spools-edn consumer-root) "\n"))
+        (spit (io/file workspace "init.clj") shell-acceptance-init)
+        (mill-command! mill source state-home workspace-path ["weaver" "start"])
+        (let [_before-status (weaver-status! mill source state-home workspace-path)
+              before (weaver-repl! mill source state-home workspace-path
+                                   (shell-gate-probe-form))]
+          (reset! started-result
+                  (weaver-repl! mill source state-home workspace-path
+                                (workflow-shell-gate-form
+                                 (.getCanonicalPath release-marker))))
+          (let [running
+                (test-support/poll-until
+                 #(let [probe (weaver-repl! mill source state-home workspace-path
+                                            (shell-gate-probe-form))]
+                    (reset! last-probe probe)
+                    (when (get-in probe [:gate :attributes :shell/running])
+                      probe))
+                 {:timeout-ms (test-support/await-budget-ms)
+                  :interval-ms 100
+                  :on-timeout
+                  (fn []
+                    (throw (ex-info "Shell gate was not claimed"
+                                    {:started @started-result
+                                     :probe @last-probe})))})]
+            (is (some? (get-in running [:gate :attributes :shell/custody-handle]))
+                "the running gate has a Mill custody handle before replacement")
+            (is (.isAlive ^Process @mill-process)
+                "Mill is alive before the planned Weaver replacement")
+            ;; Ask Mill to perform its planned Weaver replacement while the
+            ;; custody-backed shell attempt is still in flight.
+            (mill-command! mill source state-home workspace-path ["weaver" "restart"])
+            (is (.isAlive ^Process @mill-process)
+                "Mill remains alive through the planned Weaver replacement")
+            (let [_after-status (weaver-status! mill source state-home workspace-path)]
+              (spit release-marker "release")
+              (let [after
+                    (test-support/poll-until
+                     #(let [probe (weaver-repl! mill source state-home workspace-path
+                                                (shell-gate-probe-form))]
+                        (reset! after-probe probe)
+                        (when (= ["After"] (mapv :title (:ready probe)))
+                          probe))
+                     {:timeout-ms (test-support/await-budget-ms 15000)
+                      :interval-ms 100
+                      :on-timeout #(throw (ex-info "Shell gate did not advance after Weaver replacement"
+                                                   {:before before
+                                                    :probe @after-probe}))})]
+                (is (= ["After"] (mapv :title (:ready after))))
+                (is (= "closed" (get-in after [:gate :state])))
+                (is (= "shell" (get-in after [:gate :attributes :workflow/outcome-by])))
+                (is (= "shell-ok" (get-in after [:gate :attributes :shell/output]))))))))
+      (finally
+        (when (and @mill-process (.isAlive ^Process @mill-process))
+          (try
+            (mill-command! (if (.isFile mill-target)
+                             (.getCanonicalPath mill-target)
+                             "mill")
+                           source
+                           state-home
+                           (.getCanonicalPath workspace)
+                           ["weaver" "stop"])
+            (catch Throwable _ nil)))
+        (when-let [^Process process @mill-process]
+          (when (.isAlive process)
+            (.destroy process)
+            (when-not (.waitFor process 5 java.util.concurrent.TimeUnit/SECONDS)
+              (.destroyForcibly process)
+              (.waitFor process 5 java.util.concurrent.TimeUnit/SECONDS))))
+        (test-support/delete-tree! disposable-root)))))
 
 (deftest output-reader-failure-is-not-reported-as-a-timeout
   (let [reader (reify clojure.lang.IBlockingDeref
