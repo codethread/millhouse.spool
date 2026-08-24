@@ -27,9 +27,10 @@ order the shell module after it:
 ```
 
 Activation declares the `shell` attribute namespace, registers the workflow
-executor and stalled-gate query, starts the graph-change scan handler, and runs
-an initial scan. A durable ready `:shell` gate can therefore be dispatched as
-soon as the module reconciles.
+executor and stalled-gate query, starts the graph-change scan handler, and
+reconciles any Mill-owned shell attempts retained across Weaver replacement.
+A durable ready `:shell` gate can therefore be dispatched as soon as the module
+reconciles.
 
 ## 2. Authoring shell gates
 
@@ -49,15 +50,19 @@ zero closes the gate and releases dependent steps. A non-zero exit, timeout,
 spawn failure, or invalid request leaves the gate active and ready with a
 durable `gate/error`; it never masquerades as a completed workflow step. The
 executor captures a bounded combined output tail for process outcomes.
+Commands are launched through Mill-owned process custody, so a Weaver
+replacement does not lose the child or its terminal fact.
 
 ## 3. Recovery and coordination
 
 Failures are deliberate stalls, not automatic retries. The shell executor skips
-a gate while `gate/error` or its in-flight `shell/running` claim is present, so
-graph activity cannot repeatedly launch an expensive command. A coordinator
-fixes the command or environment, removes the failure stamp, and lets the next
-scan retry it. A crash after claiming but before recording an outcome is
-recovered by removing the stale claim.
+a gate while `gate/error`, its in-flight `shell/running` claim, or an unacknowledged
+`shell/custody-handle` is present, so graph activity cannot repeatedly launch an
+expensive command. A coordinator fixes the command or environment, removes the
+failure stamp, and lets the next scan retry it. A custody terminal fact is
+committed to the matching attempt before its handle is acknowledged. Missing,
+stale, or mismatched facts are reported as owner-local reconciliation failures;
+the spool never guesses which gate they belong to.
 
 The failure predicate and named query are the durable attention surfaces. Their
 return shapes, exact clearing calls, and the distinction between an absent
@@ -70,11 +75,12 @@ attribute and blank-string data are documented with `shell-stalled?` and
 | --- | --- | --- |
 | Executor | `shell` from `defexecutor` | Claims ready workflow gates whose waiter is `:shell`; healthy gates remain ordinary waiting work. |
 | Request spec | `millhouse.spools.executors.shell/request` | Projects the required `shell/argv` and optional `shell/cwd` and `shell/timeout-secs` shape through executor discovery. |
-| Attribute namespace | `shell` | Publishes command inputs and process outcome attributes: `shell/argv`, `shell/cwd`, `shell/timeout-secs`, `shell/running`, `shell/exit-code`, and `shell/output`. |
+| Attribute namespace | `shell` | Publishes command inputs and process outcome attributes: `shell/argv`, `shell/cwd`, `shell/timeout-secs`, `shell/running`, `shell/attempt-id`, `shell/custody-handle`, `shell/exit-code`, and `shell/output`. |
 | Failure state | `gate/error` on the gate | Inherited workflow failure stamp; its presence makes the ready gate a coordinator-visible stall. |
 | Named query | `stalled-shell-gates` | Selects active `:shell` gates carrying `gate/error`. |
 | Event handler | `shell/engine` | Scans ready gates after relevant graph changes and on activation. |
 | Lifecycle resources | `shell-pool`, `shell-handler` | Own the runtime worker pool and module-scoped scan handler. |
+| Lifecycle reconciliation | `shell-attempts` | Reconciles durable attempt ids with Mill custody records and acknowledges terminal facts only after the gate update. |
 
 The complete public function and lifecycle reference is in
 [`shell.api.md`](./shell.api.md).

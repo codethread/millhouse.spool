@@ -1941,6 +1941,22 @@
         (is (= :done (:reason explicit)))
         (is (= ambient explicit))))))
 
+(deftest await-rearms-once-for-an-accepted-weaver-restart
+  (with-runtime
+    (fn [rt _]
+      (let [calls (atom [])]
+        (let [result (with-redefs-fn {#'millhouse.spools.workflow/attention
+                                      (fn [_runtime run-id]
+                                        (swap! calls conj run-id)
+                                        (if (= 1 (count @calls))
+                                          (throw (ex-info "peer Weaver restarted"
+                                                          {:code :weaver/restarted}))
+                                          {:reason :done :done true}))}
+                       #(workflow/await! rt "await-restarted"
+                                         {:timeout-secs 1 :poll-ms 1}))]
+          (is (= :done (:reason result))))
+        (is (= ["await-restarted" "await-restarted"] @calls))))))
+
 (deftest await!-fails-loudly-for-malformed-timeout-secs-or-poll-ms
   (with-runtime
     (fn [rt _]

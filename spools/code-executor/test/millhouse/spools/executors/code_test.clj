@@ -12,6 +12,7 @@
 
 (def ^:private blocker (atom (CountDownLatch. 0)))
 (def ^:private worker-exited (atom (CountDownLatch. 0)))
+(def ^:private interrupt-once? (atom true))
 
 (defn return-value
   "Return the test value supplied in `params`."
@@ -27,6 +28,13 @@
   "Throw a test exception carrying stable ex-data."
   [_params]
   (throw (ex-info "code test exploded" {:reason "broken"})))
+
+(defn interrupt-once
+  "Interrupt the first callback and succeed on the retry."
+  [params]
+  (if (compare-and-set! interrupt-once? true false)
+    (throw (InterruptedException. "code callback interrupted"))
+    (:value params)))
 
 (defn non-json-value
   "Return a value that cannot be persisted as JSON."
@@ -345,6 +353,26 @@
           (let [after-wait (weaver/show rt gate-id)]
             (is (= "active" (:state after-wait)))
             (is (nil? (attr after-wait :code/result)))))))))
+
+(deftest interrupted-callback-clears-claim-and-is-retryable
+  (with-code
+    (fn [rt]
+      (reset! interrupt-once? true)
+      (workflow/start!
+       "interrupted"
+       (single-gate
+        "interrupted"
+        (request "millhouse.spools.executors.code-test/interrupt-once"
+                 {:value "retried"}))
+       {})
+      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
+      (let [gate-id (-> (gate-strand rt "interrupted") :id)
+            retried (await-eventually
+                     #(let [gate (weaver/show rt gate-id)]
+                        (when (= "closed" (:state gate)) gate)))]
+        (is (= "retried" (attr retried :code/result)))
+        (is (nil? (attr retried :gate/error)))
+        (is (nil? (attr retried :code/running)))))))
 
 (deftest state-shape-matches-declared-version
   (test-support/assert-state-shape

@@ -310,6 +310,17 @@
     gate-id token
     #(stamp! gate-id {"code/running" nil "gate/error" detail})))
 
+(defn- interrupt-gate!
+  "Clear an interrupted in-JVM callback's claim and leave its gate retryable.
+
+  Interruption is an ownership boundary, not a callback failure: a fresh scan
+  may claim the same ready gate after the current worker exits. No error stamp is
+  published because the callback has no durable terminal result to report."
+  [gate-id token]
+  (with-live-claim!
+    gate-id token
+    #(stamp! gate-id {"code/running" nil})))
+
 (defn- timeout! [gate-id token ^Thread worker timeout-secs]
   (with-live-claim!
     gate-id token
@@ -345,6 +356,8 @@
           (reset! timeout-task
                   (schedule-timeout gate-id token (Thread/currentThread) timeout-secs))
           (pass! run-id gate-id token (callable params))))
+      (catch InterruptedException _
+        (interrupt-gate! gate-id token))
       (catch Throwable throwable
         (fail-gate! gate-id token (error-detail throwable)))
       (finally

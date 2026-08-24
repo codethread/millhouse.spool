@@ -6,17 +6,53 @@
             [millhouse.spools.workflow :as workflow]
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.api.events.alpha :as events]
+            [millstrand.api.process.alpha :as process]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.io File]))
 
 (defn- with-shell [f]
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-      (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
-                                    :after [:millhouse/spools-workflow])
-      (f rt))))
+  ;; Unit worlds do not have a Mill control channel. Keep these focused tests
+  ;; deterministic by replacing only the custody seam with a terminal-fact fake;
+  ;; disposable-world acceptance exercises the real Weaver-to-Mill channel.
+  (let [records (atom {})
+        launch (fn [_runtime _owner key {:keys [argv cwd]}]
+                 (let [{:keys [exit output timeout?]} (#'shell/execute! argv cwd nil)
+                       handle (str "test-custody-" key)
+                       output-file (doto (File/createTempFile "shell-custody-output" ".txt")
+                                     (.deleteOnExit))
+                       error-file (doto (File/createTempFile "shell-custody-error" ".txt")
+                                    (.deleteOnExit))
+                       record (if timeout?
+                                {:handle handle :owner :millhouse/shell-executor :key key
+                                 :phase :terminal
+                                 :output {:stdout-ref (.getAbsolutePath output-file)
+                                          :stderr-ref (.getAbsolutePath error-file)}
+                                 :cancellation {:reason "timed out"}}
+                                {:handle handle :owner :millhouse/shell-executor :key key
+                                 :phase :terminal
+                                 :output {:stdout-ref (.getAbsolutePath output-file)
+                                          :stderr-ref (.getAbsolutePath error-file)}
+                                 :exit {:code exit :signal nil}})]
+                   (spit output-file (or output ""))
+                   (swap! records assoc handle record)
+                   record))
+        get-record (fn [_runtime handle] (get @records handle))
+        list-owned (fn [_runtime _owner] (vec (vals @records)))
+        acknowledge (fn [_runtime _owner handle]
+                      (swap! records dissoc handle)
+                      {:acknowledged true :handle handle})]
+    (with-redefs-fn {#'process/launch! launch
+                     #'process/get get-record
+                     #'process/list-owned list-owned
+                     #'process/acknowledge! acknowledge}
+      (fn []
+        (with-runtime
+          (fn [rt _]
+            (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
+            (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+                                          :after [:millhouse/spools-workflow])
+            (f rt)))))))
 
 (defn- await-eventually
   "Poll for a real `:shell` subprocess outcome (RFC-Dtt-001.REC7): callers
@@ -301,20 +337,21 @@
    #{:scan-monitor :worker-executor :close-fn}))
 
 (deftest module-forms-publish-and-preserve-runtime-pool
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-      (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
-                                    :after [:millhouse/spools-workflow])
-      (let [pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state)))]
-        (is (some #(= :shell/engine (:key %)) (events/handlers rt))
-            "the graph-change event handler is registered")
-        (is (= "shell" (:waiter (first (workflow/executor-catalog)))))
-        (is (= shell/stalled-shell-gates
-               [:and [:= :state "active"]
-                [:= [:attr "workflow/gate"] "shell"]
-                [:exists [:attr "gate/error"]]]))
+  (with-redefs [process/list-owned (fn [_ _] [])]
+    (with-runtime
+      (fn [rt _]
+        (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
         (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
                                       :after [:millhouse/spools-workflow])
-        (is (identical? pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state))))
-            "unchanged refresh preserves the runtime-owned worker pool")))))
+        (let [pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state)))]
+          (is (some #(= :shell/engine (:key %)) (events/handlers rt))
+              "the graph-change event handler is registered")
+          (is (= "shell" (:waiter (first (workflow/executor-catalog)))))
+          (is (= shell/stalled-shell-gates
+                 [:and [:= :state "active"]
+                  [:= [:attr "workflow/gate"] "shell"]
+                  [:exists [:attr "gate/error"]]]))
+          (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+                                        :after [:millhouse/spools-workflow])
+          (is (identical? pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state))))
+              "unchanged refresh preserves the runtime-owned worker pool"))))))
