@@ -872,6 +872,10 @@
   the agent-run await surface). `:timeout-secs` must be a non-negative integer;
   `:poll-ms` must be a positive integer.
 
+  If an accepted read reports `:weaver/restarted`, reissue that read once for
+  the same run within the original timeout budget. A second restart and every
+  other error remain loud.
+
   The three-arg `(runtime run-id opts)` arity threads the target runtime
   explicitly; the shorter arities resolve `current/runtime` as the ergonomic
   default for trusted in-process callers."

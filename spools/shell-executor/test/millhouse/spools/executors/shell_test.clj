@@ -150,6 +150,16 @@
   (is (= "shell command exited 124"
          (#'shell/terminal-error {:exit {:code 124}} false))))
 
+(deftest malformed-terminal-fact-identifies-observed-custody-shape
+  (let [detail (#'shell/terminal-error
+                {:key "attempt-malformed"
+                 :handle "handle-malformed"
+                 :phase :terminal}
+                false)]
+    (is (str/includes? detail "expected one of :cancellation, :launch-failure, or :exit"))
+    (is (str/includes? detail "attempt-malformed"))
+    (is (str/includes? detail "handle-malformed"))))
+
 (deftest stale-terminal-fact-does-not-touch-a-newer-attempt
   (with-runtime
     (fn [rt _]

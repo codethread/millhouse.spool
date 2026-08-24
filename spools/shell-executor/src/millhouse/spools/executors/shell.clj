@@ -357,7 +357,11 @@
     (:launch-failure record) (str "shell command failed to launch: "
                                   (get-in record [:launch-failure :message]))
     (:exit record) (str "shell command exited " (get-in record [:exit :code]))
-    :else "shell process terminal fact is malformed"))
+    :else (str "shell process terminal fact is malformed; expected one of "
+               ":cancellation, :launch-failure, or :exit; observed "
+               (pr-str (select-keys record
+                                    [:key :handle :phase :cancellation
+                                     :launch-failure :exit])))))
 
 (defn- terminal-exit
   [record]
