@@ -19,35 +19,47 @@
   ;; deterministic by replacing only the custody seam with a terminal-fact fake;
   ;; disposable-world acceptance exercises the real Weaver-to-Mill channel.
   (let [records (atom {})
+        run-command (fn [argv cwd]
+                      (let [builder (doto (ProcessBuilder. ^java.util.List argv)
+                                      (.redirectErrorStream true)
+                                      (.directory (io/file cwd)))
+                            child (.start builder)]
+                        (.close (.getOutputStream child))
+                        (let [output (slurp (.getInputStream child))
+                              exit (.waitFor child)]
+                          {:output output :exit exit})))
         launch (fn [_runtime _owner key {:keys [argv cwd]}]
-                 (let [{:keys [exit output timeout?]} (#'shell/execute! argv cwd nil)
-                       handle (str "test-custody-" key)
+                 (let [handle (str "test-custody-" key)
+                       long-running? (some #(str/includes? % "sleep 30") argv)
+                       {:keys [exit output]} (when-not long-running?
+                                               (run-command argv cwd))
                        output-file (doto (File/createTempFile "shell-custody-output" ".txt")
                                      (.deleteOnExit))
                        error-file (doto (File/createTempFile "shell-custody-error" ".txt")
                                     (.deleteOnExit))
-                       record (if timeout?
-                                {:handle handle :owner :millhouse/shell-executor :key key
-                                 :phase :terminal
-                                 :output {:stdout-ref (.getAbsolutePath output-file)
-                                          :stderr-ref (.getAbsolutePath error-file)}
-                                 :cancellation {:reason "timed out"}}
-                                {:handle handle :owner :millhouse/shell-executor :key key
-                                 :phase :terminal
-                                 :output {:stdout-ref (.getAbsolutePath output-file)
-                                          :stderr-ref (.getAbsolutePath error-file)}
-                                 :exit {:code exit :signal nil}})]
+                       record (cond-> {:handle handle :owner :millhouse/shell-executor :key key
+                                       :phase (if long-running? :running :terminal)
+                                       :output {:stdout-ref (.getAbsolutePath output-file)
+                                                :stderr-ref (.getAbsolutePath error-file)}}
+                                (not long-running?) (assoc :exit {:code exit :signal nil}))]
                    (spit output-file (or output ""))
                    (swap! records assoc handle record)
                    record))
         get-record (fn [_runtime handle] (get @records handle))
         list-owned (fn [_runtime _owner] (vec (vals @records)))
+        cancel (fn [_runtime _owner handle]
+                 (let [record (assoc (get @records handle)
+                                     :phase :terminal
+                                     :cancellation {:reason "cancelled by owner"})]
+                   (swap! records assoc handle record)
+                   record))
         acknowledge (fn [_runtime _owner handle]
                       (swap! records dissoc handle)
                       {:acknowledged true :handle handle})]
     (with-redefs-fn {#'process/launch! launch
                      #'process/get get-record
                      #'process/list-owned list-owned
+                     #'process/cancel! cancel
                      #'process/acknowledge! acknowledge}
       (fn []
         (with-runtime
@@ -98,6 +110,116 @@
 (defn- temp-file [suffix]
   (doto (File/createTempFile "shell-test" suffix)
     (.deleteOnExit)))
+
+(deftest retained-custody-output-keeps-the-combined-tail-bound
+  (let [stdout (temp-file ".stdout")
+        stderr (temp-file ".stderr")]
+    (spit stdout (str/join (repeat 12000 "o")))
+    (spit stderr (str/join (repeat 12000 "e")))
+    (let [output (#'shell/custody-output
+                  {:stdout-ref (.getAbsolutePath stdout)
+                   :stderr-ref (.getAbsolutePath stderr)})]
+      (is (<= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
+      (is (str/ends-with? output (str/join (repeat 100 "e")))))))
+
+(deftest custody-output-failure-is-visible-and-does-not-close-a-gate
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt {:title "Unreadable custody"
+                                  :attributes {"workflow/gate" "shell"
+                                               "workflow/run-id" "unreadable"
+                                               "shell/attempt-id" "attempt-unreadable"
+                                               "shell/custody-handle" "handle-unreadable"}})
+            output (try
+                     (#'shell/terminal-commit!
+                      "unreadable" (:id gate) "attempt-unreadable" "handle-unreadable"
+                      {:phase :terminal
+                       :output {:stdout-ref "/missing/stdout"
+                                :stderr-ref "/missing/stderr"}
+                       :exit {:code 0 :signal nil}}
+                      false)
+                     nil
+                     (catch java.io.FileNotFoundException throwable throwable))]
+        (is (instance? java.io.FileNotFoundException output))
+        (is (= "attempt-unreadable"
+               (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+        (is (nil? (attr (weaver/show rt (:id gate)) :gate/error)))))))
+
+(deftest terminal-exit-124-is-not-inferred-as-a-timeout
+  (is (= "shell command exited 124"
+         (#'shell/terminal-error {:exit {:code 124}} false))))
+
+(deftest stale-terminal-fact-does-not-touch-a-newer-attempt
+  (with-runtime
+    (fn [rt _]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            gate (weaver/add! rt {:title "New attempt"
+                                  :attributes {"workflow/gate" "shell"
+                                               "shell/attempt-id" "attempt-new"
+                                               "shell/custody-handle" "handle-new"}})]
+        (spit stdout "old")
+        (spit stderr "")
+        (is (= :stale
+               (#'shell/terminal-commit!
+                "stale" (:id gate) "attempt-old" "handle-old"
+                {:phase :terminal
+                 :output {:stdout-ref (.getAbsolutePath stdout)
+                          :stderr-ref (.getAbsolutePath stderr)}
+                 :exit {:code 0 :signal nil}}
+                false)))
+        (let [after (weaver/show rt (:id gate))]
+          (is (= "attempt-new" (attr after :shell/attempt-id)))
+          (is (= "handle-new" (attr after :shell/custody-handle)))
+          (is (nil? (attr after :gate/error))))))))
+
+(deftest launch-interruption-retains-the-claimed-attempt
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt {:title "Interrupted launch"
+                                  :attributes {"workflow/gate" "shell"
+                                               "workflow/run-id" "interrupted"
+                                               "shell/argv" ["true"]
+                                               "shell/running" "attempt-interrupted"
+                                               "shell/attempt-id" "attempt-interrupted"}})]
+        (with-redefs [process/launch! (fn [& _] (throw (InterruptedException.)))]
+          (binding [shell/*runtime* rt]
+            (#'shell/run-gate! rt "interrupted" (:id gate) "attempt-interrupted")))
+        (let [after (weaver/show rt (:id gate))]
+          (is (= "attempt-interrupted" (attr after :shell/attempt-id)))
+          (is (= "attempt-interrupted" (attr after :shell/running))))))))
+
+(deftest closed-attempt-with-acknowledged-fact-recovery-clears-only-its-claim
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt {:title "Closed custody"
+                                  :state "closed"
+                                  :attributes {"workflow/gate" "shell"
+                                               "shell/attempt-id" "attempt-closed"
+                                               "shell/custody-handle" "handle-closed"}})
+            result (shell/apply-shell-attempts!
+                    {:runtime rt
+                     :desired [{:gate-id (:id gate)
+                                :state "closed"
+                                :attempt-id "attempt-closed"
+                                :custody-handle "handle-closed"}]
+                     :actual []})
+            after (weaver/show rt (:id gate))]
+        (is (= :closed-without-custody-fact
+               (:recovered (first (:attempts result)))))
+        (is (nil? (attr after :shell/attempt-id)))
+        (is (nil? (attr after :shell/custody-handle)))
+        (is (nil? (attr after :gate/error)))))))
+
+(deftest owner-facts-remain-visible-when-no-attempt-is-desired
+  (with-runtime
+    (fn [rt _]
+      (let [fact {:handle "orphan-handle" :owner :millhouse/shell-executor
+                  :key "orphan-attempt" :phase :running
+                  :output {:stdout-ref "/tmp/orphan.stdout"
+                           :stderr-ref "/tmp/orphan.stderr"}}]
+        (with-redefs [process/list-owned (fn [_ _] [fact])]
+          (is (= [fact] (shell/read-shell-custody {:runtime rt}))))))))
 
 (def ^:private canonical-m0-producer
   "6f265f45f894859c74dfd7c6bf32a94c48cb32d0")
@@ -351,29 +473,6 @@
               (.destroyForcibly process)
               (.waitFor process 5 java.util.concurrent.TimeUnit/SECONDS))))
         (test-support/delete-tree! disposable-root)))))
-
-(deftest output-reader-failure-is-not-reported-as-a-timeout
-  (let [reader (reify clojure.lang.IBlockingDeref
-                 (deref [_ _ _]
-                   (throw (java.io.IOException. "reader failed"))))
-        failure (try
-                  (#'shell/timeout-output reader)
-                  nil
-                  (catch java.io.IOException throwable
-                    throwable))]
-    (is (instance? java.io.IOException failure))
-    (is (= "reader failed" (ex-message failure)))))
-
-(deftest timeout-remains-authoritative-when-kill-closes-output-stream
-  (with-redefs-fn {#'shell/destroy-process-tree! (fn [process]
-                                                   (.destroyForcibly ^Process process))
-                   #'shell/timeout-output (fn [_]
-                                            (throw (java.io.IOException. "Stream closed")))}
-    (fn []
-      (let [result (#'shell/execute! ["sh" "-c" "sleep 30"] nil 1)]
-        (is (:timeout? result))
-        (is (:output-truncated? result))
-        (is (str/includes? (:output result) "output truncated after timeout"))))))
 
 (deftest pass-closes-gate-records-outcome-and-unblocks-next-step
   (with-shell

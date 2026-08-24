@@ -26,8 +26,7 @@
             [millstrand.api.events.alpha :as events]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime])
-  (:import [java.lang ProcessHandle]
-           [java.nio.charset StandardCharsets]
+  (:import [java.nio.charset StandardCharsets]
            [java.util.concurrent Executors ExecutorService ThreadFactory TimeUnit]))
 
 (def ^:private event-types
@@ -38,16 +37,6 @@
   the last N bytes so a runaway child cannot exhaust weaver heap
   (`PLAN-ShellGates-001.R3`)."
   (* 16 1024))
-
-(def ^:private timeout-reader-drain-ms
-  "Maximum extra wait for the stdout/stderr reader after a timeout kill.
-
-  This keeps `shell/timeout-secs` a true wall-clock-ish bound even when a
-  descendant process inherited the merged output pipe and delays EOF."
-  250)
-
-(def ^:private timeout-output-marker
-  "\n[shell: output truncated after timeout while waiting for process pipes to close]\n")
 
 (def ^:private custody-owner
   "Stable Mill process-custody owner for all shell attempts."
@@ -213,54 +202,6 @@
               (System/arraycopy chunk head ring 0 (- n head)))
             (recur (+ total (long n)))))))))
 
-(defn- destroy-process-tree! [^Process process]
-  (doseq [^ProcessHandle descendant (iterator-seq (.iterator (.descendants (.toHandle process))))]
-    (try
-      (.destroyForcibly descendant)
-      (catch Throwable _
-        nil)))
-  (.destroyForcibly process))
-
-(defn- timeout-output [reader]
-  (let [output (deref reader timeout-reader-drain-ms ::timed-out)]
-    (if (= ::timed-out output)
-      {:output timeout-output-marker :output-truncated? true}
-      {:output output})))
-
-#_{:clj-kondo/ignore [:unused-private-var]}
-(defn- execute!
-  "Run `argv` (a `List<String>`) directly with no implicit shell, capturing a
-  bounded combined stdout+stderr tail. Returns `{:exit int :output str}` on
-  natural exit, or `{:timeout? true :exit int :output str}` when a
-  `timeout-secs` bound elapses and the process tree is force-killed."
-  [argv cwd timeout-secs]
-  (let [pb (doto (ProcessBuilder. ^java.util.List argv)
-             (.redirectErrorStream true))]
-    (when cwd
-      (.directory pb (io/file cwd)))
-    (let [^Process process (.start pb)]
-      ;; Signal stdin EOF so a child that reads stdin exits instead of hanging
-      ;; the worker until the timeout bound.
-      (.close (.getOutputStream process))
-      (let [reader (future (drain-tail! (.getInputStream process) output-tail-bytes))]
-        (if timeout-secs
-          (if (.waitFor process (long timeout-secs) TimeUnit/SECONDS)
-            {:exit (.exitValue process) :output @reader}
-            (do (destroy-process-tree! process)
-                (.waitFor process)
-                (merge {:timeout? true :exit (.exitValue process)}
-                       (try
-                         (timeout-output reader)
-                         (catch Throwable _
-                           ;; Killing the process closes its output pipe. On some
-                           ;; platforms the reader observes that close as an
-                           ;; IOException instead of EOF; timeout remains the
-                           ;; authoritative terminal outcome.
-                           {:output timeout-output-marker
-                            :output-truncated? true})))))
-          (do (.waitFor process)
-              {:exit (.exitValue process) :output @reader}))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Terminal outcomes (worker thread only)
 
@@ -283,24 +224,22 @@
                                             "shell/exit-code" exit}
                                      (some? output) (assoc "shell/output" output))}))
 
-(defn- fail-gate!
-  "Stamp a loud, distinct `gate/error` (with `shell/exit-code`/`shell/output`
-  where a process ran) and clear the claim in one atomic update, leaving the gate
-  ready and stamped. The `gate/error` presence makes the shell executor skip the
-  gate until a coordinator clears it."
-  [gate-id detail exit output]
-  (stamp! gate-id (cond-> {"shell/running" nil "gate/error" detail}
-                    (some? exit) (assoc "shell/exit-code" exit)
-                    (some? output) (assoc "shell/output" output))))
-
 (defn- custody-output
-  "Read retained Mill output before acknowledging a terminal process fact."
+  "Read a bounded stdout-then-stderr tail from retained Mill output.
+
+  Mill retains stdout and stderr separately, so their deterministic projection
+  here is stream order followed by one combined 16 KiB tail. Any unreadable
+  reference throws; callers must retain the custody fact as evidence."
   [{:keys [stdout-ref stderr-ref]}]
   (let [read-ref (fn [path]
-                   (when path
-                     (slurp (io/file path))))]
-    (str (or (read-ref stdout-ref) "")
-         (or (read-ref stderr-ref) ""))))
+                   (with-open [input (io/input-stream (io/file path))]
+                     (drain-tail! input output-tail-bytes)))
+        output (str (read-ref stdout-ref) (read-ref stderr-ref))
+        ^bytes bytes (.getBytes output StandardCharsets/UTF_8)]
+    (if (<= (alength bytes) output-tail-bytes)
+      output
+      (String. ^bytes bytes (int (- (alength bytes) output-tail-bytes))
+               (int output-tail-bytes) ^java.nio.charset.Charset StandardCharsets/UTF_8))))
 
 (defn- process-terminal?
   [record]
@@ -312,13 +251,22 @@
   The process itself is owned by Mill; this wait is only a convenience for the
   current generation. If Weaver replacement interrupts this worker, the durable
   attempt and Mill record remain for `reconcile-shell-attempts!`."
-  [runtime handle]
-  (loop [record (process/get runtime handle)]
-    (if (process-terminal? record)
-      record
-      (do
-        (Thread/sleep (long process-poll-ms))
-        (recur (process/get runtime handle))))))
+  [runtime handle timeout-secs]
+  (let [deadline (when timeout-secs
+                   (+ (System/nanoTime)
+                      (* (long timeout-secs) 1000000000)))]
+    (loop [record (process/get runtime handle)
+           cancelled? false]
+      (if (process-terminal? record)
+        {:record record :timed-out? cancelled?}
+        (if (and deadline (not cancelled?)
+                 (>= (System/nanoTime) deadline))
+          (do
+            (process/cancel! runtime custody-owner handle)
+            (recur (process/get runtime handle) true))
+          (do
+            (Thread/sleep (long process-poll-ms))
+            (recur (process/get runtime handle) cancelled?)))))))
 
 (defn- attempt-gate
   [gate-id attempt-id custody-handle]
@@ -327,16 +275,40 @@
                (= custody-handle (attr gate :shell/custody-handle)))
       gate)))
 
+(defn- stamp-attempt!
+  "Stamp only while the durable attempt/handle pair is still current."
+  [gate-id attempt-id custody-handle attributes]
+  (when (attempt-gate gate-id attempt-id custody-handle)
+    (stamp! gate-id attributes)))
+
+(defn- clear-attempt!
+  "Clear only the attempt identity that owns `custody-handle`."
+  [gate-id attempt-id custody-handle]
+  (boolean
+   (stamp-attempt! gate-id attempt-id custody-handle
+                   {"shell/custody-handle" nil
+                    "shell/attempt-id" nil
+                    "shell/running" nil})))
+
+(defn- fail-attempt!
+  "Stamp an error only while the attempt/handle pair is still current."
+  [gate-id attempt-id custody-handle detail exit output]
+  (when (stamp-attempt! gate-id attempt-id custody-handle
+                        (cond-> {"shell/running" nil "gate/error" detail}
+                          (some? exit) (assoc "shell/exit-code" exit)
+                          (some? output) (assoc "shell/output" output)))
+    :stamped))
+
 (defn- terminal-error
-  [record]
+  [record timed-out?]
   (cond
-    (:cancellation record) (str "shell command cancelled: "
-                                (get-in record [:cancellation :reason]))
+    (:cancellation record) (if timed-out?
+                             "shell command timed out"
+                             (str "shell command cancelled: "
+                                  (get-in record [:cancellation :reason])))
     (:launch-failure record) (str "shell command failed to launch: "
                                   (get-in record [:launch-failure :message]))
-    (:exit record) (if (= 124 (get-in record [:exit :code]))
-                     "shell command timed out"
-                     (str "shell command exited " (get-in record [:exit :code])))
+    (:exit record) (str "shell command exited " (get-in record [:exit :code]))
     :else "shell process terminal fact is malformed"))
 
 (defn- terminal-exit
@@ -349,19 +321,17 @@
   The gate identity and attempt/handle pair are checked immediately before the
   durable workflow write. A stale fact is owner-local and is never acknowledged,
   so a coordinator can repair the mismatch without advancing another attempt."
-  [run-id gate-id attempt-id custody-handle record]
+  [run-id gate-id attempt-id custody-handle record timed-out?]
   (if-let [gate (attempt-gate gate-id attempt-id custody-handle)]
-    (let [output (try
-                   (custody-output (:output record))
-                   (catch Throwable throwable
-                     (str "[shell: output unavailable: " (ex-message throwable) "]")))]
-      (if (= "closed" (:state gate))
-        :already-committed
-        (do
-          (if (and (:exit record) (zero? (terminal-exit record)))
-            (pass! run-id gate-id attempt-id custody-handle 0 output)
-            (fail-gate! gate-id (terminal-error record) (terminal-exit record) output))
-          :committed)))
+    (if (= "closed" (:state gate))
+      :already-committed
+      (let [output (custody-output (:output record))]
+        (if (and (:exit record) (zero? (terminal-exit record)))
+          (pass! run-id gate-id attempt-id custody-handle 0 output)
+          (fail-attempt! gate-id attempt-id custody-handle
+                         (terminal-error record timed-out?)
+                         (terminal-exit record) output))
+        :committed))
     :stale))
 
 (defn- persist-custody-handle!
@@ -369,7 +339,22 @@
   (let [gate (weaver/show (rt) gate-id)]
     (when (and (= attempt-id (attr gate :shell/attempt-id))
                (nil? (attr gate :shell/custody-handle)))
-      (stamp! gate-id {"shell/custody-handle" handle}))))
+      (stamp-attempt! gate-id attempt-id nil {"shell/custody-handle" handle}))))
+
+(defn- terminal-reconcile!
+  "Commit, acknowledge, and clear one terminal fact under the runtime lock."
+  [runtime run-id gate-id attempt-id custody-handle record timed-out?]
+  #_{:splint/disable [lint/locking-object]}
+  (locking (scan-monitor)
+    (let [commit (terminal-commit! run-id gate-id attempt-id custody-handle
+                                   record timed-out?)]
+      (case commit
+        :stale :stale
+        (do
+          (process/acknowledge! runtime custody-owner custody-handle)
+          (if (clear-attempt! gate-id attempt-id custody-handle)
+            :acknowledged
+            :stale))))))
 
 (defn- run-gate!
   "Launch one claimed shell attempt through Mill custody and reconcile its fact."
@@ -379,38 +364,30 @@
           _ (require-request! gate)
           raw-argv (parse-argv gate)
           timeout-secs (parse-timeout gate)
-          argv (if timeout-secs
-                 (into ["timeout" (str timeout-secs)] raw-argv)
-                 raw-argv)
+          argv raw-argv
           cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
           process-record (process/launch! runtime custody-owner attempt-id
                                           {:argv argv :cwd cwd :env {}})
           custody-handle (:handle process-record)]
       (persist-custody-handle! gate-id attempt-id custody-handle)
-      (let [terminal (if (process-terminal? process-record)
-                       process-record
-                       (await-custody-terminal! runtime custody-handle))
-            commit (terminal-commit! run-id gate-id attempt-id custody-handle terminal)]
-        (if (= :stale commit)
-          (fail-gate! gate-id
-                      "shell custody terminal fact is stale or mismatched"
-                      nil nil)
-          ;; Commit the durable gate result before acknowledging Mill's
-          ;; retained fact. A failed acknowledgement leaves the terminal
-          ;; fact enumerable for the next module reconciliation.
-          (do
-            (process/acknowledge! runtime custody-owner custody-handle)
-            (stamp! gate-id {"shell/custody-handle" nil
-                             "shell/attempt-id" nil})))))
+      (let [{:keys [record timed-out?]}
+            (if (process-terminal? process-record)
+              {:record process-record :timed-out? false}
+              (await-custody-terminal! runtime custody-handle timeout-secs))]
+        (terminal-reconcile! runtime run-id gate-id attempt-id custody-handle
+                             record timed-out?)))
     (catch InterruptedException _
-      ;; An interruption before custody is established is retryable. Once a
-      ;; handle exists, leave the durable attempt for reconciliation instead.
-      (let [gate (weaver/show (rt) gate-id)]
-        (when (nil? (attr gate :shell/custody-handle))
-          (stamp! gate-id {"shell/running" nil
-                           "shell/attempt-id" nil}))))
+      ;; Keep the claim across the launch-to-handle seam. Reconciliation can
+      ;; match a retained Mill fact by the attempt key even when this worker
+      ;; never persisted the opaque handle.
+      nil)
     (catch Throwable t
-      (fail-gate! gate-id (str (ex-message t) (some->> (ex-data t) (str " "))) nil nil))))
+      (when-not (contains? #{"process/control-unavailable" "process/stale-weaver"}
+                           (:code (ex-data t)))
+        (let [gate (weaver/show (rt) gate-id)]
+          (when (= "active" (:state gate))
+            (fail-attempt! gate-id attempt-id (attr gate :shell/custody-handle)
+                           (str (ex-message t) (some->> (ex-data t) (str " "))) nil nil)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Event-driven scan
@@ -495,19 +472,26 @@
 (defn read-shell-custody
   "Return all unacknowledged Mill custody records for this shell owner."
   [{:keys [runtime]}]
-  ;; A fresh runtime with no durable attempts has no continuity question to
-  ;; answer. Avoid opening the Weaver-to-Mill seam in ordinary in-process test
-  ;; worlds; once an attempt exists, custody enumeration remains mandatory and
-  ;; any unavailable service fails loudly at the lifecycle boundary.
-  (if (some #(stamped? % :shell/attempt-id) (shell-gates runtime))
+  (try
     (process/list-owned runtime custody-owner)
-    []))
+    (catch Throwable throwable
+      ;; During a fresh Weaver probe (and the first refresh around a planned
+      ;; replacement) Mill may not yet admit this runtime to its process-control
+      ;; socket. Keep the durable attempt for the next generation; do not turn
+      ;; a transport seam into a false custody acknowledgement.
+      (let [code (:code (ex-data throwable))
+            deferred? (or (= "process/control-unavailable" code)
+                          (= "process/stale-weaver" code)
+                          (empty? (read-shell-attempts {:runtime runtime})))]
+        (if deferred? [] (throw throwable))))))
 
 (defn- owner-local-failure!
   [attempt detail]
   (when-let [gate-id (:gate-id attempt)]
-    (stamp! gate-id {"shell/running" nil
-                     "gate/error" detail}))
+    #_{:splint/disable [lint/locking-object]}
+    (locking (scan-monitor)
+      (fail-attempt! gate-id (:attempt-id attempt) (:custody-handle attempt)
+                     detail nil nil)))
   {:attempt-id (:attempt-id attempt)
    :gate-id (:gate-id attempt)
    :error detail})
@@ -525,26 +509,20 @@
       (not (process-terminal? fact))
       (do
         (when-not expected
-          (stamp! (:gate-id attempt)
-                  {"shell/custody-handle" handle}))
+          #_{:splint/disable [lint/locking-object]}
+          (locking (scan-monitor)
+            (stamp-attempt! (:gate-id attempt) (:attempt-id attempt) nil
+                            {"shell/custody-handle" handle})))
         {:attempt-id (:attempt-id attempt) :phase (:phase fact)})
 
       :else
-      (let [commit (terminal-commit! (:run-id attempt) (:gate-id attempt)
-                                     (:attempt-id attempt) handle fact)]
+      (let [commit (terminal-reconcile! runtime (:run-id attempt) (:gate-id attempt)
+                                        (:attempt-id attempt) handle fact false)]
         (if (= :stale commit)
-          (owner-local-failure!
-           attempt
-           (str "shell custody terminal fact is stale for attempt "
-                (:attempt-id attempt)))
-          (do
-            ;; The terminal domain update is complete before this acknowledgement.
-            (process/acknowledge! runtime custody-owner handle)
-            (stamp! (:gate-id attempt) {"shell/custody-handle" nil
-                                        "shell/attempt-id" nil})
-            {:attempt-id (:attempt-id attempt)
-             :phase :terminal
-             :acknowledged true}))))))
+          {:attempt-id (:attempt-id attempt) :stale true}
+          {:attempt-id (:attempt-id attempt)
+           :phase :terminal
+           :acknowledged true})))))
 
 (defn apply-shell-attempts!
   "Reconcile durable shell attempts with retained Mill custody facts.
@@ -565,10 +543,20 @@
                             {:gate-id (:gate-id attempt) :ignored true}
 
                             (empty? facts)
-                            (owner-local-failure!
-                             attempt
-                             (str "missing shell custody fact for attempt "
-                                  (:attempt-id attempt)))
+                            (if (= "closed" (:state attempt))
+                              #_{:splint/disable [lint/locking-object]}
+                              (if (locking (scan-monitor)
+                                    (clear-attempt! (:gate-id attempt)
+                                                    (:attempt-id attempt)
+                                                    (:custody-handle attempt)))
+                                {:attempt-id (:attempt-id attempt)
+                                 :recovered :closed-without-custody-fact}
+                                {:attempt-id (:attempt-id attempt)
+                                 :stale true})
+                              (owner-local-failure!
+                               attempt
+                               (str "missing shell custody fact for attempt "
+                                    (:attempt-id attempt))))
 
                             (> (count facts) 1)
                             (owner-local-failure!
