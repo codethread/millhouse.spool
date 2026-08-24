@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.test-support :as test-support]
+            [millstrand.api.process.alpha :as process]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- repository-root []
@@ -53,12 +54,6 @@
                     'millhouse.spools/workflow]
            :after [:millhouse/workflow]
            :required? true})
-        (runtime/module! rt :millhouse/shell-executor
-          {:ns 'millhouse.spools.executors.shell
-           :spools ['millhouse.spools.executors/shell
-                    'millhouse.spools/workflow]
-           :after [:millhouse/workflow]
-           :required? true})
         (runtime/module! rt :millhouse/kanban
           {:ns 'millhouse.spools.kanban
            :spools ['millhouse.spools/kanban]
@@ -76,6 +71,11 @@
                                 {:local/root (repository-root)
                                  :roots roots}}}
           :init init}]
+    (with-redefs [process/list-owned (fn [_ _] [])]
+      (test-support/activate-spool!
+       (:runtime ctx) :millhouse/shell-executor
+       'millhouse.spools.executors.shell
+       :after [:millhouse/workflow]))
     (let [{:keys [status op-names glossary-outcomes workflow-names]}
           (test-alpha/repl!
            ctx
