@@ -1,4 +1,4 @@
-.PHONY: test test-local api-docs docs-site docs-serve docs-check fmt-check lint lint-clj lint-splint lint-conventions reflect-check kanban-dash-check kanban-export kanban-serve quality
+.PHONY: test test-local api-docs docs-prepare docs-site docs-serve docs-check fmt-check lint lint-clj lint-splint lint-conventions reflect-check kanban-dash-check kanban-export kanban-serve quality
 
 MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.millstrand/millstrand {:local/root "$(MILLSTRAND_ROOT)"}}}}}'
 RUN_CHECK = python3 scripts/run_quality_check.py
@@ -13,10 +13,13 @@ test-local:
 api-docs:
 	@$(RUN_CHECK) api-docs clojure -M:api-docs
 
-docs-site:
+docs-prepare:
+	@python3 scripts/prepare_mkdocs.py
+
+docs-site: docs-prepare
 	@$(RUN_CHECK) docs-site uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs build --strict
 
-docs-serve:
+docs-serve: docs-prepare
 	uvx --from mkdocs --with mkdocs-material --with markdown-gfm-admonition mkdocs serve --dev-addr 0.0.0.0:8000
 
 docs-check:
