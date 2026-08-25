@@ -32,7 +32,7 @@ This is not yet a removal proposal. It is a durable account of the evidence, the
 2. The workflow engine stores it and projects it as `:action-ref` in ready-step views.
 3. The engine does not use it for graph construction, readiness, routing, executor selection, completion, or override resolution.
 4. There is no built-in action binding or third-party override API.
-5. `spools/millstrand-workflows` authors it extensively but does not dispatch on it.
+5. `spools/workflow` authors it extensively but does not dispatch on it.
 6. Skein's `land_policy.clj` does dispatch on three action refs and uses action refs as status labels.
 7. That dispatch can be replaced by explicit workflow boundaries and focused operations without weakening the conceptual model.
 8. The original landing implementation nevertheless contains important concurrency, compensation, liveness, and recovery behavior that a clearer decomposition must retain.
@@ -207,7 +207,7 @@ Whether step refs should be persisted/projected is an open question, not a decis
 
 ## 8. Evidence from `millstrand-workflows`
 
-At the time of inspection, `spools/millstrand-workflows/src` contained 38 `workflow/action-ref` assignments across five source files.
+At the time of inspection, `spools/workflow/src` contained 38 `workflow/action-ref` assignments across five source files.
 
 Observed behavior:
 
@@ -632,8 +632,8 @@ Potentially simplest, but premature until repository-wide consumers and publishe
 - `spools/workflow/src/millhouse/spools/workflow/internal/routing.clj`
 - `spools/workflow/workflow.cookbook.md`
 - `spools/workflow/test/millhouse/spools/workflow_test.clj`
-- `spools/millstrand-workflows/README.md`
-- `spools/millstrand-workflows/src/millhouse/spools/`
+- `spools/workflow/README.md`
+- `spools/workflow/src/millhouse/spools/`
 
 ### Skein
 

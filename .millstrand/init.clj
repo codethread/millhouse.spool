@@ -18,22 +18,9 @@
                  {:ns 'millhouse.spools.workflow
                   :spools ['millhouse.spools/workflow]
                   :required? true})
-(runtime/module! runtime :millhouse/spools-workflow-cli
-                 {:ns 'millhouse.spools.workflow.cli
+(runtime/module! runtime :millhouse/spools-workflow-all
+                 {:ns 'millhouse.spools.workflow.spool
                   :spools ['millhouse.spools/workflow]
-                  :after [:millhouse/spools-workflow]
-                  :required? true})
-(runtime/module! runtime :millhouse/spools-millstrand-workflows
-                 {:ns 'millhouse.spools.millstrand-workflows
-                  :spools ['millhouse.spools/millstrand-workflows
-                           'millhouse.spools/workflow]
-                  :after [:millhouse/spools-workflow
-                          :millhouse/spools-workflow-cli]
-                  :required? true})
-(runtime/module! runtime :millhouse/spools-shell
-                 {:ns 'millhouse.spools.executors.shell
-                  :spools ['millhouse.spools.executors/shell
-                           'millhouse.spools/workflow]
                   :after [:millhouse/spools-workflow]
                   :required? true})
 

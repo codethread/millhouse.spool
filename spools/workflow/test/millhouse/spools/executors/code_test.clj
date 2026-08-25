@@ -92,7 +92,7 @@
   (with-runtime
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-      (test-support/activate-spool! rt :millhouse/spools-code 'millhouse.spools.executors.code
+      (test-support/activate-spool! rt :millhouse/spools-code 'millhouse.test-modules.code-executor
                                     :after [:millhouse/spools-workflow])
       (f rt))))
 

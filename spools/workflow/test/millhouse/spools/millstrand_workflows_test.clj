@@ -24,9 +24,7 @@
 (def ^:private spools-edn
   {:spools {'millhouse/spools
             {:local/root project-root
-             :roots {'millhouse.spools/workflow "spools/workflow"
-                     'millhouse.spools/millstrand-workflows
-                     "spools/millstrand-workflows"}}}})
+             :roots {'millhouse.spools/workflow "spools/workflow"}}}})
 
 (defn- step [definition id]
   (some #(when (= id (:id %)) %) (:steps definition)))
@@ -40,9 +38,8 @@
            (runtime/module! rt :millhouse/workflow
                             {:ns 'millhouse.spools.workflow})
            (runtime/module! rt :millhouse/millstrand-workflows
-                            {:ns 'millhouse.spools.millstrand-workflows
-                             :spools ['millhouse.spools/millstrand-workflows
-                                      'millhouse.spools/workflow]
+                            {:ns 'millhouse.spools.workflow.spool
+                             :spools ['millhouse.spools/workflow]
                              :after [:millhouse/workflow]})))
       (current/with-runtime rt
         (let [resolved (workflow/resolve-workflow :publish-spool-kondo)

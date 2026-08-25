@@ -11,10 +11,7 @@
   ["spools/chime/src"
    "spools/cron/src"
    "spools/workflow/src"
-   "spools/code-executor/src"
-   "spools/shell-executor/src"
    "spools/kanban/src"
-   "spools/millstrand-workflows/src"
    ".millstrand"
    "test"])
 
@@ -23,10 +20,7 @@
   #{"spools/chime/src"
     "spools/cron/src"
     "spools/workflow/src"
-    "spools/code-executor/src"
-    "spools/shell-executor/src"
-    "spools/kanban/src"
-    "spools/millstrand-workflows/src"})
+    "spools/kanban/src"})
 
 (def ^:private core-macro-names
   (->> (ns-publics 'clojure.core)

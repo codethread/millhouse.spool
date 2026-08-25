@@ -133,7 +133,7 @@
   "Activate the engine and then the separately declared CLI module."
   [rt]
   (activate-engine! rt)
-  (test-support/activate-spool! rt :millhouse/spools-workflow-cli 'millhouse.spools.workflow.cli
+  (test-support/activate-spool! rt :millhouse/spools-workflow-cli 'millhouse.test-modules.workflow-cli
                                 :after [:millhouse/spools-workflow]))
 
 (defn- op-names
@@ -456,7 +456,7 @@
   (with-runtime
     (fn [rt _]
       (activate-cli! rt)
-      (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+      (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.test-modules.shell-executor
                                     :after [:millhouse/spools-workflow])
       (workflow/register-executor! :bare-sym 'millhouse.spools.workflow-cli-test/never-stalled)
       (workflow/register-executor! :raw-fn (constantly nil))

@@ -8,10 +8,6 @@
   work."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
-            [millhouse.spools.millstrand-workflows.bump-millstrand :as millstrand]
-            [millhouse.spools.millstrand-workflows.bump-spool :as bump]
-            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.format.alpha :as format-alpha]))
 
@@ -112,7 +108,7 @@
      |producer export under `%s/resources` is the only source of its mapping."
     spool-root)))
 
-(workflow/defworkflow! publish-spool-kondo
+(workflow/defworkflow publish-spool-kondo
   "Publish clj-kondo support for a macro-owning spool root.
 
   Start the registered workflow with a complete publisher contract:
@@ -199,16 +195,3 @@
                   :depends-on [:document-kondo-export]
                   final-status-instruction)))
 
-(workflow/use-workflow!
- bootstrap/bootstrap-kondo
- bootstrap/bootstrap-kondo-greenfield
- bootstrap/bootstrap-kondo-brownfield
- bump/bump-spool
- millstrand/bump-millstrand
- millstrand/bump-millstrand-local
- millstrand/bump-millstrand-local-validate
- millstrand/bump-millstrand-pinned
- tooling/configure-consumer-tooling
- tooling/configure-consumer-tooling-app
- tooling/configure-consumer-tooling-spool
- tooling/configure-consumer-tooling-clojure-app)

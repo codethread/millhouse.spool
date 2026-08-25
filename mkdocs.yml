@@ -55,19 +55,19 @@ nav:
           - Cookbook: spools/cron/cron.cookbook.md
           - API: spools/cron/cron.api.md
       - Code executor:
-          - Contract: spools/code-executor/README.md
-          - Cookbook: spools/code-executor/code.cookbook.md
-          - API: spools/code-executor/code.api.md
+          - Contract: spools/workflow/README.md
+          - Cookbook: spools/workflow/code.cookbook.md
+          - API: spools/workflow/code.api.md
       - Shell executor:
-          - Contract: spools/shell-executor/README.md
-          - Cookbook: spools/shell-executor/shell.cookbook.md
-          - API: spools/shell-executor/shell.api.md
+          - Contract: spools/workflow/README.md
+          - Cookbook: spools/workflow/shell.cookbook.md
+          - API: spools/workflow/shell.api.md
       - Kanban:
           - Contract: spools/kanban/README.md
           - Cookbook: spools/kanban/kanban.cookbook.md
           - API: spools/kanban/kanban.api.md
           - Peering API: spools/kanban/kanban.peering.api.md
       - Millstrand-workflows:
-          - Contract: spools/millstrand-workflows/README.md
-          - Cookbook: spools/millstrand-workflows/millstrand-workflows.cookbook.md
-          - API: spools/millstrand-workflows/millstrand-workflows.api.md
+          - Contract: spools/workflow/README.md
+          - Cookbook: spools/workflow/millstrand-workflows.cookbook.md
+          - API: spools/workflow/millstrand-workflows.api.md

@@ -66,7 +66,7 @@
         (with-runtime
           (fn [rt _]
             (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-            (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+            (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.test-modules.shell-executor
                                           :after [:millhouse/spools-workflow])
             (f rt)))))))
 
@@ -459,8 +459,7 @@
     root))
 
 (def ^:private shell-acceptance-roots
-  {'millhouse.spools/workflow "spools/workflow"
-   'millhouse.spools.executors/shell "spools/shell-executor"})
+  {'millhouse.spools/workflow "spools/workflow"})
 
 (defn- shell-acceptance-spools-edn [root]
   (pr-str {:spools {'millhouse/spools {:local/root root
@@ -475,9 +474,8 @@
       :spools ['millhouse.spools/workflow]
       :required? true})
    (runtime/module! rt :millhouse/spools-shell
-     {:ns 'millhouse.spools.executors.shell
-      :spools ['millhouse.spools.executors/shell
-               'millhouse.spools/workflow]
+     {:ns 'millhouse.spools.workflow.spool
+      :spools ['millhouse.spools/workflow]
       :after [:millhouse/spools-workflow]
       :required? true})")
 
@@ -839,7 +837,7 @@
     (with-runtime
       (fn [rt _]
         (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-        (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+        (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.test-modules.shell-executor
                                       :after [:millhouse/spools-workflow])
         (let [pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state)))]
           (is (some #(= :shell/engine (:key %)) (events/handlers rt))
@@ -849,7 +847,7 @@
                  [:and [:= :state "active"]
                   [:= [:attr "workflow/gate"] "shell"]
                   [:exists [:attr "gate/error"]]]))
-          (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.spools.executors.shell
+          (test-support/activate-spool! rt :millhouse/spools-shell 'millhouse.test-modules.shell-executor
                                         :after [:millhouse/spools-workflow])
           (is (identical? pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state))))
               "unchanged refresh preserves the runtime-owned worker pool"))))))

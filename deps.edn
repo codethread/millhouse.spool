@@ -1,161 +1,168 @@
-{:paths []
- :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
-                                  :git/sha "6f265f45f894859c74dfd7c6bf32a94c48cb32d0"
-                                  :deps/root "."}}
+{:paths [],
+ :deps
+ #:io.millstrand{millstrand
+                 {:git/url
+                  "https://github.com/codethread/millstrand.git",
+                  :git/sha "6f265f45f894859c74dfd7c6bf32a94c48cb32d0",
+                  :deps/root "."}},
  :aliases
- {:millstrand
-  {:extra-paths [".millstrand"]
+ {:lint/clj-kondo
+  {:extra-deps #:clj-kondo{clj-kondo #:mvn{:version "2025.06.05"}},
+   :main-opts
+   ["-m"
+    "clj-kondo.main"
+    "--cache-dir"
+    ".clj-kondo/.cache"
+    "--lint"
+    "spools/workflow/src"
+    "scripts"
+    "test"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"]},
+  :format
+  {:extra-deps #:dev.weavejester{cljfmt #:mvn{:version "0.13.1"}},
+   :main-opts
+   ["-m"
+    "cljfmt.main"
+    "check"
+    "spools/workflow/src"
+    "scripts"
+    "test"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"]},
+  :api-docs
+  {:extra-deps
+   #:io.github.borkdude{quickdoc #:git{:tag "v0.2.6", :sha "ce86780"}},
+   :main-opts ["scripts/generate_api_docs.clj"]},
+  :reflect-check
+  {:extra-paths
+   ["scripts"
+    "spools/chime/src"
+    "spools/cron/src"
+    "spools/workflow/src"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"],
+   :main-opts ["-m" "quality.reflect-check"]},
+  :millstrand
+  {:extra-paths [".millstrand"],
    :extra-deps
-   {ct.spools/agent-run
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "agent-run"}
-    ct.spools/harness-core
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "harness-core"}
-    ct.spools/claude-harness
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "claude-harness"}
-    ct.spools/codex-harness
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "codex-harness"}
-    ct.spools/pi-harness
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "pi-harness"}
-    ct.spools/agent-cli
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "agent-cli"}
-    ct.spools/delegation
-    {:git/url "https://github.com/codethread/agent-harness.spool.git"
-     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
-     :deps/root "delegation"}
+   {ct.spools/agent-cli
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "agent-cli"},
     codethread/config
-    {:local/root "../codethread.spool/spools/config"}
-    codethread/ralph
-    {:local/root "../codethread.spool/spools/ralph"}
+    #:local{:root "../codethread.spool/spools/config"},
+    ct.spools/harness-core
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "harness-core"},
+    ct.spools/delegation
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "delegation"},
     codethread/devflow
-    {:git/url "https://github.com/codethread/devflow.spool.git"
-     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
-     :deps/root "."}
+    {:git/url "https://github.com/codethread/devflow.spool.git",
+     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97",
+     :deps/root "."},
+    ct.spools/pi-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "pi-harness"},
+    ct.spools/agent-run
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "agent-run"},
+    codethread/ralph #:local{:root "../codethread.spool/spools/ralph"},
     codethread/devflow-kanban-adapter
-    {:git/url "https://github.com/codethread/devflow.spool.git"
-     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
-     :deps/root "kanban-adapter"}}}
-  :test {:extra-paths [".millstrand"
-                       "test"
-                       "spools/chime/src"
-                       "spools/chime/test"
-                       "spools/cron/src"
-                       "spools/cron/test"
-                       "spools/workflow/src"
-                       "spools/workflow/test"
-                       "spools/workflow/resources"
-                       "spools/code-executor/src"
-                       "spools/code-executor/test"
-                       "spools/shell-executor/src"
-                       "spools/shell-executor/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"
-                       "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"]
-         :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
-         :main-opts ["-m" "millhouse.test-runner"]}
-  :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
-           :main-opts ["-m" "cljfmt.main" "check"
-                       "spools/workflow/src" "spools/code-executor/src"
-                       "spools/shell-executor/src" "scripts" "test"
-                       "spools/chime/test" "spools/cron/test"
-                       "spools/workflow/test" "spools/code-executor/test"
-                       "spools/shell-executor/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"
-                       "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"]}
-  :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
-               :main-opts ["-m" "cljfmt.main" "fix"
-                           "spools/workflow/src" "spools/code-executor/src"
-                           "spools/shell-executor/src" "scripts" "test"
-                           "spools/chime/test" "spools/cron/test"
-                           "spools/workflow/test" "spools/code-executor/test"
-                           "spools/shell-executor/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"
-                       "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"]}
-  :lint/clj-kondo {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
-                   :main-opts ["-m" "clj-kondo.main" "--cache-dir" ".clj-kondo/.cache" "--lint"
-                               "spools/workflow/src" "spools/code-executor/src"
-                               "spools/shell-executor/src" "scripts" "test"
-                               "spools/chime/test" "spools/cron/test"
-                               "spools/workflow/test" "spools/code-executor/test"
-                               "spools/shell-executor/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"
-                       "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"]}
-  :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
-                :main-opts ["-m" "noahtheduke.splint" "--output" "clj-kondo"
-                            "spools/workflow/src" "spools/code-executor/src"
-                            "spools/shell-executor/src" "scripts" "test"
-                            "spools/chime/test" "spools/cron/test"
-                            "spools/workflow/test" "spools/code-executor/test"
-                            "spools/shell-executor/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"
-                       "spools/millstrand-workflows/src"
-                       "spools/millstrand-workflows/test"]}
-  :lint/conventions {:extra-paths ["scripts"
-                                   "spools/chime/src"
-                                   "spools/cron/src"
-                                   "spools/workflow/src"
-                                   "spools/code-executor/src"
-                                   "spools/shell-executor/src"
-                                   "spools/chime/test"
-                                   "spools/cron/test"
-                                   "spools/workflow/test"
-                                   "spools/code-executor/test"
-                                   "spools/shell-executor/test"
-                                   "spools/millstrand-workflows/src"
-                                   "spools/millstrand-workflows/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"]
-                     :extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.06.05"}}
-                     :main-opts ["-m" "quality.conventions-check"]}
-  :reflect-check {:extra-paths ["scripts"
-                                "spools/chime/src"
-                                "spools/cron/src"
-                                "spools/workflow/src"
-                                "spools/code-executor/src"
-                                "spools/shell-executor/src"
-                                "spools/chime/test"
-                                "spools/cron/test"
-                                "spools/workflow/test"
-                                "spools/code-executor/test"
-                                "spools/shell-executor/test"
-                                "spools/millstrand-workflows/src"
-                                "spools/millstrand-workflows/test"
-                       "spools/kanban/src"
-                       "spools/kanban/test"
-                       "spools/identity/src"
-                       "spools/identity/test"]
-                  :main-opts ["-m" "quality.reflect-check"]}
-  :api-docs {:extra-deps {io.github.borkdude/quickdoc {:git/tag "v0.2.6"
-                                                        :git/sha "ce86780"}}
-             :main-opts ["scripts/generate_api_docs.clj"]}}}
+    {:git/url "https://github.com/codethread/devflow.spool.git",
+     :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97",
+     :deps/root "kanban-adapter"},
+    ct.spools/claude-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "claude-harness"},
+    ct.spools/codex-harness
+    {:git/url "https://github.com/codethread/agent-harness.spool.git",
+     :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e",
+     :deps/root "codex-harness"}}},
+  :lint/conventions
+  {:extra-paths
+   ["scripts"
+    "spools/chime/src"
+    "spools/cron/src"
+    "spools/workflow/src"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"],
+   :extra-deps #:clj-kondo{clj-kondo #:mvn{:version "2025.06.05"}},
+   :main-opts ["-m" "quality.conventions-check"]},
+  :lint/splint
+  {:extra-deps
+   #:io.github.noahtheduke{splint #:mvn{:version "1.21.0"}},
+   :main-opts
+   ["-m"
+    "noahtheduke.splint"
+    "--output"
+    "clj-kondo"
+    "spools/workflow/src"
+    "scripts"
+    "test"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"]},
+  :format/fix
+  {:extra-deps #:dev.weavejester{cljfmt #:mvn{:version "0.13.1"}},
+   :main-opts
+   ["-m"
+    "cljfmt.main"
+    "fix"
+    "spools/workflow/src"
+    "scripts"
+    "test"
+    "spools/chime/test"
+    "spools/cron/test"
+    "spools/workflow/test"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"]},
+  :test
+  {:extra-paths
+   [".millstrand"
+    "test"
+    "spools/chime/src"
+    "spools/chime/test"
+    "spools/cron/src"
+    "spools/cron/test"
+    "spools/workflow/src"
+    "spools/workflow/test"
+    "spools/workflow/resources"
+    "spools/kanban/src"
+    "spools/kanban/test"
+    "spools/identity/src"
+    "spools/identity/test"],
+   :jvm-opts ["--enable-native-access=ALL-UNNAMED"],
+   :main-opts ["-m" "millhouse.test-runner"]}}}

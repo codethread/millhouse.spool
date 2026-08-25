@@ -10,20 +10,20 @@
     :outfile "spools/chime/chime.api.md"}
    {:source "spools/cron/src/millhouse/spools/cron.clj"
     :outfile "spools/cron/cron.api.md"}
-   {:source "spools/code-executor/src/millhouse/spools/executors/code.clj"
-    :outfile "spools/code-executor/code.api.md"}
-   {:source "spools/shell-executor/src/millhouse/spools/executors/shell.clj"
-    :outfile "spools/shell-executor/shell.api.md"}
+   {:source "spools/workflow/src/millhouse/spools/executors/code.clj"
+    :outfile "spools/workflow/code.api.md"}
+   {:source "spools/workflow/src/millhouse/spools/executors/shell.clj"
+    :outfile "spools/workflow/shell.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban.clj"
     :outfile "spools/kanban/kanban.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
     :outfile "spools/kanban/kanban.peering.api.md"}
-   {:source ["spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"
-             "spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj"]
-    :outfile "spools/millstrand-workflows/millstrand-workflows.api.md"}])
+   {:source ["spools/workflow/src/millhouse/spools/millstrand_workflows.clj"
+             "spools/workflow/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj"
+             "spools/workflow/src/millhouse/spools/millstrand_workflows/bump_spool.clj"
+             "spools/workflow/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"
+             "spools/workflow/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj"]
+    :outfile "spools/workflow/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
   (quickdoc/quickdoc

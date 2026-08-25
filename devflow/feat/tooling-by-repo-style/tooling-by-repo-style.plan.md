@@ -39,7 +39,7 @@ Add the repository-style tooling contract approved in [the proposal](./proposal.
 
 | ID | Area | Expected change |
 | --- | --- | --- |
-| PLAN-Tbr-001.AA1 | `spools/millstrand-workflows` | New shared tooling workflows, bump composition, registration, docs, and API output. |
+| PLAN-Tbr-001.AA1 | `spools/workflow` | New shared tooling workflows, bump composition, registration, docs, and API output. |
 | PLAN-Tbr-001.AA2 | Millstrand-workflows tests | Pure definition and compile assertions for routing, ordering, route obligations, and absence of gates. |
 
 ## PLAN-Tbr-001.P4 Contract and migration impact

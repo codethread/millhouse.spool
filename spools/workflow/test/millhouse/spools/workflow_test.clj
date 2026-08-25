@@ -81,12 +81,9 @@
               output))))))
 
 (deftest workflow-exported-kondo-contract-is-on-consumer-classpath
-  (testing "the Workflow root publishes resources"
+  (testing "the consolidated Workflow root publishes resources"
     (is (some #(= "resources" %)
-              (:paths (edn/read-string (slurp "spools/workflow/deps.edn")))))
-    (is (not-any? #(= "resources" %)
-                  (:paths (edn/read-string
-                           (slurp "spools/millstrand-workflows/deps.edn"))))))
+              (:paths (edn/read-string (slurp "spools/workflow/deps.edn"))))))
   (testing "a consumer resolves the Workflow-owned export and hook"
     (let [config (io/resource
                   "clj-kondo.exports/millhouse.spools/workflow/config.edn")

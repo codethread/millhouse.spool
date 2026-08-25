@@ -734,7 +734,7 @@
   [_context]
   {:removed :shell-attempts})
 
-(lifecycle/defreconcile! shell-attempts
+(lifecycle/defreconcile shell-attempts
   "Reconcile Mill-owned shell attempts with durable workflow gates."
   {:read-desired 'millhouse.spools.executors.shell/read-shell-attempts
    :read-actual 'millhouse.spools.executors.shell/read-shell-custody
@@ -742,7 +742,7 @@
    :on-removed 'millhouse.spools.executors.shell/remove-shell-attempts!
    :after #{:shell-handler}})
 
-(workflow/defexecutor! shell
+(workflow/defexecutor shell
   "Return durable stall detail for a ready `:shell` gate view, or nil.
 
   The executor accepts a gate with `workflow/gate` equal to `\"shell\"` and a
@@ -778,7 +778,7 @@
                  {:gate (:id gate) :error (attr gate :gate/error)})]
     (require-valid! ::stall-detail result "Invalid shell gate stall detail")))
 
-(millstrand/defquery! stalled-shell-gates
+(millstrand/defquery stalled-shell-gates
   "Return active shell gates carrying a durable error stamp.
 
   The query is the persistence-side companion to `shell-stalled?`:
@@ -863,13 +863,13 @@
                   {:unregistered :shell/engine}
                   "Invalid shell handler close result"))
 
-(lifecycle/defresource! shell-pool
+(lifecycle/defresource shell-pool
   "Own the shell worker pool for the lifetime of the runtime."
   {:open 'millhouse.spools.executors.shell/open-shell-pool!
    :close 'millhouse.spools.executors.shell/close-shell-pool!
    :scope :runtime})
 
-(lifecycle/defresource! shell-handler
+(lifecycle/defresource shell-handler
   "Own the shell event handler for the lifetime of the module."
   {:open 'millhouse.spools.executors.shell/open-shell-handler!
    :close 'millhouse.spools.executors.shell/close-shell-handler!

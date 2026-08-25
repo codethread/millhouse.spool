@@ -217,7 +217,7 @@ command was a direct Clojure invocation with only source paths and a fully
 supplied valid parameter map; it did not activate a module or start a run.
 
 ```text
-clojure -Sdeps '{:paths ["spools/workflow/src" "spools/millstrand-workflows/src"]}' -M -e '…(workflow/describe (var bump/bump-spool) params)…'
+clojure -Sdeps '{:paths ["spools/workflow/src" "spools/workflow/src"]}' -M -e '…(workflow/describe (var bump/bump-spool) params)…'
 ```
 
 The relevant supplied values were:
@@ -329,9 +329,9 @@ Questions to resolve before designing it:
 - Gate composition and forge bindings: [`spools/workflow/workflow.cookbook.md`](../../spools/workflow/workflow.cookbook.md)
 - Ready-view projection, including `:instruction`: [`internal/query.clj`](../../spools/workflow/src/millhouse/spools/workflow/internal/query.clj)
 - Explicit gate-selection and actor rules: [`internal/runs.clj`](../../spools/workflow/src/millhouse/spools/workflow/internal/runs.clj)
-- Shell request contract and lifecycle: [`spools/shell-executor/README.md`](../../spools/shell-executor/README.md)
-- Shell-gate examples: [`spools/shell-executor/shell.cookbook.md`](../../spools/shell-executor/shell.cookbook.md)
-- Dry-run example definition: [`bump_spool.clj`](../../spools/millstrand-workflows/src/millhouse/spools/millstrand_workflows/bump_spool.clj)
+- Shell request contract and lifecycle: [`spools/workflow/README.md`](../../spools/workflow/README.md)
+- Shell-gate examples: [`spools/workflow/shell.cookbook.md`](../../spools/workflow/shell.cookbook.md)
+- Dry-run example definition: [`bump_spool.clj`](../../spools/workflow/src/millhouse/spools/millstrand_workflows/bump_spool.clj)
 - Conversation record (local, non-versioned): Pi dialogue session `019ffb5b-55d8-7750-bf24-a73b690a754f`.
 
 ## 9. Verbatim intent record

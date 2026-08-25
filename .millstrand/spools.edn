@@ -5,11 +5,8 @@
  {:local/root "..",
   :roots
   {millhouse.spools/workflow "spools/workflow",
-   millhouse.spools/millstrand-workflows "spools/millstrand-workflows",
    millhouse.spools/chime "spools/chime",
    millhouse.spools/cron "spools/cron",
-   millhouse.spools.executors/code "spools/code-executor",
-   millhouse.spools.executors/shell "spools/shell-executor",
    millhouse.spools/kanban "spools/kanban",
    millhouse.spools/identity "spools/identity"}},
  ct.spools/agent-run

@@ -8,13 +8,13 @@
   (test-support/activate-spool!
    runtime :millhouse/spools-workflow 'millhouse.spools.workflow)
   (test-support/activate-spool!
-   runtime :millhouse/spools-workflow-cli 'millhouse.spools.workflow.cli
+   runtime :millhouse/spools-workflow-cli 'millhouse.test-modules.workflow-cli
    :after [:millhouse/spools-workflow])
   (test-support/activate-spool!
-   runtime :millhouse/spools-shell 'millhouse.spools.executors.shell
+   runtime :millhouse/spools-shell 'millhouse.test-modules.shell-executor
    :after [:millhouse/spools-workflow])
   (test-support/activate-spool!
-   runtime :millhouse/spools-code 'millhouse.spools.executors.code
+   runtime :millhouse/spools-code 'millhouse.test-modules.code-executor
    :after [:millhouse/spools-workflow]))
 
 (defn- request-keys [request kind]

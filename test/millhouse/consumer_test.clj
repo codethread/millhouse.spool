@@ -1,12 +1,11 @@
 (ns millhouse.consumer-test
-  "Exercise the six-root family through a disposable consumer workspace."
+  "Exercise the consolidated family through a disposable consumer workspace."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.test-support :as test-support]
-            [millstrand.api.process.alpha :as process]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- repository-root []
@@ -19,10 +18,7 @@
   {'millhouse.spools/workflow "spools/workflow"
    'millhouse.spools/chime "spools/chime"
    'millhouse.spools/cron "spools/cron"
-   'millhouse.spools.executors/code "spools/code-executor"
-   'millhouse.spools.executors/shell "spools/shell-executor"
-   'millhouse.spools/kanban "spools/kanban"
-   'millhouse.spools/millstrand-workflows "spools/millstrand-workflows"})
+   'millhouse.spools/kanban "spools/kanban"})
 
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
@@ -35,8 +31,8 @@
           {:ns 'millhouse.spools.workflow
            :spools ['millhouse.spools/workflow]
            :required? true})
-        (runtime/module! rt :millhouse/workflow-cli
-          {:ns 'millhouse.spools.workflow.cli
+        (runtime/module! rt :millhouse/workflow-all
+          {:ns 'millhouse.spools.workflow.spool
            :spools ['millhouse.spools/workflow]
            :after [:millhouse/workflow]
            :required? true})
@@ -48,21 +44,9 @@
           {:ns 'millhouse.spools.cron
            :spools ['millhouse.spools/cron]
            :required? true})
-        (runtime/module! rt :millhouse/code-executor
-          {:ns 'millhouse.spools.executors.code
-           :spools ['millhouse.spools.executors/code
-                    'millhouse.spools/workflow]
-           :after [:millhouse/workflow]
-           :required? true})
         (runtime/module! rt :millhouse/kanban
           {:ns 'millhouse.spools.kanban
            :spools ['millhouse.spools/kanban]
-           :required? true})
-        (runtime/module! rt :millhouse/millstrand-workflows
-          {:ns 'millhouse.spools.millstrand-workflows
-           :spools ['millhouse.spools/millstrand-workflows
-                    'millhouse.spools/workflow]
-           :after [:millhouse/workflow]
            :required? true})))")
 
 (deftest family-syncs-activates-and-publishes-all-roots
@@ -71,11 +55,6 @@
                                 {:local/root (repository-root)
                                  :roots roots}}}
           :init init}]
-    (with-redefs [process/list-owned (fn [_ _] [])]
-      (test-support/activate-spool!
-       (:runtime ctx) :millhouse/shell-executor
-       'millhouse.spools.executors.shell
-       :after [:millhouse/workflow]))
     (let [{:keys [status op-names glossary-outcomes workflow-names]}
           (test-alpha/repl!
            ctx
@@ -94,18 +73,15 @@
       (is (= #{:applied}
              (set (map :status (vals outcomes)))))
       (is (= #{:millhouse/workflow
-               :millhouse/workflow-cli
+               :millhouse/workflow-all
                :millhouse/chime
                :millhouse/cron
-               :millhouse/code-executor
-               :millhouse/shell-executor
-               :millhouse/kanban
-               :millhouse/millstrand-workflows}
+               :millhouse/kanban}
              (set (keys outcomes))))
       (is (contains? op-names "workflow"))
       (is (contains? glossary-outcomes "workflow/ready-next-absent"))
       (is (= :applied
-             (get-in status [:lifecycle/outcomes :millhouse/workflow-cli
+             (get-in status [:lifecycle/outcomes :millhouse/workflow-all
                              :workflow-glossary-seed :status])))
       (is (contains? workflow-names :publish-spool-kondo)))))
 

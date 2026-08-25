@@ -114,14 +114,14 @@
   "Activate the engine and then the separately declared CLI module."
   [rt]
   (test-support/activate-spool! rt :millhouse/spools-workflow 'millhouse.spools.workflow)
-  (test-support/activate-spool! rt :millhouse/spools-workflow-cli 'millhouse.spools.workflow.cli
+  (test-support/activate-spool! rt :millhouse/spools-workflow-cli 'millhouse.test-modules.workflow-cli
                                 :after [:millhouse/spools-workflow]))
 
 (defn- activate-millstrand-workflows!
   "Activate the registered publisher workflows used by the progression seam."
   [rt]
   (test-support/activate-spool! rt :millhouse/millstrand-workflows
-                                'millhouse.spools.millstrand-workflows
+                                'millhouse.test-modules.millstrand-workflows
                                 :after [:millhouse/spools-workflow]))
 
 (defn- register!

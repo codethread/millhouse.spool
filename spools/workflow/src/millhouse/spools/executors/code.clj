@@ -81,7 +81,7 @@
   [_event]
   (scan!))
 
-(workflow/defexecutor! code
+(workflow/defexecutor code
   "Return durable stall detail for a ready `:code` gate view, or nil.
 
   A gate view is a map containing its string `:id`. The result is
@@ -96,7 +96,7 @@
                  {:gate (:id gate) :error (attr gate :gate/error)})]
     (require-valid! ::stall-detail result "Invalid code gate stall detail")))
 
-(millstrand/defquery! stalled-code-gates
+(millstrand/defquery stalled-code-gates
   "Return active code gates carrying a durable `gate/error` stamp.
 
   Use this named query to find code gates that a coordinator can inspect and
@@ -145,7 +145,7 @@
   (require-valid! ::close-result {:closed :code/engine}
                   "Invalid code engine close result"))
 
-(lifecycle/defresource! code-engine
+(lifecycle/defresource code-engine
   "Own the code executor's event handler and worker resources.
 
   Opening this module resource registers the `:code` workflow executor; closing

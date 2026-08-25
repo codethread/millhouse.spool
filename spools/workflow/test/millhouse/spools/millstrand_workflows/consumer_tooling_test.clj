@@ -182,7 +182,7 @@
   (is (s/valid? ::tooling/invocation-producer
                 {:kind "local-self-root"
                  :family "millhouse/spools"
-                 :root "spools/millstrand-workflows"
+                 :root "spools/workflow"
                  :coordinate {:local/root "/tmp/millhouse"}}))
   (is (not (s/valid? ::tooling/invocation-producer
                      (assoc (:invocation-producer params)
