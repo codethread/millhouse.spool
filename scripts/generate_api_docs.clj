@@ -10,6 +10,8 @@
     :outfile "spools/chime/chime.api.md"}
    {:source "spools/cron/src/millhouse/spools/cron.clj"
     :outfile "spools/cron/cron.api.md"}
+   {:source "spools/identity/src/millhouse/spools/identity.clj"
+    :outfile "spools/identity/identity.api.md"}
    {:source "spools/workflow/src/millhouse/spools/executors/code.clj"
     :outfile "spools/workflow/code.api.md"}
    {:source "spools/workflow/src/millhouse/spools/executors/shell.clj"

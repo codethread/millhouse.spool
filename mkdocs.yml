@@ -54,6 +54,9 @@ nav:
           - Contract: spools/cron/README.md
           - Cookbook: spools/cron/cron.cookbook.md
           - API: spools/cron/cron.api.md
+      - Identity:
+          - Contract: spools/identity/README.md
+          - API: spools/identity/identity.api.md
       - Code executor:
           - Contract: spools/workflow/README.md
           - Cookbook: spools/workflow/code.cookbook.md

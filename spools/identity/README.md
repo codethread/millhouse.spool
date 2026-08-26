@@ -1,5 +1,7 @@
 # Millhouse identity spool
 
+[API reference](./identity.api.md)
+
 `millhouse.spools.identity` gives each logical harness session one friendly,
 canonical identity. A fresh native session mints an ID such as
 `bright-calm-otter`; rebinding the same harness/session pair recovers it.
