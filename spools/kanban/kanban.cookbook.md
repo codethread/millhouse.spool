@@ -85,11 +85,15 @@ serve only that epic's direct pending features.
 **Situation.** A new agent has no conversation context, while several branches
 may have review work ready at once.
 
-**Composition.** Read the board's doing-task projections first, open one card's
-resume view, and use the cross-card review frontier for coordination. Mark
-review strands with an open review signal such as `kind=review`.
+**Composition.** Start with the identity-scoped ready query. It returns the
+active epic context, owned feature, and owned tasks that are not blocked by an
+active dependency. Then open the feature's resume view and use the cross-card
+review frontier for coordination. Mark review strands with an open review
+signal such as `kind=review`.
 
 ```sh
+strand ready --query kanban-identity-work \
+  --param identity="$MILLSTRAND_AGENT_ID"
 strand kanban board | jq '{claimed, in_review, needs_review: .["needs-review"]}'
 strand kanban card "$card" | jq '{card, tasks, notes, active_work: .["active-work"], ready, related}'
 

@@ -168,6 +168,7 @@ cards fail loudly. The receiver returns only the ids it created.
 | Card query | `kanban-cards` from `defquery` | Selects every strand marked `kanban/card=true`. |
 | Pending query | `kanban-pending` from `defquery` | Selects active cards in the `pending` lane. |
 | Epic query | `kanban-epic-pending` from `defquery` | Selects an epic's direct pending cards for composition with `strand ready`. |
+| Identity work query | `kanban-identity-work` from `defquery` | Selects an identity's active epic, owned feature, and owned tasks; compose with `strand ready` for its current frontier. |
 | Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task/run markers, provenance, and abandon restore state. |
 | Label state | `kanban.label/<slug>` attributes | Stores one independent `"true"` marker per normalized free-form label. |
 | Lifecycle resource | `kanban-runtime` | Declares the Kanban vocabularies and owns process-lifetime runtime state. |

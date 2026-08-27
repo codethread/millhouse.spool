@@ -126,7 +126,7 @@ Claim a pending feature card, stamping the work-root attributes.
 Function.
 
 Close Kanban's module resource without retracting process-lifetime state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1555-L1558">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1576-L1579">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/finish!">`finish!`</a>
 ``` clojure
@@ -221,6 +221,14 @@ Function.
 Return a card's full parent-of subtree with its internal depends-on edges.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1517-L1521">Source</a></sub></p>
 
+## <a name="millhouse.spools.kanban/kanban-identity-work">`kanban-identity-work`</a>
+
+
+
+
+Select an identity's active epic, feature, and task work.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1549-L1568">Source</a></sub></p>
+
 ## <a name="millhouse.spools.kanban/kanban-pending">`kanban-pending`</a>
 
 
@@ -235,7 +243,7 @@ Select active Kanban cards in the pending lane.
 
 
 Own Kanban runtime-state setup for the module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1560-L1563">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1581-L1584">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/label-add!">`label-add!`</a>
 ``` clojure
@@ -330,7 +338,7 @@ Append a note to a card or task via the blessed notes relation.
 Function.
 
 Materialize Kanban's process-lifetime runtime state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1549-L1553">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1570-L1574">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/print-board!">`print-board!`</a>
 ``` clojure

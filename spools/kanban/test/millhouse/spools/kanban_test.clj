@@ -93,7 +93,8 @@
                   (filter #(= "kanban-batch" (:name %)))
                   vec)
    :queries (select-keys (graph/queries rt)
-                         ["kanban-cards" "kanban-pending" "kanban-epic-pending"])})
+                         ["kanban-cards" "kanban-pending" "kanban-epic-pending"
+                          "kanban-identity-work"])})
 
 (deftest source-and-image-activation-publish-the-same-kanban-surface
   (t/run-with-weaver-world
@@ -111,7 +112,8 @@
            "image replay publishes the normalized source declaration record")
        (is (= #{"kanban" "kanban-export"} (set (keys (:ops source-surface)))))
        (is (= ["kanban-batch"] (mapv :name (:patterns source-surface))))
-       (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"}
+       (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"
+                "kanban-identity-work"}
               (set (keys (:queries source-surface)))))))))
 
 (deftest omitting-kanban-retracts-static-entries-and-closes-its-resource
@@ -192,7 +194,8 @@
       (let [surface (kanban-surface rt)]
         (is (= #{"kanban" "kanban-export"} (set (keys (:ops surface)))))
         (is (= ["kanban-batch"] (mapv :name (:patterns surface))))
-        (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"}
+        (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"
+                 "kanban-identity-work"}
                (set (keys (:queries surface)))))))))
 
 (deftest kanban-publishes-canonical-discovery-metadata
@@ -488,6 +491,36 @@
         (testing "a missing parameter fails loudly instead of matching nothing"
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Missing query parameter"
                                 (graph/query-ids rt "kanban-epic-pending" {}))))))))
+
+(deftest kanban-identity-work-query-selects-the-agents-ready-hierarchy
+  (with-kanban
+    (fn [rt]
+      (let [agent "bright-calm-otter"
+            other "quiet-green-fox"
+            epic (get-in (op! rt "add" "Owned epic" "--type" "epic") [:card :id])
+            feature (get-in (op! rt "add" "Owned feature" "--epic" epic) [:card :id])
+            task (get-in (op! rt "task" "add" feature "Current task") [:task :id])
+            blocked (get-in (op! rt "task" "add" feature "Blocked task" "--depends-on" task)
+                            [:task :id])
+            unrelated (get-in (op! rt "add" "Someone else's feature") [:card :id])
+            definition (graph/resolve-query rt "kanban-identity-work")]
+        (op! rt "claim" feature "--owner" agent "--branch" "identity-work")
+        (weaver/update! rt task {:attributes {:owner agent}})
+        (weaver/update! rt blocked {:attributes {:owner agent}})
+        (op! rt "claim" unrelated "--owner" other "--branch" "elsewhere")
+        (testing "the query returns the identity's epic, feature, and active tasks"
+          (is (= #{epic feature task blocked}
+                 (set (graph/query-ids rt "kanban-identity-work" {:identity agent}))))
+          (is (= #{unrelated}
+                 (set (graph/query-ids rt "kanban-identity-work" {:identity other})))))
+        (testing "ready applies the dependency frontier to the identity selection"
+          (is (= #{epic feature task}
+                 (set (map :id (weaver/ready rt definition {:identity agent}))))))
+        (testing "identity is an explicit query parameter"
+          (is (= [:identity] (:params definition)))
+          (is (= [:identity] (graph/referenced-params definition)))
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Missing query parameter"
+                                (graph/query-ids rt "kanban-identity-work" {}))))))))
 
 (deftest kanban-next-epic-narrows-the-queue-to-one-epic
   (with-kanban

@@ -1546,6 +1546,27 @@
            [:= [:attr "kanban/lane"] "pending"]
            [:edge/in "parent-of" [:= :id [:param :epic]]]]})
 
+(millstrand/defquery! kanban-identity-work
+  "Select an identity's active epic, feature, and task work."
+  {:usage (str "strand ready --query kanban-identity-work "
+               "--param identity=$MILLSTRAND_AGENT_ID")}
+  {:params [:identity]
+   :where
+   [:and
+    [:= :state "active"]
+    [:or
+     [:and
+      [:= [:attr "owner"] [:param :identity]]
+      [:or [:= [:attr "kanban/card"] "true"]
+       [:= [:attr "kanban/task"] "true"]]]
+     [:and
+      [:= [:attr "kanban/card"] "true"]
+      [:= [:attr "kanban/type"] "epic"]
+      [:edge/out "parent-of"
+       [:and
+        [:= [:attr "kanban/card"] "true"]
+        [:= [:attr "owner"] [:param :identity]]]]]]]})
+
 (defn open-kanban!
   "Materialize Kanban's process-lifetime runtime state."
   [{:keys [runtime]}]
