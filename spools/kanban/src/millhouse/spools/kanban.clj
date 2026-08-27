@@ -36,6 +36,7 @@
 (def ^:private note-kind-attr :note/kind)
 (def ^:private task-attr :kanban/task)
 (def ^:private run-id-attr :kanban/run-id)
+(def ^:private closed-by-attr :kanban/closed-by)
 (def ^:private restore-lane-attr :kanban/abandon-restore-lane)
 
 (def ^:private addable-lanes #{"pending" "refinement"})
@@ -466,34 +467,47 @@
          (sort-by :id)
          vec)))
 
+(declare feature-tasks)
+
+(defn- cascade-close!
+  "Close strand and all its open task children as unactioned parent cascades."
+  [rt strand attrs]
+  (doseq [task (filterv #(not= "closed" (:state %))
+                        (feature-tasks rt (:id strand)))]
+    (update-card! rt task
+                  {outcome-attr "unactioned"
+                   closed-by-attr "parent-cascade"}
+                  "closed"))
+  (update-card! rt strand
+                (merge {lane-attr nil
+                        outcome-attr "unactioned"
+                        closed-by-attr "parent-cascade"}
+                       attrs)
+                "closed"))
+
 (defn- finish-feature!
-  "Close a claimed or in_review feature card with an explicit outcome."
+  "Close a claimed or in_review feature and cascade-close its open tasks."
   [runtime id strand outcome]
   (when-not (contains? #{"claimed" "in_review"} (attr-value strand lane-attr))
     (throw (ex-info "Kanban card must be claimed or in_review to finish"
                     {:id id :lane (attr-value strand lane-attr)})))
+  (doseq [task (filterv #(not= "closed" (:state %))
+                        (feature-tasks runtime id))]
+    (cascade-close! runtime task {}))
   (let [updated (update-card! runtime strand {lane-attr nil outcome-attr outcome} "closed")]
     {:operation "kanban finish"
      :card (entity-projection updated)}))
 
 (defn- complete-epic!
-  "Close an epic as done, guarding that every direct feature child is closed.
-
-  An open feature child fails loudly, naming every offending child and its lane —
-  a done epic asserts its features are finished, so it never silently closes over
-  live work."
-  [rt id strand]
-  (let [open (filterv #(not= "closed" (:state %)) (direct-feature-children rt strand))]
-    (when (seq open)
-      (throw (ex-info "Kanban epic cannot be completed while feature children are open"
-                      {:id id
-                       :open-children (mapv (fn [child]
-                                              {:id (:id child)
-                                               :lane (attr-value child lane-attr)})
-                                            open)})))
+  "Close an epic as done and cascade-close every open direct feature child."
+  [rt _id strand]
+  (let [cascaded (filterv #(not= "closed" (:state %)) (direct-feature-children rt strand))]
+    (doseq [child cascaded]
+      (cascade-close! rt child {}))
     (let [updated (update-card! rt strand {lane-attr nil outcome-attr "done"} "closed")]
       {:operation "kanban finish"
-       :card (entity-projection updated)})))
+       :card (entity-projection updated)
+       :cascaded (mapv :id cascaded)})))
 
 (defn- abandon-epic!
   "Abandon an epic and cascade-close its still-open feature children.
@@ -506,11 +520,8 @@
   [rt strand]
   (let [cascaded (filterv #(not= "closed" (:state %)) (direct-feature-children rt strand))]
     (doseq [child cascaded]
-      (update-card! rt child
-                    {restore-lane-attr (attr-value child lane-attr)
-                     lane-attr nil
-                     outcome-attr "abandoned"}
-                    "closed"))
+      (cascade-close! rt child
+                      {restore-lane-attr (attr-value child lane-attr)}))
     (let [updated (update-card! rt strand
                                 {restore-lane-attr (attr-value strand lane-attr)
                                  lane-attr nil
@@ -524,8 +535,8 @@
   "Close a grouping epic from the refinement or pending lane.
 
   Epics are never claimed, so they finish from a queue lane, not the work lanes.
-  `--outcome done` completes (every feature child must be closed); `--outcome
-  abandoned` cascades a reversible close over the still-open children. Any other
+  Both outcomes cascade-close open feature children and their tasks as unactioned.
+  `--outcome abandoned` records restore lanes for a reversible close. Any other
   outcome fails loudly."
   [rt id strand outcome]
   (when-not (contains? epic-finish-lanes (attr-value strand lane-attr))
@@ -542,9 +553,10 @@
 
   A feature card closes from the claimed or in_review lane (`--outcome` defaults
   to done). A grouping epic is never claimed, so it closes from the refinement or
-  pending lane: `--outcome done` completes it (guarding every direct feature
-  child is closed) and `--outcome abandoned` cascade-closes each still-open
-  feature child, recording each transitioned card's lane in
+  pending lane. Finishing either tier cascade-closes its open children with
+  `kanban/outcome=unactioned` and `kanban/closed-by=parent-cascade`, distinguishing
+  them from manually completed work. An abandoned epic also records each
+  transitioned card's lane in
   `kanban/abandon-restore-lane` so `kanban reopen` can reverse exactly what the
   abandon closed.
 
@@ -604,9 +616,17 @@
           epic-restore-lane (validated-restore-lane strand)
           child-restore-lanes (mapv validated-restore-lane cascaded)]
       (doseq [[child lane] (map vector cascaded child-restore-lanes)]
+        (doseq [task (filterv #(and (= "closed" (:state %))
+                                    (= "parent-cascade" (attr-value % closed-by-attr)))
+                              (feature-tasks runtime (:id child)))]
+          (update-card! runtime task
+                        {outcome-attr nil
+                         closed-by-attr nil}
+                        "active"))
         (update-card! runtime child
                       {lane-attr lane
                        outcome-attr nil
+                       closed-by-attr nil
                        restore-lane-attr nil}
                       "active"))
       (let [updated (update-card! runtime strand
@@ -1547,25 +1567,35 @@
            [:edge/in "parent-of" [:= :id [:param :epic]]]]})
 
 (millstrand/defquery! kanban-identity-work
-  "Select an identity's active epic, feature, and task work."
-  {:usage (str "strand ready --query kanban-identity-work "
+  "Select an identity's Kanban epics, features, and tasks."
+  {:usage (str "strand list --query kanban-identity-work "
                "--param identity=$MILLSTRAND_AGENT_ID")}
   {:params [:identity]
    :where
-   [:and
-    [:= :state "active"]
-    [:or
-     [:and
-      [:= [:attr "owner"] [:param :identity]]
-      [:or [:= [:attr "kanban/card"] "true"]
-       [:= [:attr "kanban/task"] "true"]]]
-     [:and
+   [:or
+    ;; Cards or tasks directly owned by the identity.
+    [:and
+     [:= [:attr "owner"] [:param :identity]]
+     [:or
       [:= [:attr "kanban/card"] "true"]
-      [:= [:attr "kanban/type"] "epic"]
-      [:edge/out "parent-of"
-       [:and
-        [:= [:attr "kanban/card"] "true"]
-        [:= [:attr "owner"] [:param :identity]]]]]]]})
+      [:= [:attr "kanban/task"] "true"]]]
+
+    ;; Tasks inherit ownership from their parent card.
+    [:and
+     [:= [:attr "kanban/task"] "true"]
+     [:edge/in "parent-of"
+      [:and
+       [:= [:attr "kanban/card"] "true"]
+       [:= [:attr "owner"] [:param :identity]]]]]
+
+    ;; Include epics containing cards owned by the identity.
+    [:and
+     [:= [:attr "kanban/card"] "true"]
+     [:= [:attr "kanban/type"] "epic"]
+     [:edge/out "parent-of"
+      [:and
+       [:= [:attr "kanban/card"] "true"]
+       [:= [:attr "owner"] [:param :identity]]]]]]})
 
 (defn open-kanban!
   "Materialize Kanban's process-lifetime runtime state."

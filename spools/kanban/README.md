@@ -36,10 +36,12 @@ The active lanes are:
 - `in_review` — work is waiting for review; `rework` returns it to `claimed`.
 
 Finishing removes the lane and closes the strand. Features record `done` by
-default or an explicitly supplied outcome. Epics finish from `refinement` or
-`pending`: `done` requires every direct feature child to be closed, while
-`abandoned` closes still-open children and records each former lane so
-`reopen` can restore exactly the cards that cascade closed. A completed epic
+default or an explicitly supplied outcome, and close their open tasks. Epics
+finish from `refinement` or `pending` and close their open feature children and
+tasks. Cascade-closed descendants record `kanban/outcome=unactioned` and
+`kanban/closed-by=parent-cascade`, distinguishing them from manually completed
+work. For `abandoned`, each feature's former lane is also recorded so `reopen`
+can restore exactly the cards and tasks the cascade closed. A completed epic
 cannot be reopened.
 
 Priorities are `p1` (immediate blocker), `p2` (high value), `p3` (default), and
@@ -168,7 +170,7 @@ cards fail loudly. The receiver returns only the ids it created.
 | Card query | `kanban-cards` from `defquery` | Selects every strand marked `kanban/card=true`. |
 | Pending query | `kanban-pending` from `defquery` | Selects active cards in the `pending` lane. |
 | Epic query | `kanban-epic-pending` from `defquery` | Selects an epic's direct pending cards for composition with `strand ready`. |
-| Identity work query | `kanban-identity-work` from `defquery` | Selects an identity's active epic, owned feature, and owned tasks; compose with `strand ready` for its current frontier. |
+| Identity work query | `kanban-identity-work` from `defquery` | Selects an identity's epic, owned features, and directly or indirectly owned tasks across all states; use `strand list` for history or `strand ready` for the active frontier. |
 | Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task/run markers, provenance, and abandon restore state. |
 | Label state | `kanban.label/<slug>` attributes | Stores one independent `"true"` marker per normalized free-form label. |
 | Lifecycle resource | `kanban-runtime` | Declares the Kanban vocabularies and owns process-lifetime runtime state. |

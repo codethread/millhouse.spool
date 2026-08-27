@@ -505,16 +505,20 @@
             unrelated (get-in (op! rt "add" "Someone else's feature") [:card :id])
             definition (graph/resolve-query rt "kanban-identity-work")]
         (op! rt "claim" feature "--owner" agent "--branch" "identity-work")
-        (weaver/update! rt task {:attributes {:owner agent}})
-        (weaver/update! rt blocked {:attributes {:owner agent}})
         (op! rt "claim" unrelated "--owner" other "--branch" "elsewhere")
-        (testing "the query returns the identity's epic, feature, and active tasks"
+        (testing "the state-neutral query returns owned cards plus inherited tasks and epic"
           (is (= #{epic feature task blocked}
                  (set (graph/query-ids rt "kanban-identity-work" {:identity agent}))))
           (is (= #{unrelated}
                  (set (graph/query-ids rt "kanban-identity-work" {:identity other})))))
-        (testing "ready applies the dependency frontier to the identity selection"
+        (testing "ready applies active-state and dependency filtering to the same query"
           (is (= #{epic feature task}
+                 (set (map :id (weaver/ready rt definition {:identity agent}))))))
+        (testing "list retains closed history while ready excludes cascade-closed descendants"
+          (op! rt "finish" feature)
+          (is (= #{epic feature task blocked}
+                 (set (graph/query-ids rt "kanban-identity-work" {:identity agent}))))
+          (is (= #{epic}
                  (set (map :id (weaver/ready rt definition {:identity agent}))))))
         (testing "identity is an explicit query parameter"
           (is (= [:identity] (:params definition)))
@@ -554,33 +558,23 @@
   [strand]
   (not-any? #(= "" %) (vals (:attributes strand))))
 
-(deftest kanban-epic-complete-closes-only-when-children-are-closed
+(deftest kanban-epic-complete-cascades-open-features-and-tasks
   (with-kanban
     (fn [rt]
       (let [epic-id (get-in (op! rt "add" "Shippable theme" "--type" "epic") [:card :id])
-            a-id (get-in (op! rt "add" "Slice A" "--epic" epic-id) [:card :id])
-            b-id (get-in (op! rt "add" "Slice B" "--epic" epic-id) [:card :id])]
-        (op! rt "claim" a-id "--owner" "agent" "--branch" "slice-a")
-        (testing "an open feature child blocks completion and is named with its lane"
-          (let [ex (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                         #"cannot be completed while feature children are open"
-                                         (op! rt "finish" epic-id "--outcome" "done")))
-                open (:open-children (ex-data ex))]
-            (is (= epic-id (:id (ex-data ex))))
-            (is (= #{{:id a-id :lane "claimed"} {:id b-id :lane "pending"}} (set open)))))
-        (op! rt "finish" a-id)
-        (op! rt "claim" b-id "--owner" "agent" "--branch" "slice-b")
-        (op! rt "finish" b-id)
-        (testing "with every feature child closed the epic completes as done"
-          (let [finished (op! rt "finish" epic-id "--outcome" "done")
-                stored (weaver/show rt epic-id)]
-            (is (= "closed" (get-in finished [:card :state])))
-            (is (= "done" (get-in finished [:card :attributes :kanban/outcome])))
-            (is (nil? (get-in finished [:card :attributes :kanban/lane]))
-                "lane is cleared to absence, not a blank string")
-            (is (nil? (get-in stored [:attributes :kanban/abandon-restore-lane]))
-                "a completed epic records no restore marker")
-            (is (no-blank-string-attrs? stored))))))))
+            feature-id (get-in (op! rt "add" "Slice A" "--epic" epic-id) [:card :id])
+            task-id (get-in (op! rt "task" "add" feature-id "Implement slice") [:task :id])
+            finished (op! rt "finish" epic-id "--outcome" "done")
+            epic (weaver/show rt epic-id)
+            feature (weaver/show rt feature-id)
+            task (weaver/show rt task-id)]
+        (is (= [feature-id] (:cascaded finished)))
+        (is (= "done" (get-in epic [:attributes :kanban/outcome])))
+        (doseq [child [feature task]]
+          (is (= "closed" (:state child)))
+          (is (= "unactioned" (get-in child [:attributes :kanban/outcome])))
+          (is (= "parent-cascade" (get-in child [:attributes :kanban/closed-by]))))
+        (is (every? no-blank-string-attrs? [epic feature task]))))))
 
 (deftest kanban-epic-abandon-cascades-reversibly-and-reopen-inverts
   (with-kanban
@@ -607,11 +601,13 @@
               (is (nil? (get-in epic [:attributes :kanban/lane]))))
             (testing "each cascaded child closes abandoned with its own restore lane"
               (is (= "closed" (:state pending)))
-              (is (= "abandoned" (get-in pending [:attributes :kanban/outcome])))
+              (is (= "unactioned" (get-in pending [:attributes :kanban/outcome])))
+              (is (= "parent-cascade" (get-in pending [:attributes :kanban/closed-by])))
               (is (= "pending" (get-in pending [:attributes :kanban/abandon-restore-lane])))
               (is (nil? (get-in pending [:attributes :kanban/lane])))
               (is (= "closed" (:state claimed)))
-              (is (= "abandoned" (get-in claimed [:attributes :kanban/outcome])))
+              (is (= "unactioned" (get-in claimed [:attributes :kanban/outcome])))
+              (is (= "parent-cascade" (get-in claimed [:attributes :kanban/closed-by])))
               (is (= "claimed" (get-in claimed [:attributes :kanban/abandon-restore-lane]))))
             (testing "an already-closed child is left untouched and carries no marker"
               (is (= "closed" (:state done)))
@@ -684,12 +680,13 @@
             (is (= "closed" (:state epic)))
             (is (= "abandoned" (get-in epic [:attributes :kanban/outcome])))
             (is (= "closed" (:state child)))
-            (is (= "abandoned" (get-in child [:attributes :kanban/outcome])))))))))
+            (is (= "unactioned" (get-in child [:attributes :kanban/outcome])))))))))
 
 (deftest kanban-feature-finish-stays-lane-gated
   (with-kanban
     (fn [rt]
-      (let [id (get-in (op! rt "add" "Feature card") [:card :id])]
+      (let [id (get-in (op! rt "add" "Feature card") [:card :id])
+            task-id (get-in (op! rt "task" "add" id "Child task") [:task :id])]
         (testing "a pending feature still cannot finish — the feature path is unchanged"
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be claimed or in_review to finish"
                                 (op! rt "finish" id))))
@@ -700,7 +697,11 @@
             (is (= "closed" (get-in finished [:card :state])))
             (is (= "superseded" (get-in finished [:card :attributes :kanban/outcome])))
             (is (nil? (get-in stored [:attributes :kanban/lane])))
-            (is (no-blank-string-attrs? stored))))))))
+            (is (no-blank-string-attrs? stored))
+            (let [task (weaver/show rt task-id)]
+              (is (= "closed" (:state task)))
+              (is (= "unactioned" (get-in task [:attributes :kanban/outcome])))
+              (is (= "parent-cascade" (get-in task [:attributes :kanban/closed-by]))))))))))
 
 (deftest kanban-type-defaults-to-feature-but-drift-fails-loudly
   (with-kanban
