@@ -458,12 +458,9 @@
                       {:root (.getCanonicalPath root)})))
     root))
 
-(def ^:private shell-acceptance-roots
-  {'millhouse.spools/workflow "spools/workflow"})
-
-(defn- shell-acceptance-spools-edn [root]
-  (pr-str {:spools {'millhouse/spools {:local/root root
-                                       :roots shell-acceptance-roots}}}))
+(defn- shell-acceptance-deps-edn [root]
+  (pr-str {:deps {'millhouse.spools/workflow
+                  {:local/root (str root "/spools/workflow")}}}))
 
 (def ^:private shell-acceptance-init
   "(require '[millstrand.api.current.alpha :as current]
@@ -471,11 +468,9 @@
    (def rt (current/runtime))
    (runtime/module! rt :millhouse/spools-workflow
      {:ns 'millhouse.spools.workflow
-      :spools ['millhouse.spools/workflow]
       :required? true})
    (runtime/module! rt :millhouse/spools-shell
      {:ns 'millhouse.spools.workflow.spool
-      :spools ['millhouse.spools/workflow]
       :after [:millhouse/spools-workflow]
       :required? true})")
 
@@ -544,8 +539,8 @@
           :interval-ms 100
           :on-timeout #(throw (ex-info "Timed out waiting for disposable Mill" {}))})
         (mill-command! mill source state-home workspace-path ["init"])
-        (spit (io/file workspace "spools.edn")
-              (str (shell-acceptance-spools-edn consumer-root) "\n"))
+        (spit (io/file workspace "deps.edn")
+              (str (shell-acceptance-deps-edn consumer-root) "\n"))
         (spit (io/file workspace "init.clj") shell-acceptance-init)
         (mill-command! mill source state-home workspace-path ["weaver" "start"])
         (let [_before-status (weaver-status! mill source state-home workspace-path)

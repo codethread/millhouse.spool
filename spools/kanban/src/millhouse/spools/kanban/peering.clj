@@ -691,7 +691,7 @@
             :remedy (fmt/reflow "
                      |Activate the guild module with
                      |(runtime/module! runtime :guild {:ns 'millstrand.spools.guild
-                     |:spools ['millstrand.spools/guild] :required? true}) before
+                     |:required? true}) before
                      |activating the kanban peering module.")}))
   (when-not (op-registered? rt "kanban")
     (fail! "kanban peering activation requires the kanban module to be active first"
@@ -699,7 +699,7 @@
             :remedy (fmt/reflow "
                      |Activate the kanban module with
                      |(runtime/module! runtime :kanban {:ns 'millhouse.spools.kanban
-                     |:spools ['millhouse.spools/kanban] :required? true}) before
+                     |:required? true}) before
                      |activating the kanban peering module.")})))
 
 (millstrand/defop! kanban-peers

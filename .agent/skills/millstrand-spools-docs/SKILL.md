@@ -22,7 +22,7 @@ description: >
 
 | Surface | Content |
 | --- | --- |
-| Root `README.md` | Spool index, documentation links, and complete `spools.edn` coordinate. |
+| Root `README.md` | Spool index, documentation links, and complete `deps.edn` coordinate. |
 | Spool `README.md` | Smallest consumer contract: activation, authoring model, non-obvious safety rules, and consumer-visible Millstrand surfaces. |
 | `<spool>.cookbook.md` | Compositions and trade-offs involving multiple APIs or systems. |
 | `<spool>.api.md` | Generated signatures, request/return details, and focused examples from public docstrings. |
@@ -44,7 +44,6 @@ scheduler, with optional jitter and reloadable handlers.
 ```clojure
 (runtime/module! runtime :millhouse/cron
   {:ns 'millhouse.spools.cron
-   :spools ['millhouse.spools/cron]
    :required? true})
 ```
 

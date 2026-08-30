@@ -9,10 +9,12 @@ Managed resume can pass an expected identity and fails on mismatch.
 
 ## Activation
 
+Add `millhouse.spools/identity` to the workspace's `deps.edn`, then activate it
+from trusted startup configuration:
+
 ```clojure
 (runtime/module! runtime :millhouse/spools-identity
   {:ns 'millhouse.spools.identity
-   :spools ['millhouse.spools/identity]
    :required? true})
 ```
 

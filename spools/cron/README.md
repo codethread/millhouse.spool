@@ -4,6 +4,9 @@
 
 ## 1. Activation
 
+Add `millhouse.spools/cron` to the workspace's `deps.edn`, then activate it
+from trusted startup configuration:
+
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
@@ -11,7 +14,6 @@
 (def runtime (current/runtime))
 (runtime/module! runtime :millhouse/cron
   {:ns 'millhouse.spools.cron
-   :spools ['millhouse.spools/cron]
    :required? true})
 ```
 
