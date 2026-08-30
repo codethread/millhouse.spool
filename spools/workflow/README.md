@@ -8,6 +8,7 @@ references remain separate:
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
 - [shell executor cookbook](./shell.cookbook.md) · [shell executor API](./shell.api.md)
+- [Millstrand workflows API](./millstrand-workflows.api.md)
 
 ## Activation model
 
