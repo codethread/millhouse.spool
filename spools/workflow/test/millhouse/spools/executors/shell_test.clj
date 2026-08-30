@@ -474,7 +474,7 @@
       :after [:millhouse/spools-workflow]
       :required? true})")
 
-(defn- workflow-shell-gate-form [release-marker]
+(defn- workflow-shell-gate-form [release-fifo]
   (str "(do
      (require '[millhouse.spools.workflow :as workflow]
               '[millhouse.spools.executors.shell :as shell])
@@ -484,9 +484,9 @@
                \"Shell replacement\"
                (workflow/gate :check \"Run shell check\" :shell
                  :attributes {\"test/run-id\" \"shell-replacement\"
-                              \"shell/argv\" [\"sh\" \"-c\" \"while [ ! -f "
-       release-marker
-       " ]; do sleep 0.1; done; printf shell-ok\"]})
+                              \"shell/argv\" [\"sh\" \"-c\" \"IFS= read -r release < "
+       release-fifo
+       "; printf shell-ok\"]})
                (workflow/step :after \"After\" :self :depends-on [:check]))
              {})]
        (shell/scan!)
@@ -513,7 +513,7 @@
         disposable-root (short-disposable-root)
         state-home (io/file disposable-root "state")
         workspace (io/file disposable-root ".millstrand")
-        release-marker (io/file disposable-root "release")
+        release-fifo (io/file disposable-root "release")
         mill-target (io/file disposable-root "mill")
         mill-log (io/file disposable-root "mill.log")
         mill-process (atom nil)
@@ -521,6 +521,7 @@
         last-probe (atom nil)
         after-probe (atom nil)]
     (try
+      (run-command! ["mkfifo" (.getCanonicalPath release-fifo)] nil {} nil)
       (is (= canonical-m0-producer
              (str/trim (run-command! ["git" "-C" (.getCanonicalPath (io/file source))
                                       "rev-parse" "HEAD"]
@@ -549,7 +550,7 @@
           (reset! started-result
                   (weaver-repl! mill source state-home workspace-path
                                 (workflow-shell-gate-form
-                                 (.getCanonicalPath release-marker))))
+                                 (.getCanonicalPath release-fifo))))
           (let [running
                 (test-support/poll-until
                  #(let [probe (weaver-repl! mill source state-home workspace-path
@@ -574,7 +575,7 @@
             (is (.isAlive ^Process @mill-process)
                 "Mill remains alive through the planned Weaver replacement")
             (let [_after-status (weaver-status! mill source state-home workspace-path)]
-              (spit release-marker "release")
+              (spit release-fifo "release\n")
               (let [after
                     (test-support/poll-until
                      #(let [probe (weaver-repl! mill source state-home workspace-path
