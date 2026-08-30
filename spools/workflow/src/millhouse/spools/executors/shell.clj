@@ -185,12 +185,23 @@
 (defn- deadline-string [^Instant deadline]
   (str deadline))
 
-(defn- parse-deadline [value]
-  (when (string? value)
+(defn- parse-deadline
+  [value context]
+  (cond
+    (nil? value) nil
+    (not (string? value))
+    (fail! "Invalid durable shell timeout deadline"
+           (assoc context
+                  :value value
+                  :expected-format "ISO-8601 Instant string"))
+    :else
     (try
       (Instant/parse value)
       (catch java.time.format.DateTimeParseException _
-        nil))))
+        (fail! "Invalid durable shell timeout deadline"
+               (assoc context
+                      :value value
+                      :expected-format "ISO-8601 Instant string"))))))
 
 (defn- timeout-deadline
   [runtime timeout-secs]
@@ -403,7 +414,8 @@
   #_{:splint/disable [lint/locking-object]}
   (locking (scan-monitor)
     (let [gate (attempt-gate gate-id attempt-id custody-handle)
-          deadline (some-> gate (attr :shell/timeout-deadline) parse-deadline)
+          deadline (parse-deadline (some-> gate (attr :shell/timeout-deadline))
+                                   {:attempt-id attempt-id :gate-id gate-id})
           timed-out? (or timed-out?
                          (and deadline
                               (not (.isAfter ^Instant deadline
@@ -438,7 +450,9 @@
 (defn- enforce-timeout!
   "Rearm the original timeout after replacement, or cancel when it is due."
   [runtime attempt handle]
-  (when-let [deadline (parse-deadline (:timeout-deadline attempt))]
+  (when-let [deadline (parse-deadline (:timeout-deadline attempt)
+                                      {:attempt-id (:attempt-id attempt)
+                                       :gate-id (:gate-id attempt)})]
     (if-not (.isAfter ^Instant deadline ^Instant (runtime/now runtime))
       (cancel-attempt-at-timeout! runtime (:gate-id attempt)
                                   (:attempt-id attempt) handle)
@@ -452,7 +466,8 @@
           _ (require-request! gate)
           raw-argv (parse-argv gate)
           timeout-secs (parse-timeout gate)
-          deadline (or (parse-deadline (attr gate :shell/timeout-deadline))
+          deadline (or (parse-deadline (attr gate :shell/timeout-deadline)
+                                       {:attempt-id attempt-id :gate-id gate-id})
                        (timeout-deadline runtime timeout-secs))
           argv raw-argv
           cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
@@ -586,7 +601,9 @@
     (when (and attempt
                (= "active" (:state attempt))
                (= (:handle payload) (:custody-handle attempt))
-               (parse-deadline (:timeout-deadline attempt)))
+               (parse-deadline (:timeout-deadline attempt)
+                               {:attempt-id attempt-id
+                                :gate-id (:gate-id attempt)}))
       (cancel-attempt-at-timeout! runtime (:gate-id attempt) attempt-id
                                   (:custody-handle attempt))))
   nil)

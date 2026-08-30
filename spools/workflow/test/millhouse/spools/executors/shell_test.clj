@@ -428,6 +428,51 @@
         (is (= {:attempt-id "attempt-timeout" :handle "handle-timeout"}
                (:payload @scheduled)))))))
 
+(deftest reconciliation-rejects-a-non-string-durable-timeout-deadline
+  (with-runtime
+    (fn [rt _]
+      (let [failure (try
+                      (shell/apply-shell-attempts!
+                       {:runtime rt
+                        :desired [{:gate-id "gate-malformed"
+                                   :state "active"
+                                   :attempt-id "attempt-malformed"
+                                   :custody-handle "handle-malformed"
+                                   :timeout-deadline 42}]
+                        :actual [{:handle "handle-malformed"
+                                  :key "attempt-malformed"
+                                  :phase :running}]})
+                      nil
+                      (catch clojure.lang.ExceptionInfo throwable throwable))]
+        (is (= {:attempt-id "attempt-malformed"
+                :gate-id "gate-malformed"
+                :value 42
+                :expected-format "ISO-8601 Instant string"}
+               (ex-data failure)))))))
+
+(deftest timeout-wake-rejects-an-invalid-durable-timeout-deadline
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt
+                              {:title "Malformed timeout wake"
+                               :state "active"
+                               :attributes {"workflow/gate" "shell"
+                                            "shell/attempt-id" "attempt-wake"
+                                            "shell/custody-handle" "handle-wake"
+                                            "shell/timeout-deadline" "not-an-instant"}})
+            failure (try
+                      (shell/timeout-wake
+                       {:runtime rt
+                        :payload {:attempt-id "attempt-wake"
+                                  :handle "handle-wake"}})
+                      nil
+                      (catch clojure.lang.ExceptionInfo throwable throwable))]
+        (is (= {:attempt-id "attempt-wake"
+                :gate-id (:id gate)
+                :value "not-an-instant"
+                :expected-format "ISO-8601 Instant string"}
+               (ex-data failure)))))))
+
 (def ^:private canonical-m0-producer
   "71c0ed3d80fcad090b74a704a8eb165a3fad996e")
 
