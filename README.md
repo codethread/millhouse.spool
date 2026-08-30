@@ -25,7 +25,23 @@ only the ordinary tools.deps libraries they use:
 
 ```clojure
 {:deps
- {millhouse.spools/workflow
+ {millhouse.spools/chime
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/chime"}
+  millhouse.spools/cron
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/cron"}
+  millhouse.spools/identity
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/identity"}
+  millhouse.spools/kanban
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/kanban"}
+  millhouse.spools/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v2"
    :deps/root "spools/workflow"}}}

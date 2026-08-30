@@ -4,8 +4,16 @@
 
 ## 1. Activation
 
-Add `millhouse.spools/cron` to the workspace's `deps.edn`, then activate it
-from trusted startup configuration:
+Add this root to the workspace's `deps.edn`, then activate it from trusted
+startup configuration:
+
+```clojure
+{:deps
+ {millhouse.spools/cron
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/cron"}}}
+```
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
