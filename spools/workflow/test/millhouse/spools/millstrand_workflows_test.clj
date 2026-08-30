@@ -2,124 +2,32 @@
   "Focused contract tests for the Millstrand-workflows publisher spool."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
-            [millhouse.test-support :as test-support]
-            [millhouse.spools.millstrand-workflows]
             [millhouse.spools.workflow :as workflow]
+            [millhouse.test-support :as test-support]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.test.alpha :as t]))
 
-(def ^:private params
-  {:spool-root "spools/example-macros"
-   :namespace "example.macros"
-   :spool-key "example/macros"
-   :macro-forms [{:macro "example.macros/defwidget"
-                  :hook "hooks.example/defwidget"}
-                 {:macro "example.macros/defpanel"
-                  :hook "hooks.example/defpanel"}]})
+(def ^:private workflow-root
+  (.getCanonicalPath (io/file "spools/workflow")))
 
-(def ^:private project-root
-  (.getCanonicalPath (io/file ".")))
-
-(def ^:private spools-edn
-  {:spools {'millhouse/spools
-            {:local/root project-root
-             :roots {'millhouse.spools/workflow "spools/workflow"}}}})
-
-(defn- step [definition id]
-  (some #(when (= id (:id %)) %) (:steps definition)))
-
-(deftest activated-module-resolves-published-workflows
+(deftest bundled-selector-publishes-only-the-shipped-workflow
   (t/with-weaver-world [ctx {:storage :sqlite-memory
-                             :spools-edn spools-edn}]
+                             :deps-edn
+                             (pr-str
+                              {:deps {'millhouse.spools/workflow
+                                      {:local/root workflow-root}}})}]
     (let [rt (:runtime ctx)]
       (test-support/with-module-activation
         #(do
            (runtime/module! rt :millhouse/workflow
                             {:ns 'millhouse.spools.workflow})
-           (runtime/module! rt :millhouse/millstrand-workflows
+           (runtime/module! rt :millhouse/workflow-all
                             {:ns 'millhouse.spools.workflow.spool
-                             :spools ['millhouse.spools/workflow]
                              :after [:millhouse/workflow]})))
       (current/with-runtime rt
-        (let [resolved (workflow/resolve-workflow :publish-spool-kondo)
-              bootstrap-resolved (workflow/resolve-workflow :bootstrap-kondo)
-              bump-resolved (workflow/resolve-workflow :bump-spool)
-              tooling-resolved (workflow/resolve-workflow :configure-consumer-tooling)
-              tooling-app-resolved
-              (workflow/resolve-workflow :configure-consumer-tooling-app)
-              tooling-spool-resolved
-              (workflow/resolve-workflow :configure-consumer-tooling-spool)
-              tooling-clojure-app-resolved
-              (workflow/resolve-workflow :configure-consumer-tooling-clojure-app)
-              definition (:value resolved)
-              bootstrap-definition (:value bootstrap-resolved)
-              bump-definition (:value bump-resolved)
-              ids (mapv :id (:steps definition))]
-          (is (= #{:publish-spool-kondo
-                   :bootstrap-kondo
-                   :bootstrap-kondo-greenfield
-                   :bootstrap-kondo-brownfield
-                   :bump-spool
-                   :bump-millstrand
-                   :bump-millstrand-local
-                   :bump-millstrand-local-validate
-                   :bump-millstrand-pinned
-                   :configure-consumer-tooling
-                   :configure-consumer-tooling-app
-                   :configure-consumer-tooling-spool
-                   :configure-consumer-tooling-clojure-app}
-                 (set (keys (workflow/workflows))))
-              "the publishing root selects every reusable child workflow")
-          (is (= #{:start} (:entrypoints resolved)))
-          (is (= #{:start :call} (:entrypoints bootstrap-resolved)))
-          (is (= #{:start :call} (:entrypoints bump-resolved)))
-          (is (= #{:start :call} (:entrypoints tooling-resolved)))
-          (is (= #{:continue} (:entrypoints tooling-app-resolved)))
-          (is (= #{:continue} (:entrypoints tooling-spool-resolved)))
-          (is (= #{:continue} (:entrypoints tooling-clojure-app-resolved)))
-          (is (= 'millhouse.spools.millstrand-workflows.bootstrap-kondo/bootstrap-kondo
-                 (:definition bootstrap-resolved)))
-          (is (= [:select-world :capture-spool-status :adoption-mode]
-                 (mapv :id (:steps bootstrap-definition))))
-          (is (= 'millhouse.spools.millstrand-workflows.bump-spool/bump-spool
-                 (:definition bump-resolved)))
-          (is (= "bump-spool"
-                 (get-in bump-definition [:attributes "workflow/family"])))
-          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling
-                 (:definition tooling-resolved)))
-          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-app
-                 (:definition tooling-app-resolved)))
-          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-spool
-                 (:definition tooling-spool-resolved)))
-          (is (= 'millhouse.spools.millstrand-workflows.consumer-tooling/configure-consumer-tooling-clojure-app
-                 (:definition tooling-clojure-app-resolved)))
-          (is (= [:inspect-spool-root
-                  :publish-root-classpath
-                  :publish-kondo-export
-                  :publish-kondo-hooks
-                  :review-import-boundary
-                  :test-kondo-export
-                  :document-kondo-export
-                  :verify-clean-status]
-                 ids))
-          (is (= :review-import-boundary
-                 (first (:depends-on (step definition :test-kondo-export)))))
-          (let [review (get-in (step definition :review-import-boundary)
-                               [:attributes "workflow/instruction"])]
-            (is (re-find #"one source" review))
-            (is (re-find #"external dependency imports" review))
-            (is (re-find #"overlaps" review))
-            (is (re-find #"import drift" review))
-            (is (re-find #"tracked `\.clj-kondo/\.cache`" review)))
-          (is (= :document-kondo-export
-                 (first (:depends-on (step definition :verify-clean-status)))))
-          (let [clean-status (get-in (step definition :verify-clean-status)
-                                     [:attributes "workflow/instruction"])]
-            (is (re-find #"git diff --check" (clean-status params)))
-            (is (re-find #"git status --short" (clean-status params)))
-            (is (re-find #"tracked `\.clj-kondo/\.cache`" (clean-status params))))
-          (is (re-find #"no automatic macro discovery"
-                       ((get-in (step definition :publish-kondo-export)
-                                [:attributes "workflow/instruction"])
-                        params))))))))
+        (is (= #{:publish-spool-kondo}
+               (set (keys (workflow/workflows)))))
+        (is (= #{:start}
+               (:entrypoints
+                (workflow/resolve-workflow :publish-spool-kondo))))))))

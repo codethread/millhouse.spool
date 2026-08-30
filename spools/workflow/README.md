@@ -8,7 +8,7 @@ references remain separate:
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
 - [shell executor cookbook](./shell.cookbook.md) · [shell executor API](./shell.api.md)
-- [Millstrand workflows cookbook](./millstrand-workflows.cookbook.md) · [Millstrand workflows API](./millstrand-workflows.api.md)
+- [Millstrand workflows API](./millstrand-workflows.api.md)
 
 ## Activation model
 
@@ -23,7 +23,6 @@ before modules that publish workflow definitions or executors:
 ```clojure
 (runtime/module! runtime :workflow/engine
   {:ns 'millhouse.spools.workflow
-   :spools ['millhouse.spools/workflow]
    :required? true})
 ```
 
@@ -39,8 +38,8 @@ before modules that publish workflow definitions or executors:
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 ```
 
-Activate `app.workflow-cli` after `:workflow/engine` and approve the single
-`millhouse.spools/workflow` root.
+Activate `app.workflow-cli` after `:workflow/engine`. The workspace's `deps.edn`
+must make `millhouse.spools/workflow` available.
 
 ### Select an executor
 
@@ -67,10 +66,10 @@ only the definitions required by your workspace:
 
 ```clojure
 (ns app.release-workflows
-  (:require [millhouse.spools.millstrand-workflows.bump-spool :as bump]
+  (:require [millhouse.spools.millstrand-workflows :as workflows]
             [millhouse.spools.workflow :as workflow]))
 
-(workflow/use-workflow! bump/bump-spool)
+(workflow/use-workflow! workflows/publish-spool-kondo)
 ```
 
 This works because `defworkflow` creates an inert, metadata-bearing Var;
@@ -79,19 +78,18 @@ therefore retain normal workflow entrypoint validation.
 
 ### Activate everything
 
-For workspaces that want the complete historical surface, activate the bundled
+For workspaces that want the complete shipped surface, activate the bundled
 selector namespace after the engine:
 
 ```clojure
 (runtime/module! runtime :workflow/all
   {:ns 'millhouse.spools.workflow.spool
-   :spools ['millhouse.spools/workflow]
    :after [:workflow/engine]})
 ```
 
 `millhouse.spools.workflow.spool` selects the CLI, both executors, their queries
-and lifecycle declarations, and every bundled reusable workflow. It is a
-convenience entry point, not a requirement.
+and lifecycle declarations, and `publish-spool-kondo`. It is a convenience
+entry point, not a requirement.
 
 ## Author workflow data
 
