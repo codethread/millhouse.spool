@@ -185,12 +185,23 @@
 (defn- deadline-string [^Instant deadline]
   (str deadline))
 
-(defn- parse-deadline [value]
-  (when (string? value)
+(defn- parse-deadline
+  [value context]
+  (cond
+    (nil? value) nil
+    (not (string? value))
+    (fail! "Invalid durable shell timeout deadline"
+           (assoc context
+                  :value value
+                  :expected-format "ISO-8601 Instant string"))
+    :else
     (try
       (Instant/parse value)
       (catch java.time.format.DateTimeParseException _
-        nil))))
+        (fail! "Invalid durable shell timeout deadline"
+               (assoc context
+                      :value value
+                      :expected-format "ISO-8601 Instant string"))))))
 
 (defn- timeout-deadline
   [runtime timeout-secs]
@@ -336,7 +347,9 @@
    (stamp-attempt! gate-id attempt-id custody-handle
                    {"shell/custody-handle" nil
                     "shell/attempt-id" nil
-                    "shell/running" nil})))
+                    "shell/running" nil
+                    timeout-deadline-attribute nil
+                    timeout-intent-attribute nil})))
 
 (defn- fail-attempt!
   "Stamp an error only while the attempt/handle pair is still current."
@@ -350,10 +363,9 @@
 (defn- terminal-error
   [record timed-out?]
   (cond
-    (:cancellation record) (if timed-out?
-                             "shell command timed out"
-                             (str "shell command cancelled: "
-                                  (get-in record [:cancellation :reason])))
+    timed-out? "shell command timed out"
+    (:cancellation record) (str "shell command cancelled: "
+                                (get-in record [:cancellation :reason]))
     (:launch-failure record) (str "shell command failed to launch: "
                                   (get-in record [:launch-failure :message]))
     (:exit record) (str "shell command exited " (get-in record [:exit :code]))
@@ -378,7 +390,7 @@
     (if (= "closed" (:state gate))
       :already-committed
       (let [output (custody-output (:output record))]
-        (if (and (:exit record) (zero? (terminal-exit record)))
+        (if (and (not timed-out?) (:exit record) (zero? (terminal-exit record)))
           (pass! run-id gate-id attempt-id custody-handle 0 output)
           (fail-attempt! gate-id attempt-id custody-handle
                          (terminal-error record
@@ -401,7 +413,14 @@
   [runtime run-id gate-id attempt-id custody-handle record timed-out?]
   #_{:splint/disable [lint/locking-object]}
   (locking (scan-monitor)
-    (let [commit (terminal-commit! run-id gate-id attempt-id custody-handle
+    (let [gate (attempt-gate gate-id attempt-id custody-handle)
+          deadline (parse-deadline (some-> gate (attr :shell/timeout-deadline))
+                                   {:attempt-id attempt-id :gate-id gate-id})
+          timed-out? (or timed-out?
+                         (and deadline
+                              (not (.isAfter ^Instant deadline
+                                             ^Instant (runtime/now runtime)))))
+          commit (terminal-commit! run-id gate-id attempt-id custody-handle
                                    record timed-out?)]
       (case commit
         :stale :stale
@@ -409,7 +428,8 @@
           ;; Keep the durable timeout wake from racing a terminal commit. A
           ;; failed cancellation leaves the fact unacknowledged for the next
           ;; reconciliation, just like any other failed custody step.
-          (cancel-timeout! runtime attempt-id)
+          (when-not timed-out?
+            (cancel-timeout! runtime attempt-id))
           (process/acknowledge! runtime custody-owner custody-handle)
           (if (clear-attempt! gate-id attempt-id custody-handle)
             :acknowledged
@@ -430,7 +450,9 @@
 (defn- enforce-timeout!
   "Rearm the original timeout after replacement, or cancel when it is due."
   [runtime attempt handle]
-  (when-let [deadline (parse-deadline (:timeout-deadline attempt))]
+  (when-let [deadline (parse-deadline (:timeout-deadline attempt)
+                                      {:attempt-id (:attempt-id attempt)
+                                       :gate-id (:gate-id attempt)})]
     (if-not (.isAfter ^Instant deadline ^Instant (runtime/now runtime))
       (cancel-attempt-at-timeout! runtime (:gate-id attempt)
                                   (:attempt-id attempt) handle)
@@ -444,7 +466,8 @@
           _ (require-request! gate)
           raw-argv (parse-argv gate)
           timeout-secs (parse-timeout gate)
-          deadline (or (parse-deadline (attr gate :shell/timeout-deadline))
+          deadline (or (parse-deadline (attr gate :shell/timeout-deadline)
+                                       {:attempt-id attempt-id :gate-id gate-id})
                        (timeout-deadline runtime timeout-secs))
           argv raw-argv
           cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
@@ -568,9 +591,9 @@
 (defn timeout-wake
   "Cancel a shell attempt when its durable absolute timeout is due.
 
-  The wake is deliberately keyed by attempt identity. A terminal commit cancels
-  it; a stale delivery re-reads the gate and therefore cannot cancel a newer
-  attempt that reused the workflow gate."
+  The wake is deliberately keyed by attempt identity. A terminal commit before
+  its deadline cancels it; a stale delivery re-reads the gate and therefore
+  cannot cancel a newer attempt that reused the workflow gate."
   [{:keys [runtime payload]}]
   (let [attempt-id (:attempt-id payload)
         attempt (some #(when (= attempt-id (:attempt-id %)) %)
@@ -578,7 +601,9 @@
     (when (and attempt
                (= "active" (:state attempt))
                (= (:handle payload) (:custody-handle attempt))
-               (parse-deadline (:timeout-deadline attempt)))
+               (parse-deadline (:timeout-deadline attempt)
+                               {:attempt-id attempt-id
+                                :gate-id (:gate-id attempt)}))
       (cancel-attempt-at-timeout! runtime (:gate-id attempt) attempt-id
                                   (:custody-handle attempt))))
   nil)

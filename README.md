@@ -12,7 +12,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 
 | Spool                                                                                                   | Info                                                                                                                                         | Links                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Workflow](spools/workflow/README.md) (`millhouse.spools/workflow`)                                  | One selectively activated root for the workflow engine, worker CLI, code and shell executors, and reusable Millstrand workflows.             | [contract](spools/workflow/README.md) · [workflow](spools/workflow/workflow.cookbook.md) · [code](spools/workflow/code.cookbook.md) · [shell](spools/workflow/shell.cookbook.md) · [reusable workflows](spools/workflow/millstrand-workflows.cookbook.md) |
+| [Workflow](spools/workflow/README.md) (`millhouse.spools/workflow`)                                  | One selectively activated root for the workflow engine, worker CLI, code and shell executors, and reusable Millstrand workflows.             | [contract](spools/workflow/README.md) · [workflow](spools/workflow/workflow.cookbook.md) · [code](spools/workflow/code.cookbook.md) · [shell](spools/workflow/shell.cookbook.md) · [reusable workflows API](spools/workflow/millstrand-workflows.api.md) |
 | [Chime](spools/chime/README.md) (`millhouse.spools.chime`)                                              | Turn meaningful graph events into local notifications with workspace-owned rules and your preferred notifier.                                | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md)                                                                            |
 | [Cron](spools/cron/README.md) (`millhouse.spools.cron`)                                                 | Run durable, interval-based jobs through Millstrand's scheduler, with optional jitter and reloadable handlers.                               | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md)                                                                                 |
 | [Identity](spools/identity/README.md) (`millhouse.spools.identity`)                                      | Give each logical harness session a friendly identity and connect it to the runs it performs.                                                 | [contract](spools/identity/README.md) · [API](spools/identity/identity.api.md)                                                                                                             |
@@ -20,18 +20,34 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 
 ## Consumption
 
-Millhouse publishes breaking spool-family releases as annotated `vN` tags. This consolidated root is released as `v2`; consumers select only the roots they approve:
+Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only the ordinary tools.deps libraries they use:
 
 ```clojure
-{:spools
- {millhouse/spools
+{:deps
+ {millhouse.spools/chime
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v2"
-   :roots {millhouse.spools/workflow "spools/workflow"
-           millhouse.spools/chime "spools/chime"
-           millhouse.spools/cron "spools/cron"
-           millhouse.spools/kanban "spools/kanban"
-           millhouse.spools/identity "spools/identity"}}}}
+   :deps/root "spools/chime"}
+  millhouse.spools/cron
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/cron"}
+  millhouse.spools/identity
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/identity"}
+  millhouse.spools/kanban
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/kanban"}
+  millhouse.spools/workflow
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/workflow"}}}
 ```
 
 `v2` is intentionally breaking: the former workflow, code-executor, shell-executor, and Millstrand-workflows roots are replaced by `millhouse.spools/workflow`. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
+
+### deps-native cutover
+
+The manifest activation API has been removed. Replace `spools.edn`, `:spools` module options, and family/root selection with ordinary `deps.edn` dependencies; module declarations retain `:ns`, `:after`, and `:required?` as needed. This is also an API break for the retired `bootstrap-kondo`, `bump-spool`, `bump-millstrand`, and `configure-consumer-tooling` workflows. The only bundled Millstrand workflow now is `publish-spool-kondo`.

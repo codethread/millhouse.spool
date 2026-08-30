@@ -7,6 +7,16 @@ second status system.
 
 ## 1. Activation
 
+Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
+
+```clojure
+{:deps
+ {millhouse.spools/kanban
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/kanban"}}}
+```
+
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
@@ -14,7 +24,6 @@ second status system.
 (def runtime (current/runtime))
 (runtime/module! runtime :millhouse/kanban
   {:ns 'millhouse.spools.kanban
-   :spools ['millhouse.spools/kanban]
    :required? true})
 ```
 
@@ -115,21 +124,17 @@ view.
 
 ## 5. Optional board peering
 
-Peering is opt-in and requires Guild plus the base Kanban module. Activate the
-modules in this order:
+Peering is opt-in and requires Guild plus the base Kanban module. Add both libraries to `deps.edn`, then activate the modules in this order:
 
 ```clojure
 (runtime/module! runtime :guild
   {:ns 'millstrand.spools.guild
-   :spools ['millstrand.spools/guild]
    :required? true})
 (runtime/module! runtime :millhouse/kanban
   {:ns 'millhouse.spools.kanban
-   :spools ['millhouse.spools/kanban]
    :required? true})
 (runtime/module! runtime :millhouse/kanban-peering
   {:ns 'millhouse.spools.kanban.peering
-   :spools ['millhouse.spools/kanban 'millstrand.spools/guild]
    :after [:guild :millhouse/kanban]
    :required? true})
 ```

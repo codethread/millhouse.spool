@@ -2,9 +2,10 @@
 
 MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.millstrand/millstrand {:local/root "$(MILLSTRAND_ROOT)"}}}}}'
 RUN_CHECK = python3 scripts/run_quality_check.py
+TEST_NAMESPACES ?=
 
 test:
-	@$(RUN_CHECK) test clojure -M:test
+	@$(RUN_CHECK) test clojure -M:test $(TEST_NAMESPACES)
 
 test-local:
 	@test -n "$(strip $(MILLSTRAND_ROOT))" || { echo "MILLSTRAND_ROOT is required (for example: make test-local MILLSTRAND_ROOT=/path/to/millstrand)" >&2; exit 2; }

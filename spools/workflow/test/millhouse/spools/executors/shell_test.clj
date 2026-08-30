@@ -150,6 +150,70 @@
   (is (= "shell command exited 124"
          (#'shell/terminal-error {:exit {:code 124}} false))))
 
+(deftest terminal-reconciliation-reserves-a-due-timeout
+  (with-runtime
+    (fn [rt _]
+      (doseq [[deadline timed-out? expected]
+              [["2999-01-01T00:00:00Z" false [:commit/ordinary :cancel :acknowledge :clear]]
+               ["2000-01-01T00:00:00Z" false [:commit/timeout :acknowledge :clear]]
+               [nil true [:commit/timeout :acknowledge :clear]]]]
+        (let [steps (atom [])
+              gate (weaver/add! rt
+                                {:title "Terminal timeout ownership"
+                                 :attributes (cond-> {"shell/attempt-id" "attempt"
+                                                      "shell/custody-handle" "handle"}
+                                               deadline (assoc "shell/timeout-deadline"
+                                                               deadline))})]
+          (with-redefs-fn {#'shell/terminal-commit! (fn [& args]
+                                                      (swap! steps conj
+                                                             (if (last args)
+                                                               :commit/timeout
+                                                               :commit/ordinary))
+                                                      :committed)
+                           #'shell/cancel-timeout! (fn [& _] (swap! steps conj :cancel))
+                           #'process/acknowledge! (fn [& _] (swap! steps conj :acknowledge))
+                           #'shell/clear-attempt! (fn [& _]
+                                                    (swap! steps conj :clear)
+                                                    true)}
+            (fn []
+              (is (= :acknowledged
+                     (#'shell/terminal-reconcile!
+                      rt "run" (:id gate) "attempt" "handle"
+                      {:phase :terminal} timed-out?)))))
+          (is (= expected @steps)))))))
+
+(deftest clearing-an-attempt-clears-its-timeout-state
+  (with-runtime
+    (fn [rt _]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            gate (weaver/add! rt
+                              {:title "Timed-out attempt"
+                               :attributes {"shell/attempt-id" "attempt-old"
+                                            "shell/custody-handle" "handle-old"
+                                            "shell/running" "attempt-old"
+                                            "shell/timeout-deadline" "2000-01-01T00:00:00Z"
+                                            "shell/timeout-intent" "timed-out"}})]
+        (spit stdout "")
+        (spit stderr "")
+        (is (#'shell/clear-attempt! (:id gate) "attempt-old" "handle-old"))
+        (weaver/update! rt (:id gate)
+                        {:attributes {"shell/attempt-id" "attempt-new"
+                                      "shell/custody-handle" "handle-new"
+                                      "shell/running" "attempt-new"}})
+        (is (= :committed
+               (#'shell/terminal-commit!
+                "run" (:id gate) "attempt-new" "handle-new"
+                {:phase :terminal
+                 :output {:stdout-ref (.getAbsolutePath stdout)
+                          :stderr-ref (.getAbsolutePath stderr)}
+                 :exit {:code 7}}
+                false)))
+        (let [after (weaver/show rt (:id gate))]
+          (is (= "shell command exited 7" (attr after :gate/error)))
+          (is (nil? (attr after :shell/timeout-deadline)))
+          (is (nil? (attr after :shell/timeout-intent))))))))
+
 (deftest malformed-terminal-fact-identifies-observed-custody-shape
   (let [detail (#'shell/terminal-error
                 {:key "attempt-malformed"
@@ -364,8 +428,53 @@
         (is (= {:attempt-id "attempt-timeout" :handle "handle-timeout"}
                (:payload @scheduled)))))))
 
+(deftest reconciliation-rejects-a-non-string-durable-timeout-deadline
+  (with-runtime
+    (fn [rt _]
+      (let [failure (try
+                      (shell/apply-shell-attempts!
+                       {:runtime rt
+                        :desired [{:gate-id "gate-malformed"
+                                   :state "active"
+                                   :attempt-id "attempt-malformed"
+                                   :custody-handle "handle-malformed"
+                                   :timeout-deadline 42}]
+                        :actual [{:handle "handle-malformed"
+                                  :key "attempt-malformed"
+                                  :phase :running}]})
+                      nil
+                      (catch clojure.lang.ExceptionInfo throwable throwable))]
+        (is (= {:attempt-id "attempt-malformed"
+                :gate-id "gate-malformed"
+                :value 42
+                :expected-format "ISO-8601 Instant string"}
+               (ex-data failure)))))))
+
+(deftest timeout-wake-rejects-an-invalid-durable-timeout-deadline
+  (with-runtime
+    (fn [rt _]
+      (let [gate (weaver/add! rt
+                              {:title "Malformed timeout wake"
+                               :state "active"
+                               :attributes {"workflow/gate" "shell"
+                                            "shell/attempt-id" "attempt-wake"
+                                            "shell/custody-handle" "handle-wake"
+                                            "shell/timeout-deadline" "not-an-instant"}})
+            failure (try
+                      (shell/timeout-wake
+                       {:runtime rt
+                        :payload {:attempt-id "attempt-wake"
+                                  :handle "handle-wake"}})
+                      nil
+                      (catch clojure.lang.ExceptionInfo throwable throwable))]
+        (is (= {:attempt-id "attempt-wake"
+                :gate-id (:id gate)
+                :value "not-an-instant"
+                :expected-format "ISO-8601 Instant string"}
+               (ex-data failure)))))))
+
 (def ^:private canonical-m0-producer
-  "6f265f45f894859c74dfd7c6bf32a94c48cb32d0")
+  "71c0ed3d80fcad090b74a704a8eb165a3fad996e")
 
 (defn- millstrand-source-root []
   (test-alpha/spool-checkout-root "millstrand/api/process/alpha.clj"))
@@ -373,21 +482,23 @@
 (declare run-command-result!)
 
 (defn- run-command!
-  "Run one isolated command and return its merged output, failing on nonzero exit."
+  "Run one isolated command and return stdout, failing on nonzero exit."
   [command cwd environment stdin]
-  (let [{:keys [output exit-code]} (run-command-result! command cwd environment stdin)]
+  (let [{:keys [output error-output exit-code]}
+        (run-command-result! command cwd environment stdin)
+        diagnostics (str "stdout:\n" output "\nstderr:\n" error-output)]
     (is (zero? exit-code)
-        (str "command failed: " (pr-str command) "\n" output))
+        (str "command failed: " (pr-str command) "\n" diagnostics))
     (when-not (zero? exit-code)
       (throw (ex-info "Isolated command failed" {:command command :exit-code exit-code
-                                                 :output output})))
+                                                 :output output
+                                                 :error-output error-output})))
     output))
 
 (defn- run-command-result!
-  "Run one isolated command and return its merged output and exit code."
+  "Run one isolated command and return its stdout, stderr, and exit code."
   [command cwd environment stdin]
-  (let [builder (doto (ProcessBuilder. ^java.util.List command)
-                  (.redirectErrorStream true))
+  (let [builder (ProcessBuilder. ^java.util.List command)
         _ (when cwd (.directory builder (io/file cwd)))
         _ (doseq [[key value] environment]
             (.put (.environment builder) key value))
@@ -395,9 +506,17 @@
     (when stdin
       (with-open [writer (io/writer (.getOutputStream process))]
         (.write writer stdin)))
-    (let [output (slurp (.getInputStream process))
+    (let [output (future (slurp (.getInputStream process)))
+          error-output (future (slurp (.getErrorStream process)))
           exit-code (.waitFor process)]
-      {:output output :exit-code exit-code})))
+      {:output @output :error-output @error-output :exit-code exit-code})))
+
+(deftest isolated-command-keeps-stderr-out-of-stdout
+  (is (= {:output "edn-output\n"
+          :error-output "download-progress\n"
+          :exit-code 0}
+         (run-command-result! ["sh" "-c" "echo edn-output; echo download-progress >&2"]
+                              nil {} nil))))
 
 (defn- mill-environment [source state-home]
   {"MILLSTRAND_SOURCE" (.getCanonicalPath (io/file source))
@@ -458,12 +577,9 @@
                       {:root (.getCanonicalPath root)})))
     root))
 
-(def ^:private shell-acceptance-roots
-  {'millhouse.spools/workflow "spools/workflow"})
-
-(defn- shell-acceptance-spools-edn [root]
-  (pr-str {:spools {'millhouse/spools {:local/root root
-                                       :roots shell-acceptance-roots}}}))
+(defn- shell-acceptance-deps-edn [root]
+  (pr-str {:deps {'millhouse.spools/workflow
+                  {:local/root (str root "/spools/workflow")}}}))
 
 (def ^:private shell-acceptance-init
   "(require '[millstrand.api.current.alpha :as current]
@@ -471,15 +587,13 @@
    (def rt (current/runtime))
    (runtime/module! rt :millhouse/spools-workflow
      {:ns 'millhouse.spools.workflow
-      :spools ['millhouse.spools/workflow]
       :required? true})
    (runtime/module! rt :millhouse/spools-shell
      {:ns 'millhouse.spools.workflow.spool
-      :spools ['millhouse.spools/workflow]
       :after [:millhouse/spools-workflow]
       :required? true})")
 
-(defn- workflow-shell-gate-form [release-marker]
+(defn- workflow-shell-gate-form [release-fifo]
   (str "(do
      (require '[millhouse.spools.workflow :as workflow]
               '[millhouse.spools.executors.shell :as shell])
@@ -489,9 +603,9 @@
                \"Shell replacement\"
                (workflow/gate :check \"Run shell check\" :shell
                  :attributes {\"test/run-id\" \"shell-replacement\"
-                              \"shell/argv\" [\"sh\" \"-c\" \"while [ ! -f "
-       release-marker
-       " ]; do sleep 0.1; done; printf shell-ok\"]})
+                              \"shell/argv\" [\"sh\" \"-c\" \"IFS= read -r release < "
+       release-fifo
+       "; printf shell-ok\"]})
                (workflow/step :after \"After\" :self :depends-on [:check]))
              {})]
        (shell/scan!)
@@ -518,7 +632,7 @@
         disposable-root (short-disposable-root)
         state-home (io/file disposable-root "state")
         workspace (io/file disposable-root ".millstrand")
-        release-marker (io/file disposable-root "release")
+        release-fifo (io/file disposable-root "release")
         mill-target (io/file disposable-root "mill")
         mill-log (io/file disposable-root "mill.log")
         mill-process (atom nil)
@@ -526,6 +640,7 @@
         last-probe (atom nil)
         after-probe (atom nil)]
     (try
+      (run-command! ["mkfifo" (.getCanonicalPath release-fifo)] nil {} nil)
       (is (= canonical-m0-producer
              (str/trim (run-command! ["git" "-C" (.getCanonicalPath (io/file source))
                                       "rev-parse" "HEAD"]
@@ -544,8 +659,8 @@
           :interval-ms 100
           :on-timeout #(throw (ex-info "Timed out waiting for disposable Mill" {}))})
         (mill-command! mill source state-home workspace-path ["init"])
-        (spit (io/file workspace "spools.edn")
-              (str (shell-acceptance-spools-edn consumer-root) "\n"))
+        (spit (io/file workspace "deps.edn")
+              (str (shell-acceptance-deps-edn consumer-root) "\n"))
         (spit (io/file workspace "init.clj") shell-acceptance-init)
         (mill-command! mill source state-home workspace-path ["weaver" "start"])
         (let [_before-status (weaver-status! mill source state-home workspace-path)
@@ -554,7 +669,7 @@
           (reset! started-result
                   (weaver-repl! mill source state-home workspace-path
                                 (workflow-shell-gate-form
-                                 (.getCanonicalPath release-marker))))
+                                 (.getCanonicalPath release-fifo))))
           (let [running
                 (test-support/poll-until
                  #(let [probe (weaver-repl! mill source state-home workspace-path
@@ -579,7 +694,7 @@
             (is (.isAlive ^Process @mill-process)
                 "Mill remains alive through the planned Weaver replacement")
             (let [_after-status (weaver-status! mill source state-home workspace-path)]
-              (spit release-marker "release")
+              (spit release-fifo "release\n")
               (let [after
                     (test-support/poll-until
                      #(let [probe (weaver-repl! mill source state-home workspace-path

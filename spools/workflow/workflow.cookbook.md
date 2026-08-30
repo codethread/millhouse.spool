@@ -126,7 +126,7 @@ publisher through root ownership, export, hook, test, and documentation checks.
 
 **Why this shape.**
 
-- **`:revise` over a hand-written wrapper.** A `:revise {:params {...}}` choice re-pours the run's *own* `workflow/definition` under the same `run-id`, so you never write a "revision" variant of the workflow. It needs a definition on the root to re-pour, which a Var or registered-name start records for you; a run poured from a bare workflow map has none, and `:revise` fails loudly (contract [§5, "`:revise`"](./README.md#5-checkpoints-and-routing)).
+- **`:revise` over a hand-written wrapper.** A `:revise {:params {...}}` choice re-pours the run's *own* `workflow/definition` under the same `run-id`, so you never write a "revision" variant of the workflow. It needs a definition on the root to re-pour, which a Var or registered-name start records for you; a run poured from a bare workflow map has none, and `:revise` fails loudly (contract [`README.md`](./README.md)).
 - **`:condition` + splicing, not a manual branch.** `:condition [:!= :revision
   true]` drops `:design` from the compiled graph on a revise round; condition
   splicing reattaches `:implement` (which depended on `:design`) to the round's
@@ -207,7 +207,7 @@ Each stage is a `defworkflow` Var: a name, a doc, its declared entrypoints, and 
 
 **Why this shape.**
 
-- **A registered name can be re-pointed; a symbol cannot.** A `:next` *keyword* is resolved through the registry at `choose!` time, so re-registering that name sends every in-flight run's not-yet-chosen route to whatever the name now means — and the registry is where the entrypoint check applies, so the target must declare `:continue`. A `:next` *symbol* is resolved straight to the Var it names, which makes the symbol itself part of the run's durability contract: editing the definition in place is picked up, but renaming or moving the Var breaks the in-flight run. Prefer the keyword for anything that may be reloaded (contract [§5, "Named workflows"](./README.md#5-checkpoints-and-routing)).
+- **A registered name can be re-pointed; a symbol cannot.** A `:next` *keyword* is resolved through the registry at `choose!` time, so re-registering that name sends every in-flight run's not-yet-chosen route to whatever the name now means — and the registry is where the entrypoint check applies, so the target must declare `:continue`. A `:next` *symbol* is resolved straight to the Var it names, which makes the symbol itself part of the run's durability contract: editing the definition in place is picked up, but renaming or moving the Var breaks the in-flight run. Prefer the keyword for anything that may be reloaded (contract [`README.md`](./README.md)).
 - **Routing is a hard cutover, not a fork.** Choosing `:next` closes out every
   remaining step of the current stage in one transaction and pours the
   continuation under the same `run-id`. Any step not yet reached is *abandoned*,
@@ -269,7 +269,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
   inner step beneath a `call`, its `procedure` join closes in the *same*
   transaction (stamped `workflow/outcome-by "engine"`). Joins never surface as
   ready work, so an agent driving the run sees the parent's next step, not a
-  bookkeeping strand (contract [§4, "Procedure join auto-close"](./README.md#4-drive-a-run)).
+  bookkeeping strand (contract [`README.md`](./README.md)).
 - **One definition, many call sites.** The same `review` can be `call`-ed by a proposal stage and a spec stage with different `:artifact` params; a CI-round sub-flow can be recomposed by every stage that pushes commits. That is the point of `call` over duplication.
 
 Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `ct.spools.devflow`'s `:agent-review-proposal` call.
@@ -401,7 +401,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   gate doesn't add a scheduling primitive — it just *labels* a step "not yours,
   wait for `<waiter>`". `step-view` surfaces it as `:gate "ci"`, so a driving
   agent treats a ready gate as **poll/hand off, don't do** (contract
-  [§2, "Gates"](./README.md#2-define-workflow-data)).
+  [`README.md`](./README.md)).
 - **`:by` is mandatory on a gate close** and records `workflow/outcome-by`, so
   the audit trail always names who satisfied the wait. `complete!` fails loudly
   if you try to close a gate without it.
@@ -494,7 +494,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
   keeping binding keys simple keywords (`:pr.ci.wait`, `:instruction`) and
   mapping them onto the canonical string attribute vocabulary
   (`"workflow/instruction"`) at build time keeps them faithful across the JSON
-  layer (contract [§2, "Tool bindings"](./README.md#2-define-workflow-data)).
+  layer (contract [`README.md`](./README.md)).
 
 Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
 
@@ -550,7 +550,7 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
 
 **Why this shape.**
 
-- **`:loop` expands after params resolve**, so each copy's fn-valued `title`/`attributes` render against `(merge params {:item item :i idx})` — the per-task `:harness`/`:cwd`/`:body` fall out of the item, falling back to the run-level param, which `:defaults` supplies when the caller gave none (contract [§3, "Loops"](./README.md#3-definition-layer)).
+- **`:loop` expands after params resolve**, so each copy's fn-valued `title`/`attributes` render against `(merge params {:item item :i idx})` — the per-task `:harness`/`:cwd`/`:body` fall out of the item, falling back to the run-level param, which `:defaults` supplies when the caller gave none (contract [`README.md`](./README.md)).
 - **`:chain true` serializes; edge absence would parallelize.** Chaining makes
   task *i* depend on task *i-1*, which is what a *pipeline* needs. Drop `:chain`
   and every expansion is independently ready — a fan-out, not a sequence.

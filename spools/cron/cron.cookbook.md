@@ -26,7 +26,6 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
 ;; init.clj
 (runtime/module! runtime :millhouse/cron
   {:ns 'millhouse.spools.cron
-   :spools ['millhouse.spools/cron]
    :required? true})
 
 (runtime/module! runtime :report-job

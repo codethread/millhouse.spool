@@ -331,7 +331,6 @@ Questions to resolve before designing it:
 - Explicit gate-selection and actor rules: [`internal/runs.clj`](../../spools/workflow/src/millhouse/spools/workflow/internal/runs.clj)
 - Shell request contract and lifecycle: [`spools/workflow/README.md`](../../spools/workflow/README.md)
 - Shell-gate examples: [`spools/workflow/shell.cookbook.md`](../../spools/workflow/shell.cookbook.md)
-- Dry-run example definition: [`bump_spool.clj`](../../spools/workflow/src/millhouse/spools/millstrand_workflows/bump_spool.clj)
 - Conversation record (local, non-versioned): Pi dialogue session `019ffb5b-55d8-7750-bf24-a73b690a754f`.
 
 ## 9. Verbatim intent record

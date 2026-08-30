@@ -11,9 +11,15 @@ and recent failures on the active runtime for the weaver lifetime.
 
 ## 1. Activation
 
-Approve `millhouse.spools/chime` through the [repository family entry](../../README.md#consumption),
-then activate it from trusted startup configuration after syncing approved
-roots:
+Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
+
+```clojure
+{:deps
+ {millhouse.spools/chime
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v2"
+   :deps/root "spools/chime"}}}
+```
 
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
@@ -22,7 +28,6 @@ roots:
 (def runtime (current/runtime))
 (runtime/module! runtime :chime
   {:ns 'millhouse.spools.chime
-   :spools ['millhouse.spools/chime]
    :required? true})
 ```
 

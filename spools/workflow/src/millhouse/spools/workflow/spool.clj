@@ -8,10 +8,6 @@
   (:require [millhouse.spools.executors.code :as code]
             [millhouse.spools.executors.shell :as shell]
             [millhouse.spools.millstrand-workflows :as workflows]
-            [millhouse.spools.millstrand-workflows.bootstrap-kondo :as bootstrap]
-            [millhouse.spools.millstrand-workflows.bump-millstrand :as bump-millstrand]
-            [millhouse.spools.millstrand-workflows.bump-spool :as bump-spool]
-            [millhouse.spools.millstrand-workflows.consumer-tooling :as tooling]
             [millhouse.spools.workflow :as workflow]
             [millhouse.spools.workflow.cli :as cli]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -26,17 +22,4 @@
 (lifecycle/use-reconcile! shell/shell-attempts)
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 
-(workflow/use-workflow!
- workflows/publish-spool-kondo
- bootstrap/bootstrap-kondo
- bootstrap/bootstrap-kondo-greenfield
- bootstrap/bootstrap-kondo-brownfield
- bump-spool/bump-spool
- bump-millstrand/bump-millstrand
- bump-millstrand/bump-millstrand-local
- bump-millstrand/bump-millstrand-local-validate
- bump-millstrand/bump-millstrand-pinned
- tooling/configure-consumer-tooling
- tooling/configure-consumer-tooling-app
- tooling/configure-consumer-tooling-spool
- tooling/configure-consumer-tooling-clojure-app)
+(workflow/use-workflow! workflows/publish-spool-kondo)

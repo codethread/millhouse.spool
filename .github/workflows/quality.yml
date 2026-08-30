@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  quality:
+  checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: codethread/millstrand
-          ref: 6f265f45f894859c74dfd7c6bf32a94c48cb32d0
+          ref: 71c0ed3d80fcad090b74a704a8eb165a3fad996e
           path: skein-src
       - uses: actions/setup-java@v4
         with:
@@ -48,8 +48,68 @@ jobs:
       - name: API docs
         working-directory: millhouse.spool
         run: make docs-check
+
+  tests:
+    name: Tests (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: workflow
+            namespaces: >-
+              millhouse.spools.workflow-test
+              millhouse.spools.millstrand-workflows-test
+              millhouse.spools.millstrand-workflows.bump-millstrand-test
+              millhouse.spools.millstrand-workflows.bootstrap-kondo-test
+              millhouse.spools.millstrand-workflows.consumer-tooling-test
+              millhouse.spools.millstrand-workflows.bump-spool-test
+          - shard: commands
+            namespaces: >-
+              millhouse.spools.workflow-run-cli-test
+              millhouse.spools.executors.shell-test
+              millhouse.executor-discovery-test
+              millhouse.spools.identity-test
+          - shard: runtime
+            namespaces: >-
+              millhouse.spools.workflow-cli-test
+              millhouse.chime-test
+              millhouse.spools.kanban-test
+              millhouse.spools.cron.runtime-test
+              millhouse.spools.executors.code-test
+              millhouse.consumer-test
+              millhouse.e2e.cron.lifecycle-test
+              millhouse.authoring-forms-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: millhouse.spool
+      - uses: actions/checkout@v4
+        with:
+          repository: codethread/millstrand
+          ref: 71c0ed3d80fcad090b74a704a8eb165a3fad996e
+          path: skein-src
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: latest
       - name: Tests
         working-directory: millhouse.spool
-        run: make test
+        run: make test TEST_NAMESPACES="${{ matrix.namespaces }}"
         env:
           MILLSTRAND_TEST_AWAIT_SCALE: '3'
+
+  quality:
+    if: ${{ always() }}
+    needs: [checks, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every quality gate
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: test "$CHECKS_RESULT" = success && test "$TESTS_RESULT" = success

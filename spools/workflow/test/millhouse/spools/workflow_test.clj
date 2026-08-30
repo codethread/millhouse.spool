@@ -2544,10 +2544,15 @@
         (runtime/module! rt :wf-beta2 {:file beta-source})
         (is (= #{:alpha :beta} (set (keys (workflow/workflows)))))
         (definition-module-source config-dir "wf-alpha2" "")
-        (let [result (runtime/module! rt :wf-alpha2 {:file alpha-source})]
-          (is (= :refused (:status result)))
+        (let [error (try
+                      (runtime/module! rt :wf-alpha2 {:file alpha-source})
+                      nil
+                      (catch clojure.lang.ExceptionInfo error
+                        error))]
+          (is (instance? clojure.lang.ExceptionInfo error))
           (is (= :workflow/reference-unregistered
-                 (get-in result [:conflicts 0 :data :reason]))))
+                 (:reason (ex-data error))))
+          (is (= :wf-beta2 (:owner (ex-data error)))))
         (is (= #{:alpha :beta} (set (keys (workflow/workflows))))
             "every affected owner keeps its previous live partition")))))
 
@@ -2559,11 +2564,15 @@
                      config-dir "wf-gone"
                      (str "(millstrand.api.runtime.alpha/collect-entry!\n"
                           "  workflow/definition-kind :gone 'test.module.wf-gone/absent)\n"))
-            result (runtime/module! rt :wf-gone {:file source})]
-        (is (= :refused (:status result)))
+            error (try
+                    (runtime/module! rt :wf-gone {:file source})
+                    nil
+                    (catch clojure.lang.ExceptionInfo error
+                      error))]
+        (is (instance? clojure.lang.ExceptionInfo error))
         (is (= :workflow/definition-unresolvable
-               (get-in result [:conflicts 0 :data :reason])))
-        (is (= :wf-gone (get-in result [:conflicts 0 :data :owner])))
+               (:reason (ex-data error))))
+        (is (= :wf-gone (:owner (ex-data error))))
         (is (empty? (workflow/workflows)))))))
 
 ;; --- spec-first params, live checkpoint input, and the JSON boundary --------

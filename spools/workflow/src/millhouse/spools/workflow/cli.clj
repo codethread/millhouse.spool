@@ -22,7 +22,6 @@
 
       (runtime/module! rt :millhouse/spools-workflow-cli
         {:ns 'millhouse.spools.workflow.cli
-         :spools ['millhouse.spools/workflow]
          :after [:millhouse/spools-workflow]})"
   (:require [clojure.string :as str]
             [millstrand.api.millstrand.alpha :as millstrand]

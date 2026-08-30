@@ -22,7 +22,7 @@ description: >
 
 | Surface | Content |
 | --- | --- |
-| Root `README.md` | Spool index, documentation links, and complete `spools.edn` coordinate. |
+| Root `README.md` | Spool index, documentation links, and complete `deps.edn` coordinate. |
 | Spool `README.md` | Smallest consumer contract: activation, authoring model, non-obvious safety rules, and consumer-visible Millstrand surfaces. |
 | `<spool>.cookbook.md` | Compositions and trade-offs involving multiple APIs or systems. |
 | `<spool>.api.md` | Generated signatures, request/return details, and focused examples from public docstrings. |
@@ -44,7 +44,6 @@ scheduler, with optional jitter and reloadable handlers.
 ```clojure
 (runtime/module! runtime :millhouse/cron
   {:ns 'millhouse.spools.cron
-   :spools ['millhouse.spools/cron]
    :required? true})
 ```
 
@@ -73,7 +72,7 @@ contract callout, `Examples`, or `See also`.
 | Exact `register!` keys, return, and example | `register!` docstring → API |
 | In-flight counter and execution pool | Source only |
 | Cron + external lock + Kanban card | Cookbook |
-| Git coordinate and selectable roots | Root README |
+| Git coordinate and per-library `:deps/root` snippets | Root README |
 | clj-kondo mapping needed for `defjob` | Final contract table |
 
 Delete prose that expands a clear namespace or Var docstring. A small spool

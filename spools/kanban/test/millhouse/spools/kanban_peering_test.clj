@@ -111,7 +111,7 @@
             remedy (:remedy (ex-data ex))]
         (is (= "guild" (:missing (ex-data ex))))
         (is (str/includes? remedy "millstrand.spools.guild"))
-        (is (str/includes? remedy "millstrand.spools/guild"))))))
+        (is (not (str/includes? remedy ":spools")))))))
 
 (deftest peering-owner-surface-covers-both-local-ops
   ;; The receive operation remains Guild's dispatch-table declaration; these
@@ -135,7 +135,7 @@
             remedy (:remedy (ex-data ex))]
         (is (= "kanban" (:missing (ex-data ex))))
         (is (str/includes? remedy "millhouse.spools.kanban"))
-        (is (str/includes? remedy "millhouse.spools/kanban"))))))
+        (is (not (str/includes? remedy ":spools")))))))
 
 (deftest peering-lifecycle-registers-the-guild-receiver
   (with-world

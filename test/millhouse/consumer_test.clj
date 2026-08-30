@@ -14,11 +14,13 @@
       .getParentFile
       .getCanonicalPath))
 
-(def ^:private roots
-  {'millhouse.spools/workflow "spools/workflow"
-   'millhouse.spools/chime "spools/chime"
-   'millhouse.spools/cron "spools/cron"
-   'millhouse.spools/kanban "spools/kanban"})
+(defn- consumer-deps-edn []
+  (pr-str
+   {:deps
+    {'millhouse.spools/workflow {:local/root (str (repository-root) "/spools/workflow")}
+     'millhouse.spools/chime {:local/root (str (repository-root) "/spools/chime")}
+     'millhouse.spools/cron {:local/root (str (repository-root) "/spools/cron")}
+     'millhouse.spools/kanban {:local/root (str (repository-root) "/spools/kanban")}}}))
 
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
@@ -29,32 +31,25 @@
         (def rt (current/runtime))
         (runtime/module! rt :millhouse/workflow
           {:ns 'millhouse.spools.workflow
-           :spools ['millhouse.spools/workflow]
            :required? true})
         (runtime/module! rt :millhouse/workflow-all
           {:ns 'millhouse.spools.workflow.spool
-           :spools ['millhouse.spools/workflow]
            :after [:millhouse/workflow]
            :required? true})
         (runtime/module! rt :millhouse/chime
           {:ns 'millhouse.spools.chime
-           :spools ['millhouse.spools/chime]
            :required? true})
         (runtime/module! rt :millhouse/cron
           {:ns 'millhouse.spools.cron
-           :spools ['millhouse.spools/cron]
            :required? true})
         (runtime/module! rt :millhouse/kanban
           {:ns 'millhouse.spools.kanban
-           :spools ['millhouse.spools/kanban]
            :required? true})))")
 
 (deftest family-syncs-activates-and-publishes-all-roots
   (test-alpha/with-weaver-world
-    [ctx {:spools-edn {:spools {'millhouse/spools
-                                {:local/root (repository-root)
-                                 :roots roots}}}
-          :init init}]
+    [ctx {:deps-edn (consumer-deps-edn)
+          :init-clj init}]
     (let [{:keys [status op-names glossary-outcomes workflow-names]}
           (test-alpha/repl!
            ctx
@@ -69,20 +64,23 @@
                  :op-names (set (map :name (weaver/ops rt)))
                  :glossary-outcomes (set (map :name (glossary/glossary-outcomes rt)))
                  :workflow-names (set (keys (workflow/workflows)))})))
-          outcomes (:module/outcomes status)]
-      (is (= #{:applied}
-             (set (map :status (vals outcomes)))))
+          outcomes (:modules status)]
       (is (= #{:millhouse/workflow
                :millhouse/workflow-all
                :millhouse/chime
                :millhouse/cron
                :millhouse/kanban}
              (set (keys outcomes))))
+      (is (= #{'millhouse.spools.workflow
+               'millhouse.spools.workflow.spool
+               'millhouse.spools.chime
+               'millhouse.spools.cron
+               'millhouse.spools.kanban}
+             (set (map :ns (vals outcomes)))))
       (is (contains? op-names "workflow"))
       (is (contains? glossary-outcomes "workflow/ready-next-absent"))
-      (is (= :applied
-             (get-in status [:lifecycle/outcomes :millhouse/workflow-all
-                             :workflow-glossary-seed :status])))
+      (is (= [:millhouse/workflow]
+             (get-in status [:modules :millhouse/workflow-all :after])))
       (is (contains? workflow-names :publish-spool-kondo)))))
 
 (deftest repository-kondo-config-keeps-producer-ownership
@@ -256,7 +254,7 @@
           source-file (io/file consumer "src/consumer/forms.clj")
           spool-classpath (resolved-spool-classpath root)]
       (try
-        (is (= "6f265f45f894859c74dfd7c6bf32a94c48cb32d0"
+        (is (= "71c0ed3d80fcad090b74a704a8eb165a3fad996e"
                (:git/sha millstrand-dep)))
         (portable-consumer-bin! bin-dir)
         (write-file! kondo-config "{}")
