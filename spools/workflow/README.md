@@ -1,8 +1,6 @@
 # Millhouse Workflow spool
 
-`millhouse.spools/workflow` is a tools.deps library containing the workflow
-engine, worker CLI, code and shell gate executors, and reusable Millstrand
-workflows. Its focused cookbooks and API references remain separate:
+`millhouse.spools/workflow` is a tools.deps library containing the workflow engine, worker CLI, code and shell gate executors, and reusable Millstrand workflows. Its focused cookbooks and API references remain separate:
 
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
@@ -37,9 +35,7 @@ before modules that publish workflow definitions or executors:
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 ```
 
-Activate `app.workflow-cli` after `:workflow/engine`. Add
-`millhouse.spools/workflow` to the workspace's `deps.edn`, and use `:after` to
-declare module ordering.
+Activate `app.workflow-cli` after `:workflow/engine`. Add `millhouse.spools/workflow` to the workspace's `deps.edn`, and use `:after` to declare module ordering.
 
 ### Select an executor
 

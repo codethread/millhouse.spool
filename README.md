@@ -46,7 +46,4 @@ Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only
    :deps/root "spools/workflow"}}}
 ```
 
-The Workflow library contains the workflow engine, gate executors, and reusable
-Millstrand workflows. Chime and Cron use the repository's conventions,
-reflection, and runtime-test gates; cljfmt, clj-kondo, and Splint do not cover
-those two libraries.
+The Workflow library contains the workflow engine, gate executors, and reusable Millstrand workflows. Chime and Cron use the repository's conventions, reflection, and runtime-test gates; cljfmt, clj-kondo, and Splint do not cover those two libraries.
