@@ -32,3 +32,12 @@ only the ordinary tools.deps libraries they use:
 ```
 
 `v2` is intentionally breaking: the former workflow, code-executor, shell-executor, and Millstrand-workflows roots are replaced by `millhouse.spools/workflow`. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
+
+### deps-native cutover
+
+The manifest activation API has been removed. Replace `spools.edn`, `:spools`
+module options, and family/root selection with ordinary `deps.edn` dependencies;
+module declarations retain `:ns`, `:after`, and `:required?` as needed. This is
+also an API break for the retired `bootstrap-kondo`, `bump-spool`,
+`bump-millstrand`, and `configure-consumer-tooling` workflows. The only bundled
+Millstrand workflow now is `publish-spool-kondo`.

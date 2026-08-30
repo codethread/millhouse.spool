@@ -41,6 +41,10 @@ before modules that publish workflow definitions or executors:
 Activate `app.workflow-cli` after `:workflow/engine`. The workspace's `deps.edn`
 must make `millhouse.spools/workflow` available.
 
+`spools.edn` approval and the `:spools` module option are not supported by the
+deps-native runtime. Declare the library in `deps.edn` and keep module ordering
+in `:after` instead.
+
 ### Select an executor
 
 ```clojure

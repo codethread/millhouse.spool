@@ -20,11 +20,7 @@
     :outfile "spools/kanban/kanban.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
     :outfile "spools/kanban/kanban.peering.api.md"}
-   {:source ["spools/workflow/src/millhouse/spools/millstrand_workflows.clj"
-             "spools/workflow/src/millhouse/spools/millstrand_workflows/bootstrap_kondo.clj"
-             "spools/workflow/src/millhouse/spools/millstrand_workflows/bump_spool.clj"
-             "spools/workflow/src/millhouse/spools/millstrand_workflows/bump_millstrand.clj"
-             "spools/workflow/src/millhouse/spools/millstrand_workflows/consumer_tooling.clj"]
+   {:source "spools/workflow/src/millhouse/spools/millstrand_workflows.clj"
     :outfile "spools/workflow/millstrand-workflows.api.md"}])
 
 (doseq [{:keys [source outfile]} spool-docs]
