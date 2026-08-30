@@ -409,7 +409,8 @@
           ;; Keep the durable timeout wake from racing a terminal commit. A
           ;; failed cancellation leaves the fact unacknowledged for the next
           ;; reconciliation, just like any other failed custody step.
-          (cancel-timeout! runtime attempt-id)
+          (when-not timed-out?
+            (cancel-timeout! runtime attempt-id))
           (process/acknowledge! runtime custody-owner custody-handle)
           (if (clear-attempt! gate-id attempt-id custody-handle)
             :acknowledged
@@ -568,9 +569,9 @@
 (defn timeout-wake
   "Cancel a shell attempt when its durable absolute timeout is due.
 
-  The wake is deliberately keyed by attempt identity. A terminal commit cancels
-  it; a stale delivery re-reads the gate and therefore cannot cancel a newer
-  attempt that reused the workflow gate."
+  The wake is deliberately keyed by attempt identity. A terminal commit before
+  its deadline cancels it; a stale delivery re-reads the gate and therefore
+  cannot cancel a newer attempt that reused the workflow gate."
   [{:keys [runtime payload]}]
   (let [attempt-id (:attempt-id payload)
         attempt (some #(when (= attempt-id (:attempt-id %)) %)

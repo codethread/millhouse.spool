@@ -150,6 +150,26 @@
   (is (= "shell command exited 124"
          (#'shell/terminal-error {:exit {:code 124}} false))))
 
+(deftest terminal-reconciliation-cancels-only-a-pending-timeout
+  (with-runtime
+    (fn [rt _]
+      (doseq [[timed-out? expected]
+              [[false [:cancel :acknowledge :clear]]
+               [true [:acknowledge :clear]]]]
+        (let [steps (atom [])]
+          (with-redefs-fn {#'shell/terminal-commit! (fn [& _] :committed)
+                           #'shell/cancel-timeout! (fn [& _] (swap! steps conj :cancel))
+                           #'process/acknowledge! (fn [& _] (swap! steps conj :acknowledge))
+                           #'shell/clear-attempt! (fn [& _]
+                                                    (swap! steps conj :clear)
+                                                    true)}
+            (fn []
+              (is (= :acknowledged
+                     (#'shell/terminal-reconcile!
+                      rt "run" "gate" "attempt" "handle"
+                      {:phase :terminal} timed-out?)))))
+          (is (= expected @steps)))))))
+
 (deftest malformed-terminal-fact-identifies-observed-custody-shape
   (let [detail (#'shell/terminal-error
                 {:key "attempt-malformed"
