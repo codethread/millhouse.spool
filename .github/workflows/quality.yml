@@ -61,10 +61,6 @@ jobs:
             namespaces: >-
               millhouse.spools.workflow-test
               millhouse.spools.millstrand-workflows-test
-              millhouse.spools.millstrand-workflows.bump-millstrand-test
-              millhouse.spools.millstrand-workflows.bootstrap-kondo-test
-              millhouse.spools.millstrand-workflows.consumer-tooling-test
-              millhouse.spools.millstrand-workflows.bump-spool-test
           - shard: commands
             namespaces: >-
               millhouse.spools.workflow-run-cli-test

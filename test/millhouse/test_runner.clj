@@ -8,7 +8,6 @@
 (def test-namespaces
   "All test namespaces, in stable reporting order."
   '[millhouse.spools.millstrand-workflows-test
-    millhouse.spools.millstrand-workflows.bump-millstrand-test
     millhouse.authoring-forms-test
     millhouse.consumer-test
     millhouse.executor-discovery-test
@@ -21,10 +20,7 @@
     millhouse.spools.executors.code-test
     millhouse.spools.executors.shell-test
     millhouse.spools.kanban-test
-    millhouse.spools.identity-test
-    millhouse.spools.millstrand-workflows.bootstrap-kondo-test
-    millhouse.spools.millstrand-workflows.consumer-tooling-test
-    millhouse.spools.millstrand-workflows.bump-spool-test])
+    millhouse.spools.identity-test])
 
 (def serial-namespaces
   "Namespaces proven to require a JVM-global serial island.
@@ -36,8 +32,7 @@
   #{'millhouse.consumer-test
     'millhouse.spools.executors.code-test
     'millhouse.spools.kanban-test
-    'millhouse.spools.millstrand-workflows-test
-    'millhouse.spools.millstrand-workflows.bump-millstrand-test})
+    'millhouse.spools.millstrand-workflows-test})
 
 (defn- initial-summary [] test/*initial-report-counters*)
 

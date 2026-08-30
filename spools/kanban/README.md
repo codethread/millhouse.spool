@@ -13,7 +13,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 {:deps
  {millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/kanban"}}}
 ```
 

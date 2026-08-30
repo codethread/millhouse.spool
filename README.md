@@ -26,28 +26,24 @@ Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only
 {:deps
  {millhouse.spools/chime
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/chime"}
   millhouse.spools/cron
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/cron"}
   millhouse.spools/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/identity"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/kanban"}
   millhouse.spools/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v2"
+   :git/tag "v4"
    :deps/root "spools/workflow"}}}
 ```
 
-`v2` is intentionally breaking: the former workflow, code-executor, shell-executor, and Millstrand-workflows roots are replaced by `millhouse.spools/workflow`. Chime and Cron retain the source repository's current quality boundary: conventions, reflection, and runtime tests cover them, while cljfmt, clj-kondo, and Splint do not.
-
-### deps-native cutover
-
-The manifest activation API has been removed. Replace `spools.edn`, `:spools` module options, and family/root selection with ordinary `deps.edn` dependencies; module declarations retain `:ns`, `:after`, and `:required?` as needed. This is also an API break for the retired `bootstrap-kondo`, `bump-spool`, `bump-millstrand`, and `configure-consumer-tooling` workflows. The only bundled Millstrand workflow now is `publish-spool-kondo`.
+The Workflow library contains the workflow engine, gate executors, and reusable Millstrand workflows. Chime and Cron use the repository's conventions, reflection, and runtime-test gates; cljfmt, clj-kondo, and Splint do not cover those two libraries.
