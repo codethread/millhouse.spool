@@ -373,21 +373,23 @@
 (declare run-command-result!)
 
 (defn- run-command!
-  "Run one isolated command and return its merged output, failing on nonzero exit."
+  "Run one isolated command and return stdout, failing on nonzero exit."
   [command cwd environment stdin]
-  (let [{:keys [output exit-code]} (run-command-result! command cwd environment stdin)]
+  (let [{:keys [output error-output exit-code]}
+        (run-command-result! command cwd environment stdin)
+        diagnostics (str "stdout:\n" output "\nstderr:\n" error-output)]
     (is (zero? exit-code)
-        (str "command failed: " (pr-str command) "\n" output))
+        (str "command failed: " (pr-str command) "\n" diagnostics))
     (when-not (zero? exit-code)
       (throw (ex-info "Isolated command failed" {:command command :exit-code exit-code
-                                                 :output output})))
+                                                 :output output
+                                                 :error-output error-output})))
     output))
 
 (defn- run-command-result!
-  "Run one isolated command and return its merged output and exit code."
+  "Run one isolated command and return its stdout, stderr, and exit code."
   [command cwd environment stdin]
-  (let [builder (doto (ProcessBuilder. ^java.util.List command)
-                  (.redirectErrorStream true))
+  (let [builder (ProcessBuilder. ^java.util.List command)
         _ (when cwd (.directory builder (io/file cwd)))
         _ (doseq [[key value] environment]
             (.put (.environment builder) key value))
@@ -395,9 +397,17 @@
     (when stdin
       (with-open [writer (io/writer (.getOutputStream process))]
         (.write writer stdin)))
-    (let [output (slurp (.getInputStream process))
+    (let [output (future (slurp (.getInputStream process)))
+          error-output (future (slurp (.getErrorStream process)))
           exit-code (.waitFor process)]
-      {:output output :exit-code exit-code})))
+      {:output @output :error-output @error-output :exit-code exit-code})))
+
+(deftest isolated-command-keeps-stderr-out-of-stdout
+  (is (= {:output "edn-output\n"
+          :error-output "download-progress\n"
+          :exit-code 0}
+         (run-command-result! ["sh" "-c" "echo edn-output; echo download-progress >&2"]
+                              nil {} nil))))
 
 (defn- mill-environment [source state-home]
   {"MILLSTRAND_SOURCE" (.getCanonicalPath (io/file source))
