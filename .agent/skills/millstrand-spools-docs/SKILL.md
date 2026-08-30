@@ -72,7 +72,7 @@ contract callout, `Examples`, or `See also`.
 | Exact `register!` keys, return, and example | `register!` docstring → API |
 | In-flight counter and execution pool | Source only |
 | Cron + external lock + Kanban card | Cookbook |
-| Git coordinate and selectable roots | Root README |
+| Git coordinate and per-library `:deps/root` snippets | Root README |
 | clj-kondo mapping needed for `defjob` | Final contract table |
 
 Delete prose that expands a clear namespace or Var docstring. A small spool

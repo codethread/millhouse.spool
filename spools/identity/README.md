@@ -9,8 +9,7 @@ Managed resume can pass an expected identity and fails on mismatch.
 
 ## Activation
 
-Add this root to the workspace's `deps.edn`, then activate it from trusted
-startup configuration:
+Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
 
 ```clojure
 {:deps

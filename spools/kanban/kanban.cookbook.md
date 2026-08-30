@@ -122,9 +122,7 @@ index maintained by coordinators.
 belongs on the other board. The receiving board should get the work shape while
 execution history and claims remain local.
 
-**Composition.** Add Guild and Kanban to `deps.edn` in both workspaces,
-activate peering after them, publish a distinct weaver name, discover the
-target, and send the queued card.
+**Composition.** Add Guild and Kanban to `deps.edn` in both workspaces, activate peering after them, publish a distinct weaver name, discover the target, and send the queued card.
 
 ```clojure
 ;; In each workspace's init.clj: guild, then kanban, then peering.

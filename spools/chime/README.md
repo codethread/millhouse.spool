@@ -11,8 +11,7 @@ and recent failures on the active runtime for the weaver lifetime.
 
 ## 1. Activation
 
-Add this root to the workspace's `deps.edn`, then activate it from trusted
-startup configuration:
+Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
 
 ```clojure
 {:deps

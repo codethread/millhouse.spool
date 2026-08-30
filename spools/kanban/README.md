@@ -7,8 +7,7 @@ second status system.
 
 ## 1. Activation
 
-Add this root to the workspace's `deps.edn`, then activate it from trusted
-startup configuration:
+Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
 
 ```clojure
 {:deps
@@ -125,8 +124,7 @@ view.
 
 ## 5. Optional board peering
 
-Peering is opt-in and requires Guild plus the base Kanban module. Add both
-libraries to `deps.edn`, then activate the modules in this order:
+Peering is opt-in and requires Guild plus the base Kanban module. Add both libraries to `deps.edn`, then activate the modules in this order:
 
 ```clojure
 (runtime/module! runtime :guild

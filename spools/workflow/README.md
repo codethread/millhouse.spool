@@ -8,7 +8,6 @@ references remain separate:
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
 - [shell executor cookbook](./shell.cookbook.md) · [shell executor API](./shell.api.md)
-- [Millstrand workflows API](./millstrand-workflows.api.md)
 
 ## Activation model
 
@@ -38,12 +37,9 @@ before modules that publish workflow definitions or executors:
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 ```
 
-Activate `app.workflow-cli` after `:workflow/engine`. The workspace's `deps.edn`
-must make `millhouse.spools/workflow` available.
+Activate `app.workflow-cli` after `:workflow/engine`. The workspace's `deps.edn` must make `millhouse.spools/workflow` available.
 
-`spools.edn` approval and the `:spools` module option are not supported by the
-deps-native runtime. Declare the library in `deps.edn` and keep module ordering
-in `:after` instead.
+`spools.edn` approval and the `:spools` module option are not supported by the deps-native runtime. Declare the library in `deps.edn` and keep module ordering in `:after` instead.
 
 ### Select an executor
 
@@ -82,8 +78,7 @@ therefore retain normal workflow entrypoint validation.
 
 ### Activate everything
 
-For workspaces that want the complete shipped surface, activate the bundled
-selector namespace after the engine:
+For workspaces that want the complete shipped surface, activate the bundled selector namespace after the engine:
 
 ```clojure
 (runtime/module! runtime :workflow/all
@@ -91,9 +86,7 @@ selector namespace after the engine:
    :after [:workflow/engine]})
 ```
 
-`millhouse.spools.workflow.spool` selects the CLI, both executors, their queries
-and lifecycle declarations, and `publish-spool-kondo`. It is a convenience
-entry point, not a requirement.
+`millhouse.spools.workflow.spool` selects the CLI, both executors, their queries and lifecycle declarations, and `publish-spool-kondo`. It is a convenience entry point, not a requirement.
 
 ## Author workflow data
 
