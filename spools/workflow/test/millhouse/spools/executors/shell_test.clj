@@ -150,14 +150,26 @@
   (is (= "shell command exited 124"
          (#'shell/terminal-error {:exit {:code 124}} false))))
 
-(deftest terminal-reconciliation-cancels-only-a-pending-timeout
+(deftest terminal-reconciliation-reserves-a-due-timeout
   (with-runtime
     (fn [rt _]
-      (doseq [[timed-out? expected]
-              [[false [:cancel :acknowledge :clear]]
-               [true [:acknowledge :clear]]]]
-        (let [steps (atom [])]
-          (with-redefs-fn {#'shell/terminal-commit! (fn [& _] :committed)
+      (doseq [[deadline timed-out? expected]
+              [["2999-01-01T00:00:00Z" false [:commit/ordinary :cancel :acknowledge :clear]]
+               ["2000-01-01T00:00:00Z" false [:commit/timeout :acknowledge :clear]]
+               [nil true [:commit/timeout :acknowledge :clear]]]]
+        (let [steps (atom [])
+              gate (weaver/add! rt
+                                {:title "Terminal timeout ownership"
+                                 :attributes (cond-> {"shell/attempt-id" "attempt"
+                                                      "shell/custody-handle" "handle"}
+                                               deadline (assoc "shell/timeout-deadline"
+                                                               deadline))})]
+          (with-redefs-fn {#'shell/terminal-commit! (fn [& args]
+                                                      (swap! steps conj
+                                                             (if (last args)
+                                                               :commit/timeout
+                                                               :commit/ordinary))
+                                                      :committed)
                            #'shell/cancel-timeout! (fn [& _] (swap! steps conj :cancel))
                            #'process/acknowledge! (fn [& _] (swap! steps conj :acknowledge))
                            #'shell/clear-attempt! (fn [& _]
@@ -166,9 +178,41 @@
             (fn []
               (is (= :acknowledged
                      (#'shell/terminal-reconcile!
-                      rt "run" "gate" "attempt" "handle"
+                      rt "run" (:id gate) "attempt" "handle"
                       {:phase :terminal} timed-out?)))))
           (is (= expected @steps)))))))
+
+(deftest clearing-an-attempt-clears-its-timeout-state
+  (with-runtime
+    (fn [rt _]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            gate (weaver/add! rt
+                              {:title "Timed-out attempt"
+                               :attributes {"shell/attempt-id" "attempt-old"
+                                            "shell/custody-handle" "handle-old"
+                                            "shell/running" "attempt-old"
+                                            "shell/timeout-deadline" "2000-01-01T00:00:00Z"
+                                            "shell/timeout-intent" "timed-out"}})]
+        (spit stdout "")
+        (spit stderr "")
+        (is (#'shell/clear-attempt! (:id gate) "attempt-old" "handle-old"))
+        (weaver/update! rt (:id gate)
+                        {:attributes {"shell/attempt-id" "attempt-new"
+                                      "shell/custody-handle" "handle-new"
+                                      "shell/running" "attempt-new"}})
+        (is (= :committed
+               (#'shell/terminal-commit!
+                "run" (:id gate) "attempt-new" "handle-new"
+                {:phase :terminal
+                 :output {:stdout-ref (.getAbsolutePath stdout)
+                          :stderr-ref (.getAbsolutePath stderr)}
+                 :exit {:code 7}}
+                false)))
+        (let [after (weaver/show rt (:id gate))]
+          (is (= "shell command exited 7" (attr after :gate/error)))
+          (is (nil? (attr after :shell/timeout-deadline)))
+          (is (nil? (attr after :shell/timeout-intent))))))))
 
 (deftest malformed-terminal-fact-identifies-observed-custody-shape
   (let [detail (#'shell/terminal-error

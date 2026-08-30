@@ -336,7 +336,9 @@
    (stamp-attempt! gate-id attempt-id custody-handle
                    {"shell/custody-handle" nil
                     "shell/attempt-id" nil
-                    "shell/running" nil})))
+                    "shell/running" nil
+                    timeout-deadline-attribute nil
+                    timeout-intent-attribute nil})))
 
 (defn- fail-attempt!
   "Stamp an error only while the attempt/handle pair is still current."
@@ -350,10 +352,9 @@
 (defn- terminal-error
   [record timed-out?]
   (cond
-    (:cancellation record) (if timed-out?
-                             "shell command timed out"
-                             (str "shell command cancelled: "
-                                  (get-in record [:cancellation :reason])))
+    timed-out? "shell command timed out"
+    (:cancellation record) (str "shell command cancelled: "
+                                (get-in record [:cancellation :reason]))
     (:launch-failure record) (str "shell command failed to launch: "
                                   (get-in record [:launch-failure :message]))
     (:exit record) (str "shell command exited " (get-in record [:exit :code]))
@@ -378,7 +379,7 @@
     (if (= "closed" (:state gate))
       :already-committed
       (let [output (custody-output (:output record))]
-        (if (and (:exit record) (zero? (terminal-exit record)))
+        (if (and (not timed-out?) (:exit record) (zero? (terminal-exit record)))
           (pass! run-id gate-id attempt-id custody-handle 0 output)
           (fail-attempt! gate-id attempt-id custody-handle
                          (terminal-error record
@@ -401,7 +402,13 @@
   [runtime run-id gate-id attempt-id custody-handle record timed-out?]
   #_{:splint/disable [lint/locking-object]}
   (locking (scan-monitor)
-    (let [commit (terminal-commit! run-id gate-id attempt-id custody-handle
+    (let [gate (attempt-gate gate-id attempt-id custody-handle)
+          deadline (some-> gate (attr :shell/timeout-deadline) parse-deadline)
+          timed-out? (or timed-out?
+                         (and deadline
+                              (not (.isAfter ^Instant deadline
+                                             ^Instant (runtime/now runtime)))))
+          commit (terminal-commit! run-id gate-id attempt-id custody-handle
                                    record timed-out?)]
       (case commit
         :stale :stale
