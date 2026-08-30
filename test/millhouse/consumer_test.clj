@@ -254,7 +254,7 @@
           source-file (io/file consumer "src/consumer/forms.clj")
           spool-classpath (resolved-spool-classpath root)]
       (try
-        (is (= "6c108a1827daa386167822c22905754e740c0870"
+        (is (= "71c0ed3d80fcad090b74a704a8eb165a3fad996e"
                (:git/sha millstrand-dep)))
         (portable-consumer-bin! bin-dir)
         (write-file! kondo-config "{}")

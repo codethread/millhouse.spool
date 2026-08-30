@@ -54,6 +54,17 @@
 
 (def ^:private module-activation-lock (Object.))
 
+(defn- repository-root []
+  (-> (test-alpha/spool-checkout-root "millhouse/spools/workflow.clj")
+      .getParentFile
+      .getParentFile
+      .getCanonicalPath))
+
+(defn- fixture-deps-edn []
+  (let [root (repository-root)]
+    (pr-str {:paths [(str root "/spools/workflow/test")]
+             :deps {'millhouse/test {:local/root (str root "/test")}}})))
+
 (defn with-module-activation
   "Run one source-backed module activation under the JVM namespace lock.
 
@@ -72,7 +83,7 @@
      (throw (ex-info "Unknown Millhouse runtime fixture options"
                      {:keys (vec unknown)})))
    (test-alpha/run-with-weaver-world
-    (cond-> {}
+    (cond-> {:deps-edn (fixture-deps-edn)}
       (:prefix opts) (assoc :name (:prefix opts)))
     (fn [{:keys [runtime config-dir]}]
       (current/with-runtime runtime

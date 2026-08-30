@@ -365,7 +365,7 @@
                (:payload @scheduled)))))))
 
 (def ^:private canonical-m0-producer
-  "6f265f45f894859c74dfd7c6bf32a94c48cb32d0")
+  "71c0ed3d80fcad090b74a704a8eb165a3fad996e")
 
 (defn- millstrand-source-root []
   (test-alpha/spool-checkout-root "millstrand/api/process/alpha.clj"))

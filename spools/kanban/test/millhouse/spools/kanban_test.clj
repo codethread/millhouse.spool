@@ -124,7 +124,7 @@
              "(runtime/module! runtime :kanban {:ns 'millhouse.spools.kanban})\n")]
     (t/run-with-weaver-world
      {:storage :sqlite-memory
-      :init init-source}
+      :init-clj init-source}
      (fn [ctx]
        (let [rt (:runtime ctx)
              id (get-in (kanban/add! rt "Retained card" {}) [:card :id])]

@@ -3,7 +3,7 @@
  #:io.millstrand{millstrand
                  {:git/url
                   "https://github.com/codethread/millstrand.git",
-                  :git/sha "6c108a1827daa386167822c22905754e740c0870",
+                  :git/sha "71c0ed3d80fcad090b74a704a8eb165a3fad996e",
                   :deps/root "."}},
  :aliases
  {:lint/clj-kondo
