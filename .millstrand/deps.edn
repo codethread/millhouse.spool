@@ -1,0 +1,48 @@
+{:deps
+ {millstrand.spools/batteries
+  {:git/url "https://github.com/codethread/millstrand.git"
+   :git/sha "6c108a1827daa386167822c22905754e740c0870"
+   :deps/root "spools/batteries"}
+  millhouse.spools/identity {:local/root "../spools/identity"}
+  millhouse.spools/workflow {:local/root "../spools/workflow"}
+  millhouse.spools/chime {:local/root "../spools/chime"}
+  millhouse.spools/cron {:local/root "../spools/cron"}
+  millhouse.spools/kanban {:local/root "../spools/kanban"}
+  ct.spools/agent-cli
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "agent-cli"}
+  ct.spools/harness-core
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "harness-core"}
+  ct.spools/delegation
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "delegation"}
+  ct.spools/pi-harness
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "pi-harness"}
+  ct.spools/agent-run
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "agent-run"}
+  codethread/devflow
+  {:git/url "https://github.com/codethread/devflow.spool.git"
+   :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+   :deps/root "."}
+  codethread/devflow-kanban-adapter
+  {:git/url "https://github.com/codethread/devflow.spool.git"
+   :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+   :deps/root "kanban-adapter"}
+  ct.spools/claude-harness
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "claude-harness"}
+  ct.spools/codex-harness
+  {:git/url "https://github.com/codethread/agent-harness.spool.git"
+   :git/sha "42b93f8bf030cb0797d684813c6604f1b7206f9e"
+   :deps/root "codex-harness"}
+  codethread/config {:local/root "../../codethread.spool/spools/config"}
+  codethread/ralph {:local/root "../../codethread.spool/spools/ralph"}}}
