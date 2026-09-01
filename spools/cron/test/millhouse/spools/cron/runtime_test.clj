@@ -29,12 +29,15 @@
 (defn fire-other [_runtime] :other)
 (defn fire-throw [_runtime] (throw (ex-info "boom" {:why :test})))
 
+(defn- cron-root []
+  (test-alpha/spool-checkout-root "millhouse/spools/cron.clj"))
+
 (deftest cron-exported-kondo-contract-is-published-by-cron-root
   (testing "Cron publishes resources from its owning root"
     (is (some #(= "resources" %)
-              (:paths (edn/read-string (slurp "spools/cron/deps.edn")))))
+              (:paths (edn/read-string (slurp (io/file (cron-root) "deps.edn"))))))
     (let [config-file (io/file
-                       "spools/cron/resources/clj-kondo.exports/millhouse.spools/cron/config.edn")
+                       (cron-root) "resources/clj-kondo.exports/millhouse.spools/cron/config.edn")
           config-data (edn/read-string (slurp config-file))]
       (is (.isFile config-file))
       (is (= 'clojure.core/def

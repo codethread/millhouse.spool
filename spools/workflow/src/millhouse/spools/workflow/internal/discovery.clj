@@ -223,8 +223,8 @@
                   {})
   (let [wanted (or (:entrypoint request) :start)]
     (mapv catalog-item
-          (cond->> (resolved-entries rt)
-            wanted (filterv #(contains? (:entrypoints %) wanted))))))
+          (filterv #(contains? (:entrypoints %) wanted)
+                   (resolved-entries rt)))))
 
 (defn definition-view
   "Return the full-fidelity discovery view of registered workflow `name`.

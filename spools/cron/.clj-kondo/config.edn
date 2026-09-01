@@ -1,0 +1,4 @@
+{:config-paths ["../../.clj-kondo/repo-policy"]
+ :linters
+ {:unused-private-var
+  {:exclude [millhouse.spools.cron/job-authoring-plan]}}}

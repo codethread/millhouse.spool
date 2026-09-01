@@ -62,8 +62,10 @@
 
 (defn- fixture-deps-edn []
   (let [root (repository-root)]
-    (pr-str {:paths [(str root "/spools/workflow/test")]
-             :deps {'millhouse/test {:local/root (str root "/test")}}})))
+    (pr-str {:paths [(str root "/test")
+                     (str root "/spools/workflow/test")]
+             :deps {'millhouse.spools/workflow
+                    {:local/root (str root "/spools/workflow")}}})))
 
 (defn with-module-activation
   "Run one source-backed module activation under the JVM namespace lock.

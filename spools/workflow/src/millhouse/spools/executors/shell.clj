@@ -411,6 +411,7 @@
 (defn- terminal-reconcile!
   "Commit, acknowledge, and clear one terminal fact under the runtime lock."
   [runtime run-id gate-id attempt-id custody-handle record timed-out?]
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
   #_{:splint/disable [lint/locking-object]}
   (locking (scan-monitor)
     (let [gate (attempt-gate gate-id attempt-id custody-handle)
@@ -548,6 +549,7 @@
     (binding [*runtime* runtime]
       ;; scan-monitor returns the runtime-owned (Object.) monitor; the rule only
       ;; recognises bare-symbol locks and can't see the stable Object behind it.
+      #_{:clj-kondo/ignore [:locking-suspicious-lock]}
       #_{:splint/disable [lint/locking-object]}
       (locking (scan-monitor)
         (doseq [root (workflow/active-runs)
@@ -634,6 +636,7 @@
 (defn- owner-local-failure!
   [attempt detail]
   (when-let [gate-id (:gate-id attempt)]
+    #_{:clj-kondo/ignore [:locking-suspicious-lock]}
     #_{:splint/disable [lint/locking-object]}
     (locking (scan-monitor)
       (fail-attempt! gate-id (:attempt-id attempt) (:custody-handle attempt)
@@ -655,6 +658,7 @@
       (not (process-terminal? fact))
       (do
         (when-not expected
+          #_{:clj-kondo/ignore [:locking-suspicious-lock]}
           #_{:splint/disable [lint/locking-object]}
           (locking (scan-monitor)
             (stamp-attempt! (:gate-id attempt) (:attempt-id attempt) nil
@@ -719,6 +723,7 @@
 
                               (empty? facts)
                               (if (= "closed" (:state attempt))
+                                #_{:clj-kondo/ignore [:locking-suspicious-lock]}
                                 #_{:splint/disable [lint/locking-object]}
                                 (if (locking (scan-monitor)
                                       (clear-attempt! (:gate-id attempt)

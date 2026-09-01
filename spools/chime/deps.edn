@@ -1,1 +1,11 @@
-{:paths ["src" "resources"]}
+{:paths ["src" "resources"]
+ :deps
+ {io.millstrand/millstrand
+  {:git/url "https://github.com/codethread/millstrand.git"
+   :git/sha "71c0ed3d80fcad090b74a704a8eb165a3fad996e"
+   :deps/root "."}}
+ :aliases
+ {:test
+  {:extra-paths ["test" "../../test"]
+   :extra-deps {millhouse.spools/workflow {:local/root "../workflow"}}
+   :main-opts ["-m" "millhouse.test-runner" "millhouse.chime-test"]}}}

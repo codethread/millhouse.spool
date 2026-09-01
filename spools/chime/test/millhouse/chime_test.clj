@@ -17,15 +17,18 @@
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
 
+(defn- chime-root []
+  (test-alpha/spool-checkout-root "millhouse/spools/chime.clj"))
+
 (deftest chime-exported-kondo-contract-is-published-by-owner
   (testing "the Chime root publishes resources"
     (is (some #(= "resources" %)
-              (:paths (edn/read-string (slurp "spools/chime/deps.edn"))))))
+              (:paths (edn/read-string (slurp (io/file (chime-root) "deps.edn")))))))
   (testing "the owner export names the handler hook"
     (let [config-file (io/file
-                       "spools/chime/resources/clj-kondo.exports/millhouse.spools/chime/config.edn")
+                       (chime-root) "resources/clj-kondo.exports/millhouse.spools/chime/config.edn")
           hook-file (io/file
-                     "spools/chime/resources/clj-kondo.exports/millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo")
+                     (chime-root) "resources/clj-kondo.exports/millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo")
           config-data (edn/read-string (slurp config-file))]
       (is (.isFile config-file))
       (is (.isFile hook-file))

@@ -29,7 +29,6 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 Activation publishes the `kanban` command tree, the read-only
 `kanban-export` operation, the `kanban-dash` binary, and the Kanban queries.
-It does not enable board peering; peering is a separate module described below.
 
 ## 2. Board model
 
@@ -122,50 +121,7 @@ the internal `parent-of` and `depends-on` edges. The Bun consumer under
 `scripts/kanban-export` turns that payload into a self-contained HTML progress
 view.
 
-## 5. Optional board peering
-
-Peering is opt-in and requires Guild plus the base Kanban module. Add both libraries to `deps.edn`, then activate the modules in this order:
-
-```clojure
-(runtime/module! runtime :guild
-  {:ns 'millstrand.spools.guild
-   :required? true})
-(runtime/module! runtime :millhouse/kanban
-  {:ns 'millhouse.spools.kanban
-   :required? true})
-(runtime/module! runtime :millhouse/kanban-peering
-  {:ns 'millhouse.spools.kanban.peering
-   :after [:guild :millhouse/kanban]
-   :required? true})
-```
-
-The consuming weaver must have a published name. `kanban-peers` discovers
-sibling weavers and reports which advertise `kanban.send.v1`; `kanban-send`
-sends a pending or refinement feature, or an epic with its pending/refinement
-feature children.
-
-Only board-tier data travels: title, body, source, priority, queued lane, and
-optional `:from` provenance. Claims, worktrees, tasks, notes, execution
-strands, labels, closed cards, and in-flight epic children remain local. A
-received card is a new local card with a local id and defaults; its provenance
-is stored as `kanban/from`. Sending never changes the source lane.
-
-The Guild receiver accepts exactly one JSON object in one of these shapes:
-
-```clojure
-{:card {:title "…" :body "…" :source "…"
-        :priority "p1|p2|p3|p4" :lane "pending|refinement"}
- :from {:board "backend" :card "abc12"}}
-
-{:epic {:title "…"}
- :features [{:title "…"}]
- :from {:board "backend" :card "abc12"}}
-```
-
-Unknown keys, malformed cards, an incomplete epic bundle, and non-queued source
-cards fail loudly. The receiver returns only the ids it created.
-
-## 6. Millstrand state and APIs
+## 5. Millstrand state and APIs
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
@@ -179,5 +135,3 @@ cards fail loudly. The receiver returns only the ids it created.
 | Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task/run markers, provenance, and abandon restore state. |
 | Label state | `kanban.label/<slug>` attributes | Stores one independent `"true"` marker per normalized free-form label. |
 | Lifecycle resource | `kanban-runtime` | Declares the Kanban vocabularies and owns process-lifetime runtime state. |
-| Peering operations | `kanban-peers`, `kanban-send` | Discover compatible sibling boards and send queued board-tier work. |
-| Guild receiver | `kanban.send.v1` | Receives a card or epic bundle through the opt-in peering module. |

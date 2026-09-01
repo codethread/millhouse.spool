@@ -1,0 +1,12 @@
+{:config-paths ["../../.clj-kondo/repo-policy"]
+ :linters
+ {:unused-private-var
+  {:exclude [millhouse.spools.workflow/workflow-authoring-plan
+             millhouse.spools.workflow/executor-authoring-plan
+             millhouse.spools.workflow-test/bad-defaults-definition
+             millhouse.spools.workflow-test/bad-spec-definition
+             millhouse.spools.workflow-test/unknown-input-definition
+             millhouse.spools.workflow-test/revisable-definition
+             millhouse.spools.workflow-test/revisable-definition-v2
+             millhouse.spools.workflow-test/exploding-constructor
+             millhouse.spools.workflow-test/malformed-constructor]}}}

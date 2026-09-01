@@ -11,7 +11,8 @@
   This reference also lists `desired-jobs`, `actual-jobs`, `apply-jobs!`, and
   `remove-jobs!`. They are public because the `scheduled-jobs` lifecycle
   declaration resolves them by symbol; module authors do not call them."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.format.alpha :as format-alpha]
@@ -20,7 +21,7 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.spool.alpha :refer [fail! poll-until! reject-unknown-keys!
-                                           require-valid!]])
+                                                require-valid!]])
   (:import [java.time Instant]
            [java.util Random]
            [java.util.concurrent ExecutorService Executors
@@ -41,7 +42,6 @@
   "Registry kind `:millhouse.spools.cron/jobs`, targeted by `use-job!` and the
   `scheduled-jobs` lifecycle declaration."
   :millhouse.spools.cron/jobs)
-(def ^:private repl-owner :millstrand.owner/repl)
 
 (s/def ::id (s/or :keyword keyword?
                   :string (s/and string? (complement str/blank?))))
@@ -70,7 +70,7 @@
          #(s/valid? ::reconciled (:reconciled %))
          #(s/valid? ::job-ids (:jobs %))))
 
-(defn- ^ThreadFactory daemon-thread-factory [prefix]
+(defn- daemon-thread-factory ^ThreadFactory [prefix]
   (let [counter (atom 0)]
     (reify ThreadFactory
       (newThread [_ runnable]
@@ -98,12 +98,12 @@
 (defn- state [runtime]
   (runtime/spool-state runtime ::state {:version state-version} new-state))
 
-(defn- ^ExecutorService executor [runtime] (:executor (state runtime)))
+(defn- executor ^ExecutorService [runtime] (:executor (state runtime)))
 (defn- jobs-atom [runtime] (:jobs (state runtime)))
 (defn- job-kinds [runtime]
   (runtime/spool-state runtime ::job-kinds registry/registry))
 (defn- failure-log [runtime] (:failure-log (state runtime)))
-(defn- ^Random rng [runtime] (:rng (state runtime)))
+(defn- rng ^Random [runtime] (:rng (state runtime)))
 
 (defn- record-failure! [runtime entry]
   (let [full (assoc entry :at (str (Instant/now)))]
@@ -127,7 +127,7 @@
   zero or negative bound yields 0."
   [bound-ms ^Random rng]
   (if (pos? bound-ms)
-    (long (Math/round (* (- (* 2.0 (.nextDouble rng)) 1.0) (double bound-ms))))
+    (math/round (* (- (* 2.0 (.nextDouble rng)) 1.0) (double bound-ms)))
     0))
 
 (defn- reschedule-delay-ms [interval-ms jitter-ms ^Random rng]
@@ -208,14 +208,14 @@
                 result (handler-fn runtime)]
             (swap! (jobs-atom runtime) update id
                    (fn [j] (when j (assoc j :last-result result
-                                         :last-fired-at fired-at
-                                         :last-error nil)))))
+                                          :last-fired-at fired-at
+                                          :last-error nil)))))
           (catch Throwable t
             (record-failure! runtime {:kind :run :job id
                                       :message (ex-message t) :data (ex-data t)})
             (swap! (jobs-atom runtime) update id
                    (fn [j] (when j (assoc j :last-error (ex-message t)
-                                         :last-fired-at fired-at))))))))
+                                          :last-fired-at fired-at))))))))
     (finally
       (dec-in-flight! runtime))))
 
@@ -430,7 +430,7 @@
   @(jobs-atom runtime))
 
 (defn- apply-job-change!
-  [runtime operation id declaration change!]
+  [operation id declaration change!]
   (try
     (change!)
     (catch Throwable t
@@ -456,12 +456,12 @@
   (require-valid! ::apply-context context "Invalid Cron apply context")
   (let [removed (remove (set (keys desired)) (keys actual))]
     (doseq [id removed]
-      (apply-job-change! runtime :remove id (get actual id)
+      (apply-job-change! :remove id (get actual id)
                          #(unregister! runtime id)))
     (doseq [[id job] desired]
       (when (or (not= (config-tuple job) (some-> (get actual id) config-tuple))
                 (not (wake-pending? runtime id)))
-        (apply-job-change! runtime :apply id job
+        (apply-job-change! :apply id job
                            #(register! runtime (assoc job :id id)))))
     (require-valid! ::reconcile-result
                     {:reconciled :cron :jobs (vec (sort (keys desired)))}

@@ -1,7 +1,7 @@
-.clj-kondo/.cache/
 .cpcache/
-.lsp/*
-!.lsp/config.edn
+**/.lsp/.cache/
+**/.clj-kondo/.cache/
+**/.clj-kondo/imports/
 target/
 *.class
 site/

@@ -39,7 +39,7 @@ Close Chime's atomic engine boundary for a validated lifecycle context.
   A failed close restores the active cluster before surfacing the failure. The
   retained resource handle can therefore be retried without exposing a
   half-closed handler, barrier, or rule view.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L569-L604">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L571-L606">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/defrule">`defrule`</a>
 ``` clojure
@@ -68,7 +68,7 @@ Own Chime's handler, mutation barrier, and visible rule view atomically.
 
   Activation applies this resource; removing it unregisters the event handler
   and mutation barrier and retracts the visible rule view.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L606-L612">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L608-L614">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/mutation-registration-barrier!">`mutation-registration-barrier!`</a>
 ``` clojure
@@ -79,7 +79,7 @@ Function.
 Serialize a pending graph mutation after any in-progress rule registration.
 
   Installed as a synchronous pre-commit hook. Its return value is ignored.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L462-L468">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L463-L470">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/notifier">`notifier`</a>
 ``` clojure
@@ -136,7 +136,7 @@ Open Chime's atomic engine boundary for a validated lifecycle context.
   The handler, mutation barrier, and visible rule view change under their
   shared monitor. A failed open compensates back to the inactive boundary so a
   lifecycle retry never inherits a half-open engine.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L543-L567">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/chime/src/millhouse/spools/chime.clj#L545-L569">Source</a></sub></p>
 
 ## <a name="millhouse.spools.chime/recent-failures">`recent-failures`</a>
 ``` clojure
@@ -228,8 +228,8 @@ Return registered notification rules ordered by key.
 
 ## <a name="millhouse.spools.chime/scan!">`scan!`</a>
 ``` clojure
-(scan! event)
 (scan!)
+(scan! event)
 ```
 Function.
 

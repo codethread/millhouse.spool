@@ -12,7 +12,7 @@
    "spools/cron/src"
    "spools/workflow/src"
    "spools/kanban/src"
-   ".millstrand"
+   ".millstrand/init.clj"
    "test"])
 
 (def spool-roots
@@ -38,7 +38,10 @@
 (defn- clj-files
   [roots]
   (for [root roots
-        ^java.io.File file (sort (file-seq (io/file root)))
+        :let [root-file (io/file root)]
+        ^java.io.File file (if (.isDirectory root-file)
+                             (sort (file-seq root-file))
+                             [root-file])
         :when (and (.isFile file) (str/ends-with? (.getName file) ".clj"))]
     file))
 
@@ -189,7 +192,7 @@
   "Return every convention finding for the configured roots."
   []
   (doseq [root source-roots]
-    (when-not (.isDirectory (io/file root))
+    (when-not (.exists (io/file root))
       (throw (ex-info "Configured source root is missing" {:root root}))))
   (let [{:keys [analysis]} (kondo/run! {:lint source-roots
                                         :config {:analysis {:locals true}}})]

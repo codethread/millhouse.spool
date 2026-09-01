@@ -86,24 +86,20 @@
 (deftest repository-kondo-config-keeps-producer-ownership
   (let [root (io/file (repository-root))
         config-text (slurp (io/file root ".clj-kondo/config.edn"))
-        lsp-config (edn/read-string (slurp (io/file root ".lsp/config.edn")))
-        project-hooks (slurp (io/file root ".clj-kondo/hooks/project_rules.clj"))
-        config (edn/read-string config-text)
-        config-paths (:config-paths config)
-        self-imports (io/file root ".clj-kondo/imports/millhouse.spools")]
-    (is (= ["imports/io.millstrand/millstrand"
-            "../spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow"
-            "../spools/chime/resources/clj-kondo.exports/millhouse.spools/chime"
-            "../spools/cron/resources/clj-kondo.exports/millhouse.spools/cron"]
-           config-paths))
+        project-hooks (slurp (io/file root ".clj-kondo/repo-policy/hooks/project_rules.clj"))
+        config (edn/read-string config-text)]
+    (is (= ["repo-policy"] (:config-paths config)))
+    (is (not (.exists (io/file root ".lsp/config.edn"))))
     (doseq [form '[defop defquery defpattern defhook defhandler defbin]]
       (is (not (re-find (re-pattern (str "millstrand.api.millstrand.alpha/" form))
                         config-text)))
       (is (not (str/includes? project-hooks (str "(defn " form)))))
     (is (not (re-find #"millstrand\.macros\.(queries|ops|rules)" config-text)))
-    (is (false? (:copy-kondo-configs? lsp-config)))
-    (is (.isFile (io/file root ".clj-kondo/imports/io.millstrand/millstrand/config.edn")))
-    (is (not (.exists self-imports)))))
+    (doseq [artifact ["io.millstrand/millstrand"
+                      "millhouse.spools/chime"
+                      "millhouse.spools/cron"
+                      "millhouse.spools/workflow"]]
+      (is (.isFile (io/file root ".clj-kondo/imports" artifact "config.edn"))))))
 
 (def ^:private resolved-spool-roots
   "Installed spool roots that status must contribute to a consumer classpath."

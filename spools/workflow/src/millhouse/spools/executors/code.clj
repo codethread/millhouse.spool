@@ -284,6 +284,7 @@
   executor-local critical section. A timeout and a normal completion therefore
   cannot both observe and publish the same token."
   [gate-id token f]
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
   #_{:splint/disable [lint/locking-object]}
   (locking (scan-monitor)
     (when (live-claim? gate-id token)
@@ -396,6 +397,7 @@
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
+      #_{:clj-kondo/ignore [:locking-suspicious-lock]}
       #_{:splint/disable [lint/locking-object]}
       (locking (scan-monitor)
         (doseq [root (workflow/active-runs)

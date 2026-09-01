@@ -1,0 +1,18 @@
+{:hooks
+ {:analyze-call
+  {clojure.core/ns hooks.project-rules/ns-docstring
+   ns hooks.project-rules/ns-docstring
+   clojure.core/def hooks.project-rules/no-spool-module-atom
+   def hooks.project-rules/no-spool-module-atom
+   clojure.core/defonce hooks.project-rules/no-spool-module-atom
+   defonce hooks.project-rules/no-spool-module-atom
+   clojure.core/let hooks.project-rules/no-fn-keys-destructure
+   let hooks.project-rules/no-fn-keys-destructure
+   clojure.core/fn hooks.project-rules/no-fn-keys-destructure
+   fn hooks.project-rules/no-fn-keys-destructure
+   clojure.core/defn hooks.project-rules/no-fn-keys-destructure
+   defn hooks.project-rules/no-fn-keys-destructure}}
+ :linters
+ {:project/ns-docstring {:level :error}
+  :project/no-spool-module-atom {:level :error}
+  :project/no-fn-keys-destructure {:level :error}}}

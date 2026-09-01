@@ -24,22 +24,24 @@
 (defn- failure-reason [f]
   (:reason (ex-data (try (f) (catch clojure.lang.ExceptionInfo e e)))))
 
+(defn- workflow-root []
+  (test-alpha/spool-checkout-root "millhouse/spools/workflow.clj"))
+
+(defn- repository-root []
+  (-> (workflow-root) .getParentFile .getParentFile))
+
 (defn- lint-workflow-hook [source]
-  (let [root (.getCanonicalFile (io/file "."))
+  (let [root (repository-root)
         dir (test-support/temp-dir "millhouse-workflow-hook")
         source-file (io/file dir "workflow_hook_test.clj")]
     (try
       (spit source-file source)
-      (sh/sh "clojure"
-             "-Sdeps"
-             "{:deps {clj-kondo/clj-kondo {:mvn/version \"2025.06.05\"}}}"
-             "-M"
-             "-m"
-             "clj-kondo.main"
+      (sh/sh "clj-kondo"
+             "--repro"
              "--lint"
              (.getPath source-file)
              "--config"
-             (.getPath (io/file root ".clj-kondo/config.edn"))
+             (.getPath (io/file (workflow-root) ".clj-kondo/config.edn"))
              :dir (.getPath root))
       (finally
         (test-support/delete-tree! dir)))))
@@ -83,7 +85,7 @@
 (deftest workflow-exported-kondo-contract-is-on-consumer-classpath
   (testing "the consolidated Workflow root publishes resources"
     (is (some #(= "resources" %)
-              (:paths (edn/read-string (slurp "spools/workflow/deps.edn"))))))
+              (:paths (edn/read-string (slurp (io/file (workflow-root) "deps.edn")))))))
   (testing "a consumer resolves the Workflow-owned export and hook"
     (let [config (io/resource
                   "clj-kondo.exports/millhouse.spools/workflow/config.edn")

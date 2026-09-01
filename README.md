@@ -16,7 +16,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 | [Chime](spools/chime/README.md) (`millhouse.spools.chime`)                                              | Turn meaningful graph events into local notifications with workspace-owned rules and your preferred notifier.                                | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md)                                                                            |
 | [Cron](spools/cron/README.md) (`millhouse.spools.cron`)                                                 | Run durable, interval-based jobs through Millstrand's scheduler, with optional jitter and reloadable handlers.                               | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md)                                                                                 |
 | [Identity](spools/identity/README.md) (`millhouse.spools.identity`)                                      | Give each logical harness session a friendly identity and connect it to the runs it performs.                                                 | [contract](spools/identity/README.md) · [API](spools/identity/identity.api.md)                                                                                                             |
-| [Kanban](spools/kanban/README.md) (`millhouse.spools.kanban`)                                           | Manage user–agent work as a shared board with priorities, handoffs, task dependencies, review, and optional peer-to-peer card transfer.      | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md) · [peering API](spools/kanban/kanban.peering.api.md)                  |
+| [Kanban](spools/kanban/README.md) (`millhouse.spools.kanban`)                                           | Manage user–agent work as a shared board with priorities, handoffs, task dependencies, and review.      | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md)                  |
 
 ## Consumption
 
@@ -46,4 +46,15 @@ Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only
    :deps/root "spools/workflow"}}}
 ```
 
-The Workflow library contains the workflow engine, gate executors, and reusable Millstrand workflows. Chime and Cron use the repository's conventions, reflection, and runtime-test gates; cljfmt, clj-kondo, and Splint do not cover those two libraries.
+The Workflow library contains the workflow engine, gate executors, and reusable Millstrand workflows.
+
+## Development
+
+Each spool and `.millstrand` is an independent tools.deps project. Configure
+your editor to select the nearest `deps.edn`; the repository intentionally has
+no aggregate clojure-lsp configuration. The root project owns repository
+scripts and cross-spool integration tests.
+
+Install native `clj-kondo` v2026.08.04. `make lint-clj` refreshes dependency
+exports and lints every project independently; `make clean-kondo` removes only
+generated imports and caches. Run `make quality` before landing changes.

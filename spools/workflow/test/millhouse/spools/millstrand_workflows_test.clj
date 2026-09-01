@@ -1,7 +1,6 @@
 (ns millhouse.spools.millstrand-workflows-test
   "Focused contract tests for the Millstrand-workflows publisher spool."
-  (:require [clojure.java.io :as io]
-            [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is]]
             [millhouse.spools.workflow :as workflow]
             [millhouse.test-support :as test-support]
             [millstrand.api.current.alpha :as current]
@@ -9,7 +8,8 @@
             [millstrand.test.alpha :as t]))
 
 (def ^:private workflow-root
-  (.getCanonicalPath (io/file "spools/workflow")))
+  (.getCanonicalPath
+   (t/spool-checkout-root "millhouse/spools/workflow.clj")))
 
 (deftest bundled-selector-publishes-only-the-shipped-workflow
   (t/with-weaver-world [ctx {:storage :sqlite-memory

@@ -2,9 +2,8 @@
 
 Compositions for running user↔agent work through the Kanban board. The
 [contract](./README.md) defines lanes, attributes, and consumer-visible
-surfaces; the generated [API](./kanban.api.md) and [peering API](./kanban.peering.api.md)
-define signatures and focused calls. These recipes combine those surfaces into
-repeatable operating patterns.
+surfaces; the generated [API](./kanban.api.md) defines signatures and focused
+calls. These recipes combine those surfaces into repeatable operating patterns.
 
 ## 1. Carry one card from queue to handoff
 
@@ -115,42 +114,3 @@ active and what to do next. The card view also exposes blockers in both
 directions through `related`. The review queue is computed from the graph on
 every board read, so it cannot drift from actual readiness or require a second
 index maintained by coordinators.
-
-## 4. Transfer queued board work between sibling weavers
-
-**Situation.** Two repositories have independent weavers, but a pending card
-belongs on the other board. The receiving board should get the work shape while
-execution history and claims remain local.
-
-**Composition.** Add Guild and Kanban to `deps.edn` in both workspaces, activate peering after them, publish a distinct weaver name, discover the target, and send the queued card.
-
-```clojure
-;; In each workspace's init.clj: guild, then kanban, then peering.
-(runtime/module! runtime :guild
-  {:ns 'millstrand.spools.guild
-   :required? true})
-(runtime/module! runtime :millhouse/kanban
-  {:ns 'millhouse.spools.kanban
-   :required? true})
-(runtime/module! runtime :millhouse/kanban-peering
-  {:ns 'millhouse.spools.kanban.peering
-   :after [:guild :millhouse/kanban]
-   :required? true})
-```
-
-```json
-{"configFormat": "alpha", "name": "backend"}
-```
-
-```sh
-strand kanban-peers | jq '.peers[] | select(.name == "frontend")'
-strand kanban-send frontend "$card"
-```
-
-**Why this shape.** The activation edge makes Guild's receiver seam and the
-Kanban board op prerequisites explicit. Peering refuses claimed, in-review,
-closed, or otherwise malformed work, so a transfer cannot silently split an
-active execution history. The receiver calls the local card-creation path,
-which gives the new card local identity and defaults; only queued board data
-and provenance cross the boundary. A successful send notes the source card but
-does not move or close it, leaving that lifecycle decision with the caller.

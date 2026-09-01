@@ -84,7 +84,7 @@
 (authoring/register-registry-kind! rule-kind ::rule-entry)
 
 (defn- rule-authoring-plan
-  [mode name doc args]
+  [_mode name doc args]
   (let [[options argv body] (if (vector? (first args))
                               [{} (first args) (next args)]
                               [(first args) (second args) (nnext args)])
@@ -435,6 +435,7 @@
   walks the whole current graph, so a rule can notify about a strand different
   from the event's directly affected strand. Call the zero-argument form from
   trusted code or use the event-handler path installed by activation."
+  ([] (scan! {:event/type :chime/scan}))
   ([event]
    (let [visible (rule-registry)]
      (locking visible
@@ -447,8 +448,7 @@
                (doseq [strand strands
                        rule (vals @visible)]
                  (dispatch-rule! context strand rule))
-               {:scanned (count strands) :rules (count @visible)})))))))
-  ([] (scan! {:event/type :chime/scan})))
+               {:scanned (count strands) :rules (count @visible)}))))))))
 
 (defn on-event
   "Weaver event handler: scan graph changes for attention notifications.
@@ -459,11 +459,13 @@
   [event]
   (scan! event))
 
+#_{:splint/disable [lint/locking-object]}
 (defn mutation-registration-barrier!
   "Serialize a pending graph mutation after any in-progress rule registration.
 
   Installed as a synchronous pre-commit hook. Its return value is ignored."
   [_context]
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
   (locking (rule-registry) nil)
   nil)
 

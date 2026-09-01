@@ -1,3 +1,0 @@
-{:paths ["."]
- :deps
- {millhouse.spools/workflow {:local/root "../spools/workflow"}}}

@@ -143,7 +143,7 @@ Build the validated registry value used by `defjob`; consumers normally call
 
 Registry kind `:millhouse.spools.cron/jobs`, targeted by `use-job!` and the
   `scheduled-jobs` lifecycle declaration.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L40-L43">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/cron/src/millhouse/spools/cron.clj#L41-L44">Source</a></sub></p>
 
 ## <a name="millhouse.spools.cron/jobs">`jobs`</a>
 ``` clojure

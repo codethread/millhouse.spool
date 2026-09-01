@@ -18,8 +18,6 @@
     :outfile "spools/workflow/shell.api.md"}
    {:source "spools/kanban/src/millhouse/spools/kanban.clj"
     :outfile "spools/kanban/kanban.api.md"}
-   {:source "spools/kanban/src/millhouse/spools/kanban/peering.clj"
-    :outfile "spools/kanban/kanban.peering.api.md"}
    {:source "spools/workflow/src/millhouse/spools/millstrand_workflows.clj"
     :outfile "spools/workflow/millstrand-workflows.api.md"}])
 
