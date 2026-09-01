@@ -1542,7 +1542,7 @@
 
 (millstrand/defbin! kanban-dash
   "Open the interactive Kanban board in the caller's terminal."
-  {:executable [:root "bin/kanban-dash"]
+  {:executable [:family "bin/kanban-dash"]
    :build ["go" "build" "-C" "scripts/agent-dash" "-o" "kanban-dash" "."]})
 
 (millstrand/defquery! kanban-cards

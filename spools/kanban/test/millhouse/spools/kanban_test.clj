@@ -21,8 +21,9 @@
   (is (fn? (public-value 'kanban-batch)))
   (is (= {:name "kanban-dash"
           :doc "Open the interactive Kanban board in the caller's terminal."
-          :executable [:root "bin/kanban-dash"]
-          :build ["go" "build" "-C" "scripts/agent-dash" "-o" "kanban-dash" "."]
+          :executable [:family "bin/kanban-dash"]
+          :build ["go" "build" "-C" "scripts/agent-dash"
+                  "-o" "kanban-dash" "."]
           :provenance 'millhouse.spools.kanban}
          (select-keys (public-value 'kanban-dash)
                       [:name :doc :executable :build :provenance])))
