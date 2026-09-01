@@ -1,7 +1,6 @@
 (ns quality.conventions-check
   "Enforce shared-spool Clojure conventions that prose cannot hold."
-  (:require [clj-kondo.core :as kondo]
-            [clojure.data.json :as json]
+  (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [quality.source-forms :as source-forms]))
@@ -178,7 +177,7 @@
          :when (and (under-root? filename spool-roots)
                     (not (str/includes? (str/replace filename "\\" "/") "/internal/"))
                     (not private)
-                    (not= 'clojure.core/declare defined-by)
+                    (not= "clojure.core/declare" (str defined-by))
                     (nil? doc))]
      (str filename ":" row ": public var `" name "` has no docstring"))
    (for [{:keys [filename row from to]} (concat (:namespace-usages analysis)
@@ -189,19 +188,19 @@
           "` uses internal namespace `" to "`; use millstrand.api.*.alpha"))))
 
 (defn findings
-  "Return every convention finding for the configured roots."
-  []
+  "Return every convention finding for the configured roots and Kondo analysis."
+  [analysis]
   (doseq [root source-roots]
     (when-not (.exists (io/file root))
       (throw (ex-info "Configured source root is missing" {:root root}))))
-  (let [{:keys [analysis]} (kondo/run! {:lint source-roots
-                                        :config {:analysis {:locals true}}})]
-    (concat (analysis-findings analysis)
-            (source-findings source-roots))))
+  (concat (analysis-findings analysis)
+          (source-findings source-roots)))
 
 (defn -main
   [& _]
-  (let [all-findings (vec (findings))]
+  (let [input (java.io.PushbackReader. *in* 8192)
+        analysis (:analysis (json/read input :key-fn keyword))
+        all-findings (vec (findings analysis))]
     (if (seq all-findings)
       (do
         (binding [*out* *err*]

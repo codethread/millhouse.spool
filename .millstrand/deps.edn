@@ -30,11 +30,11 @@
    :deps/root "agent-run"}
   codethread/devflow
   {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+   :git/sha "ceaa684499c6715ce0f10dba5806fd8ebef997da"
    :deps/root "."}
   codethread/devflow-kanban-adapter
   {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "528e0ba636e28032985f7f9706c8350e9f785d97"
+   :git/sha "ceaa684499c6715ce0f10dba5806fd8ebef997da"
    :deps/root "kanban-adapter"}
   ct.spools/claude-harness
   {:git/url "https://github.com/codethread/agent-harness.spool.git"

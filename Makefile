@@ -16,7 +16,11 @@ test:
 	@$(RUN_CHECK) test clojure -M:test $(TEST_NAMESPACES)
 
 test-local:
-	@test -n "$(strip $(MILLSTRAND_ROOT))" || { echo "MILLSTRAND_ROOT is required (for example: make test-local MILLSTRAND_ROOT=/path/to/millstrand)" >&2; exit 2; }
+	@test -n "$(strip $(MILLSTRAND_ROOT))" || { \
+		echo "MILLSTRAND_ROOT is required" \
+			"(for example: make test-local MILLSTRAND_ROOT=/path/to/millstrand)" >&2; \
+		exit 2; \
+	}
 	@$(RUN_CHECK) test-local clojure $(MILLSTRAND_OVERRIDE) -M:test:millstrand-root
 
 api-docs:
@@ -33,7 +37,10 @@ docs-serve: docs-prepare
 
 docs-check:
 	$(MAKE) api-docs
-	@git diff --quiet -- 'spools/*/*.api.md' || { echo "API docs are stale; run 'make api-docs' and commit the regenerated files." >&2; exit 1; }
+	@git diff --quiet -- 'spools/*/*.api.md' || { \
+		echo "API docs are stale; run 'make api-docs' and commit the regenerated files." >&2; \
+		exit 1; \
+	}
 	@$(RUN_CHECK) markdown-links python3 scripts/check_markdown_links.py
 	$(MAKE) docs-site
 
@@ -95,8 +102,18 @@ clean-kondo:
 lint-splint:
 	@$(RUN_CHECK) splint clojure -M:lint/splint
 
-lint-conventions:
-	@$(RUN_CHECK) conventions clojure -M:lint/conventions
+lint-conventions: check-clj-kondo
+	@$(RUN_CHECK) conventions sh -c '\
+		config_dir="$$(mktemp -d)"; \
+		trap '\''rm -rf "$$config_dir"'\'' EXIT; \
+		$(CLJ_KONDO) --repro \
+			--config-dir "$$config_dir" \
+			--lint scripts test \
+				spools/chime/src spools/cron/src spools/kanban/src spools/workflow/src \
+				.millstrand/init.clj \
+			--config '\''{:analysis {:locals true} :output {:format :json}}'\'' \
+		| clojure -M:lint/conventions \
+	'
 
 reflect-check:
 	@$(RUN_CHECK) reflect clojure -M:reflect-check

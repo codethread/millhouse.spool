@@ -51,7 +51,6 @@
     "spools/identity/test"
     "spools/kanban/test"
     "spools/workflow/test"]
-   :extra-deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}
    :main-opts ["-m" "quality.conventions-check"]}
   :lint/splint
   {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
