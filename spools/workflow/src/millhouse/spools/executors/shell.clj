@@ -25,11 +25,13 @@
             [millstrand.api.spool.alpha :refer [fail! attr-get require-valid!]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.events.alpha :as events]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime])
   (:import [java.nio.charset StandardCharsets]
            [java.time Instant]
-           [java.util.concurrent Executors ExecutorService ThreadFactory TimeUnit]))
+           [java.util.concurrent Executors ExecutorService RejectedExecutionException
+            ThreadFactory TimeUnit]))
 
 (def ^:private event-types
   #{:strand/added :strand/updated :batch/applied :strand/burned :strand/superseded})
@@ -63,7 +65,7 @@
   `new-state`'s key set changes: spool-state survives module refresh, so a
   post-upgrade refresh would otherwise reuse a preserved map missing the new key.
   The `state-shape-matches-declared-version` test guards against silent drift."
-  1)
+  2)
 
 (defn- daemon-thread-factory ^ThreadFactory [prefix]
   (let [counter (atom 0)]
@@ -75,6 +77,8 @@
 (defn- new-state []
   (let [^ExecutorService workers (Executors/newCachedThreadPool (daemon-thread-factory "shell-worker"))]
     {:scan-monitor (Object.)
+     :terminal-observers (atom #{})
+     :reconciliation-pending? (atom false)
      :worker-executor workers
      :close-fn (fn []
                  (.shutdownNow workers)
@@ -302,7 +306,7 @@
   [record]
   (= :terminal (:phase record)))
 
-(declare cancel-attempt-at-timeout!)
+(declare cancel-attempt-at-timeout! owner-local-failure!)
 
 (defn- await-custody-terminal!
   "Poll one retained process record until Mill reports its terminal fact.
@@ -310,22 +314,19 @@
   The process itself is owned by Mill; this wait is only a convenience for the
   current generation. If Weaver replacement interrupts this worker, the durable
   attempt and Mill record remain for `reconcile-shell-attempts!`."
-  [runtime gate-id attempt-id handle timeout-secs]
-  (let [deadline (when timeout-secs
-                   (+ (System/nanoTime)
-                      (* (long timeout-secs) 1000000000)))]
-    (loop [record (process/get runtime handle)
-           cancelled? false]
-      (if (process-terminal? record)
-        {:record record :timed-out? cancelled?}
-        (if (and deadline (not cancelled?)
-                 (>= (System/nanoTime) deadline))
-          (do
-            (cancel-attempt-at-timeout! runtime gate-id attempt-id handle)
-            (recur (process/get runtime handle) true))
-          (do
-            (Thread/sleep (long process-poll-ms))
-            (recur (process/get runtime handle) cancelled?)))))))
+  [runtime gate-id attempt-id handle ^Instant deadline]
+  (loop [record (process/get runtime handle)
+         cancelled? false]
+    (if (process-terminal? record)
+      {:record record :timed-out? cancelled?}
+      (if (and deadline (not cancelled?)
+               (not (.isAfter ^Instant deadline ^Instant (runtime/now runtime))))
+        (do
+          (cancel-attempt-at-timeout! runtime gate-id attempt-id handle)
+          (recur (process/get runtime handle) true))
+        (do
+          (Thread/sleep (long process-poll-ms))
+          (recur (process/get runtime handle) cancelled?))))))
 
 (defn- attempt-gate
   [gate-id attempt-id custody-handle]
@@ -436,6 +437,61 @@
             :acknowledged
             :stale))))))
 
+(defn- resume-custody-observation!
+  "Resume one retained custody observation in the current runtime generation.
+
+  The durable attempt and Mill handle identify the existing process; this only
+  replaces the observer that was interrupted by Weaver replacement. Runtime
+  spool state prevents repeated reconciliation from submitting duplicate
+  observers for one attempt, while the original absolute deadline remains the
+  timeout boundary."
+  [runtime attempt handle deadline]
+  (binding [*runtime* runtime]
+    (let [attempt-id (:attempt-id attempt)
+          observers (:terminal-observers (state))
+          executor (worker-executor)
+          [before _] (swap-vals! observers conj attempt-id)]
+      (when-not (contains? before attempt-id)
+        (try
+          (.execute executor
+                    ^Runnable
+                    (fn []
+                      (current/with-runtime runtime
+                        (binding [*runtime* runtime]
+                          (try
+                            (let [{:keys [record timed-out?]}
+                                  (await-custody-terminal! runtime (:gate-id attempt)
+                                                           attempt-id handle deadline)]
+                              (terminal-reconcile! runtime (:run-id attempt)
+                                                   (:gate-id attempt) attempt-id
+                                                   handle record timed-out?))
+                            (catch InterruptedException _ nil)
+                            (catch Throwable throwable
+                              (when-not (contains? #{"process/control-unavailable" "process/stale-weaver"}
+                                                   (:code (ex-data throwable)))
+                                (owner-local-failure!
+                                 attempt
+                                 (str "shell custody observation failed for attempt "
+                                      attempt-id ": " (ex-message throwable)
+                                      (some->> (ex-data throwable) (str " "))))))
+                            (finally
+                              (swap! observers disj attempt-id)))))))
+          (catch RejectedExecutionException throwable
+            (swap! observers disj attempt-id)
+            (when-not (.isShutdown executor)
+              (owner-local-failure!
+               attempt
+               (str "shell custody observation could not be scheduled for attempt "
+                    attempt-id ": " (ex-message throwable)
+                    (some->> (ex-data throwable) (str " "))))))
+          (catch Throwable throwable
+            (swap! observers disj attempt-id)
+            (owner-local-failure!
+             attempt
+             (str "shell custody observation could not be scheduled for attempt "
+                  attempt-id ": " (ex-message throwable)
+                  (some->> (ex-data throwable) (str " "))))))))))
+
 (defn- mark-timeout!
   "Record timeout intent before asking Mill to cancel the retained process."
   [gate-id attempt-id custody-handle]
@@ -480,13 +536,10 @@
         (stamp-attempt! gate-id attempt-id custody-handle
                         {timeout-deadline-attribute (deadline-string deadline)}))
       (arm-timeout! runtime attempt-id custody-handle deadline)
-      (let [{:keys [record timed-out?]}
-            (if (process-terminal? process-record)
-              {:record process-record :timed-out? false}
-              (await-custody-terminal! runtime gate-id attempt-id custody-handle
-                                       timeout-secs))]
-        (terminal-reconcile! runtime run-id gate-id attempt-id custody-handle
-                             record timed-out?)))
+      (resume-custody-observation! runtime
+                                   {:run-id run-id :gate-id gate-id
+                                    :attempt-id attempt-id :custody-handle custody-handle}
+                                   custody-handle deadline))
     (catch InterruptedException _
       ;; Keep the claim across the launch-to-handle seam. Reconciliation can
       ;; match a retained Mill fact by the attempt key even when this worker
@@ -571,6 +624,22 @@
   [runtime]
   (weaver/list runtime [:= [:attr "workflow/gate"] "shell"] {}))
 
+(defn- gate-run-id
+  "Resolve a retained gate's run from its workflow root, not its step attributes."
+  [runtime gate]
+  (or (attr gate :workflow/run-id)
+      (let [roots (graph/strands-by-ids
+                   runtime
+                   (graph/ancestor-root-ids
+                    runtime [(:id gate)]
+                    {:where [:and [:= :state "active"]
+                             [:= [:attr "workflow/role"] "root"]]}))]
+        (case (count roots)
+          0 nil
+          1 (attr (first roots) :workflow/run-id)
+          (fail! "Shell gate belongs to multiple active workflow roots"
+                 {:gate-id (:id gate) :root-ids (mapv :id roots)})))))
+
 (defn read-shell-attempts
   "Return durable shell attempts owned by this spool.
 
@@ -580,7 +649,7 @@
   [{:keys [runtime]}]
   (mapv (fn [gate]
           {:gate-id (:id gate)
-           :run-id (attr gate :workflow/run-id)
+           :run-id (gate-run-id runtime gate)
            :state (:state gate)
            :attempt-id (attr gate :shell/attempt-id)
            :custody-handle (attr gate :shell/custody-handle)
@@ -663,7 +732,12 @@
           (locking (scan-monitor)
             (stamp-attempt! (:gate-id attempt) (:attempt-id attempt) nil
                             {"shell/custody-handle" handle})))
-        (enforce-timeout! runtime attempt handle)
+        (let [attempt (assoc attempt :custody-handle handle)
+              deadline (parse-deadline (:timeout-deadline attempt)
+                                       {:attempt-id (:attempt-id attempt)
+                                        :gate-id (:gate-id attempt)})]
+          (enforce-timeout! runtime attempt handle)
+          (resume-custody-observation! runtime attempt handle deadline))
         {:attempt-id (:attempt-id attempt) :phase (:phase fact)})
 
       :else
@@ -683,7 +757,8 @@
           (owner-local-failure!
            attempt
            (str "shell custody fact could not be reconciled for attempt "
-                (:attempt-id attempt) ": " (ex-message throwable))))))))
+                (:attempt-id attempt) ": " (ex-message throwable)
+                (some->> (ex-data throwable) (str " ")))))))))
 
 (defn- deferred-custody-read?
   [actual]
@@ -696,13 +771,64 @@
     (vec (or (:facts actual) (:records actual) []))
     actual))
 
+(declare apply-shell-attempts!)
+
+(defn- resume-deferred-reconciliation!
+  "Resume a startup custody read once Mill admits this Weaver generation.
+
+  Bootstrap can precede process-control admission. Keep one runtime-owned
+  waiter for that seam; after admission, re-read durable attempts and use the
+  normal reconciler. No process is launched and no timeout is reset."
+  [runtime]
+  (binding [*runtime* runtime]
+    (let [pending? (:reconciliation-pending? (state))
+          executor (worker-executor)]
+      (when (compare-and-set! pending? false true)
+        (try
+          (.execute executor
+                    ^Runnable
+                    (fn []
+                      (current/with-runtime runtime
+                        (binding [*runtime* runtime]
+                          (try
+                            (loop []
+                              (let [actual (read-shell-custody {:runtime runtime})]
+                                (if (deferred-custody-read? actual)
+                                  (do
+                                    (Thread/sleep (long process-poll-ms))
+                                    (recur))
+                                  (apply-shell-attempts!
+                                   {:runtime runtime
+                                    :desired (read-shell-attempts {:runtime runtime})
+                                    :actual actual}))))
+                            (catch InterruptedException _ nil)
+                            (catch Throwable throwable
+                              (doseq [attempt (read-shell-attempts {:runtime runtime})]
+                                (owner-local-failure!
+                                 attempt
+                                 (str "shell custody reconciliation failed: "
+                                      (ex-message throwable)
+                                      (some->> (ex-data throwable) (str " "))))))
+                            (finally
+                              (reset! pending? false)))))))
+          (catch RejectedExecutionException throwable
+            (reset! pending? false)
+            (when-not (.isShutdown executor)
+              (throw throwable)))
+          (catch Throwable throwable
+            (reset! pending? false)
+            (throw throwable)))))))
+
 (defn apply-shell-attempts!
   "Reconcile durable shell attempts with retained Mill custody facts.
 
   Missing, stale, and mismatched facts are owner-local errors. They are returned
   in the reconcile summary and, when a gate still exists, stamped on that gate;
   the reconciler does not invent a replacement attempt or acknowledge evidence
-  it cannot correlate."
+  it cannot correlate.
+
+  Deferred admission schedules one runtime-owned retry reader, stops at worker
+  shutdown, and never relaunches processes."
   [{:keys [runtime] :as context}]
   (let [desired (:desired context)
         actual (:actual context)
@@ -754,6 +880,8 @@
                                  :handle (:handle fact)
                                  :error "shell custody fact has no matching durable attempt"})
                               (remove #(contains? desired-keys (:key %)) actual)))]
+    (when (and deferred? (seq desired))
+      (resume-deferred-reconciliation! runtime))
     {:reconciled :shell-attempts
      :status (if deferred? :deferred :applied)
      :attempts results
@@ -846,7 +974,8 @@
 (s/def ::close-context (s/keys :req-un [::resource]))
 (s/def ::handler-close-context (s/keys :req-un [::runtime]))
 (s/def ::pool-handle
-  #(= #{:scan-monitor :worker-executor :close-fn} (set (keys %))))
+  #(= #{:scan-monitor :terminal-observers :reconciliation-pending? :worker-executor :close-fn}
+      (set (keys %))))
 (s/def ::registered #{:shell/engine})
 (s/def ::unregistered #{:shell/engine})
 (s/def ::closed #{:shell-pool})

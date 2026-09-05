@@ -28,7 +28,7 @@ Fulfil workflow `:shell` gates by running their command off the event thread.
 
 
 Runtime captured for asynchronous shell-executor worker threads.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L54-L56">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L56-L58">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/apply-shell-attempts!">`apply-shell-attempts!`</a>
 ``` clojure
@@ -42,7 +42,10 @@ Reconcile durable shell attempts with retained Mill custody facts.
   in the reconcile summary and, when a gate still exists, stamped on that gate;
   the reconciler does not invent a replacement attempt or acknowledge evidence
   it cannot correlate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L699-L760">Source</a></sub></p>
+
+  Deferred admission schedules one runtime-owned retry reader, stops at worker
+  shutdown, and never relaunches processes.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L822-L888">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/close-shell-handler!">`close-shell-handler!`</a>
 ``` clojure
@@ -51,7 +54,7 @@ Reconcile durable shell attempts with retained Mill custody facts.
 Function.
 
 Unregister shell scanning when the module is removed.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L887-L894">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L1016-L1023">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/close-shell-pool!">`close-shell-pool!`</a>
 ``` clojure
@@ -60,7 +63,7 @@ Unregister shell scanning when the module is removed.
 Function.
 
 Close the runtime-lifetime shell worker pool.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L864-L871">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L993-L1000">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/non-blank-string?">`non-blank-string?`</a>
 ``` clojure
@@ -72,7 +75,7 @@ Return true when `value` is a non-blank string.
 
   The shell request spec uses this predicate for the optional `shell/cwd`
   attribute.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L112-L118">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L116-L122">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/on-event">`on-event`</a>
 ``` clojure
@@ -81,7 +84,7 @@ Return true when `value` is a non-blank string.
 Function.
 
 Weaver event handler: graph changes may make a `:shell` gate ready.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L562-L565">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L615-L618">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/open-shell-handler!">`open-shell-handler!`</a>
 ``` clojure
@@ -90,7 +93,7 @@ Weaver event handler: graph changes may make a `:shell` gate ready.
 Function.
 
 Register shell scanning and run the initial scan.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L873-L885">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L1002-L1014">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/open-shell-pool!">`open-shell-pool!`</a>
 ``` clojure
@@ -99,7 +102,7 @@ Register shell scanning and run the initial scan.
 Function.
 
 Open the runtime-lifetime shell worker pool.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L854-L862">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L983-L991">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/read-shell-attempts">`read-shell-attempts`</a>
 ``` clojure
@@ -112,7 +115,7 @@ Return durable shell attempts owned by this spool.
   Closed gates remain in this view until their custody handle is acknowledged;
   that lets a later reconciliation finish an interrupted terminal commit without
   replaying the shell command.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L574-L591">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L643-L660">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/read-shell-custody">`read-shell-custody`</a>
 ``` clojure
@@ -126,7 +129,7 @@ Return custody records, or an explicit deferred result when Mill custody is
   Other listing failures remain loud: an empty durable-attempt set is not a
   reason to reinterpret an unavailable custody read as a successful empty
   listing.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L613-L634">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L682-L703">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/remove-shell-attempts!">`remove-shell-attempts!`</a>
 ``` clojure
@@ -135,7 +138,7 @@ Return custody records, or an explicit deferred result when Mill custody is
 Function.
 
 Report removal of the shell reconciliation effect without guessing cleanup.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L762-L765">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L890-L893">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/scan!">`scan!`</a>
 ``` clojure
@@ -150,7 +153,7 @@ Dispatch every ready `:shell` gate not already claimed or errored.
   accepted gate receives a `shell/running` claim before its process is submitted
   to the worker pool; the event thread never waits for the child. Scans run on
   relevant graph changes and once during handler activation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L539-L560">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L592-L613">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-attempts">`shell-attempts`</a>
 
@@ -158,7 +161,7 @@ Dispatch every ready `:shell` gate not already claimed or errored.
 
 
 Reconcile Mill-owned shell attempts with durable workflow gates.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L767-L773">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L895-L901">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-handler">`shell-handler`</a>
 
@@ -166,7 +169,7 @@ Reconcile Mill-owned shell attempts with durable workflow gates.
 
 
 Own the shell event handler for the lifetime of the module.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L902-L906">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L1031-L1035">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-pool">`shell-pool`</a>
 
@@ -174,7 +177,7 @@ Own the shell event handler for the lifetime of the module.
 
 
 Own the shell worker pool for the lifetime of the runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L896-L900">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L1025-L1029">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/shell-stalled?">`shell-stalled?`</a>
 ``` clojure
@@ -209,7 +212,7 @@ Return durable stall detail for a ready `:shell` gate view, or nil.
   `{:gate gate-id :error detail}`. Remove the `gate/error` attribute (and any
   stale `shell/running` claim after a crash) to re-arm the next scan; a blank
   string is still present data.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L775-L809">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L903-L937">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/stalled-shell-gates">`stalled-shell-gates`</a>
 
@@ -235,7 +238,7 @@ Return active shell gates carrying a durable error stamp.
 
   Rewrite request attributes in the same update when fixing the underlying
   command or working directory.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L811-L834">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L939-L962">Source</a></sub></p>
 
 ## <a name="millhouse.spools.executors.shell/timeout-wake">`timeout-wake`</a>
 ``` clojure
@@ -248,4 +251,4 @@ Cancel a shell attempt when its durable absolute timeout is due.
   The wake is deliberately keyed by attempt identity. A terminal commit before
   its deadline cancels it; a stale delivery re-reads the gate and therefore
   cannot cancel a newer attempt that reused the workflow gate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L593-L611">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/shell.clj#L662-L680">Source</a></sub></p>
