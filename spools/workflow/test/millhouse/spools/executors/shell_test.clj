@@ -375,7 +375,7 @@
           (with-redefs [process/get get-record]
             (try
               (is (= :applied (:status (shell/apply-shell-attempts! context))))
-              (is (= true (deref started (test-support/await-budget-ms) false)))
+              (is (true? (deref started (test-support/await-budget-ms) false)))
               (is (= :applied (:status (shell/apply-shell-attempts! context))))
               (deliver release terminal)
               (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
@@ -429,7 +429,7 @@
                                    :phase :running}]}]
             (with-redefs [process/get get-record]
               (shell/apply-shell-attempts! context)
-              (is (= true (deref interrupted (test-support/await-budget-ms) false)))
+              (is (true? (deref interrupted (test-support/await-budget-ms) false)))
               (await-eventually #(empty? @(:terminal-observers (#'shell/state))))
               (let [after-interruption (weaver/show rt (:id gate))]
                 (is (= "attempt-interrupted-observer"
@@ -438,7 +438,7 @@
                        (attr after-interruption :shell/running)))
                 (is (nil? (attr after-interruption :gate/error))))
               (shell/apply-shell-attempts! context)
-              (is (= true (deref resumed (test-support/await-budget-ms) false)))
+              (is (true? (deref resumed (test-support/await-budget-ms) false)))
               (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
               (let [after (weaver/show rt (:id gate))]
                 (is (= "closed" (:state after)))
@@ -489,11 +489,11 @@
             (test-support/activate-spool! rt :millhouse/spools-shell
                                           'millhouse.test-modules.shell-executor
                                           :after [:millhouse/spools-workflow])
-            (is (= true (deref first-read (test-support/await-budget-ms) false)))
+            (is (true? (deref first-read (test-support/await-budget-ms) false)))
             (is (= "attempt-deferred-startup"
                    (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
             (deliver admitted true)
-            (is (= true (deref acknowledged (test-support/await-budget-ms) false)))
+            (is (true? (deref acknowledged (test-support/await-budget-ms) false)))
             (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
             (is (= "closed" (:state (weaver/show rt (:id gate)))))
             (is (zero? @launches))
