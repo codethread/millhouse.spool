@@ -321,6 +321,186 @@
         (is (= "attempt-deferred"
                (attr (weaver/show rt (:id gate)) :shell/attempt-id)))))))
 
+(deftest read-shell-attempts-resolves-run-id-from-workflow-root
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "root-derived"
+                       (single-gate "root-derived" {"shell/argv" ["true"]})
+                       {})
+      (let [gate (shell-gate-strand rt "root-derived")]
+        (weaver/update! rt (:id gate)
+                        {:attributes {"shell/attempt-id" "attempt-root"
+                                      "shell/custody-handle" "handle-root"
+                                      "shell/running" "attempt-root"}})
+        (let [attempt (first (shell/read-shell-attempts {:runtime rt}))]
+          (is (nil? (attr gate :workflow/run-id)))
+          (is (= "root-derived" (:run-id attempt))))))))
+
+(deftest repeated-reconciliation-submits-one-retained-observer
+  (with-shell
+    (fn [rt]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            started (promise)
+            release (promise)
+            calls (atom 0)
+            terminal {:handle "handle-observer"
+                      :key "attempt-observer"
+                      :phase :terminal
+                      :output {:stdout-ref (.getAbsolutePath stdout)
+                               :stderr-ref (.getAbsolutePath stderr)}
+                      :exit {:code 1}}
+            get-record (fn [_runtime _handle]
+                         (swap! calls inc)
+                         (deliver started true)
+                         @release)]
+        (spit stdout "")
+        (spit stderr "")
+        (let [gate (weaver/add! rt {:title "Retained observer"
+                                    :attributes {"workflow/gate" "shell"
+                                                 "shell/attempt-id" "attempt-observer"
+                                                 "shell/custody-handle" "handle-observer"
+                                                 "shell/running" "attempt-observer"}})
+              context {:runtime rt
+                       :desired [{:gate-id (:id gate)
+                                  :run-id "observer"
+                                  :state "active"
+                                  :attempt-id "attempt-observer"
+                                  :custody-handle "handle-observer"}]
+                       :actual [{:handle "handle-observer"
+                                 :key "attempt-observer"
+                                 :phase :running}]}]
+          (with-redefs [process/get get-record]
+            (try
+              (is (= :applied (:status (shell/apply-shell-attempts! context))))
+              (is (= true (deref started (test-support/await-budget-ms) false)))
+              (is (= :applied (:status (shell/apply-shell-attempts! context))))
+              (deliver release terminal)
+              (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+              (is (= 1 @calls))
+              (finally
+                (deliver release terminal)))))))))
+
+(deftest interrupted-observer-can-resume-without-losing-attempt
+  (with-shell
+    (fn [rt]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            interrupted (promise)
+            resumed (promise)
+            calls (atom 0)
+            terminal {:handle "handle-interrupted"
+                      :key "attempt-interrupted-observer"
+                      :phase :terminal
+                      :output {:stdout-ref (.getAbsolutePath stdout)
+                               :stderr-ref (.getAbsolutePath stderr)}
+                      :exit {:code 0}}
+            get-record (fn [_runtime _handle]
+                         (case (swap! calls inc)
+                           1 (do
+                               (deliver interrupted true)
+                               (throw (InterruptedException.)))
+                           2 (do
+                               (deliver resumed true)
+                               terminal)))]
+        (spit stdout "")
+        (spit stderr "")
+        (workflow/start! "observer-interrupted"
+                         (single-gate "observer-interrupted"
+                                      {"shell/argv" ["true"]
+                                       "gate/error" "held"})
+                         {})
+        (let [gate (shell-gate-strand rt "observer-interrupted")]
+          (weaver/update! rt (:id gate)
+                          {:attributes {"gate/error" nil
+                                        "shell/running" "attempt-interrupted-observer"
+                                        "shell/attempt-id" "attempt-interrupted-observer"
+                                        "shell/custody-handle" "handle-interrupted"}})
+          (let [context {:runtime rt
+                         :desired [{:gate-id (:id gate)
+                                    :run-id "observer-interrupted"
+                                    :state "active"
+                                    :attempt-id "attempt-interrupted-observer"
+                                    :custody-handle "handle-interrupted"}]
+                         :actual [{:handle "handle-interrupted"
+                                   :key "attempt-interrupted-observer"
+                                   :phase :running}]}]
+            (with-redefs [process/get get-record]
+              (shell/apply-shell-attempts! context)
+              (is (= true (deref interrupted (test-support/await-budget-ms) false)))
+              (await-eventually #(empty? @(:terminal-observers (#'shell/state))))
+              (let [after-interruption (weaver/show rt (:id gate))]
+                (is (= "attempt-interrupted-observer"
+                       (attr after-interruption :shell/attempt-id)))
+                (is (= "attempt-interrupted-observer"
+                       (attr after-interruption :shell/running)))
+                (is (nil? (attr after-interruption :gate/error))))
+              (shell/apply-shell-attempts! context)
+              (is (= true (deref resumed (test-support/await-budget-ms) false)))
+              (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+              (let [after (weaver/show rt (:id gate))]
+                (is (= "closed" (:state after)))
+                (is (nil? (attr after :gate/error)))))))))))
+
+(deftest deferred-startup-custody-read-retries-after-admission
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "deferred-startup"
+                       (single-gate "deferred-startup"
+                                    {"shell/argv" ["true"]})
+                       {})
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            first-read (promise)
+            admitted (promise)
+            acknowledged (promise)
+            reads (atom 0)
+            launches (atom 0)
+            terminal {:handle "handle-deferred-startup"
+                      :key "attempt-deferred-startup"
+                      :phase :terminal
+                      :output {:stdout-ref (.getAbsolutePath stdout)
+                               :stderr-ref (.getAbsolutePath stderr)}
+                      :exit {:code 0}}
+            list-owned (fn [_runtime _owner]
+                         (if (= 1 (swap! reads inc))
+                           (do
+                             (deliver first-read true)
+                             (throw (ex-info "Mill has not admitted Weaver"
+                                             {:code "process/control-unavailable"})))
+                           (do @admitted [terminal])))
+            gate (shell-gate-strand rt "deferred-startup")]
+        (spit stdout "")
+        (spit stderr "")
+        (weaver/update! rt (:id gate)
+                        {:attributes {"shell/running" "attempt-deferred-startup"
+                                      "shell/attempt-id" "attempt-deferred-startup"
+                                      "shell/custody-handle" "handle-deferred-startup"}})
+        (with-redefs [process/list-owned list-owned
+                      process/launch! (fn [& _] (swap! launches inc))
+                      process/acknowledge! (fn [_ _ _]
+                                             (deliver acknowledged true)
+                                             {:acknowledged true})]
+          (try
+            (test-support/activate-spool! rt :millhouse/spools-shell
+                                          'millhouse.test-modules.shell-executor
+                                          :after [:millhouse/spools-workflow])
+            (is (= true (deref first-read (test-support/await-budget-ms) false)))
+            (is (= "attempt-deferred-startup"
+                   (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+            (deliver admitted true)
+            (is (= true (deref acknowledged (test-support/await-budget-ms) false)))
+            (await-eventually #(nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+            (is (= "closed" (:state (weaver/show rt (:id gate)))))
+            (is (zero? @launches))
+            (is (nil? (attr (weaver/show rt (:id gate)) :gate/error)))
+            (finally
+              (deliver admitted true))))))))
+
 (deftest custody-listing-rethrows-unrelated-failure-with-empty-desired
   (with-runtime
     (fn [rt _]
@@ -474,7 +654,7 @@
                (ex-data failure)))))))
 
 (def ^:private canonical-m0-producer
-  "71c0ed3d80fcad090b74a704a8eb165a3fad996e")
+  "09a2cad2ab4ee203051ed3cc66bb0a177105a979")
 
 (defn- millstrand-source-root []
   (test-alpha/spool-checkout-root "millstrand/api/process/alpha.clj"))
@@ -945,7 +1125,7 @@
   ;; without a state-version bump would survive refresh as a stale map.
   (test-support/assert-state-shape
    #'shell/new-state
-   #{:scan-monitor :worker-executor :close-fn}))
+   #{:scan-monitor :terminal-observers :reconciliation-pending? :worker-executor :close-fn}))
 
 (deftest module-forms-publish-and-preserve-runtime-pool
   (with-redefs [process/list-owned (fn [_ _] [])]
