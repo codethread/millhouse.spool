@@ -13,7 +13,8 @@
             [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha])
-  (:import [java.io File]))
+  (:import [java.io File]
+           [java.util.concurrent Executors]))
 
 (defn- with-shell [f]
   ;; Unit worlds do not have a Mill control channel. Keep these focused tests
@@ -382,6 +383,78 @@
               (is (= 1 @calls))
               (finally
                 (deliver release terminal)))))))))
+
+(deftest shutdown-observer-rejection-releases-claim-for-later-reconciliation
+  (with-shell
+    (fn [rt]
+      (let [stdout (temp-file ".stdout")
+            stderr (temp-file ".stderr")
+            cleared (promise)
+            shutdown-executor (Executors/newSingleThreadExecutor)
+            usable-executor (Executors/newSingleThreadExecutor)
+            clear-attempt (deref #'shell/clear-attempt!)
+            terminal {:handle "handle-shutdown-observer"
+                      :key "attempt-shutdown-observer"
+                      :phase :terminal
+                      :output {:stdout-ref (.getAbsolutePath stdout)
+                               :stderr-ref (.getAbsolutePath stderr)}
+                      :exit {:code 0}}]
+        (spit stdout "")
+        (spit stderr "")
+        (try
+          (workflow/start! "observer-shutdown"
+                           (single-gate "observer-shutdown"
+                                        {"shell/argv" ["true"]
+                                         "gate/error" "held"})
+                           {})
+          (let [gate (shell-gate-strand rt "observer-shutdown")
+                context {:runtime rt
+                         :desired [{:gate-id (:id gate)
+                                    :run-id "observer-shutdown"
+                                    :state "active"
+                                    :attempt-id "attempt-shutdown-observer"
+                                    :custody-handle "handle-shutdown-observer"}]
+                         :actual [{:handle "handle-shutdown-observer"
+                                   :key "attempt-shutdown-observer"
+                                   :phase :running}]}]
+            (weaver/update! rt (:id gate)
+                            {:attributes {"gate/error" nil
+                                          "shell/running" "attempt-shutdown-observer"
+                                          "shell/attempt-id" "attempt-shutdown-observer"
+                                          "shell/custody-handle" "handle-shutdown-observer"}})
+            (.shutdownNow shutdown-executor)
+            (with-redefs-fn {#'shell/worker-executor (constantly shutdown-executor)}
+              (fn []
+                (doseq [actual [(:actual context) {:status :deferred :facts []}]]
+                  (shell/apply-shell-attempts! (assoc context :actual actual))
+                  (is (empty? @(:terminal-observers (#'shell/state))))
+                  (is (false? @(:reconciliation-pending? (#'shell/state)))))))
+            (let [after-rejection (weaver/show rt (:id gate))]
+              (is (= "attempt-shutdown-observer"
+                     (attr after-rejection :shell/attempt-id)))
+              (is (= "attempt-shutdown-observer"
+                     (attr after-rejection :shell/running)))
+              (is (nil? (attr after-rejection :gate/error)))
+              (is (empty? @(:terminal-observers (#'shell/state)))))
+            (with-redefs-fn {#'shell/worker-executor (constantly usable-executor)
+                             #'process/get (fn [_runtime _handle] terminal)
+                             #'process/acknowledge! (fn [& _] {:acknowledged true})
+                             #'shell/clear-attempt! (fn [& args]
+                                                      (let [result (apply clear-attempt args)]
+                                                        (deliver cleared true)
+                                                        result))}
+              (fn []
+                (shell/apply-shell-attempts! context)
+                (is (true? (deref cleared (test-support/await-budget-ms) false)))
+                (await-eventually #(empty? @(:terminal-observers (#'shell/state))))
+                (is (empty? @(:terminal-observers (#'shell/state))))
+                (let [after-reconciliation (weaver/show rt (:id gate))]
+                  (is (= "closed" (:state after-reconciliation)))
+                  (is (nil? (attr after-reconciliation :shell/attempt-id)))
+                  (is (nil? (attr after-reconciliation :gate/error)))))))
+          (finally
+            (.shutdownNow shutdown-executor)
+            (.shutdownNow usable-executor)))))))
 
 (deftest interrupted-observer-can-resume-without-losing-attempt
   (with-shell

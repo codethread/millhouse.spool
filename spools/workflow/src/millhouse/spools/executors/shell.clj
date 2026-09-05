@@ -30,7 +30,8 @@
             [millstrand.api.runtime.alpha :as runtime])
   (:import [java.nio.charset StandardCharsets]
            [java.time Instant]
-           [java.util.concurrent Executors ExecutorService ThreadFactory TimeUnit]))
+           [java.util.concurrent Executors ExecutorService RejectedExecutionException
+            ThreadFactory TimeUnit]))
 
 (def ^:private event-types
   #{:strand/added :strand/updated :batch/applied :strand/burned :strand/superseded})
@@ -445,39 +446,51 @@
   observers for one attempt, while the original absolute deadline remains the
   timeout boundary."
   [runtime attempt handle deadline]
-  (let [attempt-id (:attempt-id attempt)
-        observers (:terminal-observers (state))
-        [before _] (swap-vals! observers conj attempt-id)]
-    (when-not (contains? before attempt-id)
-      (try
-        (.execute (worker-executor)
-                  ^Runnable
-                  (fn []
-                    (current/with-runtime runtime
-                      (binding [*runtime* runtime]
-                        (try
-                          (let [{:keys [record timed-out?]}
-                                (await-custody-terminal! runtime (:gate-id attempt)
-                                                         attempt-id handle deadline)]
-                            (terminal-reconcile! runtime (:run-id attempt)
-                                                 (:gate-id attempt) attempt-id
-                                                 handle record timed-out?))
-                          (catch InterruptedException _ nil)
-                          (catch Throwable throwable
-                            (when-not (contains? #{"process/control-unavailable" "process/stale-weaver"}
-                                                 (:code (ex-data throwable)))
-                              (owner-local-failure!
-                               attempt
-                               (str "shell custody observation failed for attempt "
-                                    attempt-id ": " (ex-message throwable)))))
-                          (finally
-                            (swap! observers disj attempt-id)))))))
-        (catch Throwable throwable
-          (swap! observers disj attempt-id)
-          (owner-local-failure!
-           attempt
-           (str "shell custody observation could not be scheduled for attempt "
-                attempt-id ": " (ex-message throwable))))))))
+  (binding [*runtime* runtime]
+    (let [attempt-id (:attempt-id attempt)
+          observers (:terminal-observers (state))
+          executor (worker-executor)
+          [before _] (swap-vals! observers conj attempt-id)]
+      (when-not (contains? before attempt-id)
+        (try
+          (.execute executor
+                    ^Runnable
+                    (fn []
+                      (current/with-runtime runtime
+                        (binding [*runtime* runtime]
+                          (try
+                            (let [{:keys [record timed-out?]}
+                                  (await-custody-terminal! runtime (:gate-id attempt)
+                                                           attempt-id handle deadline)]
+                              (terminal-reconcile! runtime (:run-id attempt)
+                                                   (:gate-id attempt) attempt-id
+                                                   handle record timed-out?))
+                            (catch InterruptedException _ nil)
+                            (catch Throwable throwable
+                              (when-not (contains? #{"process/control-unavailable" "process/stale-weaver"}
+                                                   (:code (ex-data throwable)))
+                                (owner-local-failure!
+                                 attempt
+                                 (str "shell custody observation failed for attempt "
+                                      attempt-id ": " (ex-message throwable)
+                                      (some->> (ex-data throwable) (str " "))))))
+                            (finally
+                              (swap! observers disj attempt-id)))))))
+          (catch RejectedExecutionException throwable
+            (swap! observers disj attempt-id)
+            (when-not (.isShutdown executor)
+              (owner-local-failure!
+               attempt
+               (str "shell custody observation could not be scheduled for attempt "
+                    attempt-id ": " (ex-message throwable)
+                    (some->> (ex-data throwable) (str " "))))))
+          (catch Throwable throwable
+            (swap! observers disj attempt-id)
+            (owner-local-failure!
+             attempt
+             (str "shell custody observation could not be scheduled for attempt "
+                  attempt-id ": " (ex-message throwable)
+                  (some->> (ex-data throwable) (str " "))))))))))
 
 (defn- mark-timeout!
   "Record timeout intent before asking Mill to cancel the retained process."
@@ -744,7 +757,8 @@
           (owner-local-failure!
            attempt
            (str "shell custody fact could not be reconciled for attempt "
-                (:attempt-id attempt) ": " (ex-message throwable))))))))
+                (:attempt-id attempt) ": " (ex-message throwable)
+                (some->> (ex-data throwable) (str " ")))))))))
 
 (defn- deferred-custody-read?
   [actual]
@@ -766,37 +780,44 @@
   waiter for that seam; after admission, re-read durable attempts and use the
   normal reconciler. No process is launched and no timeout is reset."
   [runtime]
-  (let [pending? (:reconciliation-pending? (state))]
-    (when (compare-and-set! pending? false true)
-      (try
-        (.execute (worker-executor)
-                  ^Runnable
-                  (fn []
-                    (current/with-runtime runtime
-                      (binding [*runtime* runtime]
-                        (try
-                          (loop []
-                            (let [actual (read-shell-custody {:runtime runtime})]
-                              (if (deferred-custody-read? actual)
-                                (do
-                                  (Thread/sleep (long process-poll-ms))
-                                  (recur))
-                                (apply-shell-attempts!
-                                 {:runtime runtime
-                                  :desired (read-shell-attempts {:runtime runtime})
-                                  :actual actual}))))
-                          (catch InterruptedException _ nil)
-                          (catch Throwable throwable
-                            (doseq [attempt (read-shell-attempts {:runtime runtime})]
-                              (owner-local-failure!
-                               attempt
-                               (str "shell custody reconciliation failed: "
-                                    (ex-message throwable)))))
-                          (finally
-                            (reset! pending? false)))))))
-        (catch Throwable throwable
-          (reset! pending? false)
-          (throw throwable))))))
+  (binding [*runtime* runtime]
+    (let [pending? (:reconciliation-pending? (state))
+          executor (worker-executor)]
+      (when (compare-and-set! pending? false true)
+        (try
+          (.execute executor
+                    ^Runnable
+                    (fn []
+                      (current/with-runtime runtime
+                        (binding [*runtime* runtime]
+                          (try
+                            (loop []
+                              (let [actual (read-shell-custody {:runtime runtime})]
+                                (if (deferred-custody-read? actual)
+                                  (do
+                                    (Thread/sleep (long process-poll-ms))
+                                    (recur))
+                                  (apply-shell-attempts!
+                                   {:runtime runtime
+                                    :desired (read-shell-attempts {:runtime runtime})
+                                    :actual actual}))))
+                            (catch InterruptedException _ nil)
+                            (catch Throwable throwable
+                              (doseq [attempt (read-shell-attempts {:runtime runtime})]
+                                (owner-local-failure!
+                                 attempt
+                                 (str "shell custody reconciliation failed: "
+                                      (ex-message throwable)
+                                      (some->> (ex-data throwable) (str " "))))))
+                            (finally
+                              (reset! pending? false)))))))
+          (catch RejectedExecutionException throwable
+            (reset! pending? false)
+            (when-not (.isShutdown executor)
+              (throw throwable)))
+          (catch Throwable throwable
+            (reset! pending? false)
+            (throw throwable)))))))
 
 (defn apply-shell-attempts!
   "Reconcile durable shell attempts with retained Mill custody facts.
@@ -804,7 +825,10 @@
   Missing, stale, and mismatched facts are owner-local errors. They are returned
   in the reconcile summary and, when a gate still exists, stamped on that gate;
   the reconciler does not invent a replacement attempt or acknowledge evidence
-  it cannot correlate."
+  it cannot correlate.
+
+  Deferred admission schedules one runtime-owned retry reader, stops at worker
+  shutdown, and never relaunches processes."
   [{:keys [runtime] :as context}]
   (let [desired (:desired context)
         actual (:actual context)
