@@ -94,6 +94,7 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           cli: latest
+          clj-kondo: 2026.08.04
       - name: Tests
         working-directory: millhouse.spool
         run: make test TEST_NAMESPACES="${{ matrix.namespaces }}"
