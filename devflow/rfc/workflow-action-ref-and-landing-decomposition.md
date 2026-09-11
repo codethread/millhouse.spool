@@ -110,9 +110,17 @@ holder, workflow frontier, and timestamps.
   safe explicit withdrawal, repeatable side effects, and release before
   housekeeping. Follow the repositories' required quality checks.
 
+### Review belongs before landing
+
+Millstrand's configured Devflow cards route finishes after an approved proposal lands and its implementation cards are reviewed. Ralph or another development workflow implements those cards afterward. Proposal and card review therefore do not replace final code review.
+
+Keep the full change-review roster in one repository-owned `review` workflow shared by story, fix, and Ralph. It owns review, findings resolution, and validation, and finishes with reviewed work. Landing accepts that work as an existing draft or ready PR, or as a branch needing a PR. It reuses completed review, including the review of a proposal being landed before implementation. It does not force PR preparation or an unconditional review roster onto every merge.
+
+A broad user instruction to “land it” can authorize an agent to complete missing implementation and review through the existing development process before entering land. The workflow's own instructions describe these responsibilities; there is no separate landing guide.
+
 ### Implementation and activation record
 
-The replacement lives in Skein's `me.workflows.land`, `land-actions`, and
+The replacement lives in Skein's `me.workflows.land`, `review`, `card-actions`, and
 `merge-queue`. PR recording and sign-off use ordinary checkpoints; short code
 gates own card changes. Queue executors admit and release turns without occupying
 a worker while waiting. The old `land` operation and its action-ref dispatch are
@@ -133,8 +141,7 @@ retired merely because they are old. Their persisted instructions remain evidenc
 for explicit reconciliation; the implementation does not replay or migrate them.
 
 The new shell API requires a workflow dependency update and weaver replacement.
-The shared running weaver has not been restarted. Follow Skein's explicit
-restart-approval rule after reviewing and landing the prepared changes.
+The proposed dependency and workflow definitions have not been activated in the shared weaver. Account for active runs before replacing their live basis.
 
 ## 1. Brief
 
