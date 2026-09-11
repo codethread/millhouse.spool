@@ -1,10 +1,147 @@
 # RFC: Reassess `workflow/action-ref` through landing decomposition
 
-- **Status:** Parked exploration; no implementation decision
+- **Status:** Simplification implemented for review on 2026-09-11; live activation pending
 - **Captured:** 2026-08-15
 - **Scope:** `millhouse.spools.workflow`, `millhouse.spools.millstrand-workflows`, and Skein's local landing workflows/policy
 - **Follow-up strand:** [`wef3s` — Revisit action-ref and landing decomposition](strand://wef3s)
 - **Conversation provenance:** Pi session `01a003e2-b9e2-7048-b71b-4472a2afa90a`
+
+## 0. Agreed direction — 2026-09-11
+
+This section records the decisions from revisiting the RFC with the user. It
+supersedes conflicting proposals in sections 1–20, which preserve the original
+August exploration. The replacement workflow is implemented in the
+`codex/simplify-land` Skein worktree and is undergoing final validation.
+
+Inspection confirmed that Skein still uses the overloaded `land` operation and
+action-ref dispatch. Its files have moved to
+`../skein-src/.millstrand/me/workflows/land.clj` and `land_policy.clj`. Millhouse's
+workflow source still projects action refs but no longer authors the assignments
+described in the historical inventory below.
+
+### Ordinary bookkeeping belongs in workflow gates
+
+Record the PR through a checkpoint and express card movement, abort bookkeeping,
+and terminal cleanup as explicit, short code gates. A card may briefly lag the
+workflow while its update is visibly pending. On failure, stop at that gate and
+make the unfinished work available for deliberate retry.
+
+Do not add custom compensated transitions merely to make card and workflow state
+appear to change together. In particular, an abort decision remains an abort if
+later bookkeeping fails. The failed gate is the pending-work record; a separate
+reconciliation mechanism is unnecessary. Side-effecting helpers must tolerate a
+retry after their write succeeded but gate completion failed.
+
+This also addresses weaknesses found in the current implementation: its abort
+handler can compensate the card after routing has already committed, and terminal
+completion closes the workflow step before releasing its lock and queue entry.
+The current implementation is therefore not a failure-semantics baseline to copy
+uncritically.
+
+### Sign-off authorizes the queued landing
+
+Coordinator sign-off joins the queue and authorizes the run to merge automatically
+when its turn arrives. There is no separate `merge-queue approve` ceremony or
+mandatory second sign-off after a clean rebase.
+
+That authority also covers repairing conflicts or failed checks, obtaining focused
+review where the changes warrant it, and validating the final HEAD. Agent judgment
+remains intact: if a rebase substantially changes the work, the agent may explicitly
+abort and consult the user instead of continuing to merge.
+
+### Validate before merging and release before housekeeping
+
+The protected sequence is:
+
+1. Reach the queue head and acquire the merge lock.
+2. Fetch main; rebase onto it and push if the branch is behind.
+3. Validate the final branch HEAD. Reuse the existing successful result only if
+   HEAD has not changed.
+4. Merge the PR.
+5. Fast-forward canonical main.
+6. Release the merge lock and close the queue reservation.
+
+Holding the merge turn through these steps prevents another cooperating landing
+from advancing main between the freshness check and merge. Validation covers the
+exact branch HEAD incorporating current main. Do not rerun quality on canonical
+main after merging the already-validated tree.
+
+Worktree removal, card completion, and resource tidying follow lock release. A
+failure in that housekeeping leaves its own run unfinished without blocking the
+next landing.
+
+### Strict FIFO survives failures and timeouts
+
+A run that fails rebase, validation, or another protected step keeps its queue
+position and any acquired merge lock while it is repaired. Retry in place. Do not
+automatically withdraw it or requeue it at the back: that risks starving a PR.
+
+Only successful completion of the protected sequence or explicit withdrawal
+advances the queue. Await timeouts preserve reservations. Queue mutation and lock
+acquisition remain serialized. Deterministic active ordering is required; reuse
+of a sequence number after the queue empties is not itself a FIFO failure.
+
+### Explicit withdrawal is available to every agent
+
+An explicit withdrawal names the queue entry and records a reason. Any agent may
+abort another agent's land run; agents are trusted to exercise that authority
+appropriately. Do not add owner-only restrictions, mandatory human approval, or
+automatic eviction based on elapsed time.
+
+Stop the withdrawn run's merge work before releasing its reservation and lock.
+It must not later resume into merging after the next run takes over. Keep status
+evidence sufficient for an agent to make this decision: queue position, lock
+holder, workflow frontier, and timestamps.
+
+### Implementation defaults and remaining work
+
+- Keep one run ID across continuations and keep queue coordination Skein-local.
+- Remove landing's dependence on action refs. Leave generic engine support alone;
+  neither a public action-ref removal nor a new persisted step-ref is required.
+- Use workflow titles, checkpoints, and gate status for progress reporting.
+- Keep waiting separate from short queue mutations; do not occupy a bounded code
+  executor worker with a long queue wait.
+- Resolve the exact workflow/module and command layout during implementation.
+  The overloaded `land complete` dispatch and special approval operation should
+  disappear; the shared queue remains the custom coordination concern.
+- Before replacing live definitions, inspect active runs and their persisted
+  requests. This decision record does not migrate or restart any running weaver.
+- Verify concurrent admission and acquisition, retained FIFO on failure/timeout,
+  safe explicit withdrawal, repeatable side effects, and release before
+  housekeeping. Follow the repositories' required quality checks.
+
+### Review belongs before landing
+
+Millstrand's configured Devflow cards route finishes after an approved proposal lands and its implementation cards are reviewed. Ralph or another development workflow implements those cards afterward. Proposal and card review therefore do not replace final code review.
+
+Keep the full change-review roster in one repository-owned `review` workflow shared by story, fix, and Ralph. It owns review, findings resolution, and validation, and finishes with reviewed work. Landing accepts that work as an existing draft or ready PR, or as a branch needing a PR. It reuses completed review, including the review of a proposal being landed before implementation. It does not force PR preparation or an unconditional review roster onto every merge.
+
+A broad user instruction to “land it” can authorize an agent to complete missing implementation and review through the existing development process before entering land. The workflow's own instructions describe these responsibilities; there is no separate landing guide.
+
+### Implementation and activation record
+
+The replacement lives in Skein's `me.workflows.land`, `review`, `card-actions`, and
+`merge-queue`. PR recording and sign-off use ordinary checkpoints; short code
+gates own card changes. Queue executors admit and release turns without occupying
+a worker while waiting. The old `land` operation and its action-ref dispatch are
+removed. The workflow's own instructions describe driving and repairing a run.
+
+Millhouse adds `millhouse.spools.executors.shell/quiesce-run!`. It serializes
+withdrawal with process launch, freezes future shell gates, and waits for owned
+process cancellation before the queue can release a turn. Uncertain cancellation
+retains the custody fact and reservation for explicit reconciliation. A merge
+command that has already started is also a reconciliation case: stopping its
+local client cannot undo a request GitHub may have accepted. Failed withdrawal
+leaves the original turn held; deliberately resume its frozen gates after repair.
+
+The workspace smoke test successfully loaded the complete replacement config in
+a disposable world. Before activation, inspection found 18 legacy active land
+roots and no active merge queue entries or merge locks. These records are not
+retired merely because they are old. Their persisted instructions remain evidence
+for explicit reconciliation; the implementation does not replay or migrate them.
+
+The new shell API requires a workflow dependency update and weaver replacement.
+The proposed dependency and workflow definitions have not been activated in the shared weaver. Account for active runs before replacing their live basis.
 
 ## 1. Brief
 

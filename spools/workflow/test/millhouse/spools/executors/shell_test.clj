@@ -101,6 +101,16 @@
    (workflow/gate :check "Run shell check" :shell :depends-on [:first] :attributes (assoc gate-attrs "test/run-id" run-id))
    (workflow/step :after "After" :self :depends-on [:check])))
 
+(defn- two-shell-gates
+  "Two active shell gates, with only the first one on the ready frontier."
+  [run-id gate-attrs]
+  (workflow/workflow
+   "Shell withdrawal"
+   (workflow/gate :first "First shell" :shell
+                  :attributes (assoc gate-attrs "test/run-id" run-id))
+   (workflow/gate :second "Second shell" :shell :depends-on [:first]
+                  :attributes (assoc gate-attrs "test/run-id" run-id))))
+
 (defn- idle-workflow []
   (workflow/workflow
    "Idle workflow"
@@ -117,6 +127,111 @@
 (defn- temp-file [suffix]
   (doto (File/createTempFile "shell-test" suffix)
     (.deleteOnExit)))
+
+(deftest quiesce-freezes-all-active-shell-gates-in-the-run
+  (with-shell
+    (fn [rt]
+      (workflow/start! "quiesce-all"
+                       (two-shell-gates "quiesce-all" {"gate/error" "held"})
+                       {})
+      (let [result (shell/quiesce-run! "quiesce-all" "withdrawn")
+            gates (weaver/list rt [:and [:= [:attr "workflow/gate"] "shell"]
+                                   [:= [:attr "test/run-id"] "quiesce-all"]] {})]
+        (is (= "quiesce-all" (:run-id result)))
+        (is (= 2 (count (:gates result))))
+        (is (= #{"withdrawn"} (set (map #(attr % :gate/error) gates))))
+        (is (every? (comp false? :attempted?) (:gates result)))))))
+
+(deftest quiesce-cancels-a-running-owned-attempt
+  (with-shell
+    (fn [rt]
+      (workflow/start! "quiesce-running"
+                       (single-gate "quiesce-running"
+                                    {"gate/error" "held"
+                                     "shell/argv" ["sh" "-c" "sleep 30"]})
+                       {})
+      (let [gate (shell-gate-strand rt "quiesce-running")
+            attempt-id "quiesce-running-attempt"
+            record (process/launch! rt :millhouse/shell-executor attempt-id
+                                    {:argv ["sh" "-c" "sleep 30"]
+                                     :cwd "." :env {}})]
+        (weaver/update! rt (:id gate)
+                        {:attributes {"gate/error" nil
+                                      "shell/running" attempt-id
+                                      "shell/attempt-id" attempt-id
+                                      "shell/custody-handle" (:handle record)}})
+        (let [cancel process/cancel!
+              result (with-redefs [process/cancel! (fn [& args]
+                                                     (apply cancel args)
+                                                     record)]
+                       (shell/quiesce-run! "quiesce-running" "withdrawn"))
+              after (weaver/show rt (:id gate))]
+          (is (true? (:attempted? (first (:gates result)))))
+          (is (= "withdrawn" (attr after :gate/error)))
+          (is (= :terminal (:phase (process/get rt (:handle record))))))))))
+
+(deftest quiesce-rejects-uncertain-cancellation-and-retains-freeze
+  (with-shell
+    (fn [rt]
+      (workflow/start! "quiesce-uncertain"
+                       (single-gate "quiesce-uncertain"
+                                    {"gate/error" "held"
+                                     "shell/argv" ["sh" "-c" "sleep 30"]})
+                       {})
+      (let [gate (shell-gate-strand rt "quiesce-uncertain")
+            attempt-id "quiesce-uncertain-attempt"
+            record (process/launch! rt :millhouse/shell-executor attempt-id
+                                    {:argv ["sh" "-c" "sleep 30"]
+                                     :cwd "." :env {}})]
+        (weaver/update! rt (:id gate)
+                        {:attributes {"gate/error" nil
+                                      "shell/running" attempt-id
+                                      "shell/attempt-id" attempt-id
+                                      "shell/custody-handle" (:handle record)}})
+        (let [uncertain (assoc record :phase :terminal
+                               :cancellation {:reason "signal failed" :stop :uncertain})
+              acknowledgements (atom [])]
+          (with-redefs [process/cancel! (fn [& _] uncertain)
+                        process/get (fn [& _] uncertain)
+                        process/acknowledge! (fn [& args] (swap! acknowledgements conj args))]
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cancellation is uncertain"
+                                  (shell/quiesce-run! "quiesce-uncertain" "withdrawn")))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cancellation is uncertain"
+                                  (#'shell/terminal-reconcile!
+                                   rt "quiesce-uncertain" (:id gate) attempt-id
+                                   (:handle record) uncertain false)))
+            (is (empty? @acknowledgements))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cancellation is uncertain"
+                                  (shell/quiesce-run! "quiesce-uncertain" "withdrawn")))))
+        (let [after (weaver/show rt (:id gate))]
+          (is (= "withdrawn" (attr after :gate/error)))
+          (is (= attempt-id (attr after :shell/attempt-id)))
+          (is (= (:handle record) (attr after :shell/custody-handle))))))))
+
+(deftest claimed-attempt-cannot-launch-after-quiesce
+  (with-shell
+    (fn [rt]
+      (workflow/start! "quiesce-claimed"
+                       (single-gate "quiesce-claimed"
+                                    {"gate/error" "held"
+                                     "shell/argv" ["true"]})
+                       {})
+      (let [gate (shell-gate-strand rt "quiesce-claimed")
+            attempt-id "quiesce-claimed-attempt"]
+        (weaver/update! rt (:id gate)
+                        {:attributes {"gate/error" nil
+                                      "shell/running" attempt-id
+                                      "shell/attempt-id" attempt-id}})
+        (let [result (shell/quiesce-run! "quiesce-claimed" "withdrawn")]
+          (is (false? (:attempted? (first (:gates result))))))
+        (#'shell/run-gate! rt "quiesce-claimed" (:id gate) attempt-id)
+        (is (nil? (attr (weaver/show rt (:id gate)) :shell/custody-handle)))
+        (is (nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
+        (is (= [] (process/list-owned rt :millhouse/shell-executor)))
+        (weaver/update! rt (:id gate) {:attributes {"gate/error" nil}})
+        (shell/scan!)
+        (await-eventually #(= "closed" (:state (weaver/show rt (:id gate)))))
+        (is (= "After" (:title (first (workflow/ready "quiesce-claimed")))))))))
 
 (deftest retained-custody-output-keeps-the-combined-tail-bound
   (let [stdout (temp-file ".stdout")

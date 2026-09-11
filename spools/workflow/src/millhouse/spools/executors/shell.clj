@@ -22,7 +22,7 @@
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.process.alpha :as process]
             [millstrand.api.scheduler.alpha :as scheduler]
-            [millstrand.api.spool.alpha :refer [fail! attr-get require-valid!]]
+            [millstrand.api.spool.alpha :refer [fail! attr-get require-valid! poll-until!]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.graph.alpha :as graph]
@@ -395,13 +395,18 @@
     (if (= "closed" (:state gate))
       :already-committed
       (let [output (custody-output (:output record))]
-        (if (and (not timed-out?) (:exit record) (zero? (terminal-exit record)))
+        ;; A quiesced gate is frozen even when the process happened to exit
+        ;; successfully before cancellation. Never let that terminal fact
+        ;; route the workflow past the coordinator's withdrawal marker.
+        (if (and (not (stamped? gate :gate/error))
+                 (not timed-out?) (:exit record) (zero? (terminal-exit record)))
           (pass! run-id gate-id attempt-id custody-handle 0 output)
           (fail-attempt! gate-id attempt-id custody-handle
-                         (terminal-error record
-                                         (or timed-out?
-                                             (= "timed-out"
-                                                (attr gate :shell/timeout-intent))))
+                         (or (attr gate :gate/error)
+                             (terminal-error record
+                                             (or timed-out?
+                                                 (= "timed-out"
+                                                    (attr gate :shell/timeout-intent)))))
                          (terminal-exit record) output))
         :committed))
     :stale))
@@ -431,6 +436,9 @@
       (case commit
         :stale :stale
         (do
+          (when (= :uncertain (get-in record [:cancellation :stop]))
+            (fail! "Shell cancellation is uncertain; retain custody for reconciliation"
+                   {:gate-id gate-id :custody-handle custody-handle :record record}))
           ;; Keep the durable timeout wake from racing a terminal commit. A
           ;; failed cancellation leaves the fact unacknowledged for the next
           ;; reconciliation, just like any other failed custody step.
@@ -519,26 +527,45 @@
                                   (:attempt-id attempt) handle)
       (arm-timeout! runtime (:attempt-id attempt) handle deadline))))
 
+(defn- launch-gate!
+  "Launch and persist one claimed attempt while holding the scan monitor.
+
+  Quiescence uses the same monitor to stamp its freeze marker. Keeping the
+  fresh gate check, Mill launch, and handle persistence in this critical
+  section makes a claimed-but-not-launched worker either launch before the
+  freeze (and therefore become cancellable) or not launch at all."
+  [runtime gate-id attempt-id]
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+  #_{:splint/disable [lint/locking-object]}
+  (locking (scan-monitor)
+    (let [gate (weaver/show runtime gate-id)]
+      (when (and (= "active" (:state gate))
+                 (= attempt-id (attr gate :shell/attempt-id))
+                 (= attempt-id (attr gate :shell/running))
+                 (not (stamped? gate :gate/error))
+                 (nil? (attr gate :shell/custody-handle)))
+        (let [_ (require-request! gate)
+              raw-argv (parse-argv gate)
+              timeout-secs (parse-timeout gate)
+              deadline (or (parse-deadline (attr gate :shell/timeout-deadline)
+                                           {:attempt-id attempt-id :gate-id gate-id})
+                           (timeout-deadline runtime timeout-secs))
+              cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
+              process-record (process/launch! runtime custody-owner attempt-id
+                                              {:argv raw-argv :cwd cwd :env {}})
+              custody-handle (:handle process-record)]
+          (persist-custody-handle! gate-id attempt-id custody-handle)
+          (when (and deadline (nil? (attr gate :shell/timeout-deadline)))
+            (stamp-attempt! gate-id attempt-id custody-handle
+                            {timeout-deadline-attribute (deadline-string deadline)}))
+          {:custody-handle custody-handle :deadline deadline})))))
+
 (defn- run-gate!
   "Launch one claimed shell attempt through Mill custody and reconcile its fact."
   [runtime run-id gate-id attempt-id]
   (try
-    (let [gate (weaver/show (rt) gate-id)
-          _ (require-request! gate)
-          raw-argv (parse-argv gate)
-          timeout-secs (parse-timeout gate)
-          deadline (or (parse-deadline (attr gate :shell/timeout-deadline)
-                                       {:attempt-id attempt-id :gate-id gate-id})
-                       (timeout-deadline runtime timeout-secs))
-          argv raw-argv
-          cwd (some-> (or (parse-cwd gate) ".") io/file .getAbsolutePath)
-          process-record (process/launch! runtime custody-owner attempt-id
-                                          {:argv argv :cwd cwd :env {}})
-          custody-handle (:handle process-record)]
-      (persist-custody-handle! gate-id attempt-id custody-handle)
-      (when (and deadline (nil? (attr gate :shell/timeout-deadline)))
-        (stamp-attempt! gate-id attempt-id custody-handle
-                        {timeout-deadline-attribute (deadline-string deadline)}))
+    (when-let [{:keys [custody-handle deadline]}
+               (launch-gate! runtime gate-id attempt-id)]
       (arm-timeout! runtime attempt-id custody-handle deadline)
       (resume-custody-observation! runtime
                                    {:run-id run-id :gate-id gate-id
@@ -552,10 +579,15 @@
     (catch Throwable t
       (when-not (contains? #{"process/control-unavailable" "process/stale-weaver"}
                            (:code (ex-data t)))
-        (let [gate (weaver/show (rt) gate-id)]
-          (when (= "active" (:state gate))
-            (fail-attempt! gate-id attempt-id (attr gate :shell/custody-handle)
-                           (str (ex-message t) (some->> (ex-data t) (str " "))) nil nil)))))))
+        #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+        #_{:splint/disable [lint/locking-object]}
+        (locking (scan-monitor)
+          (let [gate (weaver/show (rt) gate-id)]
+            (when (and (= "active" (:state gate))
+                       (= attempt-id (attr gate :shell/attempt-id))
+                       (not (stamped? gate :gate/error)))
+              (fail-attempt! gate-id attempt-id (attr gate :shell/custody-handle)
+                             (str (ex-message t) (some->> (ex-data t) (str " "))) nil nil))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Event-driven scan
@@ -682,6 +714,120 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Owner declarations and resource reconciliation
+
+(defn- active-shell-gates-for-run
+  [runtime run-id]
+  (let [roots (weaver/list runtime [:and
+                                    [:= :state "active"]
+                                    [:= [:attr "workflow/run-id"] run-id]
+                                    [:= [:attr "workflow/role"] "root"]] {})
+        root (case (count roots)
+               0 (fail! "Unknown active workflow run" {:run-id run-id})
+               1 (first roots)
+               (fail! "Multiple active workflow roots found"
+                      {:run-id run-id :roots (mapv :id roots)}))]
+    (->> (:strands (graph/subgraph runtime [(:id root)]))
+         (filter #(and (= "active" (:state %))
+                       (= "shell" (attr % :workflow/gate))))
+         vec)))
+
+(defn- quiesce-plans!
+  "Freeze every active shell gate in one monitor-serialized scan.
+
+  The claim and handle are retained in the returned plans. A plan with an
+  attempt but no handle is the launch-to-handle seam; quiesce resolves that
+  seam from Mill's owner/key listing before asking Mill to cancel anything."
+  [runtime run-id reason]
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+  #_{:splint/disable [lint/locking-object]}
+  (locking (scan-monitor)
+    (mapv (fn [gate]
+            (stamp! (:id gate) {"gate/error" reason})
+            {:gate-id (:id gate)
+             :attempt-id (attr gate :shell/attempt-id)
+             :custody-handle (attr gate :shell/custody-handle)
+             :attempted? false})
+          (active-shell-gates-for-run runtime run-id))))
+
+(defn- custody-match
+  [facts plan]
+  (let [attempt-id (:attempt-id plan)
+        matches (filter #(= attempt-id (:key %)) facts)
+        handle (:custody-handle plan)]
+    (when (> (count matches) 1)
+      (fail! "Multiple shell custody facts match one quiesced attempt"
+             {:gate-id (:gate-id plan)
+              :attempt-id attempt-id :handles (mapv :handle matches)}))
+    (when (and handle
+               (or (empty? matches)
+                   (not= handle (:handle (first matches)))))
+      (fail! "Shell custody fact does not match the durable gate handle"
+             {:gate-id (:gate-id plan) :attempt-id attempt-id
+              :expected-handle handle
+              :actual-handle (some-> matches first :handle)}))
+    (or handle (some-> matches first :handle))))
+
+(defn- retain-quiesced-handle!
+  [{:keys [gate-id attempt-id custody-handle] :as plan} handle]
+  (when (and handle (nil? custody-handle))
+    (stamp-attempt! gate-id attempt-id nil {"shell/custody-handle" handle}))
+  (when-not handle
+    ;; The frozen worker cannot launch. Clear its reservation so clearing the
+    ;; error later can retry the gate with a new attempt.
+    (clear-attempt! gate-id attempt-id nil))
+  (assoc plan :custody-handle handle :attempted? (some? handle)))
+
+(defn- cancel-quiesced-attempt!
+  [runtime {:keys [gate-id attempt-id custody-handle] :as plan}]
+  (if-not custody-handle
+    plan
+    (let [_ (process/cancel! runtime custody-owner custody-handle)
+          record (poll-until!
+                  (runtime/clock runtime)
+                  {:timeout-ms 10000 :poll-ms process-poll-ms
+                   :check #(process/get runtime custody-handle)
+                   :pred->result #(when (process-terminal? %) %)
+                   :on-timeout #(fail! "Shell cancellation has not settled; retain custody"
+                                       {:gate-id gate-id :attempt-id attempt-id
+                                        :custody-handle custody-handle :record %})})]
+      (when (= :uncertain (get-in record [:cancellation :stop]))
+        (fail! "Shell cancellation is uncertain; retain custody for reconciliation"
+               {:gate-id gate-id :custody-handle custody-handle :record record}))
+      (assoc plan :cancelled? true :custody-phase (:phase record)))))
+
+(defn quiesce-run!
+  "Freeze and stop all active shell gates belonging to `run-id`.
+
+  Return `{:run-id id :gates [...]}`. Each gate reports `:gate-id` and
+  `:attempted?`, true when Mill custody confirms a launch, including recovery
+  through its owner-scoped attempt key. A prevented launch clears its claim.
+
+  Persist `reason` as each gate's `gate/error`. Serialize against claims,
+  launches and terminal acknowledgement until cancellation settles, waiting up
+  to ten seconds per process. Uncertain or unsettled cancellation throws and
+  retains custody and the frozen gates for explicit reconciliation. Settled
+  facts remain for normal executor acknowledgement. Clear the frozen errors
+  only when deliberately resuming the run."
+  [run-id reason]
+  (when-not (and (string? run-id) (not (str/blank? run-id)))
+    (fail! "Shell quiescence requires a non-blank run-id" {:run-id run-id}))
+  (when-not (non-blank-string? reason)
+    (fail! "Shell quiescence requires a non-blank reason" {:run-id run-id :reason reason}))
+  #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+  #_{:splint/disable [lint/locking-object]}
+  (locking (scan-monitor)
+    (let [runtime (rt)
+          plans (quiesce-plans! runtime run-id reason)
+          facts (if (some :attempt-id plans)
+                  (process/list-owned runtime custody-owner)
+                  [])
+          plans (mapv (fn [plan]
+                        (if (:attempt-id plan)
+                          (retain-quiesced-handle! plan (custody-match facts plan))
+                          plan))
+                      plans)]
+      {:run-id run-id
+       :gates (mapv #(cancel-quiesced-attempt! runtime %) plans)})))
 
 (defn- shell-gates
   [runtime]
