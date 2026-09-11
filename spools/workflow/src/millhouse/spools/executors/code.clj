@@ -7,7 +7,11 @@
   returns are recorded as `code/result`; exceptions and timeouts stamp
   `gate/error`. Claim tokens prevent an abandoned invocation from publishing a
   late result. There is no process isolation: a resolved function runs with
-  the weaver's ambient Clojure authority and owns any subprocesses it starts."
+  the weaver's ambient Clojure authority and owns any subprocesses it starts.
+
+  Event scans dispatch only ready gates whose nearest `parent-of` workflow root
+  is active and carries `workflow/run-id`; orphan gates and gates beneath
+  closed or replaced nearest roots are ignored."
   (:require [clojure.spec.alpha :as s]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.current.alpha :as current]
@@ -80,6 +84,10 @@
 (defn on-event
   "Scan for ready `:code` gates after a graph mutation.
 
+  Dispatch requires the nearest `parent-of` workflow root to be active and to
+  carry `workflow/run-id`; orphan gates and gates beneath closed or replaced
+  nearest roots are ignored.
+
   This function is registered as the `:code/engine` event handler by the
   `code-engine` lifecycle resource. The scan is also performed during resource
   opening, so durable gates that were already ready are reconciled immediately."
@@ -92,7 +100,8 @@
   A gate view is a map containing its string `:id`. The result is
   `{:gate id :error detail}` when the current gate is ready and carries
   `gate/error`; otherwise the result is nil. This predicate is the executor's
-  coordinator-facing attention surface."
+  coordinator-facing attention surface. `::gate-view` and `::stall-detail`
+  validate its input and result shapes."
   {:request-spec ::request}
   [gate-view]
   (require-valid! ::gate-view gate-view "Invalid code gate view")
@@ -126,7 +135,8 @@
 
   This lifecycle callback registers the `:code/engine` graph handler, creates
   the bounded worker and timeout pools, scans existing ready gates, and returns
-  the engine handle owned by `code-engine`."
+  the engine handle owned by `code-engine`. `::open-context` and
+  `::engine-handle` validate its input and result shapes."
   [ctx]
   (require-valid! ::open-context ctx "Invalid code engine open context")
   (let [runtime (:runtime ctx)
@@ -142,7 +152,8 @@
   "Close code executor resources and unregister its event handler.
 
   This lifecycle callback removes `:code/engine` and shuts down the worker and
-  timeout pools owned by the matching open operation."
+  timeout pools owned by the matching open operation. `::close-context` and
+  `::close-result` validate its input and result shapes."
   [ctx]
   (require-valid! ::close-context ctx "Invalid code engine close context")
   (events/unregister-handler! (:runtime ctx) :code/engine)
