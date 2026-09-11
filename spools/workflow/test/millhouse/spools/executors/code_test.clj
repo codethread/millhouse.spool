@@ -13,10 +13,17 @@
 (def ^:private blocker (atom (CountDownLatch. 0)))
 (def ^:private worker-exited (atom (CountDownLatch. 0)))
 (def ^:private interrupt-once? (atom true))
+(def ^:private callback-count (atom 0))
 
 (defn return-value
   "Return the test value supplied in `params`."
   [params]
+  (:value params))
+
+(defn count-return-value
+  "Count callback invocations before returning the test value."
+  [params]
+  (swap! callback-count inc)
   (:value params))
 
 (defn nil-value
@@ -244,6 +251,91 @@
                 closed (await-eventually #(let [gate (weaver/show rt gate-id)]
                                             (when (= "closed" (:state gate)) gate)))]
             (is (= "new" (attr closed :code/result)))))))))
+
+(deftest ready-code-gate-dispatches-callback-once
+  (with-code
+    (fn [rt]
+      (reset! callback-count 0)
+      (workflow/start!
+       "once"
+       (single-gate
+        "once"
+        (request "millhouse.spools.executors.code-test/count-return-value"
+                 {:value "once"}))
+       {})
+      (let [closed (await-eventually
+                    #(let [gate (gate-strand rt "once")]
+                       (when (= "closed" (:state gate)) gate)))]
+        (is (= "once" (attr closed :code/result)))
+        (is (= 1 @callback-count))))))
+
+(deftest nested-workflow-root-keeps-its-own-run-id
+  (with-runtime
+    (fn [rt _]
+      (reset! callback-count 0)
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "outer" (idle-workflow) {})
+      (workflow/start!
+       "inner"
+       (gated-gate
+        "inner"
+        (request "millhouse.spools.executors.code-test/return-value"
+                 {:value "inner"}))
+       {})
+      (weaver/update! rt (:id (workflow/current-root "outer"))
+                      {:edges [{:type "parent-of"
+                                :to (:id (workflow/current-root "inner"))}]})
+      (test-support/activate-spool! rt :millhouse/spools-code
+                                    'millhouse.test-modules.code-executor
+                                    :after [:millhouse/spools-workflow])
+      (workflow/complete! "inner")
+      (let [gate-id (:id (ready-code-gate "inner"))
+            closed (await-eventually
+                    #(let [gate (weaver/show rt gate-id)]
+                       (when (= "closed" (:state gate)) gate)))]
+        (is (= "inner" (attr closed :code/result)))
+        (is (= "active" (:state (workflow/current-root "outer"))))))))
+
+(deftest blocked-errored-and-orphaned-gates-are-not-dispatched
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start!
+       "blocked"
+       (gated-gate
+        "blocked"
+        (request "millhouse.spools.executors.code-test/count-return-value"
+                 {:value "blocked"}))
+       {})
+      (workflow/start!
+       "errored"
+       (gated-gate
+        "errored"
+        (request "millhouse.spools.executors.code-test/count-return-value"
+                 {:value "errored"}))
+       {})
+      (let [blocked-id (:id (gate-strand rt "blocked"))]
+        (workflow/complete! "errored")
+        (let [errored-id (:id (ready-code-gate "errored"))
+              orphan (weaver/add! rt {:title "Orphan code gate"
+                                      :state "active"
+                                      :attributes
+                                      {"workflow/gate" "code"
+                                       "code/fn" "millhouse.spools.executors.code-test/count-return-value"
+                                       "code/params" {:value "orphan"}}})]
+          (weaver/update! rt errored-id
+                          {:attributes {"gate/error" "prior failure"}})
+          (test-support/activate-spool! rt :millhouse/spools-code
+                                        'millhouse.test-modules.code-executor
+                                        :after [:millhouse/spools-workflow])
+          (code/on-event {})
+          (is (zero? @callback-count))
+          (is (= "active" (:state (weaver/show rt (:id orphan)))))
+          (is (nil? (attr (weaver/show rt errored-id) :code/running)))
+          (is (= "active"
+                 (:state (weaver/show rt blocked-id)))))))))
 
 (deftest scan-uses-one-filtered-ready-query-without-per-root-scans
   (with-code

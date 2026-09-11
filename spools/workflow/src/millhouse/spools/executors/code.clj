@@ -396,26 +396,52 @@
           (catch RejectedExecutionException _
             nil))))))
 
+(defn- workflow-root? [strand]
+  (= "root" (attr strand :workflow/role)))
+
+(defn- nearest-workflow-root
+  "Return the nearest workflow root above `gate`, or nil when it has none.
+
+  Walk direct `parent-of` adjacency by level rather than using
+  `ancestor-root-ids`. The latter reports structural graph roots, which can
+  skip a nested workflow root or select an enclosing root instead. A root is a
+  boundary even when it is closed or replaced, so a stale inner gate cannot
+  fall through to an outer active workflow.
+  "
+  [runtime gate]
+  (loop [frontier [(:id gate)]
+         seen #{}]
+    (let [parent-ids (->> (graph/incoming-edges runtime frontier "parent-of")
+                          (map :from_strand_id)
+                          (remove seen)
+                          distinct
+                          vec)
+          parents (graph/strands-by-ids runtime parent-ids)
+          roots (filterv workflow-root? parents)]
+      (cond
+        (seq roots)
+        (case (count roots)
+          1 (first roots)
+          (fail! "Code gate has multiple workflow roots at the same level"
+                 {:gate (:id gate) :roots (mapv :id roots)}))
+
+        (empty? parent-ids) nil
+
+        :else (recur parent-ids (into seen frontier))))))
+
 (defn- active-root-for-gate
   "Return the gate's single active workflow root, or nil when it has none.
 
   A ready strand can outlive its workflow root during graph replacement, and a
-  hand-created code gate may have no workflow root at all. Restricting the
-  ancestor lookup to active roots preserves workflow ownership without scanning
-  every active run or calling the per-run readiness projection.
+  hand-created code gate may have no workflow root at all. The nearest root is
+  selected before its state is checked so a closed or replaced inner workflow
+  cannot be mistaken for an enclosing active workflow.
   "
   [runtime gate]
-  (let [root-ids (graph/ancestor-root-ids
-                  runtime
-                  [(:id gate)]
-                  {:where [:and
-                           [:= :state "active"]
-                           [:= [:attr "workflow/role"] "root"]]})]
-    (case (count root-ids)
-      0 nil
-      1 (weaver/show runtime (first root-ids))
-      (fail! "Code gate has multiple active workflow roots"
-             {:gate (:id gate) :roots root-ids}))))
+  (let [root (nearest-workflow-root runtime gate)]
+    (when (and (= "active" (:state root))
+               (some? (attr root :workflow/run-id)))
+      root)))
 
 (defn- scan!
   "Dispatch every ready `:code` gate owned by an active workflow root.
