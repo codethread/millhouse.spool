@@ -297,9 +297,79 @@
         (is (= "inner" (attr closed :code/result)))
         (is (= "active" (:state (workflow/current-root "outer"))))))))
 
+(defn- nested-ready-code-gate! [rt]
+  (workflow/start! "outer" (idle-workflow) {})
+  (workflow/start!
+   "inner"
+   (gated-gate
+    "inner"
+    (request "millhouse.spools.executors.code-test/count-return-value"
+             {:value "inner"}))
+   {})
+  (let [outer-root (workflow/current-root "outer")
+        inner-root (workflow/current-root "inner")]
+    (weaver/update! rt (:id outer-root)
+                    {:edges [{:type "parent-of" :to (:id inner-root)}]})
+    (workflow/complete! "inner")
+    (let [gate (ready-code-gate "inner")]
+      (is (= "active" (:state gate)))
+      (is (= (:id gate) (:id (first (workflow/ready "inner")))))
+      {:gate-id (:id gate)
+       :inner-root-id (:id inner-root)
+       :outer-root-id (:id outer-root)})))
+
+(deftest closed-nested-workflow-root-does-not-release-code-gate-to-outer-run
+  (with-runtime
+    (fn [rt _]
+      (reset! callback-count 0)
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (let [{:keys [gate-id inner-root-id outer-root-id]}
+            (nested-ready-code-gate! rt)]
+        (weaver/update! rt inner-root-id {:state "closed"})
+        (test-support/activate-spool! rt :millhouse/spools-code
+                                      'millhouse.test-modules.code-executor
+                                      :after [:millhouse/spools-workflow])
+        (code/on-event {})
+        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
+        (is (= "closed" (:state (weaver/show rt inner-root-id))))
+        (is (= "active" (:state (weaver/show rt outer-root-id))))
+        (is (= "active" (:state (weaver/show rt gate-id))))
+        (is (nil? (attr (weaver/show rt gate-id) :code/running)))
+        (is (some #(= gate-id (:id %)) (weaver/ready rt)))
+        (is (zero? @callback-count))))))
+
+(deftest superseded-nested-workflow-root-does-not-release-code-gate-to-outer-run
+  (with-runtime
+    (fn [rt _]
+      (reset! callback-count 0)
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (let [{:keys [gate-id inner-root-id outer-root-id]}
+            (nested-ready-code-gate! rt)
+            replacement (weaver/add! rt {:title "Inner replacement"
+                                         :attributes {"workflow/role" "root"
+                                                      "workflow/run-id" "inner"}})]
+        (weaver/update! rt outer-root-id
+                        {:edges [{:type "parent-of" :to (:id replacement)}]})
+        (weaver/supersede! rt inner-root-id (:id replacement))
+        (test-support/activate-spool! rt :millhouse/spools-code
+                                      'millhouse.test-modules.code-executor
+                                      :after [:millhouse/spools-workflow])
+        (code/on-event {})
+        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
+        (is (= "replaced" (:state (weaver/show rt inner-root-id))))
+        (is (= "active" (:state (workflow/current-root "inner"))))
+        (is (= "active" (:state (weaver/show rt outer-root-id))))
+        (is (= "active" (:state (weaver/show rt gate-id))))
+        (is (nil? (attr (weaver/show rt gate-id) :code/running)))
+        (is (some #(= gate-id (:id %)) (weaver/ready rt)))
+        (is (zero? @callback-count))))))
+
 (deftest blocked-errored-and-orphaned-gates-are-not-dispatched
   (with-runtime
     (fn [rt _]
+      (reset! callback-count 0)
       (test-support/activate-spool! rt :millhouse/spools-workflow
                                     'millhouse.spools.workflow)
       (workflow/start!
