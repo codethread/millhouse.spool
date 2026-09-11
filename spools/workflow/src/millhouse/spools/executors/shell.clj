@@ -36,6 +36,10 @@
 (def ^:private event-types
   #{:strand/added :strand/updated :batch/applied :strand/burned :strand/superseded})
 
+(def ^:private ready-shell-query
+  "Select active, unblocked shell gates through the weaver readiness surface."
+  [:= [:attr "workflow/gate"] "shell"])
+
 (def ^:private output-tail-bytes
   "Fixed cap on captured combined stdout+stderr: the shell executor retains only
   the last N bytes so a runaway child cannot exhaust weaver heap
@@ -589,14 +593,63 @@
                                 (binding [*runtime* runtime]
                                   (run-gate! runtime run-id (:id gate) attempt-id)))))))))
 
-(defn scan!
-  "Dispatch every ready `:shell` gate not already claimed or errored.
+(defn- workflow-root? [strand]
+  (= "root" (attr strand :workflow/role)))
 
-  Enumerates ready gates purely through the workflow surface and serializes on a
-  runtime-owned monitor so concurrent scans cannot double-launch a gate. Each
-  accepted gate receives a `shell/running` claim before its process is submitted
-  to the worker pool; the event thread never waits for the child. Scans run on
-  relevant graph changes and once during handler activation."
+(defn- nearest-workflow-root
+  "Return the nearest workflow root above `gate`, or nil when it has none.
+
+  Walk direct `parent-of` adjacency by level rather than using
+  `ancestor-root-ids`. The latter reports structural graph roots, which can
+  skip a nested workflow root or select an enclosing root instead. A root is a
+  boundary even when it is closed or replaced, so a stale inner gate cannot
+  fall through to an outer active workflow.
+  "
+  [runtime gate]
+  (loop [frontier [(:id gate)]
+         seen #{}]
+    (let [parent-ids (->> (graph/incoming-edges runtime frontier "parent-of")
+                          (map :from_strand_id)
+                          (remove seen)
+                          distinct
+                          vec)
+          parents (graph/strands-by-ids runtime parent-ids)
+          roots (filterv workflow-root? parents)]
+      (cond
+        (seq roots)
+        (case (count roots)
+          1 (first roots)
+          (fail! "Shell gate has multiple workflow roots at the same level"
+                 {:gate (:id gate) :roots (mapv :id roots)}))
+
+        (empty? parent-ids) nil
+
+        :else (recur parent-ids (into seen frontier))))))
+
+(defn- active-root-for-gate
+  "Return the gate's single active workflow root, or nil when it has none.
+
+  A ready strand can outlive its workflow root during graph replacement, and a
+  hand-created shell gate may have no workflow root at all. The nearest root is
+  selected before its state is checked so a closed or replaced inner workflow
+  cannot be mistaken for an enclosing active workflow.
+  "
+  [runtime gate]
+  (let [root (nearest-workflow-root runtime gate)]
+    (when (and (= "active" (:state root))
+               (some? (attr root :workflow/run-id)))
+      root)))
+
+(defn scan!
+  "Dispatch every ready `:shell` gate owned by an active workflow root.
+
+  Readiness is selected once at the storage boundary. Root ownership is then
+  checked only for those selected gates, so an unrelated graph event does not
+  project the global ready frontier once per active workflow. The scan still
+  serializes on a runtime-owned monitor so concurrent scans cannot double-launch
+  a gate. Each accepted gate receives a `shell/running` claim before its process
+  is submitted to the worker pool; the event thread never waits for the child.
+  Scans run on relevant graph changes and once during handler activation."
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
@@ -605,11 +658,12 @@
       #_{:clj-kondo/ignore [:locking-suspicious-lock]}
       #_{:splint/disable [lint/locking-object]}
       (locking (scan-monitor)
-        (doseq [root (workflow/active-runs)
-                :let [run-id (attr root :workflow/run-id)]
-                step (workflow/ready run-id)
-                :when (= "shell" (:gate step))]
-          (claim-and-dispatch! runtime run-id step))
+        (doseq [gate (weaver/ready runtime ready-shell-query {})
+                :let [root (active-root-for-gate runtime gate)
+                      run-id (some-> root (attr :workflow/run-id))]
+                :when run-id]
+          (claim-and-dispatch! runtime run-id
+                               {:id (:id gate) :gate "shell"}))
         {:scanned true}))))
 
 (defn on-event
