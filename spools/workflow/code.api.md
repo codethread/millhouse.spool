@@ -33,6 +33,32 @@ Close code executor resources and unregister its event handler.
   `::close-result` validate its input and result shapes.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L151-L162">Source</a></sub></p>
 
+## <a name="millhouse.spools.executors.code/code-engine">`code-engine`</a>
+
+
+
+
+Own the code executor's event handler and worker resources.
+
+  Opening this module resource registers the `:code` workflow executor; closing
+  it unregisters graph scanning and stops both executor pools.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L164-L170">Source</a></sub></p>
+
+## <a name="millhouse.spools.executors.code/code-stalled?">`code-stalled?`</a>
+``` clojure
+(code-stalled? gate-view)
+```
+Function.
+
+Return durable stall detail for a ready `:code` gate view, or nil.
+
+  A gate view is a map containing its string `:id`. The result is
+  `{:gate id :error detail}` when the current gate is ready and carries
+  `gate/error`; otherwise the result is nil. This predicate is the executor's
+  coordinator-facing attention surface. `::gate-view` and `::stall-detail`
+  validate its input and result shapes.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L97-L111">Source</a></sub></p>
+
 ## <a name="millhouse.spools.executors.code/on-event">`on-event`</a>
 ``` clojure
 (on-event _event)
@@ -63,3 +89,15 @@ Open the code executor handler and worker resources.
   the engine handle owned by `code-engine`. `::open-context` and
   `::engine-handle` validate its input and result shapes.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L133-L149">Source</a></sub></p>
+
+## <a name="millhouse.spools.executors.code/stalled-code-gates">`stalled-code-gates`</a>
+
+
+
+
+Return active code gates carrying a durable `gate/error` stamp.
+
+  Use this named query to find code gates that a coordinator can inspect and
+  deliberately re-arm by removing `gate/error` after fixing the request or
+  resolved function.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L113-L122">Source</a></sub></p>
