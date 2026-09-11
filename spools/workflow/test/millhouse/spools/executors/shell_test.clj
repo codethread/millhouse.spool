@@ -1250,6 +1250,33 @@
         (is (= "active" (:state (weaver/show rt gate-id))))
         (is (nil? (attr (weaver/show rt gate-id) :shell/running)))))))
 
+(deftest malformed-active-workflow-root-identity-fails-through-public-scan
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "malformed-root"
+                       (single-gate "malformed-root" {"shell/argv" ["true"]})
+                       {})
+      (let [root-id (:id (workflow/current-root "malformed-root"))
+            gate-id (:id (shell-gate-strand rt "malformed-root"))]
+        (doseq [run-id [nil "" 42]]
+          (weaver/update! rt root-id {:attributes {"workflow/run-id" run-id}})
+          (let [failure (try
+                          (shell/scan!)
+                          nil
+                          (catch clojure.lang.ExceptionInfo throwable
+                            throwable))]
+            (is (some? failure) (str "malformed run-id: " (pr-str run-id)))
+            (is (= gate-id (:gate-id (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (= root-id (:root-id (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (= "non-blank string" (:expected (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (str/includes? (ex-message failure) "workflow/run-id")
+                (str "malformed run-id: " (pr-str run-id)))))))))
+
 (deftest scan-uses-one-filtered-ready-query-without-per-root-scans
   (with-shell
     (fn [rt]

@@ -636,20 +636,29 @@
   "
   [runtime gate]
   (let [root (nearest-workflow-root runtime gate)]
-    (when (and (= "active" (:state root))
-               (some? (attr root :workflow/run-id)))
-      root)))
+    (when (= "active" (:state root))
+      (let [run-id (attr root :workflow/run-id)]
+        (when-not (non-blank-string? run-id)
+          (fail! "Active shell workflow root has an invalid workflow/run-id"
+                 {:gate-id (:id gate)
+                  :root-id (:id root)
+                  :value run-id
+                  :expected "non-blank string"}))
+        root))))
 
 (defn scan!
-  "Dispatch every ready `:shell` gate owned by an active workflow root.
+  "Dispatch every ready `:shell` gate whose nearest workflow root is active.
 
-  Readiness is selected once at the storage boundary. Root ownership is then
-  checked only for those selected gates, so an unrelated graph event does not
-  project the global ready frontier once per active workflow. The scan still
-  serializes on a runtime-owned monitor so concurrent scans cannot double-launch
-  a gate. Each accepted gate receives a `shell/running` claim before its process
-  is submitted to the worker pool; the event thread never waits for the child.
-  Scans run on relevant graph changes and once during handler activation."
+  Readiness is selected once at the storage boundary. Gates with no nearest
+  workflow root (orphans), or with a closed or replaced nearest root, are
+  omitted. An active nearest root with a malformed `workflow/run-id` fails
+  loudly with gate/root context. Root ownership is then checked only for those
+  selected gates, so an unrelated graph event does not project the global ready
+  frontier once per active workflow. The scan still serializes on a
+  runtime-owned monitor so concurrent scans cannot double-launch a gate. Each
+  accepted gate receives a `shell/running` claim before its process is submitted
+  to the worker pool; the event thread never waits for the child. Scans run on
+  relevant graph changes and once during handler activation."
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
