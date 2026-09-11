@@ -9,6 +9,10 @@ KONDO_PROJECTS := root millstrand chime cron identity kanban workflow
 	check-clj-kondo clean-kondo kanban-dash-check kanban-export kanban-serve quality
 
 MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.millstrand/millstrand {:local/root "$(MILLSTRAND_ROOT)"}}}}}'
+# The workspace authoring deps retain local roots for runtime use. Kondo only
+# needs their exported configs, so replace the two personal sibling roots with
+# the verified bundle revision while resolving this disposable classpath.
+MILLSTRAND_KONDO_OVERRIDE = -Sdeps '{:deps {codethread/config {:git/url "https://github.com/codethread/codethread.spool.git" :git/sha "ab10ed817296181d09fd94c7b30d745df4dcd4fe" :deps/root "spools/config"} codethread/ralph {:git/url "https://github.com/codethread/codethread.spool.git" :git/sha "ab10ed817296181d09fd94c7b30d745df4dcd4fe" :deps/root "spools/ralph"}}}'
 RUN_CHECK = python3 scripts/run_quality_check.py
 TEST_NAMESPACES ?=
 
@@ -81,7 +85,7 @@ kondo-configs-root: check-clj-kondo
 
 kondo-configs-millstrand: check-clj-kondo
 	@cd .millstrand && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
-		classpath="$$(clojure -Spath)" && \
+		classpath="$$(clojure $(MILLSTRAND_KONDO_OVERRIDE) -Spath)" && \
 		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
 
 kondo-configs-chime kondo-configs-cron kondo-configs-identity kondo-configs-kanban kondo-configs-workflow: kondo-configs-%: check-clj-kondo

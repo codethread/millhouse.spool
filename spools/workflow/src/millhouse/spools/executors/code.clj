@@ -7,8 +7,13 @@
   returns are recorded as `code/result`; exceptions and timeouts stamp
   `gate/error`. Claim tokens prevent an abandoned invocation from publishing a
   late result. There is no process isolation: a resolved function runs with
-  the weaver's ambient Clojure authority and owns any subprocesses it starts."
+  the weaver's ambient Clojure authority and owns any subprocesses it starts.
+
+  Event scans dispatch only ready gates whose nearest `parent-of` workflow root
+  is active and carries `workflow/run-id`; orphan gates and gates beneath
+  closed or replaced nearest roots are ignored."
   (:require [clojure.spec.alpha :as s]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -25,6 +30,10 @@
 
 (def ^:private event-types
   #{:strand/added :strand/updated :batch/applied :strand/burned :strand/superseded})
+
+(def ^:private ready-code-query
+  "Select active, unblocked code gates through the weaver readiness surface."
+  [:= [:attr "workflow/gate"] "code"])
 
 (def ^:private pool-size
   "Maximum number of code-gate invocations that may occupy worker threads."
@@ -75,6 +84,10 @@
 (defn on-event
   "Scan for ready `:code` gates after a graph mutation.
 
+  Dispatch requires the nearest `parent-of` workflow root to be active and to
+  carry `workflow/run-id`; orphan gates and gates beneath closed or replaced
+  nearest roots are ignored.
+
   This function is registered as the `:code/engine` event handler by the
   `code-engine` lifecycle resource. The scan is also performed during resource
   opening, so durable gates that were already ready are reconciled immediately."
@@ -87,7 +100,8 @@
   A gate view is a map containing its string `:id`. The result is
   `{:gate id :error detail}` when the current gate is ready and carries
   `gate/error`; otherwise the result is nil. This predicate is the executor's
-  coordinator-facing attention surface."
+  coordinator-facing attention surface. `::gate-view` and `::stall-detail`
+  validate its input and result shapes."
   {:request-spec ::request}
   [gate-view]
   (require-valid! ::gate-view gate-view "Invalid code gate view")
@@ -121,7 +135,8 @@
 
   This lifecycle callback registers the `:code/engine` graph handler, creates
   the bounded worker and timeout pools, scans existing ready gates, and returns
-  the engine handle owned by `code-engine`."
+  the engine handle owned by `code-engine`. `::open-context` and
+  `::engine-handle` validate its input and result shapes."
   [ctx]
   (require-valid! ::open-context ctx "Invalid code engine open context")
   (let [runtime (:runtime ctx)
@@ -137,7 +152,8 @@
   "Close code executor resources and unregister its event handler.
 
   This lifecycle callback removes `:code/engine` and shuts down the worker and
-  timeout pools owned by the matching open operation."
+  timeout pools owned by the matching open operation. `::close-context` and
+  `::close-result` validate its input and result shapes."
   [ctx]
   (require-valid! ::close-context ctx "Invalid code engine close context")
   (events/unregister-handler! (:runtime ctx) :code/engine)
@@ -392,19 +408,72 @@
           (catch RejectedExecutionException _
             nil))))))
 
+(defn- workflow-root? [strand]
+  (= "root" (attr strand :workflow/role)))
+
+(defn- nearest-workflow-root
+  "Return the nearest workflow root above `gate`, or nil when it has none.
+
+  Walk direct `parent-of` adjacency by level rather than using
+  `ancestor-root-ids`. The latter reports structural graph roots, which can
+  skip a nested workflow root or select an enclosing root instead. A root is a
+  boundary even when it is closed or replaced, so a stale inner gate cannot
+  fall through to an outer active workflow.
+  "
+  [runtime gate]
+  (loop [frontier [(:id gate)]
+         seen #{}]
+    (let [parent-ids (->> (graph/incoming-edges runtime frontier "parent-of")
+                          (map :from_strand_id)
+                          (remove seen)
+                          distinct
+                          vec)
+          parents (graph/strands-by-ids runtime parent-ids)
+          roots (filterv workflow-root? parents)]
+      (cond
+        (seq roots)
+        (case (count roots)
+          1 (first roots)
+          (fail! "Code gate has multiple workflow roots at the same level"
+                 {:gate (:id gate) :roots (mapv :id roots)}))
+
+        (empty? parent-ids) nil
+
+        :else (recur parent-ids (into seen frontier))))))
+
+(defn- active-root-for-gate
+  "Return the gate's single active workflow root, or nil when it has none.
+
+  A ready strand can outlive its workflow root during graph replacement, and a
+  hand-created code gate may have no workflow root at all. The nearest root is
+  selected before its state is checked so a closed or replaced inner workflow
+  cannot be mistaken for an enclosing active workflow.
+  "
+  [runtime gate]
+  (let [root (nearest-workflow-root runtime gate)]
+    (when (and (= "active" (:state root))
+               (some? (attr root :workflow/run-id)))
+      root)))
+
 (defn- scan!
-  "Dispatch every ready `:code` gate not already claimed or errored."
+  "Dispatch every ready `:code` gate owned by an active workflow root.
+
+  Readiness is selected once at the storage boundary. Root ownership is then
+  checked only for those selected gates, so an unrelated graph event does not
+  project the global ready frontier once per active workflow.
+  "
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
       #_{:clj-kondo/ignore [:locking-suspicious-lock]}
       #_{:splint/disable [lint/locking-object]}
       (locking (scan-monitor)
-        (doseq [root (workflow/active-runs)
-                :let [run-id (attr root :workflow/run-id)]
-                step (workflow/ready run-id)
-                :when (= "code" (:gate step))]
-          (claim-and-dispatch! runtime run-id step))
+        (doseq [gate (weaver/ready runtime ready-code-query {})
+                :let [root (active-root-for-gate runtime gate)
+                      run-id (some-> root (attr :workflow/run-id))]
+                :when run-id]
+          (claim-and-dispatch! runtime run-id
+                               {:id (:id gate) :gate "code"}))
         {:scanned true}))))
 
 (defn- register-code-handler! [runtime]
