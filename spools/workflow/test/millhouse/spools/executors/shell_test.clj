@@ -111,6 +111,11 @@
    (workflow/gate :second "Second shell" :shell :depends-on [:first]
                   :attributes (assoc gate-attrs "test/run-id" run-id))))
 
+(defn- idle-workflow []
+  (workflow/workflow
+   "Idle workflow"
+   (workflow/step :wait "Wait" :self)))
+
 (defn- ready-shell-gate [run-id]
   (first (filter #(= "shell" (:gate %)) (workflow/ready run-id))))
 
@@ -1307,6 +1312,109 @@
         (await-eventually #(= "closed" (:state (weaver/show rt gate-id))))
         (is (zero? (attr (weaver/show rt gate-id) :shell/exit-code)))
         (is (= "After" (:title (first (workflow/ready "comp")))))))))
+
+(deftest closed-nested-workflow-root-does-not-release-shell-gate-to-outer-run
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "outer" (idle-workflow) {})
+      (workflow/start! "inner" (gated-gate "inner" {"shell/argv" ["true"]}) {})
+      (let [outer-root (workflow/current-root "outer")
+            inner-root (workflow/current-root "inner")]
+        (weaver/update! rt (:id outer-root)
+                        {:edges [{:type "parent-of"
+                                  :to (:id inner-root)}]})
+        ;; Make the inner gate ready and close its root before opening the shell
+        ;; resource. The first activation scan and the explicit scan below must
+        ;; both honour the nearest closed root instead of releasing the gate to
+        ;; the active outer run.
+        (workflow/complete! "inner")
+        (weaver/update! rt (:id inner-root) {:state "closed"})
+        (let [gate-id (:id (shell-gate-strand rt "inner"))]
+          (with-redefs [process/list-owned (fn [_ _] [])]
+            (test-support/activate-spool! rt :millhouse/spools-shell
+                                          'millhouse.test-modules.shell-executor
+                                          :after [:millhouse/spools-workflow])
+            (shell/scan!))
+          (is (= "closed" (:state (weaver/show rt (:id inner-root)))))
+          (is (= "active" (:state (weaver/show rt (:id outer-root)))))
+          (is (= "active" (:state (weaver/show rt gate-id))))
+          (is (nil? (attr (weaver/show rt gate-id) :shell/running)))
+          (is (some #(= gate-id (:id %)) (weaver/ready rt))))))))
+
+(deftest parent-blocked-shell-gate-is-not-dispatched
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "bond-left" (idle-workflow) {})
+      (workflow/start! "bond-right"
+                       (single-gate "bond-right" {"shell/argv" ["true"]})
+                       {})
+      (let [left-root (workflow/current-root "bond-left")
+            right-root (workflow/current-root "bond-right")
+            gate-id (:id (shell-gate-strand rt "bond-right"))]
+        (workflow/bond! (:id left-root) (:id right-root))
+        (is (= [] (workflow/ready "bond-right")))
+        (with-redefs [process/list-owned (fn [_ _] [])]
+          (test-support/activate-spool! rt :millhouse/spools-shell
+                                        'millhouse.test-modules.shell-executor
+                                        :after [:millhouse/spools-workflow])
+          (shell/scan!))
+        (is (= "active" (:state (weaver/show rt gate-id))))
+        (is (nil? (attr (weaver/show rt gate-id) :shell/running)))))))
+
+(deftest malformed-active-workflow-root-identity-fails-through-public-scan
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :millhouse/spools-workflow
+                                    'millhouse.spools.workflow)
+      (workflow/start! "malformed-root"
+                       (single-gate "malformed-root" {"shell/argv" ["true"]})
+                       {})
+      (let [root-id (:id (workflow/current-root "malformed-root"))
+            gate-id (:id (shell-gate-strand rt "malformed-root"))]
+        (doseq [run-id [nil "" 42]]
+          (weaver/update! rt root-id {:attributes {"workflow/run-id" run-id}})
+          (let [failure (try
+                          (shell/scan!)
+                          nil
+                          (catch clojure.lang.ExceptionInfo throwable
+                            throwable))]
+            (is (some? failure) (str "malformed run-id: " (pr-str run-id)))
+            (is (= gate-id (:gate-id (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (= root-id (:root-id (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (= "non-blank string" (:expected (ex-data failure)))
+                (str "malformed run-id: " (pr-str run-id)))
+            (is (str/includes? (ex-message failure) "workflow/run-id")
+                (str "malformed run-id: " (pr-str run-id)))))))))
+
+(deftest scan-uses-one-filtered-ready-query-without-per-root-scans
+  (with-shell
+    (fn [rt]
+      (doseq [run-id ["idle-1" "idle-2" "idle-3"]]
+        (workflow/start! run-id (idle-workflow) {}))
+      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
+      (let [ready-calls (atom [])
+            real-ready weaver/ready
+            fail-per-root (fn [& _]
+                            (throw (ex-info "per-root scan should not run" {})))
+            fail-mutation (fn [& _]
+                            (throw (ex-info "irrelevant scan must not mutate" {})))]
+        (with-redefs [weaver/ready (fn [runtime query params]
+                                     (swap! ready-calls conj [query params])
+                                     (real-ready runtime query params))
+                      workflow/active-runs fail-per-root
+                      workflow/ready fail-per-root
+                      weaver/update! fail-mutation]
+          (is (= {:scanned true} (shell/on-event {}))))
+        (is (= 1 (count @ready-calls)))
+        (is (= [:= [:attr "workflow/gate"] "shell"]
+               (ffirst @ready-calls)))
+        (is (= {} (second (first @ready-calls))))))))
 
 (deftest state-shape-matches-declared-version
   ;; Drift alarm for the shell executor's versioned spool-state: a key added to new-state

@@ -63,9 +63,9 @@
   closes, even though each step's own deps may be satisfied."
   [rt run-id]
   (let [root (current-root-with-rt rt run-id)
-        ready (weaver/ready rt)
-        root-ready? (and root (some #(= (:id %) (:id root)) ready))
-        ids (when root (set (map :id (:strands (graph/subgraph rt [(:id root)])))))]
+        ids (when root (set (map :id (:strands (graph/subgraph rt [(:id root)])))))
+        ready (when root (weaver/ready rt [:in :id ids] {}))
+        root-ready? (and root (some #(= (:id %) (:id root)) ready))]
     (if-not root-ready?
       []
       (->> ready
