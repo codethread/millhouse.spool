@@ -1086,6 +1086,30 @@
         (is (true? (workflow/done? "bond-left")))
         (is (= ["Do B"] (mapv :title (workflow/ready "bond-right"))))))))
 
+(deftest workflow-ready-bounds-storage-query-to-current-subgraph
+  (with-runtime
+    (fn [rt _]
+      (let [unrelated-id (:id (weaver/add! rt {:title "Unrelated ready work"}))
+            calls (atom [])
+            real-ready weaver/ready
+            started (with-redefs [weaver/ready
+                                  (fn [runtime query-def params]
+                                    (swap! calls conj {:query-def query-def
+                                                       :params params})
+                                    (real-ready runtime query-def params))]
+                      (workflow/start! "bounded-run"
+                                       {:name "Bounded"
+                                        :steps [{:id :work :title "Bounded work"}]}
+                                       {}))
+            root-id (:id (workflow/current-root "bounded-run"))
+            selected-ids (set (map :id (:strands (graph/subgraph rt [root-id]))))
+            call (first @calls)]
+        (is (= 1 (count @calls)))
+        (is (= [:in :id selected-ids] (:query-def call)))
+        (is (= {} (:params call)))
+        (is (not (contains? selected-ids unrelated-id)))
+        (is (= ["Bounded work"] (mapv :title (:ready started))))))))
+
 (deftest workflow-checkpoint-rejects-duplicate-choice-keys
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"choice keys must be unique"
                         (workflow/checkpoint :gate "Gate"
