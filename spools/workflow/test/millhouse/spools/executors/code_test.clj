@@ -122,6 +122,11 @@
                   :attributes (assoc gate-attrs "test/run-id" run-id))
    (workflow/step :after "After" :self :depends-on [:check])))
 
+(defn- idle-workflow []
+  (workflow/workflow
+   "Idle workflow"
+   (workflow/step :wait "Wait" :self)))
+
 (defn- request
   ([fn-name params]
    {"code/fn" fn-name "code/params" params})
@@ -239,6 +244,30 @@
                 closed (await-eventually #(let [gate (weaver/show rt gate-id)]
                                             (when (= "closed" (:state gate)) gate)))]
             (is (= "new" (attr closed :code/result)))))))))
+
+(deftest scan-uses-one-filtered-ready-query-without-per-root-scans
+  (with-code
+    (fn [rt]
+      (doseq [run-id ["idle-1" "idle-2" "idle-3"]]
+        (workflow/start! run-id (idle-workflow) {}))
+      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
+      (let [ready-calls (atom [])
+            real-ready weaver/ready
+            fail-per-root (fn [& _]
+                            (throw (ex-info "per-root scan should not run" {})))
+            fail-mutation (fn [& _]
+                            (throw (ex-info "irrelevant scan must not mutate" {})))]
+        (with-redefs [weaver/ready (fn [runtime query params]
+                                     (swap! ready-calls conj [query params])
+                                     (real-ready runtime query params))
+                      workflow/active-runs fail-per-root
+                      workflow/ready fail-per-root
+                      weaver/update! fail-mutation]
+          (is (= {:scanned true} (code/on-event {}))))
+        (is (= 1 (count @ready-calls)))
+        (is (= [:= [:attr "workflow/gate"] "code"]
+               (ffirst @ready-calls)))
+        (is (= {} (second (first @ready-calls))))))))
 
 (deftest saturated-pool-does-not-queue-or-claim-extra-gates
   (with-code

@@ -9,6 +9,7 @@
   late result. There is no process isolation: a resolved function runs with
   the weaver's ambient Clojure authority and owns any subprocesses it starts."
   (:require [clojure.spec.alpha :as s]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -25,6 +26,10 @@
 
 (def ^:private event-types
   #{:strand/added :strand/updated :batch/applied :strand/burned :strand/superseded})
+
+(def ^:private ready-code-query
+  "Select active, unblocked code gates through the weaver readiness surface."
+  [:= [:attr "workflow/gate"] "code"])
 
 (def ^:private pool-size
   "Maximum number of code-gate invocations that may occupy worker threads."
@@ -391,18 +396,45 @@
           (catch RejectedExecutionException _
             nil))))))
 
+(defn- active-root-for-gate
+  "Return the gate's single active workflow root, or nil when it has none.
+
+  A ready strand can outlive its workflow root during graph replacement, and a
+  hand-created code gate may have no workflow root at all. Restricting the
+  ancestor lookup to active roots preserves workflow ownership without scanning
+  every active run or calling the per-run readiness projection.
+  "
+  [runtime gate]
+  (let [root-ids (graph/ancestor-root-ids
+                  runtime
+                  [(:id gate)]
+                  {:where [:and
+                           [:= :state "active"]
+                           [:= [:attr "workflow/role"] "root"]]})]
+    (case (count root-ids)
+      0 nil
+      1 (weaver/show runtime (first root-ids))
+      (fail! "Code gate has multiple active workflow roots"
+             {:gate (:id gate) :roots root-ids}))))
+
 (defn- scan!
-  "Dispatch every ready `:code` gate not already claimed or errored."
+  "Dispatch every ready `:code` gate owned by an active workflow root.
+
+  Readiness is selected once at the storage boundary. Root ownership is then
+  checked only for those selected gates, so an unrelated graph event does not
+  project the global ready frontier once per active workflow.
+  "
   []
   (let [runtime (rt)]
     (binding [*runtime* runtime]
       #_{:splint/disable [lint/locking-object]}
       (locking (scan-monitor)
-        (doseq [root (workflow/active-runs)
-                :let [run-id (attr root :workflow/run-id)]
-                step (workflow/ready run-id)
-                :when (= "code" (:gate step))]
-          (claim-and-dispatch! runtime run-id step))
+        (doseq [gate (weaver/ready runtime ready-code-query {})
+                :let [root (active-root-for-gate runtime gate)
+                      run-id (some-> root (attr :workflow/run-id))]
+                :when run-id]
+          (claim-and-dispatch! runtime run-id
+                               {:id (:id gate) :gate "code"}))
         {:scanned true}))))
 
 (defn- register-code-handler! [runtime]
