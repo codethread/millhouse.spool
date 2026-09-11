@@ -222,7 +222,11 @@
         (#'shell/run-gate! rt "quiesce-claimed" (:id gate) attempt-id)
         (is (nil? (attr (weaver/show rt (:id gate)) :shell/custody-handle)))
         (is (nil? (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
-        (is (= [] (process/list-owned rt :millhouse/shell-executor)))))))
+        (is (= [] (process/list-owned rt :millhouse/shell-executor)))
+        (weaver/update! rt (:id gate) {:attributes {"gate/error" nil}})
+        (shell/scan!)
+        (await-eventually #(= "closed" (:state (weaver/show rt (:id gate)))))
+        (is (= "After" (:title (first (workflow/ready "quiesce-claimed")))))))))
 
 (deftest retained-custody-output-keeps-the-combined-tail-bound
   (let [stdout (temp-file ".stdout")
