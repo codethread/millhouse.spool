@@ -116,7 +116,7 @@ The replacement lives in Skein's `me.workflows.land`, `land-actions`, and
 `merge-queue`. PR recording and sign-off use ordinary checkpoints; short code
 gates own card changes. Queue executors admit and release turns without occupying
 a worker while waiting. The old `land` operation and its action-ref dispatch are
-removed. `devflow/workflows/land.md` documents driving and repairing a run.
+removed. The workflow's own instructions describe driving and repairing a run.
 
 Millhouse adds `millhouse.spools.executors.shell/quiesce-run!`. It serializes
 withdrawal with process launch, freezes future shell gates, and waits for owned
