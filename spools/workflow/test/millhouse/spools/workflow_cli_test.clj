@@ -47,7 +47,7 @@
    (workflow/step :prototype "Prototype one target" :self
                   :depends-on [:inspect]
                   :loop {:each :prototype-targets})
-   (workflow/gate :ci "Wait for CI" :subagent :depends-on [:prototype])
+   (workflow/gate :ci "Wait for CI" :agent :depends-on [:prototype])
    (workflow/call :assess :review {} :depends-on [:ci])
    (workflow/checkpoint :recommendation "Choose what follows the spike"
                         :kind :agent
@@ -345,7 +345,7 @@
           (is (= {:kind "static"
                   :entry ["inspect"]
                   :loops [{:step "prototype" :each "prototype-targets"}]
-                  :gates [{:step "ci" :waiter "subagent"}]
+                  :gates [{:step "ci" :waiter "agent"}]
                   :checkpoints [{:step "recommendation" :choices ["recommend-build" "stop"]}]
                   :calls [{:step "assess" :procedure "review" :kind "registered"}]
                   :defers []

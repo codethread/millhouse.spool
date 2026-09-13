@@ -995,7 +995,7 @@
 (deftest kanban-task-status-derives-from-graph-and-owner
   ;; Self-contained DAG (DELTA-Nwt-001.J2): the four statuses derive from
   ;; state=closed, the depends-on frontier, and the owner attr only — never a
-  ;; delegation or agent-run attribute is set, so the litmus (delete delegation,
+  ;; delegation or harness-run attribute is set, so the litmus (delete delegation,
   ;; the derivation still computes) holds.
   (with-kanban
     (fn [rt]

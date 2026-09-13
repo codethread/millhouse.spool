@@ -41,7 +41,7 @@
   (workflow/workflow
    "Mixed"
    (workflow/step :work "Do the work" :self)
-   (workflow/gate :ci "Wait for CI" :subagent)
+   (workflow/gate :ci "Wait for CI" :agent)
    (workflow/checkpoint :sign-off "Sign the work off"
                         :choices [{:key :ship
                                    :label "Ship it"
@@ -62,7 +62,7 @@
 (workflow/defworkflow gated
   "A single external gate: ready, and never inferable."
   {:entrypoints #{:start}}
-  (workflow/workflow "Gated" (workflow/gate :ci "Wait for CI" :subagent)))
+  (workflow/workflow "Gated" (workflow/gate :ci "Wait for CI" :agent)))
 
 (workflow/defworkflow scoped
   "A definition whose params its own spec judges."
@@ -206,7 +206,7 @@
       (let [ready (verb "ready" "run-frontier")]
         (is (= [["Do the work" "step"] ["Wait for CI" "step"] ["Sign the work off" "checkpoint"]]
                (mapv (juxt :title :role) (:ready ready))))
-        (is (= "subagent" (:gate (second (:ready ready)))))
+        (is (= "agent" (:gate (second (:ready ready)))))
         (is (= ["ship" "rework"] (:choices (nth (:ready ready) 2))))
         (is (every? #(= "run-frontier" (:run-id %)) (:ready ready)))))))
 
@@ -411,7 +411,7 @@
             "the only ready item is a gate, so nothing is inferable")
         (let [data (failure #(verb "complete" "run-gate" :step gate))]
           (is (= :workflow/gate-actor-required (:reason data)))
-          (is (= "subagent" (:gate data))))
+          (is (= "agent" (:gate data))))
         (let [result (verb "complete" "run-gate" :step gate :by "ci-bot")]
           (is (true? (:done result)))
           (is (= "ci-bot"
@@ -780,7 +780,7 @@
     (fn [rt _]
       (activate-cli! rt)
       (register! :gated)
-      (workflow/register-executor! :subagent (fn [_step] nil))
+      (workflow/register-executor! :agent (fn [_step] nil))
       (started "run-await-timeout" :gated)
       (let [result (verb "await" "run-await-timeout" :timeout-secs 0)]
         (is (= :timeout (:reason result)))

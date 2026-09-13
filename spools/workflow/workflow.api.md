@@ -78,7 +78,7 @@ Block until workflow run-id is done, at a checkpoint, at a defer awaiting a
   detail, or timed out.
 
   opts: `:timeout-secs` (default 1800) and `:poll-ms` (default 250, matching
-  the agent-run await surface). `:timeout-secs` must be a non-negative integer;
+  the tracked-agent await surface). `:timeout-secs` must be a non-negative integer;
   `:poll-ms` must be a positive integer.
 
   If an accepted read reports `:weaver/restarted`, reissue that read once for
@@ -576,7 +576,7 @@ Return a workflow gate step definition — a step whose completion belongs to
 
   A gate stays an ordinary step (role `"step"`, so done-semantics are
   untouched) stamped with `workflow/gate <waiter>`, a freeform actor hint such
-  as `:ci`, `:human`, or `:subagent`. `step-view` surfaces it as `:gate`, and
+  as `:ci`, `:human`, or `:agent`. `step-view` surfaces it as `:gate`, and
   `complete!` refuses to close it without a `:by` recording who closed it. The
   driving agent should treat a ready gate as a poll/hand-off point, not work to
   do. `register-executor!` keys a stall predicate by this same waiter name, so
@@ -680,7 +680,7 @@ Return the single ready workflow step for run-id, or fail if ambiguous.
 Function.
 
 Register a stall predicate for gate waiter `waiter` (a keyword/symbol/string
-  matching a `gate` waiter hint, e.g. `:subagent`).
+  matching a `gate` waiter hint, e.g. `:agent`).
 
   The predicate receives a ready gate step view and returns nil/false while the
   executor is still fulfilling the gate, or truthy detail when coordinator

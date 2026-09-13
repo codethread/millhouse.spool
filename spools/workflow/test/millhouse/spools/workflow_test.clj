@@ -1178,7 +1178,7 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Step waiter must be :self.*use gate"
                           (workflow/step :a "A" :ci)))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Step waiter must be :self.*use gate"
-                          (workflow/step :a "A" :subagent)))
+                          (workflow/step :a "A" :agent)))
     (try
       (workflow/step :a "A" :ci)
       (is false "expected step to throw on a non-:self waiter")
@@ -1476,7 +1476,7 @@
     (fn [_rt _]
       (let [definition (workflow/workflow "Runid demo"
                                           (workflow/step :a "Do A" :self)
-                                          (workflow/gate :handoff "Hand off" :subagent)
+                                          (workflow/gate :handoff "Hand off" :agent)
                                           (workflow/checkpoint :decide "Decide" :kind :agent :choices [:ok]))
             started (workflow/start! "runid-run" definition {})]
         (is (= "runid-run" (:run-id (first (:ready started)))))
@@ -1484,7 +1484,7 @@
                               (workflow/ready-step "runid-run")))
         (is (= #{"Do A" "Hand off" "Decide"} (set (map :title (workflow/ready "runid-run")))))
         (is (= ["runid-run" "runid-run" "runid-run"] (mapv :run-id (workflow/ready "runid-run"))))
-        (is (= ["Hand off"] (mapv :title (workflow/ready-gates "runid-run" "subagent"))))
+        (is (= ["Hand off"] (mapv :title (workflow/ready-gates "runid-run" "agent"))))
         (is (= "Decide" (:title (workflow/ready-checkpoint "runid-run"))))
         (is (= ["Decide"] (mapv :title (workflow/ready "runid-run" {:role "checkpoint"}))))
         ;; a bare step-view (no run context) stays unchanged
