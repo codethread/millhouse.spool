@@ -101,5 +101,8 @@ when deliberately defining and selecting a consumer-owned declaration together.
 (workflow/use-workflow! build)
 ```
 
+The `doc` argument may be a computed Clojure expression rather than a string
+literal; its evaluated result must be a non-blank string.
+
 See the focused documentation above for graph composition, routing, run driving,
 executor request contracts, recovery, discovery, and reusable workflow inputs.

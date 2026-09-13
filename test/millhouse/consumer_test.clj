@@ -182,7 +182,7 @@
      {:executable \"sample-bin\"})
 
    (workflow/defworkflow sample-workflow
-     \"A sample workflow.\"
+     (str \"A sample \" \"workflow.\")
      {:entrypoints #{:start} :defaults {}}
      (workflow/workflow
        (fn [_] \"done\")
