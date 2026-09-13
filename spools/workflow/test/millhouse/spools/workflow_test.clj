@@ -46,6 +46,25 @@
       (finally
         (test-support/delete-tree! dir)))))
 
+(deftest workflow-defworkflow-hook-analyzes-computed-docs
+  (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
+        valid (lint-workflow-hook
+               (str prefix
+                    "(workflow/defworkflow sample\n"
+                    "  (str \"Computed \" \"doc.\")\n"
+                    "  {:entrypoints #{:start}}\n"
+                    "  (workflow/workflow \"Sample\"))"))
+        unresolved (lint-workflow-hook
+                    (str prefix
+                         "(workflow/defworkflow sample\n"
+                         "  (missing-doc)\n"
+                         "  {:entrypoints #{:start}}\n"
+                         "  (workflow/workflow \"Sample\"))"))]
+    (is (zero? (:exit valid))
+        (str (:out valid) (:err valid)))
+    (is (str/includes? (str (:out unresolved) (:err unresolved))
+                       "Unresolved symbol: missing-doc"))))
+
 (deftest workflow-defexecutor-hook-validates-declaration-shape
   (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
         valid (lint-workflow-hook
@@ -2223,6 +2242,15 @@
                   (fn [{:keys [scope reviewer]}] (str "Implement " scope " for " reviewer))
                   :self)))
 
+(def ^:private computed-doc-evaluations (atom 0))
+
+(workflow/defworkflow static-computed-doc
+  (do
+    (swap! computed-doc-evaluations inc)
+    "Computed workflow doc.")
+  {:entrypoints #{:start}}
+  (workflow/workflow "Computed doc"))
+
 (workflow/defworkflow static-review
   "Review a completed implementation."
   {:entrypoints #{:call}}
@@ -2274,6 +2302,12 @@
 
 (defn- malformed-constructor [_]
   {:not-a "workflow"})
+
+(deftest defworkflow-evaluates-computed-doc-once
+  (is (= 1 @computed-doc-evaluations))
+  (is (= "Computed workflow doc."
+         (:doc static-computed-doc)
+         (:doc (meta #'static-computed-doc)))))
 
 (deftest defworkflow-defines-a-self-describing-var-and-stays-passive
   ;; PROP-Wcd-001.S5: ordinary def semantics first — loading the namespace
