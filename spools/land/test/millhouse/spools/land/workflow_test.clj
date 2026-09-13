@@ -237,14 +237,19 @@
         (try
           (workflow/start! run-id :land params)
           (complete-ready! run-id)
-          (test-support/poll-until
-           #(when (= "in_review" (card-lane rt card)) true)
-           {:timeout-ms (test-support/await-budget-ms)
-            :on-timeout #(throw (ex-info "Land card callback did not resolve" {}))})
-          (is (= "Validate the pushed HEAD before review"
-                 (:title (first (workflow/ready run-id)))))
+          (let [quality
+                (test-support/poll-until
+                 #(let [step (first (workflow/ready run-id))]
+                    (when (= "Validate the pushed HEAD before review" (:title step))
+                      step))
+                 {:timeout-ms (test-support/await-budget-ms)
+                  :on-timeout #(throw (ex-info "Land card callback did not resolve" {}))})]
+            (is (= "shell" (:gate quality))))
+          (is (= "in_review" (card-lane rt card)))
           (is (every? (set (keys (workflow/workflows)))
                       [:review :land :land-merge :land-abort]))
+          (is (= {:entries [] :lock nil :operation "merge-queue status"}
+                 (weaver/op! rt :merge-queue ["status"])))
           (finally
             (test-support/delete-tree! root)))))))
 

@@ -307,7 +307,7 @@
              the turn. There is no automatic eviction or second merge approval.
            " {})}
   [ctx]
-  (let [runtime (:runtime ctx)
+  (let [runtime (:op/runtime ctx)
         {:keys [subcommand run-id entry-id timeout-secs reason]} (:op/args ctx)]
     (case (first subcommand)
       "join" {:entry (join! runtime run-id)}
