@@ -46,6 +46,25 @@
       (finally
         (test-support/delete-tree! dir)))))
 
+(deftest workflow-defworkflow-hook-analyzes-computed-docs
+  (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
+        valid (lint-workflow-hook
+               (str prefix
+                    "(workflow/defworkflow sample\n"
+                    "  (str \"Computed \" \"doc.\")\n"
+                    "  {:entrypoints #{:start}}\n"
+                    "  (workflow/workflow \"Sample\"))"))
+        unresolved (lint-workflow-hook
+                    (str prefix
+                         "(workflow/defworkflow sample\n"
+                         "  (missing-doc)\n"
+                         "  {:entrypoints #{:start}}\n"
+                         "  (workflow/workflow \"Sample\"))"))]
+    (is (zero? (:exit valid))
+        (str (:out valid) (:err valid)))
+    (is (str/includes? (str (:out unresolved) (:err unresolved))
+                       "Unresolved symbol: missing-doc"))))
+
 (deftest workflow-defexecutor-hook-validates-declaration-shape
   (let [prefix "(ns workflow-hook-test\n  \"Workflow hook test.\"\n  (:require [millhouse.spools.workflow :as workflow]))\n\n"
         valid (lint-workflow-hook
