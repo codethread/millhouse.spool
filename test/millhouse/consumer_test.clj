@@ -107,6 +107,7 @@
     (doseq [artifact ["io.millstrand/millstrand"
                       "millhouse.spools/chime"
                       "millhouse.spools/cron"
+                      "millhouse.spools/land"
                       "millhouse.spools/workflow"]]
       (is (.isFile (io/file root ".clj-kondo/imports" artifact "config.edn"))))))
 
@@ -242,7 +243,9 @@
     'millhouse.spools/chime
     {:local/root (.getCanonicalPath (io/file root "spools/chime"))}
     'millhouse.spools/cron
-    {:local/root (.getCanonicalPath (io/file root "spools/cron"))}}})
+    {:local/root (.getCanonicalPath (io/file root "spools/cron"))}
+    'millhouse.spools/land
+    {:local/root (.getCanonicalPath (io/file root "spools/land"))}}})
 
 (defn- run-consumer-command [dir command]
   (sh/sh "sh" "-c" command :dir (.getPath dir)))
@@ -275,7 +278,8 @@
                "millhouse.spools/workflow/hooks/millhouse/spools/workflow.clj_kondo"
                "millhouse.spools/chime/config.edn"
                "millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo"
-               "millhouse.spools/cron/config.edn"]
+               "millhouse.spools/cron/config.edn"
+               "millhouse.spools/land/config.edn"]
               lint-result (run-consumer-command
                            consumer "clj-kondo --repro --parallel --lint src")]
           (is (zero? (:exit import-result))

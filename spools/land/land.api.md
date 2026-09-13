@@ -1,5 +1,44 @@
 
 -----
+# <a name="millhouse.spools.land">millhouse.spools.land</a>
+
+
+Reusable one-seat review and serialized landing workflow definitions.
+
+
+
+
+## <a name="millhouse.spools.land/land">`land`</a>
+
+
+
+
+Review and merge work through sign-off and a durable FIFO turn.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land.clj#L236-L277">Source</a></sub></p>
+
+## <a name="millhouse.spools.land/land-abort">`land-abort`</a>
+
+
+
+
+Record an aborted landing and leave the work available for follow-up.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land.clj#L155-L172">Source</a></sub></p>
+
+## <a name="millhouse.spools.land/land-merge">`land-merge`</a>
+
+
+
+
+Land approved work in FIFO order.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land.clj#L174-L234">Source</a></sub></p>
+
+## <a name="millhouse.spools.land/review">`review`</a>
+
+
+
+
+Run one configured review agent, then require coordinator P1/P2 resolution.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land.clj#L100-L153">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.land.card-actions">millhouse.spools.land.card-actions</a>
@@ -112,6 +151,33 @@ Function.
 Reserve a run's FIFO position at its merge-turn gate; repeat calls retain it.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L87-L106">Source</a></sub></p>
 
+## <a name="millhouse.spools.land.merge-queue/merge-queue">`merge-queue`</a>
+``` clojure
+(merge-queue ctx)
+```
+Function.
+
+Own strict FIFO reservations; ordinary landing progression uses workflow verbs.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L298-L308">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/merge-release-stalled?">`merge-release-stalled?`</a>
+``` clojure
+(merge-release-stalled? view)
+```
+Function.
+
+Release the completed merge turn automatically before housekeeping.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L328-L332">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/merge-turn-stalled?">`merge-turn-stalled?`</a>
+``` clojure
+(merge-turn-stalled? view)
+```
+Function.
+
+Wait for automatic FIFO admission and acquisition; failed gates expose their error.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L322-L326">Source</a></sub></p>
+
 ## <a name="millhouse.spools.land.merge-queue/on-event">`on-event`</a>
 ``` clojure
 (on-event _event)
@@ -129,6 +195,14 @@ Function.
 
 Register queue scanning and recover pending queue gates on activation.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L358-L366">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/queue-handler">`queue-handler`</a>
+
+
+
+
+Drive durable FIFO queue gates on graph changes.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L374-L377">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.merge-queue/release!">`release!`</a>
 ``` clojure

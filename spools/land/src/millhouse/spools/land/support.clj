@@ -1,7 +1,7 @@
 (ns millhouse.spools.land.support
   "Shared script helpers for the repo's independently loaded workflow definitions."
   (:require [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
+            [clojure.java.shell :as sh]
             [clojure.string :as str]
             [millhouse.spools.workflow :as workflow]))
 
@@ -12,7 +12,7 @@
   survives removal of the feature worktree."
   [worktree]
   (let [{:keys [exit out err]}
-        (shell/sh "git" "-C" worktree "rev-parse"
+        (sh/sh "git" "-C" worktree "rev-parse"
                   "--path-format=absolute" "--git-common-dir")]
     (when-not (zero? exit)
       (throw (ex-info "Cannot locate canonical landing checkout"
