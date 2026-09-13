@@ -22,13 +22,22 @@
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
+;; Keep first-stage ownership local while the workspace still pins the old
+;; Codethread bootstrap. The follow-up bootstrap pin will own both module ids.
+(runtime/module! runtime :millhouse/spools-kanban
+                 {:ns 'millhouse.spools.kanban
+                  :required? true})
+(runtime/module! runtime :millhouse/spools-land
+                 {:ns 'millhouse.spools.land.spool
+                  :after [:millhouse/spools-workflow-all
+                          :millhouse/spools-kanban
+                          :codethread/config-reviewers]
+                  :required? true})
+
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
 (runtime/module! runtime :devflow
                  {:ns 'ct.spools.devflow
                   :after [:millhouse/spools-workflow]
-                  :required? true})
-(runtime/module! runtime :millhouse/spools-kanban
-                 {:ns 'millhouse.spools.kanban
                   :required? true})
 (runtime/module! runtime :devflow/kanban-adapter
                  {:ns 'ct.spools.devflow-kanban-adapter
@@ -61,6 +70,7 @@
 ;; alias election, and reviewer declaration is reconciled.
 (codethread/register-executor!
  runtime [:millhouse/spools-workflow-all
+          :millhouse/spools-land
           :devflow
           :devflow/kanban-adapter
           :codethread/config
