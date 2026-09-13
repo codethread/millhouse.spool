@@ -196,7 +196,29 @@
    (workflow/use-workflow! sample-workflow)
    (workflow/use-executor! sample-executor-stalled?)
    (chime/use-rule! sample-rule-rule)
-   (cron/use-job! sample-job)")
+   (cron/use-job! sample-job)
+
+   (workflow/defworkflow! sample-workflow-bang
+     \"A selected sample workflow.\"
+     {:entrypoints #{:start} :defaults {}}
+     (workflow/workflow
+       (fn [_] \"done\")
+       (workflow/step :done \"Done\" :self)))
+
+   (workflow/defexecutor! sample-executor-bang
+     \"A selected sample executor.\"
+     {}
+     [_]
+     nil)
+
+   (chime/defrule! sample-rule-bang
+     \"A selected sample Chime rule.\"
+     [_]
+     nil)
+
+   (cron/defjob! sample-job-bang \"A selected sample job.\"
+     {:interval-ms 1000
+      :handler 'consumer.forms/sample-job-handler})")
 
 (defn- write-file! [^java.io.File file content]
   (.mkdirs (.getParentFile file))
@@ -234,7 +256,9 @@
         (let [import-result
               (run-consumer-command
                consumer
-               "clj-kondo --repro --lint \"$(clojure -Srepro -Spath)\" --copy-configs --skip-lint")
+               (str "classpath=\"$(clojure -Srepro -Spath)\" && "
+                    "clj-kondo --repro --lint \"$classpath\" "
+                    "--copy-configs --skip-lint"))
               expected-imports
               ["io.millstrand/millstrand/config.edn"
                "io.millstrand/millstrand/hooks/millstrand.clj"

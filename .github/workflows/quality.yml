@@ -97,7 +97,7 @@ jobs:
           clj-kondo: 2026.08.04
       - name: Prepare linter configurations for tests
         working-directory: millhouse.spool
-        run: make kondo-configs
+        run: make kondo-import
       - name: Tests
         working-directory: millhouse.spool
         run: make test TEST_NAMESPACES="${{ matrix.namespaces }}"
