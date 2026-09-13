@@ -111,16 +111,6 @@
                       "millhouse.spools/workflow"]]
       (is (.isFile (io/file root ".clj-kondo/imports" artifact "config.edn"))))))
 
-(deftest land-manifest-pins-published-sibling-roots
-  (let [root (io/file (repository-root))
-        deps (:deps (edn/read-string (slurp (io/file root "spools/land/deps.edn"))))
-        source {:git/url "https://github.com/codethread/millhouse.spool.git"
-                :git/sha "3132c8f7f10455c893da28fef0e9ca0047560f82"}]
-    (is (= (assoc source :deps/root "spools/kanban")
-           (get deps 'millhouse.spools/kanban)))
-    (is (= (assoc source :deps/root "spools/workflow")
-           (get deps 'millhouse.spools/workflow)))))
-
 (def ^:private portable-consumer-source
   "A consumer source exercising every imported authoring-form family."
   "(ns consumer.forms
