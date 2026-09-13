@@ -2242,6 +2242,15 @@
                   (fn [{:keys [scope reviewer]}] (str "Implement " scope " for " reviewer))
                   :self)))
 
+(def ^:private computed-doc-evaluations (atom 0))
+
+(workflow/defworkflow static-computed-doc
+  (do
+    (swap! computed-doc-evaluations inc)
+    "Computed workflow doc.")
+  {:entrypoints #{:start}}
+  (workflow/workflow "Computed doc"))
+
 (workflow/defworkflow static-review
   "Review a completed implementation."
   {:entrypoints #{:call}}
@@ -2293,6 +2302,12 @@
 
 (defn- malformed-constructor [_]
   {:not-a "workflow"})
+
+(deftest defworkflow-evaluates-computed-doc-once
+  (is (= 1 @computed-doc-evaluations))
+  (is (= "Computed workflow doc."
+         (:doc static-computed-doc)
+         (:doc (meta #'static-computed-doc)))))
 
 (deftest defworkflow-defines-a-self-describing-var-and-stays-passive
   ;; PROP-Wcd-001.S5: ordinary def semantics first — loading the namespace

@@ -973,8 +973,11 @@
   [_mode name doc options definition]
   (let [qualified (symbol (str (ns-name *ns*)) (str name))]
     {:name name
-     :definition `(def ~(with-meta name {:doc doc})
-                    (static-definition ~doc ~options ~definition))
+     :definition `(def ~name
+                    (let [doc# ~doc
+                          definition# (static-definition doc# ~options ~definition)]
+                      (alter-meta! (var ~name) assoc :doc doc#)
+                      definition#))
      :kind definition-kind
      :key (keyword name)
      :entry `(~'quote ~qualified)
