@@ -16,14 +16,14 @@ starts or restarts Weaver.
 
 Add this root to the workspace's `deps.edn`, then activate it from trusted
 startup configuration. The startup API requires the identity implementation at
-`a8cb5ef24d41fa67d776c29f5dde8f12c050c6a5` or a subsequent release; `v4` does not
+`9939588e925c5a3c73608feb8182c4f52d586f64` or a subsequent release; `v4` does not
 include it:
 
 ```clojure
 {:deps
  {millhouse.spools/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "a8cb5ef24d41fa67d776c29f5dde8f12c050c6a5"
+   :git/sha "9939588e925c5a3c73608feb8182c4f52d586f64"
    :deps/root "spools/identity"}}}
 ```
 
