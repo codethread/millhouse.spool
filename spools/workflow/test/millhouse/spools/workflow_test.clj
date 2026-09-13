@@ -1178,7 +1178,7 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Step waiter must be :self.*use gate"
                           (workflow/step :a "A" :ci)))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Step waiter must be :self.*use gate"
-                          (workflow/step :a "A" :subagent)))
+                          (workflow/step :a "A" :agent)))
     (try
       (workflow/step :a "A" :ci)
       (is false "expected step to throw on a non-:self waiter")
@@ -1476,7 +1476,7 @@
     (fn [_rt _]
       (let [definition (workflow/workflow "Runid demo"
                                           (workflow/step :a "Do A" :self)
-                                          (workflow/gate :handoff "Hand off" :subagent)
+                                          (workflow/gate :handoff "Hand off" :agent)
                                           (workflow/checkpoint :decide "Decide" :kind :agent :choices [:ok]))
             started (workflow/start! "runid-run" definition {})]
         (is (= "runid-run" (:run-id (first (:ready started)))))

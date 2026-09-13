@@ -22,13 +22,13 @@ startup configuration, and let Chime handle scanning and deduplication.
   (:require [millhouse.spools.chime :as chime]))
 
 (defn agent-failed
-  "Notify when a delegated run has failed or exhausted its attempts."
+  "Notify when a tracked harness run has failed."
   [{:keys [strand]}]
-  (let [phase (get-in strand [:attributes "agent-run/phase"])]
-    (when (contains? #{"failed" "exhausted"} phase)
-      {:title (str "Agent run " phase ": " (:title strand))
-       :body (str "Strand " (:id strand) " entered agent-run/phase " phase
-                  (when-let [error (get-in strand [:attributes "agent-run/error"])]
+  (let [status (get-in strand [:attributes "harness/status"])]
+    (when (= "failed" status)
+      {:title (str "Harness run failed: " (:title strand))
+       :body (str "Strand " (:id strand) " entered harness/status failed"
+                  (when-let [error (get-in strand [:attributes "harness/error"])]
                     (str "\n\n" error)))})))
 
 (chime/register! :agent-failure 'my.rules/agent-failed)
@@ -47,37 +47,30 @@ load-bearing examples.
 
 ## Notify when an interactive agent session is ready
 
-**Situation.** An `agent delegate --interactive` run is live, and a human needs
-the attach hint without polling `strand agent ps`.
+**Situation.** A `strand agent run <alias> --interactive` run is live, and a
+human needs to know that the session is ready without polling `strand agent
+runs`.
 
-**Composition.** Combine durable agent-run attributes with the agent-run
-summary and a Chime rule. The notifier remains a personal binding; the rule is
-shared workspace policy.
+**Composition.** Match durable Harnesses attributes with a Chime rule. The
+notifier remains a personal binding; the rule is shared workspace policy.
 
 ```clojure
 (ns my.rules
   "Workspace attention rules."
-  (:require [clojure.string :as str]
-            [ct.spools.agent-run :as agent-run]
-            [millhouse.spools.chime :as chime]))
+  (:require [millhouse.spools.chime :as chime]))
 
 (defn interactive-session-running
-  "Notify when an interactive agent-run session is ready for its human."
+  "Notify when an interactive harness session is ready for its human."
   [{:keys [strand]}]
   (let [attrs (:attributes strand)]
-    (when (and (= "true" (get attrs "agent-run/run"))
-               (= "interactive" (get attrs "agent-run/mode"))
-               (= "running" (get attrs "agent-run/phase")))
-      (let [summary (some #(when (= (:id %) (:id strand)) %)
-                          (agent-run/runs {:active true}))
-            attach (:attach summary)]
-        {:title (str "Interactive session ready: " (:title strand))
-         :body (str "Run " (:id strand) " is waiting for a human."
-                    (when-let [served (:for summary)]
-                      (str "\nServes: " served))
-                    (if (str/blank? attach)
-                      "\nAttach: no backend attach hint is configured for this run."
-                      (str "\nAttach: " attach)))}))))
+    (when (and (= "true" (get attrs "harness/run"))
+               (= "interactive" (get attrs "harness/mode"))
+               (= "running" (get attrs "harness/status")))
+      {:title (str "Interactive session ready: " (:title strand))
+       :body (str "Run " (:id strand) " is waiting for a human."
+                  "\nInspect it with `strand agent show " (:id strand) "`."
+                  (when-let [session (get attrs "harness/session-id")]
+                    (str "\nSession: " session)))})))
 
 (chime/register! :interactive-session-running
                  'my.rules/interactive-session-running)
@@ -86,12 +79,11 @@ shared workspace policy.
 **Why this shape.** Agent-run and Chime stay decoupled: one publishes durable
 run state and summaries, while the other evaluates notification policy. A run
 already in progress when the rule is registered is baselined; one that starts
-later notifies once while it remains running. The attach text comes from the
-same summary surface exposed by `strand agent ps`, and the rule reports when no
-backend attach hint exists.
+later notifies once while it remains running. The run ID and native session ID
+come from the same durable Harnesses strand exposed by `strand agent show`.
 
-The [agent-run summary contract](https://github.com/codethread/agent-harness.spool/blob/d28bfb35b5fc1891a7a318e06886aa446722241d/delegation/README.md)
-documents the `mode`, `backend`, `session`, and `attach` fields.
+The Harnesses [agent inspection contract](https://github.com/codethread/harnesses.spool/blob/9548390ce621461ba0a289859fe9b0af963f5805/README.md)
+documents the `strand agent show` inspection surface.
 
 ## Notify about a strand made ready by another mutation
 

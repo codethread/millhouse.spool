@@ -13,8 +13,8 @@ Fulfil workflow `:shell` gates by running their command off the event thread.
   `gate/error` and leaves the gate ready and stamped rather than masquerading as
   a completed run. Terminal custody facts are committed to the matching attempt
   before acknowledgement, and module-owned reconciliation repairs the in-flight
-  view after Weaver replacement. It is a subagent-executor sibling minus
-  everything agent-run-specific: the failure detail lives on the gate itself, so
+  view after Weaver replacement. It is an agent-executor sibling minus
+  everything harness-run-specific: the failure detail lives on the gate itself, so
   there is no separate run strand, no `delegates` edge, and no session/harness
   vocabulary. Request validation and the durable coordinator surfaces are
   described on the public executor and query Vars below.

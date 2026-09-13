@@ -20,39 +20,13 @@
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
-;; --- identity, agent-run, delegation, and provider surfaces -----------------
+;; --- identity and consolidated Harnesses surface ----------------------------
 (runtime/module! runtime :millhouse/spools-identity
                  {:ns 'millhouse.spools.identity
                   :required? true})
-(runtime/module! runtime :millstrand/spools-agent-run
-                 {:ns 'ct.spools.agent-run
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-delegation
-                 {:ns 'ct.spools.delegation
-                  :after [:millstrand/spools-agent-run]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-harness-core
-                 {:ns 'ct.spools.harness-core
+(runtime/module! runtime :harnesses
+                 {:ns 'ct.spools.harnesses.spool
                   :after [:millhouse/spools-identity]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-claude-harness
-                 {:ns 'ct.spools.claude-harness
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-codex-harness
-                 {:ns 'ct.spools.codex-harness
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-pi-harness
-                 {:ns 'ct.spools.pi-harness
-                  :after [:millstrand/spools-harness-core]
-                  :required? true})
-(runtime/module! runtime :millstrand/spools-agent-cli
-                 {:ns 'ct.spools.agent-cli
-                  :after [:millstrand/spools-harness-core
-                          :millstrand/spools-claude-harness
-                          :millstrand/spools-codex-harness
-                          :millstrand/spools-pi-harness]
                   :required? true})
 
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
@@ -73,7 +47,7 @@
 ;; --- Codethread shared roots, in dependency order --------------------------
 (runtime/module! runtime :codethread/config-agents
   {:ns 'ct.spools.codethread.agents
-   :after [:millstrand/spools-agent-run]
+   :after [:harnesses]
    :required? true})
 (runtime/module! runtime :codethread/config-help
   {:ns 'ct.spools.codethread.help
@@ -88,8 +62,7 @@
            :codethread/config-help
            :codethread/config-devflow
            :millstrand/spools-batteries
-           :millstrand/spools-agent-run
-           :millstrand/spools-delegation
+           :harnesses
            :devflow/kanban-adapter]
    :required? true})
 (runtime/module! runtime :codethread/ralph
@@ -97,9 +70,9 @@
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
-(runtime/module! runtime :millstrand/spools-subagent
-                 {:ns 'ct.spools.executors.subagent
-                  :after [:millstrand/spools-agent-run
+(runtime/module! runtime :harnesses/agent-executor
+                 {:ns 'ct.spools.harnesses.executors.agent.spool
+                  :after [:harnesses
                           :millhouse/spools-workflow
                           :codethread/config
                           :devflow/kanban-adapter]

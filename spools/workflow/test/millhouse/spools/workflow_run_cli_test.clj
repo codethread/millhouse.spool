@@ -41,7 +41,7 @@
   (workflow/workflow
    "Mixed"
    (workflow/step :work "Do the work" :self)
-   (workflow/gate :ci "Wait for CI" :subagent)
+   (workflow/gate :ci "Wait for CI" :agent)
    (workflow/checkpoint :sign-off "Sign the work off"
                         :choices [{:key :ship
                                    :label "Ship it"
@@ -62,7 +62,7 @@
 (workflow/defworkflow gated
   "A single external gate: ready, and never inferable."
   {:entrypoints #{:start}}
-  (workflow/workflow "Gated" (workflow/gate :ci "Wait for CI" :subagent)))
+  (workflow/workflow "Gated" (workflow/gate :ci "Wait for CI" :agent)))
 
 (workflow/defworkflow scoped
   "A definition whose params its own spec judges."
@@ -780,7 +780,7 @@
     (fn [rt _]
       (activate-cli! rt)
       (register! :gated)
-      (workflow/register-executor! :subagent (fn [_step] nil))
+      (workflow/register-executor! :agent (fn [_step] nil))
       (started "run-await-timeout" :gated)
       (let [result (verb "await" "run-await-timeout" :timeout-secs 0)]
         (is (= :timeout (:reason result)))

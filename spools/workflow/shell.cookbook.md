@@ -11,7 +11,7 @@ calls.
 must pass before the workflow can ship the result.
 
 **Composition.** Keep the delegated work and the verification as separate
-gates. The `:shell` gate depends on the `:subagent` gate, so the shell executor
+gates. The `:shell` gate depends on the `:agent` gate, so the shell executor
 does not inspect the workspace until the agent executor has closed its gate.
 
 ```clojure
@@ -20,10 +20,10 @@ does not inspect the workspace until the agent executor has closed its gate.
 (def implement-and-verify
   (workflow/workflow
     "Implement and verify"
-    (workflow/gate :implement "Agent implements the feature" :subagent
-                   :attributes {"agent-run/harness" "build"
-                                "agent-run/prompt" "Implement per specs/feature.md"
-                                "agent-run/cwd" "/path/to/worktree"})
+    (workflow/gate :implement "Agent implements the feature" :agent
+                   :attributes {"harness/alias" "grunt"
+                                "harness/prompt" "Implement per specs/feature.md"
+                                "harness/cwd" "/path/to/worktree"})
     (workflow/gate :verify "Tests pass" :shell
                    :depends-on [:implement]
                    :attributes {"shell/argv" ["clojure" "-M:test"]

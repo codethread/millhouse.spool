@@ -1274,7 +1274,7 @@
       ;; a non-:shell gate is never touched, even carrying shell/* attributes
       (workflow/start! "iso" (workflow/workflow
                               "Iso"
-                              (workflow/gate :sub "Delegate" :subagent
+                              (workflow/gate :sub "Delegate" :agent
                                              :attributes {"shell/argv" ["true"]})) {})
       (let [sub-gate-id (:id (first (workflow/ready "iso")))]
         (shell/scan!)

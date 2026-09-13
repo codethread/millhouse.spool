@@ -361,7 +361,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
 
 **Situation.** Some steps aren't the driving agent's to *do* — they're waits: CI must go green, a sub-agent must finish, a human must weigh in. The agent should be told to poll or hand off, not to try the work itself.
 
-**Composition.** Model each wait as a `gate` with a freeform waiter hint (`:ci`, `:subagent`, `:human`). The external actor closes it via `complete!` with a mandatory `:by`. Optionally register an executor for a waiter class so `await!` stays quiet while an adapter is healthy. The verdict routes here use the symbol form, so each one must name a Var holding a definition of its own.
+**Composition.** Model each wait as a `gate` with a freeform waiter hint (`:ci`, `:agent`, `:human`). The external actor closes it via `complete!` with a mandatory `:by`. Optionally register an executor for a waiter class so `await!` stays quiet while an adapter is healthy. The verdict routes here use the symbol form, so each one must name a Var holding a definition of its own.
 
 ```clojure
 (require '[clojure.spec.alpha :as s]
@@ -406,16 +406,16 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   the audit trail always names who satisfied the wait. `complete!` fails loudly
   if you try to close a gate without it.
 - **Executors keep `await!` honest per waiter class.** Register an executor for
-  `:subagent` and a coordinator's `await!` stays silent while that adapter is
+  `:agent` and a coordinator's `await!` stays silent while that adapter is
   healthy, waking only on a genuine stall. A waiter with *no* registered
   executor always surfaces immediately — there is no silent default. The shipped
-  `ct.spools.executors.subagent` does exactly this for `:subagent` gates.
+  `ct.spools.harnesses.executors.agent` does exactly this for `:agent` gates.
 - **Checkpoints, not conditional edges, carry the branch.** The gate waits; the
   *checkpoint after it* is where the driving agent turns an observation (CI
   verdict) into a route. Parallelism falls out of edge absence; branching lives
   in checkpoint choices.
 
-Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:subagent` gate that `ct.spools.executors.subagent` fulfills.
+Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:agent` gate that `ct.spools.harnesses.executors.agent` fulfills.
 
 ---
 
@@ -530,16 +530,16 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
   (workflow/workflow
     (fn [{:keys [run-id]}] (str "Delegated pipeline: " run-id))
     {:attributes {"workflow/family" "delegate-pipeline"}}
-    ;; one :subagent gate per task, chained so task i waits on task i-1
+    ;; one :agent gate per task, chained so task i waits on task i-1
     (workflow/gate :task
                    (fn [{:keys [item]}] (str "Delegate pipeline task " (:id item)))
-                   :subagent
+                   :agent
                    :loop {:each :tasks :chain true}
-                   :attributes {"agent-run/harness" (fn [{:keys [item harness]}]
-                                                    (or (:harness item) harness))
-                                "agent-run/prompt"  (fn [{:keys [item]}] (:body item))
-                                "agent-run/cwd"     (fn [{:keys [item cwd]}]
-                                                    (or (:cwd item) cwd))})
+                   :attributes {"harness/alias" (fn [{:keys [item harness]}]
+                                                  (or (:harness item) harness))
+                                "harness/prompt" (fn [{:keys [item]}] (:body item))
+                                "harness/cwd"    (fn [{:keys [item cwd]}]
+                                                  (or (:cwd item) cwd))})
     ;; depends on the *base* loop id :task -> fans in over every expansion
     (workflow/checkpoint :accept "Accept delegated pipeline"
                          :depends-on [:task]
@@ -559,11 +559,11 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
   expanded task ids — so "wait for the whole batch" is one edge, even when the
   loop is chained.
 - **Gate + attributes hand off cleanly to an adapter.** Because each expansion is
-  a `:subagent` gate carrying `agent-run/*` attributes, `ct.spools.executors.subagent` can
-  fulfill it by spawning an agent-run run and closing the gate with the result — the
+  an `:agent` gate carrying `harness/*` attributes, `ct.spools.harnesses.executors.agent` can
+  fulfill it by spawning a tracked harness run and closing the gate with the result — the
   workflow definition never names the run engine.
 
-Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstrand/workflows/common.clj`](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/workflows/common.clj) (chained `:subagent` gate loop with fn-valued `agent-run/*` attributes and a base-id fan-in to the accept checkpoint).
+Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstrand/workflows/common.clj`](https://github.com/codethread/millstrand/blob/3bbe5dc15359975a8e8203ef47b3a7514177e75b/.millstrand/workflows/common.clj) (chained `:agent` gate loop with fn-valued `harness/*` attributes and a base-id fan-in to the accept checkpoint).
 
 ---
 
