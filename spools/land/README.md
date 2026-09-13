@@ -18,6 +18,8 @@ Choosing `accepted` requires durable coordinator evidence containing:
 - `p1-p2`: `"none"` or `"resolved"`;
 - `summary`: a non-blank adjudication summary.
 
+This evidence names the prequeue range. Signoff also authorizes a conflict-free queue-time rebase followed by exact final-HEAD quality validation; material repairs require focused follow-up review.
+
 A repository may retain a richer local review as a separate workflow. The shared root does not depend on a Harnesses implementation or prescribe a roster, but the consumer must activate one provider for `:agent` gates that understands `harness/alias`, `harness/cwd`, and `harness/prompt`.
 
 Landing scripts are loaded from classpath resources when the namespace loads, then embedded into shell-gate requests. A changed branch cannot swap the script after the workflow is poured. Preparation rebases onto `origin/main`, validates the final pushed HEAD through the repository contract, and records that exact SHA in Git metadata. Merge requires the local, remote, pull-request, and validated-marker SHAs to match and uses `gh pr merge --match-head-commit`.
