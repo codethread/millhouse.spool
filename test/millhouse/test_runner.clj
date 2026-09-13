@@ -20,7 +20,10 @@
     millhouse.spools.executors.code-test
     millhouse.spools.executors.shell-test
     millhouse.spools.kanban-test
-    millhouse.spools.identity-test])
+    millhouse.spools.identity-test
+    millhouse.spools.land.merge-queue-test
+    millhouse.spools.land.scripts-test
+    millhouse.spools.land.workflow-test])
 
 (def serial-namespaces
   "Namespaces proven to require a JVM-global serial island.
@@ -32,6 +35,8 @@
   #{'millhouse.consumer-test
     'millhouse.spools.executors.code-test
     'millhouse.spools.kanban-test
+    'millhouse.spools.land.merge-queue-test
+    'millhouse.spools.land.workflow-test
     'millhouse.spools.millstrand-workflows-test})
 
 (defn- initial-summary [] test/*initial-report-counters*)

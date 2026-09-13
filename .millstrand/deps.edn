@@ -4,6 +4,7 @@
    :git/sha "310368dff9174bd889ad21d4ed8196952684eaf9"
    :deps/root "spools/batteries"}
   millhouse.spools/identity {:local/root "../spools/identity"}
+  millhouse.spools/land {:local/root "../spools/land"}
   millhouse.spools/workflow {:local/root "../spools/workflow"}
   millhouse.spools/chime {:local/root "../spools/chime"}
   millhouse.spools/cron {:local/root "../spools/cron"}

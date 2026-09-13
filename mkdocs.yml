@@ -65,6 +65,10 @@ nav:
           - Contract: spools/workflow/README.md
           - Cookbook: spools/workflow/shell.cookbook.md
           - API: spools/workflow/shell.api.md
+      - Land:
+          - Contract: spools/land/README.md
+          - Cookbook: spools/land/land.cookbook.md
+          - API: spools/land/land.api.md
       - Kanban:
           - Contract: spools/kanban/README.md
           - Cookbook: spools/kanban/kanban.cookbook.md

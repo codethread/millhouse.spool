@@ -16,6 +16,7 @@ Read the [public documentation](https://codethread.github.io/millhouse.spool/).
 | [Chime](spools/chime/README.md) (`millhouse.spools.chime`)                                              | Turn meaningful graph events into local notifications with workspace-owned rules and your preferred notifier.                                | [contract](spools/chime/README.md) · [cookbook](spools/chime/chime.cookbook.md) · [API](spools/chime/chime.api.md)                                                                            |
 | [Cron](spools/cron/README.md) (`millhouse.spools.cron`)                                                 | Run durable, interval-based jobs through Millstrand's scheduler, with optional jitter and reloadable handlers.                               | [contract](spools/cron/README.md) · [cookbook](spools/cron/cron.cookbook.md) · [API](spools/cron/cron.api.md)                                                                                 |
 | [Identity](spools/identity/README.md) (`millhouse.spools.identity`)                                      | Give each logical harness session a friendly identity and connect it to the runs it performs.                                                 | [contract](spools/identity/README.md) · [API](spools/identity/identity.api.md)                                                                                                             |
+| [Land](spools/land/README.md) (`millhouse.spools/land`)                                                     | Review evidence, exact-HEAD validation, strict FIFO merge turns, and safe cleanup for `origin/main` GitHub repositories.                                      | [contract](spools/land/README.md) · [cookbook](spools/land/land.cookbook.md) · [API](spools/land/land.api.md)                                                                                                            |
 | [Kanban](spools/kanban/README.md) (`millhouse.spools.kanban`)                                           | Manage user–agent work as a shared board with priorities, handoffs, task dependencies, and review.      | [contract](spools/kanban/README.md) · [cookbook](spools/kanban/kanban.cookbook.md) · [API](spools/kanban/kanban.api.md)                  |
 
 ## Consumption
@@ -36,6 +37,10 @@ Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v4"
    :deps/root "spools/identity"}
+  millhouse.spools/land
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/tag "v4"
+   :deps/root "spools/land"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v4"

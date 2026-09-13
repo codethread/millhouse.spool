@@ -7,7 +7,8 @@
   {"spools/chime/src" "millhouse/spools"
    "spools/cron/src" "millhouse/spools"
    "spools/workflow/src" "millhouse/spools"
-   "spools/kanban/src" "millhouse/spools"})
+   "spools/kanban/src" "millhouse/spools"
+   "spools/land/src" "millhouse/spools"})
 
 (defn- clj-file->ns
   [root file]

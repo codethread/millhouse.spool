@@ -7,6 +7,7 @@
   millhouse.spools/chime {:local/root "spools/chime"}
   millhouse.spools/cron {:local/root "spools/cron"}
   millhouse.spools/identity {:local/root "spools/identity"}
+  millhouse.spools/land {:local/root "spools/land"}
   millhouse.spools/kanban {:local/root "spools/kanban"}
   millhouse.spools/workflow {:local/root "spools/workflow"}}
  :aliases
@@ -18,6 +19,7 @@
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
+    "spools/land/src" "spools/land/test"
     "spools/kanban/src" "spools/kanban/test"
     "spools/workflow/src" "spools/workflow/test"]}
   :format/fix
@@ -28,6 +30,7 @@
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
+    "spools/land/src" "spools/land/test"
     "spools/kanban/src" "spools/kanban/test"
     "spools/workflow/src" "spools/workflow/test"]}
   :api-docs
@@ -40,6 +43,7 @@
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"
+    "spools/land/test"
     "spools/kanban/test"
     "spools/workflow/test"]
    :main-opts ["-m" "quality.reflect-check"]}
@@ -49,6 +53,7 @@
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"
+    "spools/land/test"
     "spools/kanban/test"
     "spools/workflow/test"]
    :main-opts ["-m" "quality.conventions-check"]}
@@ -60,6 +65,7 @@
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
+    "spools/land/src" "spools/land/test"
     "spools/kanban/src" "spools/kanban/test"
     "spools/workflow/src" "spools/workflow/test"]}
   :test
@@ -68,6 +74,7 @@
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"
+    "spools/land/test"
     "spools/kanban/test"
     "spools/workflow/test"]
    :extra-deps {org.clojure/data.json {:mvn/version "2.5.1"}}

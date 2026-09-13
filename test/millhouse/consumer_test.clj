@@ -20,6 +20,7 @@
     {'millhouse.spools/workflow {:local/root (str (repository-root) "/spools/workflow")}
      'millhouse.spools/chime {:local/root (str (repository-root) "/spools/chime")}
      'millhouse.spools/cron {:local/root (str (repository-root) "/spools/cron")}
+     'millhouse.spools/land {:local/root (str (repository-root) "/spools/land")}
      'millhouse.spools/kanban {:local/root (str (repository-root) "/spools/kanban")}}}))
 
 (def ^:private init
@@ -44,6 +45,10 @@
            :required? true})
         (runtime/module! rt :millhouse/kanban
           {:ns 'millhouse.spools.kanban
+           :required? true})
+        (runtime/module! rt :millhouse/land
+          {:ns 'millhouse.spools.land.spool
+           :after [:millhouse/workflow-all :millhouse/kanban]
            :required? true})))")
 
 (deftest family-syncs-activates-and-publishes-all-roots
@@ -69,19 +74,23 @@
                :millhouse/workflow-all
                :millhouse/chime
                :millhouse/cron
-               :millhouse/kanban}
+               :millhouse/kanban
+               :millhouse/land}
              (set (keys outcomes))))
       (is (= #{'millhouse.spools.workflow
                'millhouse.spools.workflow.spool
                'millhouse.spools.chime
                'millhouse.spools.cron
-               'millhouse.spools.kanban}
+               'millhouse.spools.kanban
+               'millhouse.spools.land.spool}
              (set (map :ns (vals outcomes)))))
       (is (contains? op-names "workflow"))
+      (is (contains? op-names "merge-queue"))
       (is (contains? glossary-outcomes "workflow/ready-next-absent"))
       (is (= [:millhouse/workflow]
              (get-in status [:modules :millhouse/workflow-all :after])))
-      (is (contains? workflow-names :publish-spool-kondo)))))
+      (is (contains? workflow-names :publish-spool-kondo))
+      (is (every? workflow-names [:land :land-merge :land-abort])))))
 
 (deftest repository-kondo-config-keeps-producer-ownership
   (let [root (io/file (repository-root))

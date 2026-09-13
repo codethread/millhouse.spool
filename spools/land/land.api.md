@@ -1,0 +1,290 @@
+
+-----
+
+-----
+# <a name="millhouse.spools.land.card-actions">millhouse.spools.land.card-actions</a>
+
+
+Short, repeatable kanban card updates used by landing workflows.
+
+
+
+
+## <a name="millhouse.spools.land.card-actions/finish!">`finish!`</a>
+``` clojure
+(finish! runtime {:keys [card]})
+```
+Function.
+
+Finish an optional card after housekeeping, accepting an existing done result.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L34-L43">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.card-actions/finish-card!">`finish-card!`</a>
+``` clojure
+(finish-card! params)
+```
+Function.
+
+Workflow callback for `finish!` in the code executor's bound runtime.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L59-L62">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.card-actions/review!">`review!`</a>
+``` clojure
+(review! runtime {:keys [card]})
+```
+Function.
+
+Move an optional card into review; an already-reviewed card is unchanged.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L14-L22">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.card-actions/review-card!">`review-card!`</a>
+``` clojure
+(review-card! params)
+```
+Function.
+
+Workflow callback for `review!` in the code executor's bound runtime.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L49-L52">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.card-actions/rework!">`rework!`</a>
+``` clojure
+(rework! runtime {:keys [card]})
+```
+Function.
+
+Return an optional card to claimed after abort; repeat calls are harmless.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L24-L32">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.card-actions/rework-card!">`rework-card!`</a>
+``` clojure
+(rework-card! params)
+```
+Function.
+
+Workflow callback for `rework!` in the code executor's bound runtime.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L54-L57">Source</a></sub></p>
+
+-----
+# <a name="millhouse.spools.land.merge-queue">millhouse.spools.land.merge-queue</a>
+
+
+Strict FIFO landing turns, driven by short workflow queue gates.
+
+
+
+
+## <a name="millhouse.spools.land.merge-queue/await-turn">`await-turn`</a>
+``` clojure
+(await-turn runtime id timeout-secs)
+```
+Function.
+
+Wait for a reservation to hold the turn or close; timeout preserves its place.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L194-L204">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/close-handler!">`close-handler!`</a>
+``` clojure
+(close-handler! {:keys [runtime]})
+```
+Function.
+
+Remove the module's queue scanner; durable reservations remain.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L368-L372">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/grant!">`grant!`</a>
+``` clojure
+(grant! runtime run-id)
+```
+Function.
+
+Grant the head run's turn and close its queue gate without blocking a worker.
+
+  Failure after lock creation retains the lock and reservation for retry in
+  place. A non-head run simply remains waiting.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L108-L129">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/join!">`join!`</a>
+``` clojure
+(join! runtime run-id)
+```
+Function.
+
+Reserve a run's FIFO position at its merge-turn gate; repeat calls retain it.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L87-L106">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/on-event">`on-event`</a>
+``` clojure
+(on-event _event)
+```
+Function.
+
+Reconsider queue gates after graph mutations.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L353-L356">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/open-handler!">`open-handler!`</a>
+``` clojure
+(open-handler! {:keys [runtime]})
+```
+Function.
+
+Register queue scanning and recover pending queue gates on activation.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L358-L366">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/release!">`release!`</a>
+``` clojure
+(release! runtime run-id)
+```
+Function.
+
+Close a completed turn's reservation and lock before closing its release gate.
+
+  The queue writes share one batch. If workflow completion fails afterwards,
+  retry recognizes the closed reservation and never releases another run's lock.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L131-L155">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/scan!">`scan!`</a>
+``` clojure
+(scan! runtime)
+```
+Function.
+
+Advance ready queue gates using short serialized mutations, never a worker wait.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L334-L351">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/status">`status`</a>
+``` clojure
+(status runtime)
+(status runtime id)
+```
+Function.
+
+Report active FIFO order or one reservation, with current workflow evidence.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L177-L192">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.merge-queue/withdraw!">`withdraw!`</a>
+``` clojure
+(withdraw! runtime id reason)
+```
+Function.
+
+Stop a named landing and atomically replace it with abort bookkeeping.
+
+  Any trusted agent may withdraw; no owner restriction or timeout eviction.
+  Shell quiescence precedes release. A started irreversible gate requires
+  reconciliation instead: cancelling a local client cannot undo a remote merge.
+  A failed withdrawal keeps the reservation and lock, with shell gates frozen
+  for inspection. Repair and retry those gates to resume the original landing.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/merge_queue.clj#L235-L271">Source</a></sub></p>
+
+-----
+# <a name="millhouse.spools.land.support">millhouse.spools.land.support</a>
+
+
+Shared script helpers for the repo's independently loaded workflow definitions.
+
+
+
+
+## <a name="millhouse.spools.land.support/canonical-worktree">`canonical-worktree`</a>
+``` clojure
+(canonical-worktree worktree)
+```
+Function.
+
+Resolve the canonical checkout while the feature worktree still exists.
+
+  The resulting path is frozen into cleanup gates, so their working directory
+  survives removal of the feature worktree.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L8-L20">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/card-gate">`card-gate`</a>
+``` clojure
+(card-gate id title dependencies callable)
+```
+Function.
+
+Build a short, retryable card bookkeeping gate.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L80-L87">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/land-cleanup-argv">`land-cleanup-argv`</a>
+``` clojure
+(land-cleanup-argv branch worktree pr-number)
+```
+Function.
+
+Freeze cleanup and obtain its expected branch HEAD from the merged PR.
+
+  A rebase may have changed HEAD after the continuation was poured. The merged
+  PR retains that identity even when a previous cleanup removed the worktree.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L68-L78">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/land-cleanup-script">`land-cleanup-script`</a>
+
+
+
+
+Clean up the landed feature branch and worktree.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L64-L66">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/land-merge-script">`land-merge-script`</a>
+
+
+
+
+Idempotently ready and squash-merge the feature PR.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L46-L48">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/land-pull-main-script">`land-pull-main-script`</a>
+
+
+
+
+Fast-forward the canonical main checkout to origin/main.
+
+  This stays inline as the small-script exemplar: eight lines of shell and no
+  data-shaping logic do not earn a separate file.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L50-L62">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/land-quality-gate-script">`land-quality-gate-script`</a>
+
+
+
+
+POSIX script that validates and runs the target repository's quality contract.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L42-L44">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/non-blank-string?">`non-blank-string?`</a>
+``` clojure
+(non-blank-string? v)
+```
+Function.
+
+Return true when v is a non-blank string.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L22-L25">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/script">`script`</a>
+``` clojure
+(script name)
+```
+Function.
+
+Return the frozen source of a named workspace script.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L27-L35">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/sh-gate">`sh-gate`</a>
+``` clojure
+(sh-gate script name & args)
+```
+Function.
+
+Return shell argv that runs script with name as `$0` and args as positionals.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L37-L40">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.support/shell-gate">`shell-gate`</a>
+``` clojure
+(shell-gate id title dependencies argv timeout instruction)
+```
+Function.
+
+Build a shell gate whose request is frozen with the worktree context.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L89-L97">Source</a></sub></p>

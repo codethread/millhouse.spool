@@ -1,0 +1,62 @@
+(ns millhouse.spools.land.card-actions
+  "Short, repeatable kanban card updates used by landing workflows."
+  (:require [millhouse.spools.kanban :as kanban]
+            [millstrand.api.current.alpha :as current]
+            [millstrand.api.spool.alpha :refer [attr-get fail!]]
+            [millstrand.api.weaver.alpha :as weaver]))
+
+(defn- card-view [runtime id]
+  (let [card (weaver/show runtime id)]
+    (when-not (= "true" (attr-get card :kanban/card))
+      (fail! "Expected a kanban card" {:card id}))
+    card))
+
+(defn review!
+  "Move an optional card into review; an already-reviewed card is unchanged."
+  [runtime {:keys [card]}]
+  (when card
+    (case (attr-get (card-view runtime card) :kanban/lane)
+      "in_review" nil
+      "claimed" (kanban/review! runtime card)
+      (fail! "Card must be claimed or in review" {:card card})))
+  nil)
+
+(defn rework!
+  "Return an optional card to claimed after abort; repeat calls are harmless."
+  [runtime {:keys [card]}]
+  (when card
+    (case (attr-get (card-view runtime card) :kanban/lane)
+      "claimed" nil
+      "in_review" (kanban/rework! runtime card)
+      (fail! "Aborted landing card must be claimed or in review" {:card card})))
+  nil)
+
+(defn finish!
+  "Finish an optional card after housekeeping, accepting an existing done result."
+  [runtime {:keys [card]}]
+  (when card
+    (let [view (card-view runtime card)]
+      (if (= "closed" (:state view))
+        (when-not (= "done" (attr-get view :kanban/outcome))
+          (fail! "Landing card closed with a different outcome" {:card card}))
+        (kanban/finish! runtime card {"--outcome" "done"}))))
+  nil)
+
+;; The Workflow code executor invokes qualified one-argument callbacks while
+;; binding the originating runtime. These named adapters must remain public so
+;; generation-scoped resolution is an explicit, inspectable contract; the
+;; explicit-runtime functions above remain the reusable Clojure surface.
+(defn review-card!
+  "Workflow callback for `review!` in the code executor's bound runtime."
+  [params]
+  (review! (current/runtime) params))
+
+(defn rework-card!
+  "Workflow callback for `rework!` in the code executor's bound runtime."
+  [params]
+  (rework! (current/runtime) params))
+
+(defn finish-card!
+  "Workflow callback for `finish!` in the code executor's bound runtime."
+  [params]
+  (finish! (current/runtime) params))
