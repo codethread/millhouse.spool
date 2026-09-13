@@ -289,13 +289,13 @@
       (test-support/activate-spool! rt :millhouse/spools-code
                                     'millhouse.test-modules.code-executor
                                     :after [:millhouse/spools-workflow])
-      (workflow/complete! "inner")
-      (let [gate-id (:id (ready-code-gate "inner"))
-            closed (await-eventually
-                    #(let [gate (weaver/show rt gate-id)]
-                       (when (= "closed" (:state gate)) gate)))]
-        (is (= "inner" (attr closed :code/result)))
-        (is (= "active" (:state (workflow/current-root "outer"))))))))
+      (let [gate-id (:id (gate-strand rt "inner"))]
+        (workflow/complete! "inner")
+        (let [closed (await-eventually
+                      #(let [gate (weaver/show rt gate-id)]
+                         (when (= "closed" (:state gate)) gate)))]
+          (is (= "inner" (attr closed :code/result)))
+          (is (= "active" (:state (workflow/current-root "outer")))))))))
 
 (defn- nested-ready-code-gate! [rt]
   (workflow/start! "outer" (idle-workflow) {})
