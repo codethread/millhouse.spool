@@ -4,7 +4,6 @@
             [clojure.test :refer [deftest is testing]]
             [millhouse.spools.identity :as identity]
             [millhouse.test-support :as test-support]
-            [millstrand.api.cli.alpha :as cli]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
@@ -27,9 +26,12 @@
    runtime :millhouse/spools-identity 'millhouse.spools.identity))
 
 (defn- from-argv [runtime argv]
-  (let [arg-spec (:arg-spec (weaver/resolve-op runtime 'identity))
-        args (cli/parse arg-spec argv {})]
-    (identity/identity {:op/runtime runtime :op/args args})))
+  (weaver/op! runtime 'identity argv))
+
+(defn- graph-snapshot [runtime]
+  {:strands (weaver/list runtime)
+   :parents (identity-edges runtime "parent-of")
+   :runs (identity-edges runtime "performed")})
 
 (deftest startup-mints-once-and-recovers-without-launcher-state
   (test-support/with-runtime
@@ -60,20 +62,21 @@
   (test-support/with-runtime
     (fn [runtime _]
       (testing "maintenance callers retain the legacy result shape"
-        (let [run (weaver/add! runtime {:title "run"})
-              request {:harness "claude"
-                       :native-session-id "claude-session"
-                       :run-id (:id run)}
-              fresh (identity/bind! runtime request)
-              resumed (identity/bind! runtime
-                                      (assoc request :expected-identity
-                                             (:identity fresh)))]
-          (is (= #{:identity :strand-id :resumed :prompt} (set (keys fresh))))
-          (is (false? (:resumed fresh)))
-          (is (= (assoc fresh :resumed true) resumed))
-          (is (= [(:id run)]
-                 (mapv :to_strand_id
-                       (identity-edges runtime "performed"))))))
+        (doseq [harness ["claude" "cursor"]]
+          (let [run (weaver/add! runtime {:title "run"})
+                request {:harness harness
+                         :native-session-id (str harness "-session")
+                         :run-id (:id run)}
+                fresh (identity/bind! runtime request)
+                resumed (identity/bind! runtime
+                                        (assoc request :expected-identity
+                                               (:identity fresh)))]
+            (is (= #{:identity :strand-id :resumed :prompt} (set (keys fresh))))
+            (is (false? (:resumed fresh)))
+            (is (= (assoc fresh :resumed true) resumed))
+            (is (= [(:id run)]
+                   (mapv :to_strand_id
+                         (graph/outgoing-edges runtime [(:strand-id fresh)] "performed")))))))
       (testing "an assertion without a native binding fails before minting"
         (let [before (count (identities runtime))
               error (failure #(identity/bind!
@@ -92,7 +95,7 @@
                                               :native-session-id "native-bound"})
             other (identity/startup! runtime {:harness "codex"
                                               :native-session-id "native-other"})
-            baseline (count (identities runtime))]
+            baseline (graph-snapshot runtime)]
         (testing "the exact existing binding is a valid session-scoped reference"
           (is (= "recovered"
                  (:result
@@ -111,7 +114,7 @@
                     #"another native session"]]]
             (let [error (failure #(identity/startup! runtime request))]
               (is (re-find message (ex-message error)))
-              (is (= baseline (count (identities runtime)))))))
+              (is (= baseline (graph-snapshot runtime))))))
         (testing "an ambiguous friendly identity fails before native minting"
           (doseq [session ["duplicate-a" "duplicate-b"]]
             (weaver/add! runtime
@@ -120,14 +123,14 @@
                                        :identity/id "duplicate-calm-otter"
                                        :identity/harness "codex"
                                        :identity/native-session-id session}}))
-          (let [before (count (identities runtime))
+          (let [before (graph-snapshot runtime)
                 error (failure #(identity/startup!
                                  runtime
                                  {:harness "codex"
                                   :native-session-id "duplicate-new"
                                   :identity "duplicate-calm-otter"}))]
             (is (re-find #"does not resolve uniquely" (ex-message error)))
-            (is (= before (count (identities runtime))))))))))
+            (is (= before (graph-snapshot runtime)))))))))
 
 (deftest invalid-provenance-targets-cause-no-partial-identity-or-edge
   (test-support/with-runtime
@@ -239,6 +242,66 @@
             (is (= before (weaver/list runtime)))
             (is (= (:identity occupied) (:identity recovered)))))))))
 
+(deftest rejected-attachment-leaves-binding-and-provenance-unchanged
+  (test-support/with-runtime
+    (fn [runtime _]
+      (let [reserved (identity/reserve! runtime {:harness "codex"})
+            parent (identity/startup! runtime {:harness "pi" :native-session-id "parent"})
+            run (weaver/add! runtime {:title "run"})
+            request {:harness "codex"
+                     :native-session-id "actual-thread"
+                     :reservation-id (:reservation-id reserved)
+                     :parent-identity (:identity parent)
+                     :run-id (:id run)}]
+        (doseq [invalid [(assoc request :identity "unknown-identity")
+                         (assoc request :identity (:identity parent))
+                         (assoc request :reservation-id "unknown-reservation")
+                         (assoc request :parent-identity "unknown-parent")
+                         (assoc request :run-id "unknown-run")
+                         ;; The run resolves, but its self-edge is rejected by
+                         ;; the transaction after the binding/parent edge writes.
+                         (assoc request :run-id (:strand-id reserved))]]
+          (let [before (graph-snapshot runtime)]
+            (is (some? (failure #(identity/attach! runtime invalid))))
+            (is (= before (graph-snapshot runtime)))))
+        (is (= "attached" (:result (identity/attach! runtime request))))
+        (identity/attach! runtime request)
+        (is (= 1 (count (identity-edges runtime "parent-of"))))
+        (is (= 1 (count (identity-edges runtime "performed"))))))))
+
+(deftest simultaneous-reservation-attachment-has-one-native-winner
+  (test-support/with-runtime
+    (fn [runtime _]
+      (let [reserved (identity/reserve! runtime {:harness "codex"})
+            parent (identity/startup! runtime {:harness "pi" :native-session-id "parent"})
+            run (weaver/add! runtime {:title "run"})
+            start (promise)
+            workers (mapv (fn [n]
+                            (future
+                              @start
+                              (try
+                                (identity/attach!
+                                 runtime
+                                 {:harness "codex"
+                                  :native-session-id (str "thread-" (mod n 2))
+                                  :reservation-id (:reservation-id reserved)
+                                  :parent-identity (:identity parent)
+                                  :run-id (:id run)})
+                                (catch clojure.lang.ExceptionInfo error error))))
+                          (range 16))]
+        (deliver start true)
+        (let [results (mapv deref workers)
+              attached (filter map? results)
+              rejected (remove map? results)]
+          (is (= 8 (count attached) (count rejected)))
+          (is (every? #(= "attached" (:result %)) attached))
+          (is (= #{(:identity reserved)} (set (map :identity attached))))
+          (is (every? #(re-find #"already attached to another native session"
+                                (ex-message %)) rejected))
+          (is (= 2 (count (identities runtime))))
+          (is (= 1 (count (identity-edges runtime "parent-of"))))
+          (is (= 1 (count (identity-edges runtime "performed")))))))))
+
 (deftest simultaneous-startup-converges-on-one-binding-and-provenance-set
   (test-support/with-runtime
     (fn [runtime _]
@@ -326,5 +389,12 @@
         (is (= "recovered" (:result resumed)))
         (is (= "reserved" (:result reserved)))
         (is (= "attached" (:result attached)))
-        (is (= (identity/codex-child-session-id "parent" "agent")
-               (:native-session-id child-key)))))))
+        (is (= #{:operation :identity :strand-id :result :instruction}
+               (set (keys fresh)) (set (keys resumed)) (set (keys attached))))
+        (is (= #{:operation :identity :strand-id :result :reservation-id}
+               (set (keys reserved))))
+        (is (= ["identity startup" "identity startup" "identity reserve" "identity attach"]
+               (mapv :operation [fresh resumed reserved attached])))
+        (is (= {:operation "identity codex-child-key"
+                :native-session-id (identity/codex-child-session-id "parent" "agent")}
+               child-key))))))

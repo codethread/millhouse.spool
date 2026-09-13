@@ -15,13 +15,15 @@ starts or restarts Weaver.
 ## Activation
 
 Add this root to the workspace's `deps.edn`, then activate it from trusted
-startup configuration:
+startup configuration. The startup API requires the identity implementation at
+`a8cb5ef24d41fa67d776c29f5dde8f12c050c6a5` or a subsequent release; `v4` does not
+include it:
 
 ```clojure
 {:deps
  {millhouse.spools/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v4"
+   :git/sha "a8cb5ef24d41fa67d776c29f5dde8f12c050c6a5"
    :deps/root "spools/identity"}}}
 ```
 
@@ -58,10 +60,12 @@ Repeat, concurrent, reload, and resume calls recover it. Resolution and minting
 are serialized by a workspace-local process/file guard, and identity plus
 provenance edges are committed in one transaction.
 
-The exact startup JSON shape is:
+The exact CLI startup JSON shape is (library `startup!` returns the same map
+without the dispatcher-added `operation` key):
 
 ```json
 {
+  "operation": "identity startup",
   "identity": "warm-silver-lemur",
   "strand-id": "abc12",
   "result": "minted",
@@ -104,7 +108,7 @@ strand identity codex-child-key PARENT_SESSION_ID AGENT_ID
 ```
 
 ```json
-{"native-session-id":"codex-child:v1:cGFyZW50:YWdlbnQ"}
+{"operation":"identity codex-child-key","native-session-id":"codex-child:v1:cGFyZW50:YWdlbnQ"}
 ```
 
 ## Optional managed reservation
@@ -131,10 +135,11 @@ strand identity startup codex ACTUAL_THREAD_ID \
   --reservation-id RESERVATION_ID --identity NAME
 ```
 
-The exact reservation shape is:
+The exact CLI reservation shape is (library `reserve!` omits `operation`):
 
 ```json
 {
+  "operation": "identity reserve",
   "identity": "warm-silver-lemur",
   "strand-id": "abc12",
   "result": "reserved",
@@ -145,7 +150,29 @@ The exact reservation shape is:
 The opaque reservation ID is the attachment capability. A friendly name alone
 cannot attach a reservation. First attachment records the actual native session;
 an exact replay converges, while another harness/session or a conflicting native
-binding fails before writes. Attached identities cannot be rebound.
+binding fails before writes. Attached identities cannot be rebound. Both first
+attachment and attachment replay return `result: attached`; startup without a
+reservation subsequently returns `result: recovered`. CLI `attach` has the startup
+JSON keys with `operation: identity attach`; its library equivalent omits
+`operation`.
+
+### Complete CLI argument contract
+
+```text
+strand [--cwd DIR] [--workspace DIR] identity startup HARNESS NATIVE_ID
+  [--identity NAME] [--reservation-id TOKEN] [--parent-identity NAME]
+  [--run-id ID] [--model MODEL] [--thinking-level LEVEL]
+strand [--cwd DIR] [--workspace DIR] identity reserve HARNESS
+  [--model MODEL] [--thinking-level LEVEL]
+strand [--cwd DIR] [--workspace DIR] identity attach HARNESS NATIVE_ID TOKEN
+  [--identity NAME] [--parent-identity NAME] [--run-id ID]
+```
+
+Wrapped lines above describe one invocation each. All option values are strings;
+omit absent options rather than passing empty strings or `nil`. Model and thinking
+level are recorded only when minting or reserving, not overwritten on recovery or
+attachment. `run-id` resolves an existing strand, without requiring any
+Harnesses-specific run schema; managed authorization belongs to the caller.
 
 ## Compatibility binding
 
