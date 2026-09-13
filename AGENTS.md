@@ -5,6 +5,14 @@
 - Run `make quality` before completing changes; it covers formatting, linting, conventions, reflection, docs, and the test suite.
 - Use the focused `make` targets while iterating (`fmt-check`, `lint`, `reflect-check`, `docs-check`, `test`); `clojure -M:test --serial` is the diagnostic fallback for parallel test failures.
 
+## Working here
+
+- Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
+- Never edit `main` or push directly to `main`; feature-branch pushes are expected.
+- Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
+  shared `land` for quality, one basic review, FIFO merge, card completion, and
+  branch/worktree cleanup.
+
 ## Testing
 
 The default suite requires namespaces serially, then runs them concurrently with isolated output and summaries:

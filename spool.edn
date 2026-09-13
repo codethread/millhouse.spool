@@ -2,5 +2,6 @@
  :roots {millhouse.spools/workflow {:root "spools/workflow"}
          millhouse.spools/chime {:root "spools/chime"}
          millhouse.spools/cron {:root "spools/cron"}
+         millhouse.spools/land {:root "spools/land"}
          millhouse.spools/kanban {:root "spools/kanban"}
          millhouse.spools/identity {:root "spools/identity"}}}

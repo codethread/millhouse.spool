@@ -1,6 +1,6 @@
 CLJ_KONDO := clj-kondo
 CLJ_KONDO_VERSION := 2026.08.04
-KONDO_ROOTS := root millstrand chime cron identity kanban workflow
+KONDO_ROOTS := root millstrand chime cron identity kanban land workflow
 
 .PHONY: test test-local api-docs docs-prepare docs-site docs-serve docs-check \
 	fmt-check lint lint-clj lint-splint lint-conventions reflect-check \
@@ -71,7 +71,7 @@ kondo-import-millstrand: check-clj-kondo
 		classpath="$$(clojure -Srepro -Spath)" && \
 		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
 
-kondo-import-chime kondo-import-cron kondo-import-identity kondo-import-kanban kondo-import-workflow: kondo-import-%: check-clj-kondo
+kondo-import-chime kondo-import-cron kondo-import-identity kondo-import-kanban kondo-import-land kondo-import-workflow: kondo-import-%: check-clj-kondo
 	@cd spools/$* && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
 		classpath="$$(clojure -Srepro -Spath -M:test)" && \
 		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
@@ -82,7 +82,7 @@ kondo-lint-root: check-clj-kondo
 kondo-lint-millstrand: check-clj-kondo
 	@$(RUN_CHECK) clj-kondo-millstrand sh -c 'cd .millstrand && $(CLJ_KONDO) --repro --parallel --lint init.clj'
 
-kondo-lint-chime kondo-lint-cron kondo-lint-identity kondo-lint-kanban kondo-lint-workflow: kondo-lint-%: check-clj-kondo
+kondo-lint-chime kondo-lint-cron kondo-lint-identity kondo-lint-kanban kondo-lint-land kondo-lint-workflow: kondo-lint-%: check-clj-kondo
 	@$(RUN_CHECK) clj-kondo-$* sh -c 'cd spools/$* && $(CLJ_KONDO) --repro --parallel --lint src test'
 
 check-clj-kondo:
@@ -105,7 +105,7 @@ lint-conventions: check-clj-kondo
 		$(CLJ_KONDO) --repro \
 			--config-dir "$$config_dir" \
 			--lint scripts test \
-				spools/chime/src spools/cron/src spools/kanban/src spools/workflow/src \
+				spools/chime/src spools/cron/src spools/kanban/src spools/land/src spools/workflow/src \
 				.millstrand/init.clj \
 			--config '\''{:analysis {:locals true} :output {:format :json}}'\'' \
 		| clojure -M:lint/conventions \

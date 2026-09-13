@@ -65,7 +65,9 @@
     (pr-str {:paths [(str root "/test")
                      (str root "/spools/workflow/test")]
              :deps {'millhouse.spools/workflow
-                    {:local/root (str root "/spools/workflow")}}})))
+                    {:local/root (str root "/spools/workflow")}
+                    'millhouse.spools/land
+                    {:local/root (str root "/spools/land")}}})))
 
 (defn with-module-activation
   "Run one source-backed module activation under the JVM namespace lock.
@@ -109,6 +111,22 @@
   (.toFile (java.nio.file.Files/createTempDirectory
             (.toPath (io/file "/tmp")) prefix
             (make-array java.nio.file.attribute.FileAttribute 0))))
+
+(defn run-git!
+  "Run `git` in `dir` with `args`, returning raw stdout on success."
+  [dir & args]
+  (let [process (-> (ProcessBuilder. (into-array String (cons "git" args)))
+                    (.directory (io/file dir))
+                    (.start))
+        stderr (future (slurp (.getErrorStream process)))
+        stdout (future (slurp (.getInputStream process)))
+        exit (.waitFor process)
+        stdout @stdout
+        stderr @stderr]
+    (when-not (zero? exit)
+      (throw (ex-info "Git fixture command failed"
+                      {:args args :exit exit :stdout stdout :stderr stderr})))
+    stdout))
 
 (defn delete-tree!
   "Delete a test path recursively without following directory symlinks."

@@ -11,6 +11,7 @@
    "spools/cron/src"
    "spools/workflow/src"
    "spools/kanban/src"
+   "spools/land/src"
    ".millstrand/init.clj"
    "test"])
 
@@ -19,7 +20,8 @@
   #{"spools/chime/src"
     "spools/cron/src"
     "spools/workflow/src"
-    "spools/kanban/src"})
+    "spools/kanban/src"
+    "spools/land/src"})
 
 (def ^:private core-macro-names
   (->> (ns-publics 'clojure.core)

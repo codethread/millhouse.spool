@@ -12,6 +12,11 @@
     :outfile "spools/cron/cron.api.md"}
    {:source "spools/identity/src/millhouse/spools/identity.clj"
     :outfile "spools/identity/identity.api.md"}
+   {:source ["spools/land/src/millhouse/spools/land.clj"
+             "spools/land/src/millhouse/spools/land/card_actions.clj"
+             "spools/land/src/millhouse/spools/land/merge_queue.clj"
+             "spools/land/src/millhouse/spools/land/support.clj"]
+    :outfile "spools/land/land.api.md"}
    {:source "spools/workflow/src/millhouse/spools/executors/code.clj"
     :outfile "spools/workflow/code.api.md"}
    {:source "spools/workflow/src/millhouse/spools/executors/shell.clj"
