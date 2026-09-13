@@ -101,10 +101,6 @@
                       "millhouse.spools/workflow"]]
       (is (.isFile (io/file root ".clj-kondo/imports" artifact "config.edn"))))))
 
-(def ^:private resolved-spool-roots
-  "Installed spool roots that status must contribute to a consumer classpath."
-  ["spools/workflow" "spools/chime" "spools/cron"])
-
 (def ^:private portable-consumer-source
   "A consumer source exercising every imported authoring-form family."
   "(ns consumer.forms
@@ -175,64 +171,50 @@
      \"A sample executable.\"
      {:executable \"sample-bin\"})
 
-   (workflow/defworkflow! sample-workflow
+   (workflow/defworkflow sample-workflow
      \"A sample workflow.\"
      {:entrypoints #{:start} :defaults {}}
      (workflow/workflow
        (fn [_] \"done\")
        (workflow/step :done \"Done\" :self)))
 
-   (workflow/defexecutor! sample-executor
+   (workflow/defexecutor sample-executor
      \"A sample executor.\"
      {}
      [_]
      nil)
 
-   (chime/defrule! sample-rule
+   (chime/defrule sample-rule
      \"A sample Chime rule.\"
      [_]
      nil)
 
-   (cron/defjob! sample-job \" Sample job. \"
+   (cron/defjob sample-job \"Sample job.\"
      {:interval-ms 1000
-      :handler 'consumer.forms/sample-job-handler})")
+      :handler 'consumer.forms/sample-job-handler})
+
+   (workflow/use-workflow! sample-workflow)
+   (workflow/use-executor! sample-executor-stalled?)
+   (chime/use-rule! sample-rule-rule)
+   (cron/use-job! sample-job)")
 
 (defn- write-file! [^java.io.File file content]
   (.mkdirs (.getParentFile file))
   (spit file content)
   file)
 
-(defn- portable-consumer-deps-edn [millstrand-dep]
-  {:paths []
-   :deps {'io.millstrand/millstrand millstrand-dep}})
+(defn- portable-consumer-deps-edn [root]
+  {:paths ["src"]
+   :deps
+   {'millhouse.spools/workflow
+    {:local/root (.getCanonicalPath (io/file root "spools/workflow"))}
+    'millhouse.spools/chime
+    {:local/root (.getCanonicalPath (io/file root "spools/chime"))}
+    'millhouse.spools/cron
+    {:local/root (.getCanonicalPath (io/file root "spools/cron"))}}})
 
-(defn- resolved-spool-classpath [root]
-  (->> resolved-spool-roots
-       (mapcat (fn [root-name]
-                 (let [root-dir (io/file root root-name)
-                       deps (edn/read-string (slurp (io/file root-dir "deps.edn")))]
-                   (map #(.getCanonicalPath (io/file root-dir %))
-                        (if (contains? deps :paths)
-                          (:paths deps)
-                          ["src"])))))
-       (str/join java.io.File/pathSeparator)))
-
-(defn- portable-consumer-bin! [dir]
-  (doto (write-file!
-         (io/file dir "clj-kondo")
-         (str "#!/bin/sh\n"
-              "exec clojure -Sdeps '{:deps {clj-kondo/clj-kondo "
-              "{:mvn/version \"2025.06.05\"}}}' -M -m clj-kondo.main \"$@\"\n"))
-    (.setExecutable true)))
-
-(defn- shell-env-with-bin [bin-dir]
-  (let [path (or (System/getenv "PATH") "")]
-    (assoc (into {} (System/getenv)) "PATH" (str (.getPath bin-dir) ":" path))))
-
-(defn- run-consumer-command [dir bin-dir command]
-  (sh/sh "sh" "-c" command
-         :dir (.getPath dir)
-         :env (shell-env-with-bin bin-dir)))
+(defn- run-consumer-command [dir command]
+  (sh/sh "sh" "-c" command :dir (.getPath dir)))
 
 (defn- kondo-files [dir]
   (mapv #(.getPath ^java.io.File %)
@@ -241,29 +223,18 @@
 (deftest portable-consumer-imports-and-lints-published-forms
   (testing "a temp Tools.deps consumer imports and lints owner exports"
     (let [root (io/file (repository-root))
-          root-deps (edn/read-string (slurp (io/file root "deps.edn")))
-          millstrand-dep (get-in root-deps [:deps 'io.millstrand/millstrand])
           consumer (test-support/temp-dir "millhouse-portable-consumer")
-          bin-dir (io/file consumer "bin")
           kondo-config (io/file consumer ".clj-kondo/config.edn")
           deps-file (io/file consumer "deps.edn")
-          source-file (io/file consumer "src/consumer/forms.clj")
-          spool-classpath (resolved-spool-classpath root)]
+          source-file (io/file consumer "src/consumer/forms.clj")]
       (try
-        (is (= "09a2cad2ab4ee203051ed3cc66bb0a177105a979"
-               (:git/sha millstrand-dep)))
-        (portable-consumer-bin! bin-dir)
         (write-file! kondo-config "{}")
-        (write-file! deps-file
-                     (pr-str (portable-consumer-deps-edn millstrand-dep)))
+        (write-file! deps-file (pr-str (portable-consumer-deps-edn root)))
         (write-file! source-file portable-consumer-source)
         (let [import-result
               (run-consumer-command
-               consumer bin-dir
-               (str "clj-kondo --lint \"" spool-classpath
-                    java.io.File/pathSeparator
-                    "$(clojure -Spath)\" --dependencies --parallel"
-                    " --copy-configs --skip-lint"))
+               consumer
+               "clj-kondo --repro --lint \"$(clojure -Srepro -Spath)\" --copy-configs --skip-lint")
               expected-imports
               ["io.millstrand/millstrand/config.edn"
                "io.millstrand/millstrand/hooks/millstrand.clj"
@@ -272,8 +243,8 @@
                "millhouse.spools/chime/config.edn"
                "millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo"
                "millhouse.spools/cron/config.edn"]
-              lint-result (run-consumer-command consumer bin-dir
-                                                "clj-kondo --lint src --parallel")]
+              lint-result (run-consumer-command
+                           consumer "clj-kondo --repro --parallel --lint src")]
           (is (zero? (:exit import-result))
               (str "dependency import failed:\n" (:err import-result)))
           (doseq [relative-path expected-imports]

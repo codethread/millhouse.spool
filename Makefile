@@ -1,11 +1,12 @@
 CLJ_KONDO := clj-kondo
 CLJ_KONDO_VERSION := 2026.08.04
-KONDO_PROJECTS := root millstrand chime cron identity kanban workflow
+KONDO_ROOTS := root millstrand chime cron identity kanban workflow
 
 .PHONY: test test-local api-docs docs-prepare docs-site docs-serve docs-check \
-	fmt-check lint lint-clj lint-root lint-millstrand lint-chime lint-cron lint-identity \
-	lint-kanban lint-workflow lint-splint lint-conventions reflect-check \
-	kondo-configs $(addprefix kondo-configs-,$(KONDO_PROJECTS)) \
+	fmt-check lint lint-clj lint-splint lint-conventions reflect-check \
+	kondo kondo-import kondo-lint \
+	$(addprefix kondo-import-,$(KONDO_ROOTS)) \
+	$(addprefix kondo-lint-,$(KONDO_ROOTS)) \
 	check-clj-kondo clean-kondo kanban-dash-check kanban-export kanban-serve quality
 
 MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.millstrand/millstrand {:local/root "$(MILLSTRAND_ROOT)"}}}}}'
@@ -51,45 +52,38 @@ fmt-check:
 
 lint: lint-clj lint-splint lint-conventions
 
-lint-clj: lint-root lint-millstrand lint-chime lint-cron lint-identity lint-kanban lint-workflow
+lint-clj: kondo
 
-lint-root: kondo-configs-root
+kondo: kondo-import
+	@$(MAKE) --no-print-directory kondo-lint
+
+kondo-import: $(addprefix kondo-import-,$(KONDO_ROOTS))
+
+kondo-lint: $(addprefix kondo-lint-,$(KONDO_ROOTS))
+
+kondo-import-root: check-clj-kondo
+	@rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
+		classpath="$$(clojure -Srepro -Spath -M:test)" && \
+		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
+
+kondo-import-millstrand: check-clj-kondo
+	@cd .millstrand && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
+		classpath="$$(clojure -Srepro -Spath)" && \
+		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
+
+kondo-import-chime kondo-import-cron kondo-import-identity kondo-import-kanban kondo-import-workflow: kondo-import-%: check-clj-kondo
+	@cd spools/$* && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
+		classpath="$$(clojure -Srepro -Spath -M:test)" && \
+		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
+
+kondo-lint-root: check-clj-kondo
 	@$(RUN_CHECK) clj-kondo-root $(CLJ_KONDO) --repro --parallel --lint scripts test
 
-lint-millstrand: kondo-configs-millstrand
+kondo-lint-millstrand: check-clj-kondo
 	@$(RUN_CHECK) clj-kondo-millstrand sh -c 'cd .millstrand && $(CLJ_KONDO) --repro --parallel --lint init.clj'
 
-lint-chime: kondo-configs-chime
-	@$(RUN_CHECK) clj-kondo-chime sh -c 'cd spools/chime && $(CLJ_KONDO) --repro --parallel --lint src test'
-
-lint-cron: kondo-configs-cron
-	@$(RUN_CHECK) clj-kondo-cron sh -c 'cd spools/cron && $(CLJ_KONDO) --repro --parallel --lint src test'
-
-lint-identity: kondo-configs-identity
-	@$(RUN_CHECK) clj-kondo-identity sh -c 'cd spools/identity && $(CLJ_KONDO) --repro --parallel --lint src test'
-
-lint-kanban: kondo-configs-kanban
-	@$(RUN_CHECK) clj-kondo-kanban sh -c 'cd spools/kanban && $(CLJ_KONDO) --repro --parallel --lint src test'
-
-lint-workflow: kondo-configs-workflow
-	@$(RUN_CHECK) clj-kondo-workflow sh -c 'cd spools/workflow && $(CLJ_KONDO) --repro --parallel --lint src test'
-
-kondo-configs: $(addprefix kondo-configs-,$(KONDO_PROJECTS))
-
-kondo-configs-root: check-clj-kondo
-	@rm -rf .clj-kondo/imports
-	@classpath="$$(clojure -Spath -M:test)"; \
-		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
-
-kondo-configs-millstrand: check-clj-kondo
-	@cd .millstrand && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
-		classpath="$$(clojure -Spath)" && \
-		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
-
-kondo-configs-chime kondo-configs-cron kondo-configs-identity kondo-configs-kanban kondo-configs-workflow: kondo-configs-%: check-clj-kondo
-	@cd spools/$* && rm -rf .clj-kondo/imports && mkdir -p .clj-kondo && \
-		classpath="$$(clojure -Spath -M:test)" && \
-		$(CLJ_KONDO) --repro --lint "$$classpath" --copy-configs --skip-lint
+kondo-lint-chime kondo-lint-cron kondo-lint-identity kondo-lint-kanban kondo-lint-workflow: kondo-lint-%: check-clj-kondo
+	@$(RUN_CHECK) clj-kondo-$* sh -c 'cd spools/$* && $(CLJ_KONDO) --repro --parallel --lint src test'
 
 check-clj-kondo:
 	@command -v $(CLJ_KONDO) >/dev/null 2>&1 || { echo "clj-kondo $(CLJ_KONDO_VERSION) is required" >&2; exit 1; }
