@@ -2,14 +2,20 @@
 
 [API reference](./identity.api.md)
 
-`millhouse.spools.identity` gives each logical harness session one friendly,
-canonical identity. A fresh native session mints an ID such as
-`bright-calm-otter`; rebinding the same harness/session pair recovers it.
-Managed resume can pass an expected identity and fails on mismatch.
+`millhouse.spools.identity` gives each native Codex or Pi session one friendly,
+workspace-local identity. Native startup needs only the harness name and the
+host's actual session ID. It does not require a managed run, launcher state,
+`MILLSTRAND_AGENT_ID`, `MILLSTRAND_RUN_ID`, or a reservation.
+
+Workspace routing belongs to the Strand client. Native adapters pass `--cwd`
+for the session directory and pass `--workspace` only for an explicit workspace
+override. Identity resolution never creates or guesses a workspace and never
+starts or restarts Weaver.
 
 ## Activation
 
-Add this root to the workspace's `deps.edn`, then activate it from trusted startup configuration:
+Add this root to the workspace's `deps.edn`, then activate it from trusted
+startup configuration:
 
 ```clojure
 {:deps
@@ -25,26 +31,143 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
    :required? true})
 ```
 
-## Harness binding
+## Native startup
 
-Harness integrations call `bind!` before launch (or `strand identity bind` from
-a start wrapper) with the harness name, its native logical session ID, and an
-optional run strand ID:
+Call the library with the actual native session ID:
 
 ```clojure
-(identity/bind! runtime
+(identity/startup! runtime
   {:harness "pi"
    :native-session-id session-id
    :model "claude-sonnet"
    :thinking-level "high"
+   :parent-identity parent-name
+   :run-id optional-run-id})
+```
+
+Or call the Strand operation:
+
+```text
+strand identity startup pi SESSION_ID
+strand identity startup codex THREAD_ID --identity EXISTING_NAME
+strand identity startup codex CHILD_KEY --parent-identity PARENT_NAME
+```
+
+The first call for a `(harness, native-session-id)` pair mints one identity.
+Repeat, concurrent, reload, and resume calls recover it. Resolution and minting
+are serialized by a workspace-local process/file guard, and identity plus
+provenance edges are committed in one transaction.
+
+The exact startup JSON shape is:
+
+```json
+{
+  "identity": "warm-silver-lemur",
+  "strand-id": "abc12",
+  "result": "minted",
+  "instruction": "Your Millstrand identity is warm-silver-lemur. Use warm-silver-lemur for identity-bearing operations; pass `--by-identity warm-silver-lemur` explicitly. Do not invent another identity."
+}
+```
+
+`result` is one of `minted`, `recovered`, or `attached`. The instruction is the
+canonical context for native adapters. Codex supplies it as developer context;
+Pi composes it into its owned effective system prompt.
+
+`--identity NAME` is a session-scoped reference, not a rename or adoption
+request. `NAME` must resolve uniquely and already be bound to the exact harness
+and native session. Unknown, ambiguous, reserved, or differently bound names
+fail before writes. With no explicit name, startup first recovers the native
+binding and otherwise mints.
+
+`--parent-identity NAME` adds the idempotent `parent-of` edge
+`parent -> current identity`; supplying the current identity produces no
+self-edge. `--run-id ID` adds the idempotent `performed` edge
+`current identity -> run`. Both targets are validated before identity or edge
+writes.
+
+### Native child keys
+
+Pi passes the child's actual session ID unchanged. Codex `SubagentStart` has a
+parent `session_id` and an `agent_id`, so it must not use either value alone.
+Use the collision-safe composite helper:
+
+```clojure
+(identity/codex-child-session-id parent-session-id agent-id)
+```
+
+The stable format is `codex-child:v1:<base64url(parent UTF-8)>:<base64url(agent
+UTF-8)>`, without padding. It is always distinct from the parent. The CLI can
+produce the same value:
+
+```text
+strand identity codex-child-key PARENT_SESSION_ID AGENT_ID
+```
+
+```json
+{"native-session-id":"codex-child:v1:cGFyZW50:YWdlbnQ"}
+```
+
+## Optional managed reservation
+
+Reservations are a compatibility path for managed callers, not a desktop
+startup requirement:
+
+```clojure
+(def reserved
+  (identity/reserve! runtime {:harness "codex" :model "gpt-5"}))
+
+(identity/attach! runtime
+  {:harness "codex"
+   :native-session-id actual-thread-id
+   :reservation-id (:reservation-id reserved)
+   :identity (:identity reserved)})
+```
+
+```text
+strand identity reserve codex --model gpt-5
+strand identity attach codex ACTUAL_THREAD_ID RESERVATION_ID --identity NAME
+# Equivalent native startup attachment:
+strand identity startup codex ACTUAL_THREAD_ID \
+  --reservation-id RESERVATION_ID --identity NAME
+```
+
+The exact reservation shape is:
+
+```json
+{
+  "identity": "warm-silver-lemur",
+  "strand-id": "abc12",
+  "result": "reserved",
+  "reservation-id": "907302db-f1a1-4f20-9908-da397415a7c8"
+}
+```
+
+The opaque reservation ID is the attachment capability. A friendly name alone
+cannot attach a reservation. First attachment records the actual native session;
+an exact replay converges, while another harness/session or a conflicting native
+binding fails before writes. Attached identities cannot be rebound.
+
+## Compatibility binding
+
+Existing Claude, Cursor, and managed maintenance integrations may continue to
+call `bind!` or `strand identity bind`:
+
+```clojure
+(identity/bind! runtime
+  {:harness "claude"
+   :native-session-id session-id
    :run-id run-id
    :expected-identity prior-identity})
 ```
 
-The result contains `:identity`, `:resumed`, and a short `:prompt`. Integrations
-export the friendly value as `MILLSTRAND_AGENT_ID` and prepend the prompt to the
-agent's initial instructions. If a run is supplied, the identity strand records
-a `performed` edge to it.
+Its result remains `:identity`, `:strand-id`, `:resumed`, and `:prompt`.
+`expected-identity` remains an assertion rather than adoption permission. If no
+native binding exists or it differs, binding fails before minting, so no orphan
+identity or provenance edge is left behind.
 
-This POC deliberately contains only session binding and run provenance. It does
-not model durable cross-session actors, end hooks, capabilities, or domain acts.
+## Validation scope
+
+The spool is exercised with disposable CLI/runtime worlds, including cold
+runtime restart and concurrent startup. Desktop behavior is an adapter contract;
+no desktop application or live plugin lifecycle is operated as part of this
+spool's acceptance.
