@@ -1,6 +1,7 @@
 (ns millhouse.spools.identity-test
   "Focused lifecycle tests for native startup identity resolution."
-  (:require [clojure.string :as str]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.spools.identity :as identity]
             [millhouse.test-support :as test-support]
@@ -57,6 +58,22 @@
         (is (= "native-1" (attr-get record :identity/native-session-id)))
         (is (= "claude-sonnet" (attr-get record :identity/model)))
         (is (= 1 (count (identities runtime))))))))
+
+(deftest startup-lock-persists-in-ignored-workspace-state
+  (test-support/with-runtime
+    (fn [runtime config-dir]
+      (test-support/run-git! config-dir "init" "--quiet")
+      (spit (io/file config-dir ".gitignore") "state/\ndata/\n")
+      (test-support/run-git! config-dir "add" ".")
+      (test-support/run-git! config-dir
+                             "-c" "user.name=Millhouse Test"
+                             "-c" "user.email=millhouse@example.invalid"
+                             "commit" "--quiet" "-m" "fixture")
+      (is (str/blank? (test-support/run-git! config-dir "status" "--porcelain")))
+      (identity/startup! runtime {:harness "pi" :native-session-id "clean-checkout"})
+      (is (.isFile (io/file config-dir "state" ".identity-lock.acquire")))
+      (is (not (.exists (io/file config-dir ".identity-lock.acquire"))))
+      (is (str/blank? (test-support/run-git! config-dir "status" "--porcelain"))))))
 
 (deftest bind-remains-compatible-and-expected-identity-never-mints-an-orphan
   (test-support/with-runtime

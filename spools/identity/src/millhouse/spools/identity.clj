@@ -128,12 +128,13 @@
     (when-not (and (string? config-dir) (not (str/blank? config-dir)))
       (fail! "Identity binding requires a selected workspace"
              {:config-dir config-dir}))
-    (locking identity-monitor
-      (with-open [file (RandomAccessFile.
-                        (io/file config-dir ".identity-lock.acquire") "rw")
-                  channel (.getChannel file)
-                  _lock (.lock channel)]
-        (f)))))
+    (let [lock-file (io/file config-dir "state" ".identity-lock.acquire")]
+      (io/make-parents lock-file)
+      (locking identity-monitor
+        (with-open [file (RandomAccessFile. lock-file "rw")
+                    channel (.getChannel file)
+                    _lock (.lock channel)]
+          (f))))))
 
 (defn- require-run [runtime run-id]
   (when run-id
