@@ -4,8 +4,14 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "09a2cad2ab4ee203051ed3cc66bb0a177105a979"
    :deps/root "."}
-  millhouse.spools/kanban {:local/root "../kanban"}
-  millhouse.spools/workflow {:local/root "../workflow"}}
+  millhouse.spools/kanban
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/sha "3132c8f7f10455c893da28fef0e9ca0047560f82"
+   :deps/root "spools/kanban"}
+  millhouse.spools/workflow
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/sha "3132c8f7f10455c893da28fef0e9ca0047560f82"
+   :deps/root "spools/workflow"}}
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]

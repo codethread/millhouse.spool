@@ -39,7 +39,7 @@ Millhouse publishes breaking releases as annotated `vN` tags. Consumers add only
    :deps/root "spools/identity"}
   millhouse.spools/land
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/tag "v4"
+   :git/sha "3132c8f7f10455c893da28fef0e9ca0047560f82"
    :deps/root "spools/land"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
