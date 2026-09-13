@@ -23,9 +23,9 @@
    :deps/root "kanban-adapter"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "8f7d99354fef66b43693fcb2002c6ccdd5001267"
+   :git/sha "b23d84b06af25c56c009f1697bd13f1ed739091c"
    :deps/root "spools/config"}
   codethread/ralph
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "252eeaee216a5e4d4e82c6b2948dd9eba1dafc9d"
+   :git/sha "b23d84b06af25c56c009f1697bd13f1ed739091c"
    :deps/root "spools/ralph"}}}

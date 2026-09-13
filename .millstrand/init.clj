@@ -12,26 +12,15 @@
 (runtime/module! runtime :millstrand/spools-batteries
                  {:ns 'millstrand.spools.batteries})
 
-;; Register shared identity, Workflow, Harnesses, aliases, and reviewers before
-;; repository-specific policy. Executor activation remains deliberately last.
+;; Register shared identity, Workflow, Harnesses, Kanban, Land, aliases, and
+;; reviewers before repository-specific policy. Executor activation remains
+;; deliberately last.
 (codethread/register! runtime)
 
 ;; --- Workflow and shell provider surfaces ----------------------------------
 (runtime/module! runtime :millhouse/spools-workflow-all
                  {:ns 'millhouse.spools.workflow.spool
                   :after [:millhouse/spools-workflow]
-                  :required? true})
-
-;; Keep first-stage ownership local while the workspace still pins the old
-;; Codethread bootstrap. The follow-up bootstrap pin will own both module ids.
-(runtime/module! runtime :millhouse/spools-kanban
-                 {:ns 'millhouse.spools.kanban
-                  :required? true})
-(runtime/module! runtime :millhouse/spools-land
-                 {:ns 'millhouse.spools.land.spool
-                  :after [:millhouse/spools-workflow-all
-                          :millhouse/spools-kanban
-                          :codethread/config-reviewers]
                   :required? true})
 
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
@@ -70,7 +59,6 @@
 ;; alias election, and reviewer declaration is reconciled.
 (codethread/register-executor!
  runtime [:millhouse/spools-workflow-all
-          :millhouse/spools-land
           :devflow
           :devflow/kanban-adapter
           :codethread/config
