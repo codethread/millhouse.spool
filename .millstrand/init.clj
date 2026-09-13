@@ -1,4 +1,5 @@
-(require '[millstrand.api.current.alpha :as current]
+(require '[ct.spools.codethread.bootstrap :as codethread]
+         '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
 
 (def runtime (current/runtime))
@@ -11,22 +12,14 @@
 (runtime/module! runtime :millstrand/spools-batteries
                  {:ns 'millstrand.spools.batteries})
 
+;; Register shared identity, Workflow, Harnesses, aliases, and reviewers before
+;; repository-specific policy. Executor activation remains deliberately last.
+(codethread/register! runtime)
+
 ;; --- Workflow and shell provider surfaces ----------------------------------
-(runtime/module! runtime :millhouse/spools-workflow
-                 {:ns 'millhouse.spools.workflow
-                  :required? true})
 (runtime/module! runtime :millhouse/spools-workflow-all
                  {:ns 'millhouse.spools.workflow.spool
                   :after [:millhouse/spools-workflow]
-                  :required? true})
-
-;; --- identity and consolidated Harnesses surface ----------------------------
-(runtime/module! runtime :millhouse/spools-identity
-                 {:ns 'millhouse.spools.identity
-                  :required? true})
-(runtime/module! runtime :harnesses
-                 {:ns 'ct.spools.harnesses.spool
-                  :after [:millhouse/spools-identity]
                   :required? true})
 
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
@@ -44,36 +37,31 @@
                           :millhouse/spools-workflow]
                   :required? true})
 
-;; --- Codethread shared roots, in dependency order --------------------------
-(runtime/module! runtime :codethread/config-agents
-  {:ns 'ct.spools.codethread.agents
-   :after [:harnesses]
-   :required? true})
+;; --- Codethread consumer roots, in dependency order ------------------------
 (runtime/module! runtime :codethread/config-help
-  {:ns 'ct.spools.codethread.help
-   :after [:millstrand/spools-batteries]
-   :required? true})
+                 {:ns 'ct.spools.codethread.help
+                  :after [:millstrand/spools-batteries]
+                  :required? true})
 (runtime/module! runtime :codethread/config-devflow
-  {:ns 'ct.spools.codethread.devflow
-   :required? true})
+                 {:ns 'ct.spools.codethread.devflow
+                  :required? true})
 (runtime/module! runtime :codethread/config
-  {:ns 'ct.spools.codethread.config
-   :after [:codethread/config-agents
-           :codethread/config-help
-           :codethread/config-devflow
-           :millstrand/spools-batteries
-           :harnesses
-           :devflow/kanban-adapter]
-   :required? true})
+                 {:ns 'ct.spools.codethread.config
+                  :after [:codethread/config-help
+                          :codethread/config-devflow
+                          :millstrand/spools-batteries
+                          :devflow/kanban-adapter]
+                  :required? true})
 (runtime/module! runtime :codethread/ralph
                  {:ns 'ct.spools.codethread.ralph
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
-(runtime/module! runtime :harnesses/agent-executor
-                 {:ns 'ct.spools.harnesses.executors.agent.spool
-                  :after [:harnesses
-                          :millhouse/spools-workflow
-                          :codethread/config
-                          :devflow/kanban-adapter]
-                  :required? true})
+;; Activate the sole shared :agent executor only after every consumer workflow,
+;; alias election, and reviewer declaration is reconciled.
+(codethread/register-executor!
+ runtime [:millhouse/spools-workflow-all
+          :devflow
+          :devflow/kanban-adapter
+          :codethread/config
+          :codethread/ralph])

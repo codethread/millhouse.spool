@@ -1484,7 +1484,7 @@
                               (workflow/ready-step "runid-run")))
         (is (= #{"Do A" "Hand off" "Decide"} (set (map :title (workflow/ready "runid-run")))))
         (is (= ["runid-run" "runid-run" "runid-run"] (mapv :run-id (workflow/ready "runid-run"))))
-        (is (= ["Hand off"] (mapv :title (workflow/ready-gates "runid-run" "subagent"))))
+        (is (= ["Hand off"] (mapv :title (workflow/ready-gates "runid-run" "agent"))))
         (is (= "Decide" (:title (workflow/ready-checkpoint "runid-run"))))
         (is (= ["Decide"] (mapv :title (workflow/ready "runid-run" {:role "checkpoint"}))))
         ;; a bare step-view (no run context) stays unchanged

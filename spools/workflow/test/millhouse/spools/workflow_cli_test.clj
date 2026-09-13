@@ -345,7 +345,7 @@
           (is (= {:kind "static"
                   :entry ["inspect"]
                   :loops [{:step "prototype" :each "prototype-targets"}]
-                  :gates [{:step "ci" :waiter "subagent"}]
+                  :gates [{:step "ci" :waiter "agent"}]
                   :checkpoints [{:step "recommendation" :choices ["recommend-build" "stop"]}]
                   :calls [{:step "assess" :procedure "review" :kind "registered"}]
                   :defers []

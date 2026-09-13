@@ -1,5 +1,5 @@
 {:deps
- {millstrand.spools/batteries
+ {io.millstrand/batteries
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "310368dff9174bd889ad21d4ed8196952684eaf9"
    :deps/root "spools/batteries"}
@@ -14,17 +14,17 @@
    :deps/root "."}
   codethread/devflow
   {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "ceaa684499c6715ce0f10dba5806fd8ebef997da"
+   :git/sha "99313b48f14ab0892cb90264d100dce4ff2a25e0"
    :deps/root "."}
   codethread/devflow-kanban-adapter
   {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "ceaa684499c6715ce0f10dba5806fd8ebef997da"
+   :git/sha "99313b48f14ab0892cb90264d100dce4ff2a25e0"
    :deps/root "kanban-adapter"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "0217f5e67ec6c23592a7df14641517706c900094"
+   :git/sha "252eeaee216a5e4d4e82c6b2948dd9eba1dafc9d"
    :deps/root "spools/config"}
   codethread/ralph
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "0217f5e67ec6c23592a7df14641517706c900094"
+   :git/sha "252eeaee216a5e4d4e82c6b2948dd9eba1dafc9d"
    :deps/root "spools/ralph"}}}

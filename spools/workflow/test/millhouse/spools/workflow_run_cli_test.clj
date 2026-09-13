@@ -206,7 +206,7 @@
       (let [ready (verb "ready" "run-frontier")]
         (is (= [["Do the work" "step"] ["Wait for CI" "step"] ["Sign the work off" "checkpoint"]]
                (mapv (juxt :title :role) (:ready ready))))
-        (is (= "subagent" (:gate (second (:ready ready)))))
+        (is (= "agent" (:gate (second (:ready ready)))))
         (is (= ["ship" "rework"] (:choices (nth (:ready ready) 2))))
         (is (every? #(= "run-frontier" (:run-id %)) (:ready ready)))))))
 
@@ -411,7 +411,7 @@
             "the only ready item is a gate, so nothing is inferable")
         (let [data (failure #(verb "complete" "run-gate" :step gate))]
           (is (= :workflow/gate-actor-required (:reason data)))
-          (is (= "subagent" (:gate data))))
+          (is (= "agent" (:gate data))))
         (let [result (verb "complete" "run-gate" :step gate :by "ci-bot")]
           (is (true? (:done result)))
           (is (= "ci-bot"
