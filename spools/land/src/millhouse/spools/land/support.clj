@@ -13,7 +13,7 @@
   [worktree]
   (let [{:keys [exit out err]}
         (sh/sh "git" "-C" worktree "rev-parse"
-                  "--path-format=absolute" "--git-common-dir")]
+               "--path-format=absolute" "--git-common-dir")]
     (when-not (zero? exit)
       (throw (ex-info "Cannot locate canonical landing checkout"
                       {:worktree worktree :exit exit :error err})))
