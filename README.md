@@ -58,3 +58,5 @@ scripts and cross-spool integration tests.
 Install native `clj-kondo` v2026.08.04. `make lint-clj` refreshes dependency
 exports and lints every project independently; `make clean-kondo` removes only
 generated imports and caches. Run `make quality` before landing changes.
+
+Follow the shared [Clojure lint and editor configuration](https://github.com/codethread/codethread.spool/blob/main/docs/processes/kondo-and-lsp.md) when refreshing static-analysis configuration.
