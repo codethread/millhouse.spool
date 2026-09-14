@@ -592,15 +592,23 @@
 ;; ---------------------------------------------------------------------------
 ;; Event-driven scan
 
+(defn- ready-for-dispatch?
+  [runtime gate-id]
+  (boolean
+   (some #(= gate-id (:id %))
+         (weaver/ready runtime
+                       [:and ready-shell-query [:= :id gate-id]] {}))))
+
 (defn- claim-and-dispatch!
   "Idempotently claim a ready, un-errored, un-claimed `:shell` gate by stamping a
   `shell/running` marker before dispatch, then submit the actual process run to
   the worker pool. The event thread never blocks on a child process.
 
-  The gate is re-read fresh (not trusted from the ready snapshot, which a
-  concurrent close can outrace) and must still be `active`: `pass!` clears the
-  claim and closes the gate in one atomic batch, and `fail-gate!` clears the
-  claim while stamping `gate/error` — so every claim-clearing transition also
+  The gate and its dependency readiness are re-read fresh (not trusted from the
+  ready snapshot, which a concurrent close or repair can outrace) and must still
+  be `active`: `pass!` clears the claim and closes the gate in one atomic batch,
+  while `fail-gate!` clears the claim and stamps `gate/error` — so every
+  claim-clearing transition also
   either closes the gate or stamps an error, and this guard blocks re-dispatch
   in all three cases."
   [runtime run-id gate-view]
@@ -608,7 +616,8 @@
     (when (and (= "active" (:state gate))
                (not (stamped? gate :gate/error))
                (not (stamped? gate :shell/running))
-               (not (stamped? gate :shell/custody-handle)))
+               (not (stamped? gate :shell/custody-handle))
+               (ready-for-dispatch? runtime (:id gate)))
       (let [attempt-id (str (java.util.UUID/randomUUID))]
         (let [timeout-secs (let [value (attr gate :shell/timeout-secs)]
                              (when (s/valid? :shell/timeout-secs value)
@@ -686,9 +695,12 @@
   omitted. An active nearest root with a malformed `workflow/run-id` fails
   loudly with gate/root context. Root ownership is then checked only for those
   selected gates, so an unrelated graph event does not project the global ready
-  frontier once per active workflow. The scan still serializes on a
-  runtime-owned monitor so concurrent scans cannot double-launch a gate. Each
-  accepted gate receives a `shell/running` claim before its process is submitted
+  frontier once per active workflow. Before claiming, dispatch revalidates each
+  gate's current state, fence, claim, and dependency readiness so a stale
+  selection cannot launch work made unready by a concurrent repair. The scan
+  still serializes on a runtime-owned monitor so concurrent scans cannot
+  double-launch a gate. Each accepted gate receives a `shell/running` claim
+  before its process is submitted
   to the worker pool; the event thread never waits for the child. Scans run on
   relevant graph changes and once during handler activation."
   []

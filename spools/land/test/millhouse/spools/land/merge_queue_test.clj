@@ -2,16 +2,18 @@
   "Exercise queue behavior through public operations in disposable runtimes."
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest is testing]]
+            [millhouse.spools.executors.shell :as shell]
             [millhouse.spools.land.merge-queue :as queue]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
+            [millstrand.api.process.alpha :as process]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.test.alpha :as test-alpha])
-  (:import [java.util.concurrent CountDownLatch TimeUnit]))
+  (:import [java.util.concurrent CountDownLatch Executor TimeUnit]))
 
 (defn- start-run! [id]
   (workflow/start!
@@ -531,6 +533,94 @@
              (str "land prepare: validated skipped-b at " branch-head))
             (is (= (:id merge-gate) (:id (first (workflow/ready "skipped-b"))))
                 "irreversible merge becomes ready only after grant and fresh preparation")
+            (finally
+              (close-guard! rt))))))))
+
+(deftest skipped-turn-repair-refuses-a-stale-shell-ready-snapshot
+  (with-runtime
+    (fn [rt _]
+      (start-land-merge-run! "race-owner-a")
+      (start-land-merge-run! "race-skipped-b")
+      (queue/join! rt "race-owner-a")
+      (queue/join! rt "race-skipped-b")
+      (let [root (workflow/current-root "race-skipped-b")
+            turn (ready-gate "race-skipped-b" "merge-turn")
+            request (turn-repair-request root turn)]
+        (queue/grant! rt "race-owner-a")
+        (workflow/complete! "race-skipped-b" {:step (:id turn) :by "merge-turn"})
+        (complete-shell!
+         "race-skipped-b"
+         (str "land prepare: validated race-skipped-b at " branch-head))
+        (let [merge-gate (first (workflow/ready "race-skipped-b"))
+              real-quiesce shell/quiesce-run!
+              real-ready weaver/ready
+              quiesced (CountDownLatch. 1)
+              continue-repair (CountDownLatch. 1)
+              stale-selected (CountDownLatch. 1)
+              continue-scan (CountDownLatch. 1)
+              scanner-thread (atom nil)
+              launches (atom [])
+              inline-executor
+              (reify Executor
+                (execute [_ task] (.run ^Runnable task)))]
+          (install-guard! rt)
+          (try
+            (with-redefs-fn
+              {#'shell/quiesce-run!
+               (fn [run-id reason]
+                 (let [result (real-quiesce run-id reason)]
+                   (when (= "race-skipped-b" run-id)
+                     (.countDown quiesced)
+                     (when-not (.await continue-repair 30 TimeUnit/SECONDS)
+                       (throw (ex-info "Repair interleaving was not released" {}))))
+                   result))
+               #'weaver/ready
+               (fn [runtime query params]
+                 (let [result (real-ready runtime query params)]
+                   (when (and (identical? (Thread/currentThread) @scanner-thread)
+                              (some #(= (:id merge-gate) (:id %)) result))
+                     (.countDown stale-selected)
+                     (when-not (.await continue-scan 30 TimeUnit/SECONDS)
+                       (throw (ex-info "Shell scan interleaving was not released" {}))))
+                   result))
+               #'shell/worker-executor (constantly inline-executor)
+               #'process/launch!
+               (fn [& args]
+                 (swap! launches conj args)
+                 (throw (ex-info "Refused intercepted process launch" {})))}
+              (fn []
+                (let [repair (future (queue/repair! rt "race-skipped-b" request))]
+                  (try
+                    (is (.await quiesced 30 TimeUnit/SECONDS)
+                        "repair completed real shell quiescence")
+                    (let [scan (future
+                                 (reset! scanner-thread (Thread/currentThread))
+                                 (shell/scan!))]
+                      (try
+                        (is (.await stale-selected 30 TimeUnit/SECONDS)
+                            "real shell scan paused with the stale merge-ready snapshot")
+                        (.countDown continue-repair)
+                        (is (not= ::timeout (deref repair 30000 ::timeout))
+                            "repair completed while the stale scanner remained paused")
+                        (is (= "race-owner-a"
+                               (get-in (queue/status rt) [:lock :run-id])))
+                        (is (= [(:id turn)]
+                               (mapv :id (workflow/ready "race-skipped-b"))))
+                        (finally
+                          (.countDown continue-scan)))
+                      (is (not= ::timeout (deref scan 30000 ::timeout)))
+                      (is (seq @launches)
+                          "the process boundary intercepted and refused real dispatch")
+                      (is (not-any?
+                           (fn [args]
+                             (let [argv (:argv (last args))]
+                               (and (= "land-merge" (nth argv 3 nil))
+                                    (= "race-skipped-b" (last argv)))))
+                           @launches)
+                          "stale B merge dispatch was refused before process launch"))
+                    (finally
+                      (.countDown continue-repair)
+                      (.countDown continue-scan))))))
             (finally
               (close-guard! rt))))))))
 
