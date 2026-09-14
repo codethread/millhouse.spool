@@ -55,6 +55,18 @@
                    :attributes {"shell/argv" ["sh" "-c" "cleanup" "land-cleanup"]}))
    {:branch id :pr-number 42}))
 
+(defn- start-land-merge-run!
+  [id]
+  (workflow/start!
+   id
+   @(requiring-resolve 'millhouse.spools.land/land-merge)
+   {:feature id
+    :branch id
+    :worktree (System/getProperty "user.dir")
+    :subject (str "Land " id)
+    :body (str "Land " id)
+    :pr-number 42}))
+
 (defn- ready-gate
   [run-id waiter]
   (first (workflow/ready-gates run-id waiter)))
@@ -469,6 +481,58 @@
               "the exact repeat is idempotent after normal grant resumes")
           (finally
             (close-guard! rt)))))))
+
+(deftest skipped-turn-repair-rewinds-completed-prepare-behind-normal-grant
+  (with-runtime
+    (fn [rt _]
+      (start-land-merge-run! "owner-a")
+      (start-land-merge-run! "skipped-b")
+      (queue/join! rt "owner-a")
+      (let [root (workflow/current-root "skipped-b")
+            turn (ready-gate "skipped-b" "merge-turn")
+            entry (queue/join! rt "skipped-b")
+            sequence (attr-get entry :queue/sequence)
+            request (turn-repair-request root turn)]
+        (queue/grant! rt "owner-a")
+        (workflow/complete! "skipped-b" {:step (:id turn) :by "merge-turn"})
+        (let [prepare (complete-shell!
+                       "skipped-b"
+                       (str "land prepare: validated skipped-b at " branch-head))
+              merge-gate (first (workflow/ready "skipped-b"))]
+          (is (true? (attr-get (weaver/show rt (:id merge-gate)) :land/irreversible))
+              "the actual Land topology exposes merge after the skipped turn and prepare")
+          (install-guard! rt)
+          (try
+            (queue/repair! rt "skipped-b" request)
+            (is (= "owner-a" (get-in (queue/status rt) [:lock :run-id])))
+            (is (= sequence (attr-get (weaver/show rt (:id entry)) :queue/sequence)))
+            (is (= [(:id turn)] (mapv :id (workflow/ready "skipped-b")))
+                "repair restores an ownership-blocked frontier")
+            (is (nil? (attr-get (weaver/show rt (:id merge-gate)) :gate/error))
+                "the irreversible gate is topology-blocked after fences clear")
+            (is (= "active" (:state (weaver/show rt (:id prepare))))
+                "the out-of-turn prepare is rewound")
+            (is (nil? (attr-get (weaver/show rt (:id prepare)) :shell/exit-code)))
+            (is (nil? (queue/grant! rt "skipped-b"))
+                "the successor cannot bypass the current owner")
+            (is (= [(:id turn)] (mapv :id (workflow/ready "skipped-b"))))
+
+            (complete-shell!
+             "owner-a"
+             (str "land prepare: validated owner-a at " branch-head))
+            (complete-shell! "owner-a" "merge submitted")
+            (complete-shell! "owner-a" (str "Fast-forward\n " merge-commit))
+            (queue/release! rt "owner-a")
+            (queue/grant! rt "skipped-b")
+            (is (= [(:id prepare)] (mapv :id (workflow/ready "skipped-b")))
+                "normal grant exposes only the rewound reversible preparation")
+            (complete-shell!
+             "skipped-b"
+             (str "land prepare: validated skipped-b at " branch-head))
+            (is (= (:id merge-gate) (:id (first (workflow/ready "skipped-b"))))
+                "irreversible merge becomes ready only after grant and fresh preparation")
+            (finally
+              (close-guard! rt))))))))
 
 (deftest skipped-turn-repair-admits-an-unreserved-run-at-the-tail
   (with-runtime

@@ -40,7 +40,7 @@ Withdrawal is allowed for any trusted agent; there is no timeout eviction or own
 
 Use repair only for corruption created before the Land completion guard was active. Do not use it as a generic retry or queue override. First collect the exact persisted root, gate, reservation, and lock IDs. Supply a non-blank actor and reason; the complete evidence object is retained on the repaired gate or entry.
 
-For a skipped `merge-turn`, first establish that no irreversible merge attempt is possible. Repair quiesces every active shell gate before checking that invariant. It restores the exact turn and prior shell error state, preserves an existing reservation/sequence, or creates one ordinary new tail reservation when the run was never admitted:
+For a skipped `merge-turn`, first establish that no irreversible merge attempt is possible. Repair quiesces every active shell gate before checking that invariant. It restores the exact turn and prior shell error state, preserves an existing reservation/sequence, or creates one ordinary new tail reservation when the run was never admitted. If `prepare-merge` already completed out of turn, repair reopens it and clears its stale shell outcome. The frontier is therefore blocked at `merge-turn`; after normal grant, preparation runs again before the irreversible merge can become ready:
 
 ```text
 strand merge-queue repair RUN_ID --kind skipped-turn --by OPERATOR --reason "Pre-guard turn was skipped before merge work" --evidence '{"root-id":"ROOT_ID","gate-id":"TURN_GATE_ID","irreversible-work":"not-started"}'

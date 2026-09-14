@@ -551,6 +551,54 @@
       (some? (attr-get gate :shell/exit-code))
       (contains? attempted (:id gate))))
 
+(defn- dependency-target
+  [runtime strands from-id label]
+  (let [ids (->> (:edges (graph/subgraph runtime [from-id] {:type "depends-on"}))
+                 (filter #(and (= "depends-on" (:edge_type %))
+                               (= from-id (:from_strand_id %))))
+                 (map :to_strand_id)
+                 distinct
+                 vec)]
+    (when-not (= 1 (count ids))
+      (fail! "Landing repair dependency is ambiguous"
+             {:step from-id :dependency label :matches ids}))
+    (or (get strands (first ids))
+        (fail! "Landing repair dependency is outside the recorded root"
+               {:step from-id :dependency label :target (first ids)}))))
+
+(defn- require-ownership-barrier!
+  [runtime strands turn irreversible]
+  (let [strands-by-id (into {} (map (juxt :id identity)) strands)
+        barrier (dependency-target runtime strands-by-id (:id irreversible)
+                                   "pre-irreversible")
+        turn-dependency (dependency-target runtime strands-by-id (:id barrier)
+                                           "merge-turn")]
+    (when-not (and (= "shell" (attr-get barrier :workflow/gate))
+                   (not (true? (attr-get barrier :land/irreversible)))
+                   (contains? #{"active" "closed"} (:state barrier))
+                   (= (:id turn) (:id turn-dependency)))
+      (fail! "Landing repair cannot restore an ownership-blocked frontier"
+             {:turn (:id turn)
+              :irreversible (:id irreversible)
+              :barrier (:id barrier)
+              :barrier-state (:state barrier)
+              :barrier-gate (attr-get barrier :workflow/gate)
+              :barrier-irreversible (attr-get barrier :land/irreversible)
+              :barrier-dependency (:id turn-dependency)}))
+    barrier))
+
+(defn- rewound-shell-attributes
+  [prior-error]
+  {:gate/error prior-error
+   :workflow/outcome-by nil
+   :shell/running nil
+   :shell/attempt-id nil
+   :shell/custody-handle nil
+   :shell/timeout-deadline nil
+   :shell/timeout-intent nil
+   :shell/exit-code nil
+   :shell/output nil})
+
 (defn- require-skipped-turn-state!
   [runtime run-id {:keys [root-id gate-id]}]
   (let [root (require-recorded-root runtime run-id root-id)
@@ -602,20 +650,30 @@
         (workflow-guard/with-run!
           runtime run-id
           (fn []
-            (let [{:keys [strands entry]}
+            (let [{:keys [strands gate entry]}
                   (require-skipped-turn-state! runtime run-id evidence)
                   shells (shell-strands strands)
-                  irreversible (irreversible-gate strands)]
+                  irreversible (irreversible-gate strands)
+                  ownership-barrier
+                  (require-ownership-barrier! runtime strands gate irreversible)]
               (when (irreversible-attempt? irreversible attempted)
                 (fail! "Irreversible merge work may have started; retain the fenced turn"
                        {:run-id run-id :gate-id (:id irreversible)
                         :attempted (contains? attempted (:id irreversible))}))
               (let [gate-ref (keyword gate-id)
-                    shell-patches (mapv (fn [shell]
-                                          {:ref (keyword (:id shell))
-                                           :attributes
-                                           {:gate/error (get prior-errors (:id shell))}})
-                                        shells)
+                    shell-patches
+                    (mapv (fn [shell]
+                            (if (and (= (:id ownership-barrier) (:id shell))
+                                     (= "closed" (:state shell)))
+                              {:ref (keyword (:id shell))
+                               :state "active"
+                               :attributes
+                               (rewound-shell-attributes
+                                (get prior-errors (:id shell)))}
+                              {:ref (keyword (:id shell))
+                               :attributes
+                               {:gate/error (get prior-errors (:id shell))}}))
+                          shells)
                     attributes (repair-attributes kind by reason evidence)
                     refs (into {gate-ref gate-id}
                                (map (fn [shell]
@@ -643,21 +701,6 @@
                 (let [repaired-entry (or entry (entry-for run-id))]
                   (repair-result kind run-id root-id gate-id
                                  (:id repaired-entry)))))))))))
-
-(defn- dependency-target
-  [runtime strands from-id label]
-  (let [ids (->> (:edges (graph/subgraph runtime [from-id] {:type "depends-on"}))
-                 (filter #(and (= "depends-on" (:edge_type %))
-                               (= from-id (:from_strand_id %))))
-                 (map :to_strand_id)
-                 distinct
-                 vec)]
-    (when-not (= 1 (count ids))
-      (fail! "Landing repair dependency is ambiguous"
-             {:step from-id :dependency label :matches ids}))
-    (or (get strands (first ids))
-        (fail! "Landing repair dependency is outside the recorded root"
-               {:step from-id :dependency label :target (first ids)}))))
 
 (defn- require-successful-shell!
   [gate label]
@@ -762,7 +805,9 @@
   "Repair one explicitly evidenced pre-guard skipped Land queue gate.
 
   Supported kinds are `:skipped-turn` before possible irreversible work and
-  `:skipped-release` after exact successful merge/main evidence. Every request
+  `:skipped-release` after exact successful merge/main evidence. Turn repair
+  rewinds completed reversible preparation to restore an ownership-blocked
+  frontier. Every request
   records actor, reason, graph ids, and evidence; mismatches fail without queue
   settlement. Repeating the exact request is idempotent."
   [runtime run-id request]
