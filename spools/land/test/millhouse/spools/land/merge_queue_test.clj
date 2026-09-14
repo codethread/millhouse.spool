@@ -1,13 +1,15 @@
 (ns millhouse.spools.land.merge-queue-test
   "Exercise queue behavior through public operations in disposable runtimes."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [millhouse.spools.land.merge-queue :as queue]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.util.concurrent CountDownLatch TimeUnit]))
 
@@ -21,6 +23,153 @@
     (workflow/gate :release "Release turn" :merge-release :depends-on [:work])
     (workflow/step :tidy "Housekeeping" :self :depends-on [:release]))
    {:branch id}))
+
+(def ^:private branch-head "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+(def ^:private merge-commit "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+
+(defn- start-repair-run!
+  [id]
+  (workflow/start!
+   id
+   (workflow/workflow
+    "Landing repair fixture"
+    {:attributes {"workflow/family" "land"
+                  "land/version" 3
+                  "land/stage" "merge"}}
+    (workflow/gate :turn "Await turn" :merge-turn)
+    (workflow/gate :prepare "Prepare merge" :shell
+                   :depends-on [:turn]
+                   :attributes {"shell/argv" ["sh" "-c" "prepare" "land-prepare"]})
+    (workflow/gate :merge "Merge PR" :shell
+                   :depends-on [:prepare]
+                   :attributes {"shell/argv" ["sh" "-c" "merge" "land-merge"
+                                              "42" "Subject" "Body" id]
+                                "land/irreversible" true})
+    (workflow/gate :pull "Pull main" :shell
+                   :depends-on [:merge]
+                   :attributes {"shell/argv" ["sh" "-c" "pull" "land-pull"]})
+    (workflow/gate :release "Release turn" :merge-release
+                   :depends-on [:pull])
+    (workflow/gate :cleanup "Cleanup" :shell
+                   :depends-on [:release]
+                   :attributes {"shell/argv" ["sh" "-c" "cleanup" "land-cleanup"]}))
+   {:branch id :pr-number 42}))
+
+(defn- ready-gate
+  [run-id waiter]
+  (first (workflow/ready-gates run-id waiter)))
+
+(defn- completion-rejected?
+  [f]
+  (let [error (try (f) nil (catch clojure.lang.ExceptionInfo e e))]
+    (and (= "Lifecycle hook failed" (ex-message error))
+         (= "land/queue-gate-completion-forbidden"
+            (:hook/cause-code (ex-data error))))))
+
+(defn- install-guard!
+  [rt]
+  (queue/open-completion-guard! {:runtime rt}))
+
+(defn- close-guard!
+  [rt]
+  (queue/close-completion-guard! {:runtime rt}))
+
+(defn- queue-snapshot
+  [rt run-id gate-id]
+  (let [root (workflow/current-root run-id)]
+    {:root (weaver/show rt (:id root))
+     :run (graph/subgraph rt [(:id root)] {:type "parent-of"})
+     :gate (weaver/show rt gate-id)
+     :ready (workflow/ready run-id)
+     :queue (queue/status rt)}))
+
+(defn- generic-completion-attacks
+  [rt run-id gate-id]
+  [["complete! with spoofed actor and disguised waiter"
+    #(workflow/complete! run-id
+                         {:step gate-id
+                          :by "merge-turn"
+                          :attributes {"workflow/gate" "human"
+                                       "land/queue-completion" "grant"}
+                          :context {:spoofed true}})]
+   ["advance! with spoofed actor and disguised waiter"
+    #(workflow/advance! run-id
+                        {:step gate-id
+                         :by "merge-release"
+                         :attributes {"workflow/gate" "code"}})]
+   ["worker complete request"
+    #(workflow/run-complete!
+      {:run-id run-id :step gate-id :by "merge-turn"
+       :attributes {"workflow/gate" "shell"}
+       :context {:worker-spoofed true}})]
+   ["worker next request"
+    #(workflow/run-next! {:run-id run-id :step gate-id :by "merge-release"})]
+   ["workflow complete CLI delegation"
+    #(weaver/op! rt :workflow
+                 ["complete" run-id "--step" gate-id "--by" "merge-turn"
+                  "--attributes" (json/write-str {"workflow/gate" "human"})])]
+   ["workflow next CLI delegation"
+    #(weaver/op! rt :workflow
+                 ["next" run-id "--step" gate-id "--by" "merge-release"])]])
+
+(defn- assert-generic-completion-rejected!
+  [rt run-id gate-id]
+  (let [before (queue-snapshot rt run-id gate-id)]
+    (doseq [[label attack] (generic-completion-attacks rt run-id gate-id)]
+      (testing label
+        (is (completion-rejected? attack))
+        (is (= before (queue-snapshot rt run-id gate-id)))))))
+
+(defn- turn-repair-request
+  [root gate]
+  {:kind :skipped-turn
+   :by "repair-operator"
+   :reason "Restore a pre-guard skipped queue turn"
+   :evidence {:root-id (:id root)
+              :gate-id (:id gate)
+              :irreversible-work "not-started"}})
+
+(defn- release-repair-request
+  [root release entry lock]
+  {:kind :skipped-release
+   :by "repair-operator"
+   :reason "Settle a pre-guard skipped queue release"
+   :evidence {:root-id (:id root)
+              :gate-id (:id release)
+              :entry-id (:id entry)
+              :lock-id (:id lock)
+              :pr-number 42
+              :pr-state "MERGED"
+              :base-branch "main"
+              :pr-head branch-head
+              :merge-commit merge-commit
+              :canonical-main merge-commit}})
+
+(defn- complete-shell!
+  [run-id output]
+  (let [gate (first (workflow/ready run-id))]
+    (workflow/complete! run-id
+                        {:step (:id gate)
+                         :by "shell"
+                         :attributes {"shell/exit-code" 0
+                                      "shell/output" output}})
+    gate))
+
+(defn- seed-skipped-release!
+  [rt run-id]
+  (let [root (workflow/current-root run-id)
+        entry (queue/join! rt run-id)]
+    (queue/grant! rt run-id)
+    (complete-shell! run-id (str "land prepare: validated " run-id " at " branch-head))
+    (complete-shell! run-id "merge submitted and PR verified MERGED")
+    (complete-shell! run-id (str "Fast-forward\n " merge-commit))
+    (let [release (ready-gate run-id "merge-release")
+          lock-id (get-in (queue/status rt) [:lock :id])]
+      (workflow/complete! run-id {:step (:id release) :by "merge-release"})
+      {:root root
+       :entry entry
+       :lock (weaver/show rt lock-id)
+       :release release})))
 
 (defn reject-marked-close
   "Reject a marked workflow close through the existing lifecycle-hook seam."
@@ -38,6 +187,71 @@
 
 (defn- allow-close! [rt gate]
   (weaver/update! rt (:id gate) {:attributes {:test/reject-close nil}}))
+
+(defn- activate-worker-cli!
+  [rt]
+  (test-support/activate-spool! rt :test/workflow 'millhouse.spools.workflow)
+  (test-support/activate-spool! rt :test/workflow-cli
+                                'millhouse.test-modules.workflow-cli
+                                :after [:test/workflow]))
+
+(deftest generic-completion-cannot-steal-another-runs-turn
+  (with-runtime
+    (fn [rt _]
+      (activate-worker-cli! rt)
+      (start-run! "first")
+      (start-run! "second")
+      (install-guard! rt)
+      (try
+        (queue/join! rt "first")
+        (queue/join! rt "second")
+        (queue/grant! rt "first")
+        (let [turn (:id (ready-gate "second" "merge-turn"))]
+          (assert-generic-completion-rejected! rt "second" turn)
+          (is (= "Protected work" (:title (first (workflow/ready "first")))))
+          (is (= "merge-turn" (:gate (first (workflow/ready "second")))))
+          (is (= "first" (get-in (queue/status rt) [:lock :run-id]))))
+        (finally
+          (close-guard! rt))))))
+
+(deftest generic-completion-cannot-skip-the-owners-release
+  (with-runtime
+    (fn [rt _]
+      (activate-worker-cli! rt)
+      (start-run! "owner")
+      (install-guard! rt)
+      (try
+        (queue/join! rt "owner")
+        (queue/grant! rt "owner")
+        (workflow/complete! "owner")
+        (let [release (:id (ready-gate "owner" "merge-release"))]
+          (assert-generic-completion-rejected! rt "owner" release)
+          (is (= "owner" (get-in (queue/status rt) [:lock :run-id])))
+          (is (= "merge-release" (:gate (first (workflow/ready "owner")))))
+          (queue/release! rt "owner")
+          (is (= "Housekeeping" (:title (first (workflow/ready "owner"))))))
+        (finally
+          (close-guard! rt))))))
+
+(deftest completion-guard-leaves-unrelated-gates-alone
+  (with-runtime
+    (fn [rt _]
+      (workflow/start!
+       "unrelated"
+       (workflow/workflow
+        "Unrelated gates"
+        (workflow/gate :human "Human" :human)
+        (workflow/gate :shell "Shell" :shell :depends-on [:human])
+        (workflow/gate :code "Code" :code :depends-on [:shell]))
+       {})
+      (install-guard! rt)
+      (try
+        (doseq [actor ["human" "shell" "code"]]
+          (let [gate (first (workflow/ready "unrelated"))]
+            (workflow/complete! "unrelated" {:step (:id gate) :by actor})))
+        (is (workflow/done? "unrelated"))
+        (finally
+          (close-guard! rt))))))
 
 (deftest fifo-retains-position-through-failure-and-timeout
   (with-runtime
@@ -218,6 +432,221 @@
         (queue/release! rt "first")
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"completed merge"
                               (queue/withdraw! rt (:id entry) "Stop")))))))
+
+(deftest completion-guard-allows-atomic-withdrawal
+  (with-runtime
+    (fn [rt _]
+      (start-run! "withdraw-guarded")
+      (let [entry (queue/join! rt "withdraw-guarded")]
+        (install-guard! rt)
+        (try
+          (queue/grant! rt "withdraw-guarded")
+          (is (= "withdrawn"
+                 (:outcome (queue/withdraw! rt (:id entry) "Guarded withdrawal"))))
+          (is (= "Return the card to claimed"
+                 (:title (first (workflow/ready "withdraw-guarded")))))
+          (finally
+            (close-guard! rt)))))))
+
+(deftest skipped-turn-repair-restores-the-exact-gate-and-reservation
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "repair-turn")
+      (let [root (workflow/current-root "repair-turn")
+            gate (ready-gate "repair-turn" "merge-turn")
+            entry (queue/join! rt "repair-turn")
+            sequence (attr-get entry :queue/sequence)
+            request (turn-repair-request root gate)]
+        (workflow/complete! "repair-turn" {:step (:id gate) :by "merge-turn"})
+        (install-guard! rt)
+        (try
+          (is (= (:id entry) (:entry-id (queue/repair! rt "repair-turn" request))))
+          (is (= sequence (attr-get (weaver/show rt (:id entry)) :queue/sequence)))
+          (is (= "active" (:state (weaver/show rt (:id gate)))))
+          (queue/grant! rt "repair-turn")
+          (is (= "Prepare merge" (:title (first (workflow/ready "repair-turn")))))
+          (is (= (:id entry) (:entry-id (queue/repair! rt "repair-turn" request)))
+              "the exact repeat is idempotent after normal grant resumes")
+          (finally
+            (close-guard! rt)))))))
+
+(deftest skipped-turn-repair-admits-an-unreserved-run-at-the-tail
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "head")
+      (start-repair-run! "unreserved")
+      (queue/join! rt "head")
+      (let [root (workflow/current-root "unreserved")
+            gate (ready-gate "unreserved" "merge-turn")
+            request (turn-repair-request root gate)]
+        (workflow/complete! "unreserved" {:step (:id gate) :by "merge-turn"})
+        (install-guard! rt)
+        (try
+          (let [result (queue/repair! rt "unreserved" request)
+                entry (weaver/show rt (:entry-id result))]
+            (is (= 1 (attr-get entry :queue/sequence)))
+            (is (= ["head" "unreserved"]
+                   (mapv :run-id (:entries (queue/status rt))))))
+          (finally
+            (close-guard! rt)))))))
+
+(deftest skipped-turn-repair-refuses-possible-irreversible-work-and-keeps-it-fenced
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "attempted-turn")
+      (let [root (workflow/current-root "attempted-turn")
+            turn (ready-gate "attempted-turn" "merge-turn")
+            _ (queue/join! rt "attempted-turn")]
+        (workflow/complete! "attempted-turn" {:step (:id turn) :by "merge-turn"})
+        ;; Select the unique irreversible shell gate rather than the first shell gate.
+        (let [irreversible (first (filter #(true? (attr-get % :land/irreversible))
+                                          (:strands (graph/subgraph
+                                                     rt [(:id root)]
+                                                     {:type "parent-of"}))))]
+          (weaver/update! rt (:id irreversible) {:attributes {:shell/exit-code 1}})
+          (install-guard! rt)
+          (try
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                  #"Irreversible merge work may have started"
+                                  (queue/repair! rt "attempted-turn"
+                                                 (turn-repair-request root turn))))
+            (is (= "closed" (:state (weaver/show rt (:id turn)))))
+            (is (some? (attr-get (weaver/show rt (:id irreversible)) :gate/error))
+                "quiescence retains a fence after refusal")
+            (finally
+              (close-guard! rt))))))))
+
+(deftest skipped-release-repair-settles-active-root-and-is-successor-safe
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "repaired-release")
+      (start-repair-run! "successor")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "repaired-release")
+            _ (queue/join! rt "successor")
+            request (release-repair-request root release entry lock)]
+        (install-guard! rt)
+        (try
+          (is (= (:id entry)
+                 (:entry-id (queue/repair! rt "repaired-release" request))))
+          (is (= "merged" (attr-get (weaver/show rt (:id entry)) :queue/outcome)))
+          (is (= "closed" (:state (weaver/show rt (:id lock)))))
+          (is (= "Cleanup" (:title (first (workflow/ready "repaired-release")))))
+          (queue/grant! rt "successor")
+          (let [successor-lock (get-in (queue/status rt) [:lock :id])]
+            (is (= (:id entry)
+                   (:entry-id (queue/repair! rt "repaired-release" request))))
+            (is (= successor-lock (get-in (queue/status rt) [:lock :id]))
+                "an idempotent repeat cannot touch the successor lock"))
+          (finally
+            (close-guard! rt)))))))
+
+(deftest skipped-release-repair-supports-a-retained-closed-root
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "closed-release")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "closed-release")
+            request (release-repair-request root release entry lock)]
+        (complete-shell! "closed-release" "cleanup complete")
+        (is (nil? (workflow/current-root "closed-release")))
+        (install-guard! rt)
+        (try
+          (queue/repair! rt "closed-release" request)
+          (is (= "closed" (:state (weaver/show rt (:id root)))))
+          (is (= "merged" (attr-get (weaver/show rt (:id entry)) :queue/outcome)))
+          (finally
+            (close-guard! rt)))))))
+
+(deftest skipped-release-repair-refuses-mismatches-without-queue-writes
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "mismatch-release")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "mismatch-release")
+            request (release-repair-request root release entry lock)
+            before {:entry (weaver/show rt (:id entry))
+                    :lock (weaver/show rt (:id lock))}]
+        (doseq [[label bad-request]
+                [["root" (assoc-in request [:evidence :root-id] "missing-root")]
+                 ["lock" (assoc-in request [:evidence :lock-id] "wrong-lock")]
+                 ["evidence" (assoc-in request [:evidence :pr-head]
+                                       "cccccccccccccccccccccccccccccccccccccccc")]]]
+          (testing label
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (queue/repair! rt "mismatch-release" bad-request)))
+            (is (= before {:entry (weaver/show rt (:id entry))
+                           :lock (weaver/show rt (:id lock))}))))))))
+
+(deftest skipped-release-repair-refuses-deleted-root-and-ambiguous-ownership
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "deleted-release")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "deleted-release")
+            request (release-repair-request root release entry lock)]
+        (workflow/burn! (:id root))
+        (let [before {:entry (weaver/show rt (:id entry))
+                      :lock (weaver/show rt (:id lock))}]
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (queue/repair! rt "deleted-release" request)))
+          (is (= before {:entry (weaver/show rt (:id entry))
+                         :lock (weaver/show rt (:id lock))}))))))
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "ambiguous-release")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "ambiguous-release")
+            request (release-repair-request root release entry lock)
+            duplicate (weaver/add!
+                       rt
+                       {:title "Ambiguous duplicate reservation"
+                        :attributes {:kind "merge-queue-entry"
+                                     :land/run-id "ambiguous-release"
+                                     :queue/root (:id root)
+                                     :queue/gate (attr-get entry :queue/gate)
+                                     :queue/sequence 1
+                                     :queue/queued-at "pre-fix corruption"}})
+            before {:entry (weaver/show rt (:id entry))
+                    :duplicate (weaver/show rt (:id duplicate))
+                    :lock (weaver/show rt (:id lock))}]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"multiple queue reservations"
+                              (queue/repair! rt "ambiguous-release" request)))
+        (is (= before {:entry (weaver/show rt (:id entry))
+                       :duplicate (weaver/show rt (:id duplicate))
+                       :lock (weaver/show rt (:id lock))}))))))
+
+(deftest skipped-release-settlement-failure-has-no-partial-queue-write
+  (with-runtime
+    (fn [rt _]
+      (start-repair-run! "failed-settlement")
+      (let [{:keys [root entry lock release]}
+            (seed-skipped-release! rt "failed-settlement")
+            request (release-repair-request root release entry lock)]
+        (reject-close! rt entry)
+        (let [before {:entry (weaver/show rt (:id entry))
+                      :lock (weaver/show rt (:id lock))}]
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Lifecycle hook failed"
+                                (queue/repair! rt "failed-settlement" request)))
+          (is (= before {:entry (weaver/show rt (:id entry))
+                         :lock (weaver/show rt (:id lock))})))))))
+
+(deftest land-activation-protects-and-scans-persisted-queue-gates
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :test/workflow 'millhouse.spools.workflow)
+      (start-repair-run! "persisted-gate")
+      (let [turn (ready-gate "persisted-gate" "merge-turn")]
+        (test-support/activate-spool! rt :test/land 'millhouse.spools.land.spool
+                                      :after [:test/workflow])
+        (test-alpha/await-quiescent! rt)
+        (is (= "Prepare merge" (:title (first (workflow/ready "persisted-gate"))))
+            "the scanner granted a gate poured before Land activation")
+        (is (= "grant"
+               (attr-get (weaver/show rt (:id turn)) :land/queue-completion)))
+        (is (some #(= :land/queue-gate-completion (:key %)) (hooks/hooks rt))
+            "the guard resource was installed before the dependent scanner")))))
 
 (deftest queue-handler-automatically-advances-ready-turns
   (with-runtime
