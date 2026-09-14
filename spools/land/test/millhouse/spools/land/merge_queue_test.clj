@@ -638,17 +638,26 @@
             records (atom {})
             terminal-record (atom nil)
             delayed-result (atom nil)
+            fresh-result (atom nil)
+            reconciliation-count (atom 0)
             dispatch-finished (CountDownLatch. 1)
             first-task? (atom true)
+            fresh-dispatch-finished (CountDownLatch. 1)
+            fresh-task? (atom false)
+            fresh-cancellation? (atom false)
             observer-paused (CountDownLatch. 1)
             continue-observer (CountDownLatch. 1)
             observer-finished (CountDownLatch. 1)
+            fresh-observer-paused (CountDownLatch. 1)
+            continue-fresh-observer (CountDownLatch. 1)
+            fresh-observer-finished (CountDownLatch. 1)
             main-thread (Thread/currentThread)
             worker-pool (Executors/newFixedThreadPool 2)
             worker-executor
             (reify Executor
               (execute [_ task]
-                (let [first? (compare-and-set! first-task? true false)]
+                (let [first? (compare-and-set! first-task? true false)
+                      fresh? (compare-and-set! fresh-task? true false)]
                   (.execute worker-pool
                             ^Runnable
                             (fn []
@@ -656,7 +665,9 @@
                                 (.run ^Runnable task)
                                 (finally
                                   (when first?
-                                    (.countDown dispatch-finished)))))))))
+                                    (.countDown dispatch-finished))
+                                  (when fresh?
+                                    (.countDown fresh-dispatch-finished)))))))))
             terminal-reconcile @#'shell/terminal-reconcile!
             output-file (doto (File/createTempFile "land-prepare-output" ".txt")
                           (.deleteOnExit))
@@ -674,16 +685,20 @@
              (fn [& args]
                (if (identical? main-thread (Thread/currentThread))
                  (apply terminal-reconcile args)
-                 (do
-                   (.countDown observer-paused)
-                   (when-not (.await continue-observer 5 TimeUnit/SECONDS)
+                 (let [fresh? (= 2 (swap! reconciliation-count inc))
+                       paused (if fresh? fresh-observer-paused observer-paused)
+                       continue (if fresh? continue-fresh-observer continue-observer)
+                       finished (if fresh? fresh-observer-finished observer-finished)
+                       result-atom (if fresh? fresh-result delayed-result)]
+                   (.countDown paused)
+                   (when-not (.await continue 5 TimeUnit/SECONDS)
                      (throw (ex-info "Timed out waiting to resume shell observer" {})))
                    (try
                      (let [result (apply terminal-reconcile args)]
-                       (reset! delayed-result result)
+                       (reset! result-atom result)
                        result)
                      (finally
-                       (.countDown observer-finished))))))
+                       (.countDown finished))))))
              #'process/launch!
              (fn [_runtime owner key _request]
                (let [record {:handle (str "inflight-" key)
@@ -703,9 +718,12 @@
                                    :cancellation {:reason "skipped-turn repair"})]
                  (reset! terminal-record record)
                  (swap! records assoc handle record)
-                 (when-not (.await observer-paused 5 TimeUnit/SECONDS)
-                   (throw (ex-info "Shell observer did not reach terminal reconciliation"
-                                   {})))
+                 (let [paused (if @fresh-cancellation?
+                                fresh-observer-paused
+                                observer-paused)]
+                   (when-not (.await paused 5 TimeUnit/SECONDS)
+                     (throw (ex-info "Shell observer did not reach terminal reconciliation"
+                                     {}))))
                  record))
              #'process/acknowledge!
              (fn [_runtime _owner handle]
@@ -743,7 +761,10 @@
                          (:id (first (workflow/ready "inflight-skipped-b"))))
                       "fresh preparation remains available after normal grant"))
 
+                (reset! fresh-task? true)
                 (shell/scan!)
+                (is (.await fresh-dispatch-finished 5 TimeUnit/SECONDS)
+                    "fresh preparation dispatch finished claiming custody")
                 (let [fresh-attempt
                       (first
                        (filter #(= (:id prepare) (:gate-id %))
@@ -751,9 +772,28 @@
                   (is (and (some? (:attempt-id fresh-attempt))
                            (not= (:attempt-id attempt)
                                  (:attempt-id fresh-attempt)))
-                      "the shell executor can claim a fresh preparation attempt")))))
+                      "the shell executor can claim a fresh preparation attempt")
+                  (reset! fresh-cancellation? true)
+                  (let [stopped (shell/quiesce-run!
+                                 "inflight-skipped-b"
+                                 "Test teardown after verified fresh dispatch")]
+                    (shell/retire-quiesced-attempts! rt stopped)
+                    (is (empty? @records)
+                        "test teardown acknowledges fresh custody")
+                    (is (nil? (attr-get (weaver/show rt (:id prepare))
+                                        :shell/attempt-id))
+                        "test teardown retires the fresh attempt metadata"))
+                  (.countDown continue-fresh-observer)
+                  (is (.await fresh-observer-finished 5 TimeUnit/SECONDS)
+                      "the fresh attempt observer completes before runtime teardown")
+                  (is (= :stale @fresh-result)
+                      "the retired fresh attempt has no late terminal work"))
+                (.shutdown worker-pool)
+                (is (.awaitTermination worker-pool 5 TimeUnit/SECONDS)
+                    "all shell workers stop before the fixture runtime closes"))))
           (finally
             (.countDown continue-observer)
+            (.countDown continue-fresh-observer)
             (.shutdownNow worker-pool)
             (close-guard! rt)))))))
 
