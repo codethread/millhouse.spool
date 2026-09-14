@@ -11,4 +11,4 @@
 (workflow/use-executor! queue/merge-turn-stalled? queue/merge-release-stalled?)
 (millstrand/use-op! queue/merge-queue)
 (millstrand/use-query! queries/merge-lock queries/merge-queue)
-(lifecycle/use-resource! queue/queue-handler)
+(lifecycle/use-resource! queue/queue-completion-guard queue/queue-handler)

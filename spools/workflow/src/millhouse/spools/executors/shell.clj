@@ -592,15 +592,23 @@
 ;; ---------------------------------------------------------------------------
 ;; Event-driven scan
 
+(defn- ready-for-dispatch?
+  [runtime gate-id]
+  (boolean
+   (some #(= gate-id (:id %))
+         (weaver/ready runtime
+                       [:and ready-shell-query [:= :id gate-id]] {}))))
+
 (defn- claim-and-dispatch!
   "Idempotently claim a ready, un-errored, un-claimed `:shell` gate by stamping a
   `shell/running` marker before dispatch, then submit the actual process run to
   the worker pool. The event thread never blocks on a child process.
 
-  The gate is re-read fresh (not trusted from the ready snapshot, which a
-  concurrent close can outrace) and must still be `active`: `pass!` clears the
-  claim and closes the gate in one atomic batch, and `fail-gate!` clears the
-  claim while stamping `gate/error` — so every claim-clearing transition also
+  The gate and its dependency readiness are re-read fresh (not trusted from the
+  ready snapshot, which a concurrent close or repair can outrace) and must still
+  be `active`: `pass!` clears the claim and closes the gate in one atomic batch,
+  while `fail-gate!` clears the claim and stamps `gate/error` — so every
+  claim-clearing transition also
   either closes the gate or stamps an error, and this guard blocks re-dispatch
   in all three cases."
   [runtime run-id gate-view]
@@ -608,7 +616,8 @@
     (when (and (= "active" (:state gate))
                (not (stamped? gate :gate/error))
                (not (stamped? gate :shell/running))
-               (not (stamped? gate :shell/custody-handle)))
+               (not (stamped? gate :shell/custody-handle))
+               (ready-for-dispatch? runtime (:id gate)))
       (let [attempt-id (str (java.util.UUID/randomUUID))]
         (let [timeout-secs (let [value (attr gate :shell/timeout-secs)]
                              (when (s/valid? :shell/timeout-secs value)
@@ -686,9 +695,12 @@
   omitted. An active nearest root with a malformed `workflow/run-id` fails
   loudly with gate/root context. Root ownership is then checked only for those
   selected gates, so an unrelated graph event does not project the global ready
-  frontier once per active workflow. The scan still serializes on a
-  runtime-owned monitor so concurrent scans cannot double-launch a gate. Each
-  accepted gate receives a `shell/running` claim before its process is submitted
+  frontier once per active workflow. Before claiming, dispatch revalidates each
+  gate's current state, fence, claim, and dependency readiness so a stale
+  selection cannot launch work made unready by a concurrent repair. The scan
+  still serializes on a runtime-owned monitor so concurrent scans cannot
+  double-launch a gate. Each accepted gate receives a `shell/running` claim
+  before its process is submitted
   to the worker pool; the event thread never waits for the child. Scans run on
   relevant graph changes and once during handler activation."
   []
@@ -828,6 +840,80 @@
                       plans)]
       {:run-id run-id
        :gates (mapv #(cancel-quiesced-attempt! runtime %) plans)})))
+
+(defn retire-quiesced-attempts!
+  "Reconcile settled custody attempts before a caller removes quiescence fences.
+
+  Accept only the exact plans returned by `quiesce-run!`. A still-current
+  attempt must remain frozen and have a terminal custody fact; normal terminal
+  reconciliation then records the frozen outcome, acknowledges Mill custody,
+  and clears that exact attempt identity. An observer that already performed
+  those steps is an idempotent success. Mismatch or unsettled custody fails
+  loudly and leaves the gate fenced."
+  [runtime {:keys [run-id gates]}]
+  (current/with-runtime runtime
+    (binding [*runtime* runtime]
+      {:run-id run-id
+       :retired
+       (mapv
+        (fn [{:keys [gate-id attempt-id custody-handle attempted? cancelled?]
+              :as plan}]
+          (if-not attempted?
+            {:gate-id gate-id :attempted? false}
+            (do
+              (when-not (and attempt-id custody-handle cancelled?)
+                (fail! "Quiesced shell attempt is not settled for retirement"
+                       {:run-id run-id :plan plan}))
+              #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+              #_{:splint/disable [lint/locking-object]}
+              (locking (scan-monitor)
+                (let [gate (weaver/show runtime gate-id)
+                      current-attempt (attr gate :shell/attempt-id)
+                      current-handle (attr gate :shell/custody-handle)
+                      current-running (attr gate :shell/running)]
+                  (cond
+                    (and (nil? current-attempt)
+                         (nil? current-handle)
+                         (nil? current-running))
+                    {:gate-id gate-id :attempt-id attempt-id :already-retired true}
+
+                    (not (and (= attempt-id current-attempt)
+                              (= custody-handle current-handle)
+                              (stamped? gate :gate/error)))
+                    (fail! "Quiesced shell attempt no longer matches its frozen gate"
+                           {:run-id run-id :gate-id gate-id
+                            :attempt-id attempt-id :custody-handle custody-handle
+                            :current-attempt current-attempt
+                            :current-handle current-handle
+                            :current-running current-running
+                            :frozen? (stamped? gate :gate/error)})
+
+                    :else
+                    (let [record (process/get runtime custody-handle)]
+                      (when-not (process-terminal? record)
+                        (fail! "Quiesced shell custody is not terminal"
+                               {:run-id run-id :gate-id gate-id
+                                :attempt-id attempt-id :record record}))
+                      (let [result (terminal-reconcile!
+                                    runtime run-id gate-id attempt-id custody-handle
+                                    record (= "timed-out" (attr gate :shell/timeout-intent)))
+                            latest (weaver/show runtime gate-id)
+                            cleared? (and (nil? (attr latest :shell/attempt-id))
+                                          (nil? (attr latest :shell/custody-handle))
+                                          (nil? (attr latest :shell/running)))]
+                        (cond
+                          (= :acknowledged result)
+                          {:gate-id gate-id :attempt-id attempt-id :retired true}
+
+                          (and (= :stale result) cleared?)
+                          {:gate-id gate-id :attempt-id attempt-id
+                           :already-retired true}
+
+                          :else
+                          (fail! "Quiesced shell attempt could not be retired"
+                                 {:run-id run-id :gate-id gate-id
+                                  :attempt-id attempt-id :result result}))))))))))
+        gates)})))
 
 (defn- shell-gates
   [runtime]
