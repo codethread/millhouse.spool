@@ -841,6 +841,80 @@
       {:run-id run-id
        :gates (mapv #(cancel-quiesced-attempt! runtime %) plans)})))
 
+(defn retire-quiesced-attempts!
+  "Reconcile settled custody attempts before a caller removes quiescence fences.
+
+  Accept only the exact plans returned by `quiesce-run!`. A still-current
+  attempt must remain frozen and have a terminal custody fact; normal terminal
+  reconciliation then records the frozen outcome, acknowledges Mill custody,
+  and clears that exact attempt identity. An observer that already performed
+  those steps is an idempotent success. Mismatch or unsettled custody fails
+  loudly and leaves the gate fenced."
+  [runtime {:keys [run-id gates]}]
+  (current/with-runtime runtime
+    (binding [*runtime* runtime]
+      {:run-id run-id
+       :retired
+       (mapv
+        (fn [{:keys [gate-id attempt-id custody-handle attempted? cancelled?]
+              :as plan}]
+          (if-not attempted?
+            {:gate-id gate-id :attempted? false}
+            (do
+              (when-not (and attempt-id custody-handle cancelled?)
+                (fail! "Quiesced shell attempt is not settled for retirement"
+                       {:run-id run-id :plan plan}))
+              #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+              #_{:splint/disable [lint/locking-object]}
+              (locking (scan-monitor)
+                (let [gate (weaver/show runtime gate-id)
+                      current-attempt (attr gate :shell/attempt-id)
+                      current-handle (attr gate :shell/custody-handle)
+                      current-running (attr gate :shell/running)]
+                  (cond
+                    (and (nil? current-attempt)
+                         (nil? current-handle)
+                         (nil? current-running))
+                    {:gate-id gate-id :attempt-id attempt-id :already-retired true}
+
+                    (not (and (= attempt-id current-attempt)
+                              (= custody-handle current-handle)
+                              (stamped? gate :gate/error)))
+                    (fail! "Quiesced shell attempt no longer matches its frozen gate"
+                           {:run-id run-id :gate-id gate-id
+                            :attempt-id attempt-id :custody-handle custody-handle
+                            :current-attempt current-attempt
+                            :current-handle current-handle
+                            :current-running current-running
+                            :frozen? (stamped? gate :gate/error)})
+
+                    :else
+                    (let [record (process/get runtime custody-handle)]
+                      (when-not (process-terminal? record)
+                        (fail! "Quiesced shell custody is not terminal"
+                               {:run-id run-id :gate-id gate-id
+                                :attempt-id attempt-id :record record}))
+                      (let [result (terminal-reconcile!
+                                    runtime run-id gate-id attempt-id custody-handle
+                                    record (= "timed-out" (attr gate :shell/timeout-intent)))
+                            latest (weaver/show runtime gate-id)
+                            cleared? (and (nil? (attr latest :shell/attempt-id))
+                                          (nil? (attr latest :shell/custody-handle))
+                                          (nil? (attr latest :shell/running)))]
+                        (cond
+                          (= :acknowledged result)
+                          {:gate-id gate-id :attempt-id attempt-id :retired true}
+
+                          (and (= :stale result) cleared?)
+                          {:gate-id gate-id :attempt-id attempt-id
+                           :already-retired true}
+
+                          :else
+                          (fail! "Quiesced shell attempt could not be retired"
+                                 {:run-id run-id :gate-id gate-id
+                                  :attempt-id attempt-id :result result}))))))))))
+        gates)})))
+
 (defn- shell-gates
   [runtime]
   (weaver/list runtime [:= [:attr "workflow/gate"] "shell"] {}))

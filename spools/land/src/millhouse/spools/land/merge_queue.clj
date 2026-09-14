@@ -551,6 +551,14 @@
       (some? (attr-get gate :shell/exit-code))
       (contains? attempted (:id gate))))
 
+(defn- require-unattempted-irreversible!
+  [run-id gate attempted]
+  (when (irreversible-attempt? gate attempted)
+    (fail! "Irreversible merge work may have started; retain the fenced turn"
+           {:run-id run-id :gate-id (:id gate)
+            :attempted (contains? attempted (:id gate))}))
+  gate)
+
 (defn- dependency-target
   [runtime strands from-id label]
   (let [ids (->> (:edges (graph/subgraph runtime [from-id] {:type "depends-on"}))
@@ -646,7 +654,10 @@
             stopped (shell/quiesce-run! run-id (str "Skipped-turn repair: " reason))
             attempted (into #{}
                             (keep #(when (:attempted? %) (:gate-id %)))
-                            (:gates stopped))]
+                            (:gates stopped))
+            irreversible (weaver/show runtime (:id (irreversible-gate strands)))]
+        (require-unattempted-irreversible! run-id irreversible attempted)
+        (shell/retire-quiesced-attempts! runtime stopped)
         (workflow-guard/with-run!
           runtime run-id
           (fn []
@@ -656,20 +667,17 @@
                   irreversible (irreversible-gate strands)
                   ownership-barrier
                   (require-ownership-barrier! runtime strands gate irreversible)]
-              (when (irreversible-attempt? irreversible attempted)
-                (fail! "Irreversible merge work may have started; retain the fenced turn"
-                       {:run-id run-id :gate-id (:id irreversible)
-                        :attempted (contains? attempted (:id irreversible))}))
+              (require-unattempted-irreversible! run-id irreversible attempted)
               (let [gate-ref (keyword gate-id)
                     shell-patches
                     (mapv (fn [shell]
-                            (if (and (= (:id ownership-barrier) (:id shell))
-                                     (= "closed" (:state shell)))
-                              {:ref (keyword (:id shell))
-                               :state "active"
-                               :attributes
-                               (rewound-shell-attributes
-                                (get prior-errors (:id shell)))}
+                            (if (= (:id ownership-barrier) (:id shell))
+                              (cond->
+                               {:ref (keyword (:id shell))
+                                :attributes
+                                (rewound-shell-attributes
+                                 (get prior-errors (:id shell)))}
+                                (= "closed" (:state shell)) (assoc :state "active"))
                               {:ref (keyword (:id shell))
                                :attributes
                                {:gate/error (get prior-errors (:id shell))}}))
@@ -806,8 +814,8 @@
 
   Supported kinds are `:skipped-turn` before possible irreversible work and
   `:skipped-release` after exact successful merge/main evidence. Turn repair
-  rewinds completed reversible preparation to restore an ownership-blocked
-  frontier. Every request
+  retires quiesced preparation custody and rewinds reversible preparation to
+  restore an ownership-blocked frontier. Every request
   records actor, reason, graph ids, and evidence; mismatches fail without queue
   settlement. Repeating the exact request is idempotent."
   [runtime run-id request]

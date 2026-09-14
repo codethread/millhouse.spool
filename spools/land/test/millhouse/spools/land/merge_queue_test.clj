@@ -13,7 +13,8 @@
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.test.alpha :as test-alpha])
-  (:import [java.util.concurrent CountDownLatch Executor TimeUnit]))
+  (:import [java.io File]
+           [java.util.concurrent CountDownLatch Executor Executors TimeUnit]))
 
 (defn- start-run! [id]
   (workflow/start!
@@ -623,6 +624,138 @@
                       (.countDown continue-scan))))))
             (finally
               (close-guard! rt))))))))
+
+(deftest skipped-turn-repair-retires-cancelled-prepare-before-unfreezing
+  (with-runtime
+    (fn [rt _]
+      (start-run! "inflight-owner-a")
+      (start-land-merge-run! "inflight-skipped-b")
+      (queue/join! rt "inflight-owner-a")
+      (queue/join! rt "inflight-skipped-b")
+      (let [root (workflow/current-root "inflight-skipped-b")
+            turn (ready-gate "inflight-skipped-b" "merge-turn")
+            request (turn-repair-request root turn)
+            records (atom {})
+            terminal-record (atom nil)
+            delayed-result (atom nil)
+            dispatch-finished (CountDownLatch. 1)
+            first-task? (atom true)
+            observer-paused (CountDownLatch. 1)
+            continue-observer (CountDownLatch. 1)
+            observer-finished (CountDownLatch. 1)
+            main-thread (Thread/currentThread)
+            worker-pool (Executors/newFixedThreadPool 2)
+            worker-executor
+            (reify Executor
+              (execute [_ task]
+                (let [first? (compare-and-set! first-task? true false)]
+                  (.execute worker-pool
+                            ^Runnable
+                            (fn []
+                              (try
+                                (.run ^Runnable task)
+                                (finally
+                                  (when first?
+                                    (.countDown dispatch-finished)))))))))
+            terminal-reconcile @#'shell/terminal-reconcile!
+            output-file (doto (File/createTempFile "land-prepare-output" ".txt")
+                          (.deleteOnExit))
+            error-file (doto (File/createTempFile "land-prepare-error" ".txt")
+                         (.deleteOnExit))]
+        (spit output-file "")
+        (spit error-file "")
+        (queue/grant! rt "inflight-owner-a")
+        (workflow/complete! "inflight-skipped-b" {:step (:id turn) :by "merge-turn"})
+        (install-guard! rt)
+        (try
+          (with-redefs-fn
+            {#'shell/worker-executor (constantly worker-executor)
+             #'shell/terminal-reconcile!
+             (fn [& args]
+               (if (identical? main-thread (Thread/currentThread))
+                 (apply terminal-reconcile args)
+                 (do
+                   (.countDown observer-paused)
+                   (when-not (.await continue-observer 5 TimeUnit/SECONDS)
+                     (throw (ex-info "Timed out waiting to resume shell observer" {})))
+                   (try
+                     (let [result (apply terminal-reconcile args)]
+                       (reset! delayed-result result)
+                       result)
+                     (finally
+                       (.countDown observer-finished))))))
+             #'process/launch!
+             (fn [_runtime owner key _request]
+               (let [record {:handle (str "inflight-" key)
+                             :owner owner
+                             :key key
+                             :phase :running
+                             :output {:stdout-ref (.getAbsolutePath output-file)
+                                      :stderr-ref (.getAbsolutePath error-file)}}]
+                 (swap! records assoc (:handle record) record)
+                 record))
+             #'process/list-owned (fn [_runtime _owner] (vec (vals @records)))
+             #'process/get (fn [_runtime handle] (get @records handle))
+             #'process/cancel!
+             (fn [_runtime _owner handle]
+               (let [record (assoc (get @records handle)
+                                   :phase :terminal
+                                   :cancellation {:reason "skipped-turn repair"})]
+                 (reset! terminal-record record)
+                 (swap! records assoc handle record)
+                 (when-not (.await observer-paused 5 TimeUnit/SECONDS)
+                   (throw (ex-info "Shell observer did not reach terminal reconciliation"
+                                   {})))
+                 record))
+             #'process/acknowledge!
+             (fn [_runtime _owner handle]
+               (swap! records dissoc handle)
+               {:acknowledged true :handle handle})}
+            (fn []
+              (shell/scan!)
+              (is (.await dispatch-finished 5 TimeUnit/SECONDS)
+                  "actual prepare dispatch finished claiming custody")
+              (let [prepare (first (workflow/ready "inflight-skipped-b"))
+                    attempt (first
+                             (filter #(= (:id prepare) (:gate-id %))
+                                     (shell/read-shell-attempts {:runtime rt})))]
+                (is (some? (:custody-handle attempt))
+                    "actual prepare dispatch is in flight before repair")
+                (queue/repair! rt "inflight-skipped-b" request)
+                (is (some? @terminal-record)
+                    "real quiescence cancelled prepare into a terminal custody fact")
+                (is (empty? @records)
+                    "repair acknowledged settled custody before removing its fence")
+
+                (.countDown continue-observer)
+                (is (.await observer-finished 5 TimeUnit/SECONDS)
+                    "the original observer completed delayed reconciliation")
+                (is (= :stale @delayed-result)
+                    "delayed terminal reconciliation sees retired custody")
+
+                (workflow/complete! "inflight-owner-a")
+                (queue/release! rt "inflight-owner-a")
+                (queue/grant! rt "inflight-skipped-b")
+                (let [current (weaver/show rt (:id prepare))]
+                  (is (nil? (attr-get current :gate/error)))
+                  (is (nil? (attr-get current :shell/attempt-id)))
+                  (is (= (:id prepare)
+                         (:id (first (workflow/ready "inflight-skipped-b"))))
+                      "fresh preparation remains available after normal grant"))
+
+                (shell/scan!)
+                (let [fresh-attempt
+                      (first
+                       (filter #(= (:id prepare) (:gate-id %))
+                               (shell/read-shell-attempts {:runtime rt})))]
+                  (is (and (some? (:attempt-id fresh-attempt))
+                           (not= (:attempt-id attempt)
+                                 (:attempt-id fresh-attempt)))
+                      "the shell executor can claim a fresh preparation attempt")))))
+          (finally
+            (.countDown continue-observer)
+            (.shutdownNow worker-pool)
+            (close-guard! rt)))))))
 
 (deftest skipped-turn-repair-admits-an-unreserved-run-at-the-tail
   (with-runtime
