@@ -13,19 +13,20 @@ func testCard(id, updated string) BoardCard {
 
 func TestActivePollingFlattensTheSnapshotWithoutDetailReads(t *testing.T) {
 	snapshot := BoardSnapshot{
-		Epics:       []BoardCard{testCard("epic", "1")},
-		Claimed:     []BoardCard{testCard("claimed", "2")},
-		InReview:    []BoardCard{testCard("review", "3")},
-		Pending:     []BoardCard{testCard("pending", "4")},
-		Refinement:  []BoardCard{testCard("refinement", "5")},
-		UnknownLane: []BoardCard{testCard("unknown", "6")},
+		Epics:        []BoardCard{testCard("epic", "1")},
+		Claimed:      []BoardCard{testCard("claimed", "2")},
+		InReview:     []BoardCard{testCard("review", "3")},
+		InProduction: []BoardCard{testCard("production", "3")},
+		Pending:      []BoardCard{testCard("pending", "4")},
+		Refinement:   []BoardCard{testCard("refinement", "5")},
+		UnknownLane:  []BoardCard{testCard("unknown", "6")},
 	}
 
 	var got []string
 	for _, c := range ActiveBoardCards(snapshot) {
 		got = append(got, c.ID)
 	}
-	want := []string{"epic", "claimed", "review", "pending", "refinement", "unknown"}
+	want := []string{"epic", "claimed", "review", "production", "pending", "refinement", "unknown"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("lane order (-want +got):\n%s", diff)
 	}

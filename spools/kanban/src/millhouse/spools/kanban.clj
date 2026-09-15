@@ -5,7 +5,7 @@
   `feature` card (occasionally grouped under an `epic`), and every agent
   working directly with a user works under a claimed card. All card state
   lives under `kanban/*` attributes; `kanban/lane` is the active board lane
-  (`refinement` -> `pending` -> `claimed` -> `in_review`) and `kanban/outcome`
+  (`refinement` -> `pending` -> `claimed` -> `in_review`, optionally `in_production`) and `kanban/outcome`
   records a finished card's outcome. The
   `kanban/priority` (p1 immediate blocker .. p4 someday, default p3) orders
   lanes and `kanban next`.
@@ -40,7 +40,7 @@
 (def ^:private restore-lane-attr :kanban/abandon-restore-lane)
 
 (def ^:private addable-lanes #{"pending" "refinement"})
-(def ^:private active-lanes #{"refinement" "pending" "claimed" "in_review"})
+(def ^:private active-lanes #{"refinement" "pending" "claimed" "in_review" "in_production"})
 (def ^:private epic-finish-lanes #{"refinement" "pending"})
 (def ^:private card-types #{"feature" "epic"})
 (def ^:private card-priorities #{"p1" "p2" "p3" "p4"})
@@ -444,10 +444,18 @@
     {:operation "kanban review"
      :card (entity-projection updated)}))
 
-(defn rework!
-  "Move an in_review kanban card back to claimed for rework."
+(defn production!
+  "Move an in_review card into optional post-merge observation or release coordination."
   [runtime id]
-  (let [strand (require-lane! "rework" (card-strand runtime (require-non-blank! :id id)) "in_review")
+  (let [strand (require-lane! "mark in_production" (card-strand runtime (require-non-blank! :id id)) "in_review")
+        updated (update-card! runtime strand {lane-attr "in_production"} nil)]
+    {:operation "kanban production" :card (entity-projection updated)}))
+
+(defn rework!
+  "Move an in_review or in_production kanban card back to claimed for rework."
+  [runtime id]
+  (let [card (card-strand runtime (require-non-blank! :id id))
+        strand (require-lane! "rework" card (if (= "in_production" (attr-value card lane-attr)) "in_production" "in_review"))
         updated (update-card! runtime strand {lane-attr "claimed"} nil)]
     {:operation "kanban rework"
      :card (entity-projection updated)}))
@@ -486,10 +494,10 @@
                 "closed"))
 
 (defn- finish-feature!
-  "Close a claimed or in_review feature and cascade-close its open tasks."
+  "Close a claimed, in_review, or in_production feature and cascade-close its open tasks."
   [runtime id strand outcome]
-  (when-not (contains? #{"claimed" "in_review"} (attr-value strand lane-attr))
-    (throw (ex-info "Kanban card must be claimed or in_review to finish"
+  (when-not (contains? #{"claimed" "in_review" "in_production"} (attr-value strand lane-attr))
+    (throw (ex-info "Kanban card must be claimed, in_review, or in_production to finish"
                     {:id id :lane (attr-value strand lane-attr)})))
   (doseq [task (filterv #(not= "closed" (:state %))
                         (feature-tasks runtime id))]
@@ -551,7 +559,7 @@
 (defn finish!
   "Close a kanban card with an explicit outcome, polymorphic on `kanban/type`.
 
-  A feature card closes from the claimed or in_review lane (`--outcome` defaults
+  A feature card closes from claimed, in_review, or optional in_production (`--outcome` defaults
   to done). A grouping epic is never claimed, so it closes from the refinement or
   pending lane. Finishing either tier cascade-closes its open children with
   `kanban/outcome=unactioned` and `kanban/closed-by=parent-cascade`, distinguishing
@@ -1172,6 +1180,7 @@
                                    (assoc :doing-task (doing-task-for runtime card))))
                                (by-priority review-features))
               :needs-review (needs-review-entries runtime (concat claimed-features review-features))
+              :in_production (lane "in_production")
               :closed {:count (count (filter #(= "closed" (:state %)) all))}}
       ;; active cards outside the known lanes are drift; surface them loudly
        (seq unknown) (assoc :unknown-lane unknown)
@@ -1232,7 +1241,7 @@
 
 (defn board-str
   "Render a `board` result map as a stacked-lane ASCII board string."
-  [{:keys [epics refinement pending claimed in_review needs-review closed unknown-lane]}]
+  [{:keys [epics refinement pending claimed in_review in_production needs-review closed unknown-lane]}]
   (let [rule (str/join (repeat board-width \=))]
     (->> (concat
           [(str "KANBAN BOARD  (closed: " (:count closed) ")") rule]
@@ -1245,6 +1254,8 @@
           (lane-lines "CLAIMED / WIP" claimed wip-row)
           [""]
           (lane-lines "IN REVIEW" in_review wip-row)
+          [""]
+          (lane-lines "IN PRODUCTION" in_production card-line)
           [""]
           (lane-lines "NEEDS REVIEW" needs-review review-line)
           (when (seq unknown-lane)
@@ -1265,6 +1276,10 @@
     |claimed, and in_review before finish closes them with an explicit outcome. Epics are
     |never claimed: finish them from refinement or pending; done requires closed feature
     |children, while abandoned reversibly closes still-open children.
+    |After review, `kanban production ID` optionally moves a merged feature to
+    |in_production while deployment validation, observation, or coordinated release
+    |work remains. `finish` closes it; `rework` returns it to claimed. Direct review
+    |to finish remains available: no guard requires the production lane.
     |
     |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
     |someday work. `kanban next` returns the highest-priority pending feature, oldest
@@ -1275,7 +1290,7 @@
     |Labels are open kanban.label/<slug>=true markers rather than a fixed vocabulary.
     |
     |Kanban owns board projections and guarded card transitions: add, board, card, next,
-    |priority, label, promote, claim, task, note, review, rework, finish, and reopen.
+    |priority, label, promote, claim, task, note, review, production, rework, finish, and reopen.
     |`kanban-batch` atomically creates pending feature cards from items with key, title,
     |optional body and priority, and sibling-key or durable-id depends-on references.
     |Use Batteries add, update, note, list, ready, show, query, and weave for the generic
@@ -1307,7 +1322,13 @@
     |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
     |list` or `strand ready` with the registered kanban queries for generic selection.
     |Move claimed work to review, rework it when necessary, and finish only after its
-    |declared outcome is known."))
+    |declared outcome is known. Once reviewed work is merged to main and its outcome
+    |is satisfied, finish it directly. Use `kanban production ID` from in_review only
+    |when post-merge deployment validation, a settling period, or coordinated release
+    |work remains (including related changes in a wider epic). This optional choice
+    |is agent policy, never a mandatory completion guard. Record what remains and
+    |the completion criterion in a task note; finish when satisfied, or rework back
+    |to claimed if implementation changes are needed."))
 
 (def ^:private kanban-arg-spec
   "Declared command surface for the `kanban` op."
@@ -1392,10 +1413,13 @@
     "review" {:doc "Move a claimed card into the in_review lane."
               :positionals [{:name :id :required? true :doc "Kanban card id."}]
               :hook-class :mutating :deadline-class :standard}
-    "rework" {:doc "Move an in_review card back to claimed for rework."
+    "production" {:doc "Move an in_review card into optional in_production observation or release coordination."
+                  :positionals [{:name :id :required? true :doc "Kanban card id."}]
+                  :hook-class :mutating :deadline-class :standard}
+    "rework" {:doc "Move an in_review or in_production card back to claimed for rework."
               :positionals [{:name :id :required? true :doc "Kanban card id."}]
               :hook-class :mutating :deadline-class :standard}
-    "finish" {:doc (str "Close a card with an explicit outcome. Features close from claimed/in_review; "
+    "finish" {:doc (str "Close a card with an explicit outcome. Features close from claimed/in_review/in_production; "
                         "epics close from refinement/pending (done requires closed feature children, "
                         "abandoned cascades reversibly).")
               :flags {:outcome {:doc "Closed outcome; defaults to done. For an epic: done|abandoned."}}
@@ -1437,6 +1461,7 @@
       ["task" "add"] (task-op runtime args flags)
       ["task" "list"] (task-op runtime args flags)
       ["review"] (review! runtime (:id args))
+      ["production"] (production! runtime (:id args))
       ["rework"] (rework! runtime (:id args))
       ["note"] (note! runtime (:id args) (str/join " " (:text args)) flags)
       ["finish"] (finish! runtime (:id args) flags)

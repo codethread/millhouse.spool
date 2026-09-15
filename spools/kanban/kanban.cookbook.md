@@ -1,5 +1,23 @@
 # Millhouse Kanban cookbook
 
+## Optional post-merge observation
+
+Reviewed work merged to main can finish directly when its declared outcome is met.
+When deployment validation, a settling period, or a coordinated release (such as
+several features in an epic) remains, agents may instead use:
+
+```sh
+strand kanban production CARD_ID
+strand kanban note TASK_ID "Observe deployment; finish after the release checks pass."
+strand kanban finish CARD_ID
+```
+
+`production` moves an `in_review` card to `in_production`. It is optional agent
+policy, not a required completion guard. Record the remaining work and completion
+criterion on a task. If implementation changes are needed, use
+`strand kanban rework CARD_ID` to return to `claimed`. An epic still requires its
+feature children to be closed before it can finish with `done`.
+
 Compositions for running user↔agent work through the Kanban board. The
 [contract](./README.md) defines lanes, attributes, and consumer-visible
 surfaces; the generated [API](./kanban.api.md) defines signatures and focused
