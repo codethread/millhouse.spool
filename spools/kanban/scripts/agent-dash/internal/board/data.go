@@ -44,13 +44,14 @@ type BoardCard struct {
 }
 
 type BoardSnapshot struct {
-	Epics       []BoardCard `json:"epics"`
-	Refinement  []BoardCard `json:"refinement"`
-	Pending     []BoardCard `json:"pending"`
-	Claimed     []BoardCard `json:"claimed"`
-	InReview    []BoardCard `json:"in_review"`
-	UnknownLane []BoardCard `json:"unknown-lane,omitempty"`
-	Cards       []BoardCard `json:"cards,omitempty"`
+	Epics        []BoardCard `json:"epics"`
+	Refinement   []BoardCard `json:"refinement"`
+	Pending      []BoardCard `json:"pending"`
+	Claimed      []BoardCard `json:"claimed"`
+	InReview     []BoardCard `json:"in_review"`
+	InProduction []BoardCard `json:"in_production"`
+	UnknownLane  []BoardCard `json:"unknown-lane,omitempty"`
+	Cards        []BoardCard `json:"cards,omitempty"`
 }
 
 type CardView struct {
@@ -65,6 +66,7 @@ func ActiveBoardCards(b BoardSnapshot) []BoardCard {
 	out = append(out, b.Epics...)
 	out = append(out, b.Claimed...)
 	out = append(out, b.InReview...)
+	out = append(out, b.InProduction...)
 	out = append(out, b.Pending...)
 	out = append(out, b.Refinement...)
 	return append(out, b.UnknownLane...)

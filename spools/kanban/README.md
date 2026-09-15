@@ -42,6 +42,7 @@ The active lanes are:
 - `pending` — actionable work, ordered p1 first and oldest first within a priority;
 - `claimed` — work has started and the card records its owner and branch;
 - `in_review` — work is waiting for review; `rework` returns it to `claimed`.
+- `in_production` — optional post-merge deployment validation, settling, or coordinated release work; `production` enters it from `in_review`, `finish` closes it, and `rework` returns it to `claimed`. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
 
 Finishing removes the lane and closes the strand. Features record `done` by
 default or an explicitly supplied outcome, and close their open tasks. Epics

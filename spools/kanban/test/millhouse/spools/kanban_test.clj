@@ -267,6 +267,26 @@
               (is (nil? (get-in finished [:card :attributes :kanban/lane])))
               (is (= "done" (get-in finished [:card :attributes :kanban/outcome]))))))))))
 
+(deftest optional-production-lifecycle
+  (with-kanban
+    (fn [rt]
+      (let [id (get-in (op! rt "add" "Observe release") [:card :id])]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be in_review"
+                              (op! rt "production" id)))
+        (op! rt "claim" id "--owner" "agent" "--branch" "production-test")
+        (op! rt "review" id)
+        (is (= "in_production" (get-in (op! rt "production" id) [:card :attributes :kanban/lane])))
+        (let [board (op! rt "board")]
+          (is (= [id] (mapv :id (:in_production board))))
+          (is (nil? (:unknown-lane board)))
+          (is (str/includes? (kanban/board-str board) "IN PRODUCTION (1)")))
+        (is (= "claimed" (get-in (op! rt "rework" id) [:card :attributes :kanban/lane])))
+        (op! rt "review" id)
+        (op! rt "production" id)
+        (is (= "closed" (get-in (op! rt "finish" id) [:card :state])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be active"
+                              (op! rt "production" id)))))))
+
 (deftest kanban-declared-subcommands-help-and-parser-errors
   (with-kanban
     (fn [rt]
@@ -276,7 +296,7 @@
         (let [detail (weaver/op! rt 'help ["kanban"])
               children (get-in detail [:node :children])
               verbs (mapv :name children)]
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "promote" "reopen" "review" "rework" "task"] verbs))
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "production" "promote" "reopen" "review" "rework" "task"] verbs))
           (is (not-any? #(contains? #{"about" "prime"} (:name %)) children))))
       (testing "depth-N help resolves task add to its classified leaf"
         (let [detail (weaver/op! rt 'help ["kanban" "task" "add"])
@@ -299,7 +319,7 @@
                                             (op! rt "bogus")))]
           (is (= :missing-subcommand (:reason (ex-data missing))))
           (is (= :unknown-subcommand (:reason (ex-data unknown))))
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "promote" "reopen" "review" "rework" "task"]
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "production" "promote" "reopen" "review" "rework" "task"]
                  (:available (ex-data missing))))
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
@@ -689,7 +709,7 @@
       (let [id (get-in (op! rt "add" "Feature card") [:card :id])
             task-id (get-in (op! rt "task" "add" id "Child task") [:task :id])]
         (testing "a pending feature still cannot finish — the feature path is unchanged"
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be claimed or in_review to finish"
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be claimed, in_review, or in_production to finish"
                                 (op! rt "finish" id))))
         (testing "an arbitrary outcome is preserved on the feature path"
           (op! rt "claim" id "--owner" "agent" "--branch" "feature-branch")

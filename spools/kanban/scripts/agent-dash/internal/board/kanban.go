@@ -49,7 +49,7 @@ func (r KanbanRow) FilterType() string     { return r.Type }
 func (r KanbanRow) FilterEpic() string     { return r.Epic }
 func (r KanbanRow) FilterLabels() []string { return r.Labels }
 
-var laneColour = map[string]string{"claimed": "green", "in_review": "magenta", "pending": "yellow", "refinement": "cyan"}
+var laneColour = map[string]string{"claimed": "green", "in_review": "magenta", "in_production": "blue", "pending": "yellow", "refinement": "cyan"}
 
 // Derived task status (`kanban card`): doing is live work, ready is actionable,
 // blocked waits on a dependency, closed is complete.
@@ -63,21 +63,21 @@ func prioDim(p string) bool { return p == "p4" }
 
 // Board lane order is review-first urgency, not the spool's lifecycle order:
 // claimed work in flight, then the cards under review that a coordinator should
-// clear next (in_review), then the actionable queue (pending), then ideas still in
+// clear next (in_review), production observation, the actionable queue, then ideas in
 // refinement. Closed strands sink regardless of their lane column — the
 // vocabulary-reset cutover leaves closed cards on historic kanban/status while
 // live cards carry kanban/lane and freshly closed ones kanban/outcome — and show
 // their outcome (done/abandoned/...) dimmed.
-var laneRankOf = map[string]int{"claimed": 0, "in_review": 1, "pending": 2, "refinement": 3}
+var laneRankOf = map[string]int{"claimed": 0, "in_review": 1, "in_production": 2, "pending": 3, "refinement": 4}
 
 func laneRank(r KanbanRow) int {
 	if r.State == "closed" {
-		return 4
+		return 5
 	}
 	if rank, ok := laneRankOf[r.Lane]; ok {
 		return rank
 	}
-	return 4
+	return 5
 }
 
 // byLane orders a queue. created_at is "YYYY-MM-DD HH:MM:SS" (UTC), so lexical
@@ -329,7 +329,7 @@ func rowType(r FlatRow) string {
 // Under a narrow terminal (<80) the lane column costs the most width; compact
 // known lanes to four-letter codes (unknowns — task statuses — fall back to a
 // four-char slice).
-var laneAbbr = map[string]string{"claimed": "clmd", "in_review": "revw", "pending": "pend", "refinement": "refn"}
+var laneAbbr = map[string]string{"claimed": "clmd", "in_review": "revw", "in_production": "prod", "pending": "pend", "refinement": "refn"}
 
 func abbrevLane(lane string) string {
 	if a, ok := laneAbbr[lane]; ok {
