@@ -139,10 +139,11 @@ provenance attributes:
 It does not copy parent/performed edges, reservation capabilities, delivery
 state, or a subgraph. An exact replay returns `result: existing` without a write,
 including after either Weaver restarts. A conflicting friendly name, native
-session binding, or origin pointer fails before mutation. Both Weavers must be
-running and have a version of the identity spool that exposes `register` and its
-internal `receive` transport operation; registration never starts or reloads a
-Weaver.
+session binding, or origin pointer fails before mutation. Forwarding an already
+registered descriptor to another Weaver preserves its original provenance rather
+than replacing it with the intermediate workspace. Both Weavers must be running
+and have a version of the identity spool that exposes `register` and its internal
+`receive` transport operation; registration never starts or reloads a Weaver.
 
 ## Optional managed reservation
 

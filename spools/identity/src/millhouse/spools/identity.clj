@@ -420,6 +420,24 @@
                    (when-some [value (attr-get record key)]
                      [key value]))) descriptor-keys))
 
+(defn- origin-provenance [record origin]
+  (let [workspace (attr-get record :identity/origin-workspace)
+        strand-id (attr-get record :identity/origin-strand-id)]
+    (cond
+      (and (nil? workspace) (nil? strand-id))
+      {:identity/origin-workspace (:workspace origin)
+       :identity/origin-strand-id (:id record)}
+
+      (and (s/valid? ::identity workspace) (s/valid? ::identity strand-id))
+      {:identity/origin-workspace workspace
+       :identity/origin-strand-id strand-id}
+
+      :else
+      (fail! "Origin identity has incomplete registration provenance"
+             {:identity (attr-get record :identity/id)
+              :origin-workspace workspace
+              :origin-strand-id strand-id}))))
+
 (defn- receive-under-lock! [runtime friendly-id attributes]
   (let [matches (by-friendly-id runtime friendly-id)
         existing (first matches)
@@ -448,7 +466,8 @@
   local descriptor under the identity guard. No caller-supplied descriptor is
   trusted. Copies only session/name/harness/native ID, optional model/thinking,
   and the durable origin workspace and strand ID. Edges and reservations stay
-  local. Conflicting names, sessions or origin pointers fail without writes."
+  local. Forwarding an imported descriptor preserves its original provenance.
+  Conflicting names, sessions or origin pointers fail without writes."
   [runtime friendly-id from-weaver]
   (require-valid! ::identity friendly-id "receive! requires an identity name")
   (require-valid! ::identity from-weaver "receive! requires an origin Weaver ID")
@@ -459,9 +478,8 @@
       (fail! "Identity registration requires a different destination Weaver" {}))
     (let [record (walk/keywordize-keys
                   (peers/call! origin "identity" {:argv ["show" friendly-id]}))
-          attributes (assoc (descriptor record friendly-id)
-                            :identity/origin-workspace (:workspace origin)
-                            :identity/origin-strand-id (:id record))]
+          attributes (merge (descriptor record friendly-id)
+                            (origin-provenance record origin))]
       (with-identity-guard runtime #(receive-under-lock! runtime friendly-id attributes)))))
 
 (defn register!

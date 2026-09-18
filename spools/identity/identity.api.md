@@ -61,7 +61,7 @@ Resolve an existing identity by friendly ID, failing when absent or ambiguous.
 Function.
 
 Dispatch `strand identity` operations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L559-L572">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L577-L590">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/identity?">`identity?`</a>
 ``` clojure
@@ -85,8 +85,9 @@ Receive an identity from an exact running origin Weaver ID.
   local descriptor under the identity guard. No caller-supplied descriptor is
   trusted. Copies only session/name/harness/native ID, optional model/thinking,
   and the durable origin workspace and strand ID. Edges and reservations stay
-  local. Conflicting names, sessions or origin pointers fail without writes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L443-L465">Source</a></sub></p>
+  local. Forwarding an imported descriptor preserves its original provenance.
+  Conflicting names, sessions or origin pointers fail without writes.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L461-L483">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/register!">`register!`</a>
 ``` clojure
@@ -112,7 +113,7 @@ Register an existing local identity in an exact destination Weaver ID.
   propagate without automatic retry. `identity/origin-workspace` is the durable
   lookup pointer, so an origin Weaver restart does not change the descriptor.
   Registration does not start, restart or reconfigure Weavers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L467-L504">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L485-L522">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/reserve!">`reserve!`</a>
 ``` clojure

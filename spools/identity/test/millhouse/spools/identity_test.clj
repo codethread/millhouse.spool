@@ -499,6 +499,30 @@
             (is (re-find #"conflicts" (ex-message error)))
             (is (= before (graph-snapshot target)))))))))
 
+(deftest registration-preserves-and-validates-forwarded-origin
+  (with-registration-world
+    (fn [origin target _]
+      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+            name (:identity bound)
+            record-id (:id (identity/current origin name))]
+        (weaver/update! origin record-id
+                        {:attributes {:identity/origin-workspace "/original/.millstrand"
+                                      :identity/origin-strand-id "original-strand"}})
+        (identity/register! origin name "target-id" name)
+        (let [registered (identity/current target name)]
+          (is (= "/original/.millstrand"
+                 (attr-get registered :identity/origin-workspace)))
+          (is (= "original-strand" (attr-get registered :identity/origin-strand-id)))))))
+  (with-registration-world
+    (fn [origin target _]
+      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+            name (:identity bound)]
+        (weaver/update! origin (:id (identity/current origin name))
+                        {:attributes {:identity/origin-workspace "/partial/.millstrand"}})
+        (is (re-find #"incomplete registration provenance"
+                     (ex-message (failure #(identity/register! origin name "target-id" name)))))
+        (is (empty? (identities target)))))))
+
 (deftest registration-rejects-unattached-origin-and-unknown-routing
   (with-registration-world
     (fn [origin target _]
