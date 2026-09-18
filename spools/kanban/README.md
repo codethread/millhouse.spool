@@ -70,10 +70,14 @@ grouping card and `--epic` attaches a feature beneath an existing epic. The
 `kanban-batch` weave pattern creates a set of pending features atomically and
 resolves dependencies by sibling key or durable strand id.
 
-Claim a feature before doing direct user work. `claim` requires `owner` and
-`branch`; `worktree` is optional for work in the main checkout, and `run-id`
-can carry an opaque workflow pointer. The card is the branch's discoverable
-work root; execution strands beneath it use `parent-of` edges.
+Claim a feature before doing direct user work. `claim` requires `--owner ID`
+and `--branch`; `ID` is the logical-session identity that owns the work root.
+`worktree` is optional for work in the main checkout, and `run-id` can carry an
+opaque workflow pointer. The card is the branch's discoverable work root;
+execution strands beneath it use `parent-of` edges. Notes use `--by ID` for
+author attribution, deliberately distinct from claim ownership. Inspect live
+help rather than substituting `--by-identity`, which belongs to agent
+operations.
 
 Tasks are the optional `feature > task` tier. `task add` marks a child with
 `kanban/task=true` and can add repeatable `depends-on` edges. Task status is
