@@ -23,9 +23,11 @@
    :deps/root "kanban-adapter"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "6c7a22cb4311076e172470a65298a089a85b52ef"
+   :git/sha "4e920fa712d059d73a2a156a46b4686f0833db67"
    :deps/root "spools/config"}
   codethread/ralph
   {:git/url "https://github.com/codethread/codethread.spool.git"
    :git/sha "3dcf5f051842512d444b9d111d3998f4078081f6"
-   :deps/root "spools/ralph"}}}
+   :deps/root "spools/ralph"}}
+ :aliases {:test {:extra-paths ["test"]
+                  :main-opts ["-m" "millhouse.auto-run-test"]}}}

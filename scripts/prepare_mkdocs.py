@@ -10,4 +10,5 @@ DOCS_DIR = REPO_ROOT / ".mkdocs"
 shutil.rmtree(DOCS_DIR, ignore_errors=True)
 DOCS_DIR.mkdir()
 (DOCS_DIR / "index.md").symlink_to("../README.md")
+(DOCS_DIR / "docs").symlink_to("../docs", target_is_directory=True)
 (DOCS_DIR / "spools").symlink_to("../spools", target_is_directory=True)

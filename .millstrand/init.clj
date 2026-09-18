@@ -55,6 +55,17 @@
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
+;; --- Repository automatic delivery policy ---------------------------------
+(runtime/module! runtime :millhouse/auto-run-workflows
+                 {:file "me/auto_run_workflows.clj"
+                  :after [:millhouse/spools-workflow-all]
+                  :required? true})
+(runtime/module! runtime :millhouse/auto-run
+                 {:file "me/auto_run.clj"
+                  :after [:millhouse/auto-run-workflows
+                          :millstrand/spools-harnesses]
+                  :required? true})
+
 ;; Activate the sole shared :agent executor only after every consumer workflow,
 ;; alias election, and reviewer declaration is reconciled.
 (codethread/register-executor!
@@ -62,4 +73,5 @@
           :devflow
           :devflow/kanban-adapter
           :codethread/config
-          :codethread/ralph])
+          :codethread/ralph
+          :millhouse/auto-run])
