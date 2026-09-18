@@ -13,8 +13,9 @@
   Cards are work roots: claiming stamps `owner`/`branch`/`worktree`, and
   execution strands hang beneath the card with `parent-of` edges — the kanban
   spool complements the engines that produce them, it does not replace them.
-  Notes are closed note strands on cards and tasks; progress notes belong on
-  the doing-task, so a cold agent self-discovers in-flight work with
+  Notes are closed note strands on cards and tasks; important user-visible notes
+  belong on the epic or feature, while task notes are the development log.
+  A cold agent self-discovers in-flight work with
   `kanban board` -> `kanban card <id>` -> the doing-task and its
   `latest-note`."
   (:require [clojure.spec.alpha :as s]
@@ -232,7 +233,7 @@
          \"--label\" [\"reliability\"]})
   ```
 
-  A refinement card stays out of `next` until a human calls `promote!`."
+  A refinement card stays out of `next` until explicitly moved to pending with `strand update`."
   [runtime title flags]
   (let [title (require-non-blank! :title title)
         epic-id (get flags "--epic")]
@@ -351,14 +352,6 @@
                   (cond-> {:attributes attrs}
                     state (assoc :state state))))
 
-(defn promote!
-  "Move a refinement card into the pending lane (an explicit human act)."
-  [runtime id]
-  (let [strand (require-lane! "promote" (card-strand runtime (require-non-blank! :id id)) "refinement")
-        updated (update-card! runtime strand {lane-attr "pending"} nil)]
-    {:operation "kanban promote"
-     :card (entity-projection updated)}))
-
 (defn set-priority!
   "Set an active card's priority (p1 highest urgency .. p4 someday)."
   [runtime id priority]
@@ -435,30 +428,6 @@
           updated (update-card! runtime strand attrs nil)]
       {:operation "kanban claim"
        :card (entity-projection updated)})))
-
-(defn review!
-  "Move a claimed kanban card into the in_review lane."
-  [runtime id]
-  (let [strand (require-lane! "mark in_review" (card-strand runtime (require-non-blank! :id id)) "claimed")
-        updated (update-card! runtime strand {lane-attr "in_review"} nil)]
-    {:operation "kanban review"
-     :card (entity-projection updated)}))
-
-(defn production!
-  "Move an in_review card into optional post-merge observation or release coordination."
-  [runtime id]
-  (let [strand (require-lane! "mark in_production" (card-strand runtime (require-non-blank! :id id)) "in_review")
-        updated (update-card! runtime strand {lane-attr "in_production"} nil)]
-    {:operation "kanban production" :card (entity-projection updated)}))
-
-(defn rework!
-  "Move an in_review or in_production kanban card back to claimed for rework."
-  [runtime id]
-  (let [card (card-strand runtime (require-non-blank! :id id))
-        strand (require-lane! "rework" card (if (= "in_production" (attr-value card lane-attr)) "in_production" "in_review"))
-        updated (update-card! runtime strand {lane-attr "claimed"} nil)]
-    {:operation "kanban rework"
-     :card (entity-projection updated)}))
 
 (defn- direct-feature-children
   "Return an epic's direct `parent-of` children that are feature cards, sorted by id.
@@ -810,9 +779,9 @@
 (defn- note-target
   "Return id's kanban card or task strand, failing loudly for anything else.
 
-  Notes target the work tier only: progress notes belong on the doing-task
-  (the resume read) and card notes stay a lean handover trail. Any other
-  strand is a wrong target."
+  Notes target the work tier only: user-visible notes belong on an epic or
+  feature, while task notes carry the development log and resume read.
+  Any other strand is a wrong target."
   [runtime id]
   (let [strand (or (weaver/show runtime id)
                    (throw (ex-info "Kanban strand not found" {:id id})))]
@@ -839,7 +808,8 @@
   hint, so concurrent agents never race a read-merge-write cycle. Every note
   keeps its own timestamp and attribution. Note the doing-task as you go — that
   is what `kanban card <id>` surfaces as each task's `:latest-note` — and keep
-  card notes to lean handover summaries. `--kind` stamps the open `note/kind`
+  important user-visible notes on the epic or feature, not only in the task's
+  development log. `--kind` stamps the open `note/kind`
   view hint (blessed values: activity, decision, review-dump, summary). A
   task note reports its owning card alongside the task when one parents it.
 
@@ -1272,14 +1242,15 @@
   (fmt/reflow "
     |Kanban cards are the user-to-agent work board. Every card is a feature by default;
     |an epic is a grouping card whose direct feature children use parent-of. Active cards
-    |move through refinement (awaiting explicit promote), pending (the actionable queue),
+    |move through refinement (awaiting explicit promotion), pending (the actionable queue),
     |claimed, and in_review before finish closes them with an explicit outcome. Epics are
-    |never claimed: finish them from refinement or pending; done requires closed feature
-    |children, while abandoned reversibly closes still-open children.
-    |After review, `kanban production ID` optionally moves a merged feature to
-    |in_production while deployment validation, observation, or coordinated release
-    |work remains. `finish` closes it; `rework` returns it to claimed. Direct review
-    |to finish remains available: no guard requires the production lane.
+    |never claimed: finish them from refinement or pending; both done and abandoned
+    |cascade-close open feature children and tasks, but only abandoned is reversible.
+    |Use `strand update ID --attr kanban/lane=LANE` for simple lane changes:
+    |pending for promotion, in_review for review, claimed for rework, and optionally
+    |in_production after merge while deployment validation, observation, or coordinated
+    |release work remains. `finish` closes the card. Direct review to finish remains
+    |available: no guard requires the production lane.
     |
     |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
     |someday work. `kanban next` returns the highest-priority pending feature, oldest
@@ -1289,8 +1260,9 @@
     |kanban/source, kanban/task, kanban/run-id, and kanban/abandon-restore-lane.
     |Labels are open kanban.label/<slug>=true markers rather than a fixed vocabulary.
     |
-    |Kanban owns board projections and guarded card transitions: add, board, card, next,
-    |priority, label, promote, claim, task, note, review, production, rework, finish, and reopen.
+    |Kanban owns board projections and structured card operations: add, board, card, next,
+    |priority, label, claim, task, note, finish, and reopen. Simple lane changes use
+    |Batteries update instead of Kanban transition wrappers.
     |`kanban-batch` atomically creates pending feature cards from items with key, title,
     |optional body and priority, and sibling-key or durable-id depends-on references.
     |Use Batteries add, update, note, list, ready, show, query, and weave for the generic
@@ -1305,30 +1277,41 @@
     |and the kanban queries through `strand query list` and `strand query explain <name>`.
     |Every direct user request is a feature card; group related cards under an epic only
     |when that grouping is useful. Half-formed ideas belong in refinement and require an
-    |explicit promote. Every agent doing direct user work works under a claimed feature
+    |explicit promotion with `strand update CARD_ID --attr kanban/lane=pending`.
+    |Every agent doing direct user work works under a claimed feature
     |card: claim the pending card with owner and branch before starting.
     |
     |Before execution, decompose the feature into tasks. Tasks are the driveable slices;
     |the card remains the audit root, and depends-on edges define the concurrency DAG.
     |Put other execution work beneath the card with Batteries add and update, and relate
-    |blockers with depends-on.
+    |blockers with depends-on. Complete each task as you go with
+    |`strand update TASK_ID --state closed`; do not leave completed tasks open until
+    |the feature finishes. Finish cascades mark remaining open tasks as unactioned,
+    |not completed work.
     |
-    |Record decisions, progress, and gotchas as they happen on the task being driven; its
-    |latest note is the resume read. Keep card notes to lean handover summaries, and put
-    |review findings or command output on a task note rather than the card. Every branch
-    |has exactly one active work root stamped with branch and owner (and worktree when it
-    |exists); its children inherit that context through parent-of.
+    |Use task notes as a development log for implementation details, command output,
+    |detailed review findings, and gotchas; the latest note is the resume read.
+    |Important user-visible notes must always be on the epic or feature, not only
+    |on a task users will rarely see. Summarize decisions, milestones, blockers,
+    |review outcomes, and handovers there; keep the detailed devlog on the task.
+    |Every branch has exactly one active work root stamped with branch and owner
+    |(and worktree when it exists); its children inherit that context through parent-of.
     |
     |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
     |list` or `strand ready` with the registered kanban queries for generic selection.
-    |Move claimed work to review, rework it when necessary, and finish only after its
-    |declared outcome is known. Once reviewed work is merged to main and its outcome
-    |is satisfied, finish it directly. Use `kanban production ID` from in_review only
-    |when post-merge deployment validation, a settling period, or coordinated release
-    |work remains (including related changes in a wider epic). This optional choice
-    |is agent policy, never a mandatory completion guard. Record what remains and
-    |the completion criterion in a task note; finish when satisfied, or rework back
-    |to claimed if implementation changes are needed."))
+    |Move claimed work to review with `strand update CARD_ID --attr kanban/lane=in_review`.
+    |For rework, use `strand update CARD_ID --attr kanban/lane=claimed`.
+    |These are direct attribute patches, not guarded transitions: inspect the current
+    |card and follow the lane discipline. Keep using `strand kanban claim`,
+    |`strand kanban finish`, and `strand kanban reopen` for their structured behavior.
+    |Finish only after the declared outcome is known. Once reviewed work is merged
+    |to main and its outcome is satisfied, finish it directly. From in_review, use
+    |`strand update CARD_ID --attr kanban/lane=in_production` only when post-merge
+    |deployment validation, a settling period, or coordinated release work remains
+    |(including related changes in a wider epic). This optional choice is agent policy,
+    |never a mandatory completion guard. Record what remains and the completion
+    |criterion on the feature or epic, with detailed observations on a task;
+    |finish when satisfied, or update back to claimed if implementation changes are needed."))
 
 (def ^:private kanban-arg-spec
   "Declared command surface for the `kanban` op."
@@ -1379,9 +1362,6 @@
                 :positionals [{:name :id :required? true :doc "Kanban card id."}
                               {:name :priority :required? true :doc "Priority: p1, p2, p3, or p4."}]
                 :hook-class :mutating :deadline-class :standard}
-    "promote" {:doc "Move a refinement card into the pending lane."
-               :positionals [{:name :id :required? true :doc "Kanban card id."}]
-               :hook-class :mutating :deadline-class :standard}
     "claim" {:doc "Claim a pending feature card."
              :flags {:owner {:doc "Claimant name (required by handler)."}
                      :branch {:doc "Work branch (required by handler)."}
@@ -1389,7 +1369,7 @@
                      :run-id {:doc "Optional opaque run pointer (stamps kanban/run-id)."}}
              :positionals [{:name :id :required? true :doc "Kanban card id."}]
              :hook-class :mutating :deadline-class :standard}
-    "note" {:doc "Append a note to a card or task; note the doing-task as you go."
+    "note" {:doc "Append a note: user-visible updates on epics/features, development logs on tasks."
             :flags {:by {:doc "Note attribution."}
                     :kind {:doc "Open note/kind view hint: activity, decision, review-dump, summary."}}
             :positionals [{:name :id :required? true :doc "Kanban card or task id."}
@@ -1410,17 +1390,8 @@
              "list" {:doc "List a feature card's tasks."
                      :positionals [{:name :feature :required? true :doc "Feature card id."}]
                      :hook-class :read :deadline-class :standard}}}
-    "review" {:doc "Move a claimed card into the in_review lane."
-              :positionals [{:name :id :required? true :doc "Kanban card id."}]
-              :hook-class :mutating :deadline-class :standard}
-    "production" {:doc "Move an in_review card into optional in_production observation or release coordination."
-                  :positionals [{:name :id :required? true :doc "Kanban card id."}]
-                  :hook-class :mutating :deadline-class :standard}
-    "rework" {:doc "Move an in_review or in_production card back to claimed for rework."
-              :positionals [{:name :id :required? true :doc "Kanban card id."}]
-              :hook-class :mutating :deadline-class :standard}
     "finish" {:doc (str "Close a card with an explicit outcome. Features close from claimed/in_review/in_production; "
-                        "epics close from refinement/pending (done requires closed feature children, "
+                        "epics close from refinement/pending (open children cascade-close as unactioned; "
                         "abandoned cascades reversibly).")
               :flags {:outcome {:doc "Closed outcome; defaults to done. For an epic: done|abandoned."}}
               :positionals [{:name :id :required? true :doc "Kanban card id."}]
@@ -1456,13 +1427,9 @@
       ["label" "add"] (label-add! runtime (:id args) (:labels args))
       ["label" "rm"] (label-rm! runtime (:id args) (:labels args))
       ["label" "list"] (label-list runtime)
-      ["promote"] (promote! runtime (:id args))
       ["claim"] (claim! runtime (:id args) flags)
       ["task" "add"] (task-op runtime args flags)
       ["task" "list"] (task-op runtime args flags)
-      ["review"] (review! runtime (:id args))
-      ["production"] (production! runtime (:id args))
-      ["rework"] (rework! runtime (:id args))
       ["note"] (note! runtime (:id args) (str/join " " (:text args)) flags)
       ["finish"] (finish! runtime (:id args) flags)
       ["reopen"] (reopen! runtime (:id args)))))

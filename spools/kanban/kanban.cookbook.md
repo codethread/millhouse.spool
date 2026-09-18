@@ -7,16 +7,19 @@ When deployment validation, a settling period, or a coordinated release (such as
 several features in an epic) remains, agents may instead use:
 
 ```sh
-strand kanban production CARD_ID
-strand kanban note TASK_ID "Observe deployment; finish after the release checks pass."
+strand update CARD_ID --attr kanban/lane=in_production
+strand kanban note CARD_ID "Observe deployment; finish after the release checks pass."
+strand kanban note TASK_ID "Deployment observations and detailed check output go here."
 strand kanban finish CARD_ID
 ```
 
-`production` moves an `in_review` card to `in_production`. It is optional agent
+The update moves an `in_review` card to `in_production`. It is optional agent
 policy, not a required completion guard. Record the remaining work and completion
-criterion on a task. If implementation changes are needed, use
-`strand kanban rework CARD_ID` to return to `claimed`. An epic still requires its
-feature children to be closed before it can finish with `done`.
+criterion on the feature or epic where users will see it. Keep detailed observations
+in the task devlog and close each completed task with `strand update TASK_ID --state closed`.
+If implementation changes are needed, use `strand update CARD_ID --attr kanban/lane=claimed`.
+Finishing an epic with `done` cascade-closes open feature children and tasks as
+`unactioned`; it does not mark their work as completed.
 
 Compositions for running user↔agent work through the Kanban board. The
 [contract](./README.md) defines lanes, attributes, and consumer-visible
@@ -48,10 +51,17 @@ Validation:
 Next: hand the branch to review.
 NOTE
 
-strand kanban review "$card"
+strand update "$impl" --state closed
+strand update "$docs" --attr owner=claude
+# Once documentation is complete:
+strand update "$docs" --state closed
+
+strand update "$card" --attr kanban/lane=in_review
 # If review requests changes:
-strand kanban rework "$card"
-strand kanban review "$card"
+strand kanban note "$card" "Review found changes needed before landing." --kind summary
+strand update "$card" --attr kanban/lane=claimed
+# After addressing the findings:
+strand update "$card" --attr kanban/lane=in_review
 
 strand kanban note "$card" "Handover: implementation reviewed and ready to land." \
   --by claude --kind summary
@@ -60,12 +70,19 @@ strand kanban finish "$card" --outcome done
 
 **Why this shape.** The claim makes the work discoverable by branch and keeps
 two agents from selecting the same pending feature. Tasks make a resumable
-doing-task and reuse the same dependency DAG that determines readiness. Notes
-on the task retain progress and bulk findings without turning the card into a
-log; `board` and `card` surface the newest note for a cold-start handoff.
-Review is a visible lane transition, and the final card note records the
+doing-task and reuse the same dependency DAG that determines readiness. Closing
+tasks as they complete unblocks dependent work immediately. Task notes are the
+devlog for details and bulk findings; `board` and `card` surface the newest note
+for a cold-start handoff. Important user-visible notes always belong on the epic
+or feature, not only on tasks users will rarely see. Review is a visible lane
+update, and the final card note records the
 handoff after the branch is ready rather than pretending that a closed card is
 self-explanatory.
+
+Simple lane changes are direct `strand update` patches, not guarded Kanban
+transitions. Inspect the current card and follow the lane discipline. Promote a
+refinement idea explicitly with `strand update CARD_ID --attr kanban/lane=pending`.
+Keep `claim`, `finish`, and `reopen` for their structured behavior.
 
 ## 2. Build a dependent backlog atomically
 
