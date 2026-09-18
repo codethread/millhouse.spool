@@ -504,11 +504,15 @@
     (fn [origin target _]
       (let [reserved (identity/reserve! origin {:harness "codex"})
             bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
-            name (:identity bound)]
-        (doseq [argv [["register" (:identity reserved) "--to-weaver" "target-id"]
-                      ["register" name "--to-weaver" "missing"]
-                      ["register" name "--to-weaver" "origin-id"]
+            name (:identity bound)
+            other (:identity (identity/startup! origin {:harness "pi"
+                                                        :native-session-id "other"}))]
+        (doseq [argv [["register" (:identity reserved) "--to-weaver" "target-id"
+                       "--by-identity" (:identity reserved)]
+                      ["register" name "--to-weaver" "missing" "--by-identity" name]
+                      ["register" name "--to-weaver" "origin-id" "--by-identity" name]
                       ["register" name "--to-weaver" "target-id" "--by-identity" "missing"]
+                      ["register" name "--to-weaver" "target-id" "--by-identity" other]
                       ["receive" "missing" "--from-weaver" "origin-id"]
                       ["receive" (:identity reserved) "--from-weaver" "origin-id"]]]
           (is (some? (failure #(from-argv (if (= "receive" (first argv)) target origin) argv))))

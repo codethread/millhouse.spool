@@ -477,7 +477,7 @@
   strand identity register NAME --to-weaver WEAVER_ID --by-identity NAME
   ```
 
-  `by-identity`, when supplied, must resolve in the origin. Returns `:identity`,
+  `by-identity` must equal `NAME` and resolve in the origin. Returns `:identity`,
   destination `:strand-id`, and `:result` (`registered` or `existing`). Exact
   replay makes no changes; conflicting bindings/provenance fail. Transport errors
   propagate without automatic retry. `identity/origin-workspace` is the durable
@@ -486,7 +486,11 @@
   [runtime friendly-id to-weaver by-identity]
   (require-valid! ::identity friendly-id "register! requires an identity name")
   (require-valid! ::identity to-weaver "register! requires a destination Weaver ID")
-  (when by-identity (current runtime by-identity))
+  (require-valid! ::identity by-identity "register! requires an acting identity")
+  (when-not (= friendly-id by-identity)
+    (fail! "Identity registration must be performed by the identity being registered"
+           {:identity friendly-id :by-identity by-identity}))
+  (current runtime by-identity)
   (descriptor (current runtime friendly-id) friendly-id)
   (let [rows (peers/peers)
         origin (local-peer runtime rows)
@@ -506,7 +510,7 @@
    {"register" {:doc "Register this workspace's identity in another running Weaver."
                 :hook-class :mutating :deadline-class :standard
                 :flags {:to-weaver {:type :string :required? true}
-                        :by-identity {:type :string}}
+                        :by-identity {:type :string :required? true}}
                 :positionals [{:name :friendly-id :type :string :required? true}]}
     "receive" {:doc "Verify and receive an identity from an origin Weaver (transport)."
                :hook-class :mutating :deadline-class :standard

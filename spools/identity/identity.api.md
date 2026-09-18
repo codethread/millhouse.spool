@@ -61,7 +61,7 @@ Resolve an existing identity by friendly ID, failing when absent or ambiguous.
 Function.
 
 Dispatch `strand identity` operations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L555-L568">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L559-L572">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/identity?">`identity?`</a>
 ``` clojure
@@ -106,13 +106,13 @@ Register an existing local identity in an exact destination Weaver ID.
   strand identity register NAME --to-weaver WEAVER_ID --by-identity NAME
   ```
 
-  `by-identity`, when supplied, must resolve in the origin. Returns `:identity`,
+  `by-identity` must equal `NAME` and resolve in the origin. Returns `:identity`,
   destination `:strand-id`, and `:result` (`registered` or `existing`). Exact
   replay makes no changes; conflicting bindings/provenance fail. Transport errors
   propagate without automatic retry. `identity/origin-workspace` is the durable
   lookup pointer, so an origin Weaver restart does not change the descriptor.
   Registration does not start, restart or reconfigure Weavers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L467-L500">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L467-L504">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/reserve!">`reserve!`</a>
 ``` clojure
