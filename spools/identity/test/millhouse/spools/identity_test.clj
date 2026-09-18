@@ -1,11 +1,13 @@
 (ns millhouse.spools.identity-test
   "Focused lifecycle tests for native startup identity resolution."
   (:require [clojure.java.io :as io]
+            [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.spools.identity :as identity]
             [millhouse.test-support :as test-support]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.peers.alpha :as peers]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha]))
@@ -415,3 +417,127 @@
         (is (= {:operation "identity codex-child-key"
                 :native-session-id (identity/codex-child-session-id "parent" "agent")}
                child-key))))))
+
+(defn- with-registration-world [f]
+  (test-support/with-runtime
+    (fn [origin origin-dir]
+      (test-support/with-runtime
+        (fn [target target-dir]
+          (activate-identity! origin)
+          (activate-identity! target)
+          (let [rows (atom [{:weaver-id "origin-id"
+                             :workspace (.getCanonicalPath (io/file origin-dir))
+                             :running? true}
+                            {:weaver-id "target-id"
+                             :workspace (.getCanonicalPath (io/file target-dir))
+                             :running? true}])]
+            (with-redefs [peers/peers #(deref rows)
+                          peers/call! (fn [peer op args]
+                                        (is (= "identity" op))
+                                        ;; The peer transport returns string-keyed JSON.
+                                        (json/read-str
+                                         (json/write-str
+                                          (from-argv (if (= (.getCanonicalPath (io/file origin-dir))
+                                                            (:workspace peer))
+                                                       origin target)
+                                                     (:argv args))
+                                          :key-fn #(if (keyword? %)
+                                                     (subs (str %) 1)
+                                                     (str %)))))]
+              (f origin target rows))))))))
+
+(deftest registration-verifies-origin-and-copies-only-the-descriptor
+  (with-registration-world
+    (fn [origin target rows]
+      (let [parent (identity/startup! origin {:harness "pi" :native-session-id "parent"})
+            run (weaver/add! origin {:title "run"})
+            reserved (identity/reserve! origin {:harness "codex" :model "astra"})
+            bound (identity/attach! origin {:harness "codex" :native-session-id "thread"
+                                            :reservation-id (:reservation-id reserved)
+                                            :parent-identity (:identity parent) :run-id (:id run)})
+            name (:identity bound)
+            argv ["register" name "--to-weaver" "target-id" "--by-identity" name]
+            result (from-argv origin argv)
+            record (identity/current target name)
+            baseline (graph-snapshot target)]
+        (is (= "registered" (:result result)))
+        (is (= "thread" (attr-get record :identity/native-session-id)))
+        (is (= "astra" (attr-get record :identity/model)))
+        (is (= (:workspace (first @rows)) (attr-get record :identity/origin-workspace)))
+        (is (= (:strand-id bound) (attr-get record :identity/origin-strand-id)))
+        (is (nil? (attr-get record :identity/reservation-id)))
+        (is (nil? (attr-get record :identity/reservation-state)))
+        (is (empty? (:parents baseline)))
+        (is (empty? (:runs baseline)))
+        (is (= "existing" (:result (from-argv origin argv))))
+        (is (= baseline (graph-snapshot target)))
+        (swap! rows update 0 assoc :weaver-id "origin-id-after-restart")
+        (is (= "existing" (:result (from-argv origin argv))))
+        (is (= baseline (graph-snapshot target)))
+        (is (= "recovered" (:result (identity/startup!
+                                     target {:harness "codex" :native-session-id "thread"
+                                             :identity name}))))))))
+
+(deftest registration-rejects-binding-and-origin-conflicts-without-writes
+  (doseq [conflict [:name :session :origin]]
+    (with-registration-world
+      (fn [origin target _]
+        (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+              name (:identity bound)]
+          (case conflict
+            :name (weaver/add! target {:title name
+                                       :attributes {:identity/session "true" :identity/id name
+                                                    :identity/harness "codex"
+                                                    :identity/native-session-id "another-thread"}})
+            :session (identity/startup! target {:harness "codex" :native-session-id "thread"})
+            :origin (do
+                      (identity/register! origin name "target-id" name)
+                      (weaver/update! target (:id (identity/current target name))
+                                      {:attributes {:identity/origin-strand-id "another-strand"}})))
+          (let [before (graph-snapshot target)
+                error (failure #(identity/register! origin name "target-id" name))]
+            (is (re-find #"conflicts" (ex-message error)))
+            (is (= before (graph-snapshot target)))))))))
+
+(deftest registration-preserves-and-validates-forwarded-origin
+  (with-registration-world
+    (fn [origin target _]
+      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+            name (:identity bound)
+            record-id (:id (identity/current origin name))]
+        (weaver/update! origin record-id
+                        {:attributes {:identity/origin-workspace "/original/.millstrand"
+                                      :identity/origin-strand-id "original-strand"}})
+        (identity/register! origin name "target-id" name)
+        (let [registered (identity/current target name)]
+          (is (= "/original/.millstrand"
+                 (attr-get registered :identity/origin-workspace)))
+          (is (= "original-strand" (attr-get registered :identity/origin-strand-id)))))))
+  (with-registration-world
+    (fn [origin target _]
+      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+            name (:identity bound)]
+        (weaver/update! origin (:id (identity/current origin name))
+                        {:attributes {:identity/origin-workspace "/partial/.millstrand"}})
+        (is (re-find #"incomplete registration provenance"
+                     (ex-message (failure #(identity/register! origin name "target-id" name)))))
+        (is (empty? (identities target)))))))
+
+(deftest registration-rejects-unattached-origin-and-unknown-routing
+  (with-registration-world
+    (fn [origin target _]
+      (let [reserved (identity/reserve! origin {:harness "codex"})
+            bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
+            name (:identity bound)
+            other (:identity (identity/startup! origin {:harness "pi"
+                                                        :native-session-id "other"}))]
+        (doseq [argv [["register" (:identity reserved) "--to-weaver" "target-id"
+                       "--by-identity" (:identity reserved)]
+                      ["register" name "--to-weaver" "missing" "--by-identity" name]
+                      ["register" name "--to-weaver" "origin-id" "--by-identity" name]
+                      ["register" name "--to-weaver" "target-id" "--by-identity" "missing"]
+                      ["register" name "--to-weaver" "target-id" "--by-identity" other]
+                      ["receive" "missing" "--from-weaver" "origin-id"]
+                      ["receive" (:identity reserved) "--from-weaver" "origin-id"]]]
+          (is (some? (failure #(from-argv (if (= "receive" (first argv)) target origin) argv))))
+          (is (empty? (identities target))))))))

@@ -111,6 +111,40 @@ strand identity codex-child-key PARENT_SESSION_ID AGENT_ID
 {"operation":"identity codex-child-key","native-session-id":"codex-child:v1:cGFyZW50:YWdlbnQ"}
 ```
 
+## Cross-Weaver registration
+
+An attached identity can be registered in another running Weaver without the
+caller knowing either workspace's hidden `.millstrand` path. Run the operation
+from the identity's origin workspace, choose the destination's exact current
+Weaver ID from `mill weaver list`, and attribute the mutation to the identity
+being registered:
+
+```text
+mill weaver status --json
+mill weaver list
+strand identity register vivid-clear-stoat \
+  --to-weaver TARGET_WEAVER_ID \
+  --by-identity vivid-clear-stoat
+```
+
+The origin resolves from normal Strand cwd/workspace discovery. The origin calls
+the selected destination, and the destination reads the identity back from the
+origin before writing anything. The resulting local identity contains the name,
+harness, native-session binding, optional model/thinking level, and two durable
+provenance attributes:
+
+- `identity/origin-workspace`: canonical origin workspace path
+- `identity/origin-strand-id`: identity strand ID in that workspace
+
+It does not copy parent/performed edges, reservation capabilities, delivery
+state, or a subgraph. An exact replay returns `result: existing` without a write,
+including after either Weaver restarts. A conflicting friendly name, native
+session binding, or origin pointer fails before mutation. Forwarding an already
+registered descriptor to another Weaver preserves its original provenance rather
+than replacing it with the intermediate workspace. Both Weavers must be running
+and have a version of the identity spool that exposes `register` and its internal
+`receive` transport operation; registration never starts or reloads a Weaver.
+
 ## Optional managed reservation
 
 Reservations are a compatibility path for managed callers, not a desktop
