@@ -133,8 +133,9 @@
 (def ^:private by-flag
   {:type :string
    :doc (fmt/reflow
-         "|Logical-session identity acting on the workflow item, recorded on
-          |the closed item. Required to close a gate; this command uses --by,
+         "|Logical-session identity acting on the workflow operation. Required
+          |to close a gate; stored as the outcome actor when closing an item or
+          |as workflow/deferred-by when filling a defer. This command uses --by,
           |not the agent surface's --by-identity.")})
 
 (def ^:private workflow-arg-spec

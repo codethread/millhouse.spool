@@ -87,7 +87,7 @@ identity flags to one command:
 | --- | --- | --- |
 | `strand kanban claim` | `--owner ID` | Current owner of the card/work root (`owner`) |
 | `strand kanban note` | `--by ID` | Author attribution on the note (`note/by`) |
-| `strand workflow complete`, `next`, `choose`, `defer` | `--by ID` | Actor closing a workflow item (`workflow/outcome-by`) when recorded |
+| `strand workflow complete`, `next`, `choose`, `defer` | `--by ID` | Workflow actor: `workflow/outcome-by` when closing an item, `workflow/deferred-by` when filling a defer |
 | `strand agent ...` and `strand identity register` | `--by-identity ID` | Identity authorizing an agent or identity operation |
 
 Existing `owner` and `note/by` values remain readable. These are intentional
