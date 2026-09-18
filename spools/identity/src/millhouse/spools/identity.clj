@@ -3,8 +3,10 @@
   (:require [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.millstrand.alpha :as millstrand]
+            [millstrand.api.peers.alpha :as peers]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
             [millstrand.api.weaver.alpha :as weaver])
   (:import [java.io RandomAccessFile]
@@ -384,11 +386,133 @@
         encode #(.encodeToString encoder (.getBytes ^String % StandardCharsets/UTF_8))]
     (str "codex-child:v1:" (encode parent-session-id) ":" (encode agent-id))))
 
+(defn- running-peer [rows matches description]
+  (let [found (filterv matches rows)]
+    (when-not (and (= 1 (count found)) (:running? (first found)))
+      (fail! "Identity registration requires one running Weaver"
+             {:selector description :matches (mapv :weaver-id found)}))
+    (first found)))
+
+(defn- peer-by-id [rows weaver-id]
+  (running-peer rows #(= weaver-id (:weaver-id %)) {:weaver-id weaver-id}))
+
+(defn- local-peer [runtime rows]
+  (let [config-dir (get-in runtime [:metadata :config-dir])]
+    (require-valid! ::identity config-dir "Identity registration requires a selected workspace")
+    (let [workspace (.getCanonicalPath (io/file config-dir))]
+      (running-peer rows #(= workspace (.getCanonicalPath (io/file (:workspace %))))
+                    {:workspace workspace}))))
+
+(def ^:private descriptor-keys
+  [:identity/session :identity/id :identity/harness :identity/native-session-id
+   :identity/model :identity/thinking-level])
+
+(defn- descriptor [record friendly-id]
+  (when-not (and (identity? record)
+                 (= friendly-id (attr-get record :identity/id))
+                 (s/valid? ::identity (:id record))
+                 (s/valid? ::harness (attr-get record :identity/harness))
+                 (s/valid? ::native-session-id (attr-get record :identity/native-session-id))
+                 (not= "reserved" (attr-get record :identity/reservation-state)))
+    (fail! "Origin identity must have an attached native session"
+           {:identity friendly-id :strand-id (:id record)}))
+  (into {} (keep (fn [key]
+                   (when-some [value (attr-get record key)]
+                     [key value]))) descriptor-keys))
+
+(defn- receive-under-lock! [runtime friendly-id attributes]
+  (let [matches (by-friendly-id runtime friendly-id)
+        existing (first matches)
+        native (unique-native-binding runtime (:identity/harness attributes)
+                                      (:identity/native-session-id attributes))]
+    (when (or (< 1 (count matches))
+              (and native (not= (:id native) (:id existing)))
+              (and existing
+                   (or (= "reserved" (attr-get existing :identity/reservation-state))
+                       (not-every? (fn [[key value]] (= value (attr-get existing key)))
+                                   attributes))))
+      (fail! "Identity registration conflicts with an existing binding or origin"
+             {:identity friendly-id :matches (mapv :id matches)
+              :native-strand-id (:id native)}))
+    (let [record (or existing
+                     (mutate-identity! runtime
+                                       {:create {:title friendly-id :attributes attributes}}))]
+      {:identity friendly-id :strand-id (:id record)
+       :result (if existing "existing" "registered")})))
+
+(defn receive!
+  "Receive an identity from an exact running origin Weaver ID.
+
+  Transport counterpart to `register!`: fetches `identity show` directly from
+  that peer, validates its attached native binding, then atomically creates a
+  local descriptor under the identity guard. No caller-supplied descriptor is
+  trusted. Copies only session/name/harness/native ID, optional model/thinking,
+  and the durable origin workspace and strand ID. Edges and reservations stay
+  local. Conflicting names, sessions or origin pointers fail without writes."
+  [runtime friendly-id from-weaver]
+  (require-valid! ::identity friendly-id "receive! requires an identity name")
+  (require-valid! ::identity from-weaver "receive! requires an origin Weaver ID")
+  (let [rows (peers/peers)
+        origin (peer-by-id rows from-weaver)
+        target (local-peer runtime rows)]
+    (when (= (:workspace origin) (:workspace target))
+      (fail! "Identity registration requires a different destination Weaver" {}))
+    (let [record (walk/keywordize-keys
+                  (peers/call! origin "identity" {:argv ["show" friendly-id]}))
+          attributes (assoc (descriptor record friendly-id)
+                            :identity/origin-workspace (:workspace origin)
+                            :identity/origin-strand-id (:id record))]
+      (with-identity-guard runtime #(receive-under-lock! runtime friendly-id attributes)))))
+
+(defn register!
+  "Register an existing local identity in an exact destination Weaver ID.
+
+  Run from the origin workspace; Strand owns cwd/workspace discovery. Select
+  the destination ID from `mill weaver list`. Both Weavers must be running with
+  this identity operation loaded. The destination reads back the origin binding
+  before writing; same-host peer discovery is the trust boundary, not user
+  authentication. No files, graph edges or reservation capabilities transfer.
+
+  ```text
+  strand identity register NAME --to-weaver WEAVER_ID --by-identity NAME
+  ```
+
+  `by-identity`, when supplied, must resolve in the origin. Returns `:identity`,
+  destination `:strand-id`, and `:result` (`registered` or `existing`). Exact
+  replay makes no changes; conflicting bindings/provenance fail. Transport errors
+  propagate without automatic retry. `identity/origin-workspace` is the durable
+  lookup pointer, so an origin Weaver restart does not change the descriptor.
+  Registration does not start, restart or reconfigure Weavers."
+  [runtime friendly-id to-weaver by-identity]
+  (require-valid! ::identity friendly-id "register! requires an identity name")
+  (require-valid! ::identity to-weaver "register! requires a destination Weaver ID")
+  (when by-identity (current runtime by-identity))
+  (descriptor (current runtime friendly-id) friendly-id)
+  (let [rows (peers/peers)
+        origin (local-peer runtime rows)
+        target (peer-by-id rows to-weaver)]
+    (when (= (:workspace origin) (:workspace target))
+      (fail! "Identity registration requires a different destination Weaver" {}))
+    (dissoc
+     (walk/keywordize-keys
+      (peers/call! target "identity"
+                   {:argv ["receive" friendly-id "--from-weaver" (:weaver-id origin)]}))
+     :operation)))
+
 (def ^:private identity-arg-spec
   {:op "identity"
    :doc "Resolve and inspect logical native-session identities."
    :subcommands
-   {"startup" {:doc "Resolve identity from an actual native session."
+   {"register" {:doc "Register this workspace's identity in another running Weaver."
+                :hook-class :mutating :deadline-class :standard
+                :flags {:to-weaver {:type :string :required? true}
+                        :by-identity {:type :string}}
+                :positionals [{:name :friendly-id :type :string :required? true}]}
+    "receive" {:doc "Verify and receive an identity from an origin Weaver (transport)."
+               :hook-class :mutating :deadline-class :standard
+               :flags {:from-weaver {:type :string :required? true}}
+               :positionals [{:name :friendly-id :type :string :required? true}]}
+    "startup" {:doc "Resolve identity from an actual native session."
                :hook-class :mutating :deadline-class :standard
                :flags {:model {:type :string}
                        :thinking-level {:type :string}
@@ -433,6 +557,8 @@
   {:arg-spec identity-arg-spec}
   [{:op/keys [runtime args]}]
   (case (first (:subcommand args))
+    "register" (register! runtime (:friendly-id args) (:to-weaver args) (:by-identity args))
+    "receive" (receive! runtime (:friendly-id args) (:from-weaver args))
     "startup" (startup! runtime (select-keys args startup-request-keys))
     "reserve" (reserve! runtime (select-keys args reserve-request-keys))
     "attach" (attach! runtime (select-keys args attach-request-keys))
