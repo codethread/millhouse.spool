@@ -178,9 +178,9 @@
 
 (defn- instruction [friendly-id]
   (str "Your Millstrand identity is " friendly-id
-       ". Use " friendly-id
-       " for identity-bearing operations; pass `--by-identity " friendly-id
-       "` explicitly. Do not invent another identity."))
+       ". Use it as `--owner " friendly-id "` for `kanban claim`, `--by "
+       friendly-id "` for Kanban notes and workflow mutations, and `--by-identity "
+       friendly-id "` for agent operations. Inspect live help; never pass an unsupported flag or invent another identity."))
 
 (defn- startup-result [identity result]
   (let [friendly-id (attr-get identity :identity/id)]

@@ -69,13 +69,30 @@ without the dispatcher-added `operation` key):
   "identity": "warm-silver-lemur",
   "strand-id": "abc12",
   "result": "minted",
-  "instruction": "Your Millstrand identity is warm-silver-lemur. Use warm-silver-lemur for identity-bearing operations; pass `--by-identity warm-silver-lemur` explicitly. Do not invent another identity."
+  "instruction": "Your Millstrand identity is warm-silver-lemur. Use it as `--owner warm-silver-lemur` for `kanban claim`, `--by warm-silver-lemur` for Kanban notes and workflow mutations, and `--by-identity warm-silver-lemur` for agent operations. Inspect live help; never pass an unsupported flag or invent another identity."
 }
 ```
 
 `result` is one of `minted`, `recovered`, or `attached`. The instruction is the
 canonical context for native adapters. Codex supplies it as developer context;
 Pi composes it into its owned effective system prompt.
+
+## Actor attribution
+
+One friendly identity is reused across the Strand surface, but each command
+names the domain role it records. Do not substitute the flags or pass several
+identity flags to one command:
+
+| Surface | Flag | Stored meaning |
+| --- | --- | --- |
+| `strand kanban claim` | `--owner ID` | Current owner of the card/work root (`owner`) |
+| `strand kanban note` | `--by ID` | Author attribution on the note (`note/by`) |
+| `strand workflow complete`, `next`, `choose`, `defer` | `--by ID` | Actor closing a workflow item (`workflow/outcome-by`) when recorded |
+| `strand agent ...` and `strand identity register` | `--by-identity ID` | Identity authorizing an agent or identity operation |
+
+Existing `owner` and `note/by` values remain readable. These are intentional
+domain distinctions, not compatibility aliases: use `strand help <command>`
+for the exact accepted flags and fail rather than guessing.
 
 `--identity NAME` is a session-scoped reference, not a rename or adoption
 request. `NAME` must resolve uniquely and already be bound to the exact harness

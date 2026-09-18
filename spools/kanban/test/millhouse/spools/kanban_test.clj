@@ -332,6 +332,35 @@
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
 
+(deftest kanban-actor-flags-remain-domain-specific
+  ;; The identity startup instruction is consumed by cold agents. Keep its
+  ;; command-specific terms truthful: owner claims responsibility; by authors
+  ;; notes; unsupported universal aliases must fail before any mutation.
+  (with-kanban
+    (fn [rt]
+      (let [entry (weaver/resolve-op rt 'kanban)
+            claim-flags (get-in entry [:arg-spec :subcommands "claim" :flags])
+            note-flags (get-in entry [:arg-spec :subcommands "note" :flags])
+            claim-help (weaver/op! rt 'help ["kanban" "claim"])
+            note-help (weaver/op! rt 'help ["kanban" "note"])
+            help-flag (fn [help flag]
+                        (some #(when (= flag (:name %)) %) (get-in help [:node :invocation :flags])))
+            card-id (get-in (op! rt "add" "Attributed work") [:card :id])]
+        (is (str/includes? (get-in claim-flags [:owner :doc]) "Logical-session identity"))
+        (is (str/includes? (get-in note-flags [:by :doc]) "Logical-session identity"))
+        (is (str/includes? (:doc (help-flag claim-help "owner")) "Logical-session identity"))
+        (is (str/includes? (:doc (help-flag note-help "by")) "Logical-session identity"))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
+                              (op! rt "claim" card-id "--by" "worker" "--branch" "branch")))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
+                              (op! rt "claim" card-id "--by-identity" "worker" "--branch" "branch")))
+        (op! rt "claim" card-id "--owner" "worker" "--branch" "branch")
+        (is (= "worker" (get-in (weaver/show rt card-id) [:attributes :owner])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
+                              (op! rt "note" card-id "No alias" "--by-identity" "worker")))
+        (let [noted (op! rt "note" card-id "Attributed note" "--by" "worker")]
+          (is (= "worker" (get-in noted [:strand :attributes :note/by]))))))))
+
 (deftest fill-wraps-prose-and-preserves-indented-blocks
   (testing "flush-left lines soft-wrap; a bare bar starts a new item; an indented line keeps the item verbatim"
     (is (= ["Prose that is long enough to wrap across two source lines."

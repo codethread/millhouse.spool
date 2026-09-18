@@ -104,5 +104,14 @@ when deliberately defining and selecting a consumer-owned declaration together.
 The `doc` argument may be a computed Clojure expression rather than a string
 literal; its evaluated result must be a non-blank string.
 
+## Actor attribution
+
+Workflow mutations that record an actor (`complete`, `next`, `choose`, and
+`defer`) use `--by ID`, where `ID` is the caller's logical-session identity.
+This matches Kanban note authorship and deliberately differs from Kanban claim
+ownership (`--owner ID`) and Harnesses agent operations (`--by-identity ID`).
+Read `strand help workflow <verb>` for whether a particular action records an
+actor; do not pass an unsupported alias.
+
 See the focused documentation above for graph composition, routing, run driving,
 executor request contracts, recovery, discovery, and reusable workflow inputs.

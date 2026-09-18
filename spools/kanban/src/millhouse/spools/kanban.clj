@@ -402,9 +402,11 @@
 (defn claim!
   "Claim a pending feature card, stamping the work-root attributes.
 
-  `--owner` and `--branch` are mandatory so every claimed card answers who is
-  driving it and on which branch; `--worktree` is optional (direct work in the
-  main checkout has no separate worktree). `--run-id` optionally stamps an
+  `--owner` is the logical-session identity owning this work root; it and
+  `--branch` are mandatory so every claimed card answers who is driving it and
+  on which branch. Notes intentionally use `--by`, not `--owner`; `--worktree`
+  is optional (direct work in the main checkout has no separate worktree).
+  `--run-id` optionally stamps an
   opaque run pointer for agents to query through their workflow directly. Epics
   group work and are never claimed themselves.
 
@@ -1363,14 +1365,14 @@
                               {:name :priority :required? true :doc "Priority: p1, p2, p3, or p4."}]
                 :hook-class :mutating :deadline-class :standard}
     "claim" {:doc "Claim a pending feature card."
-             :flags {:owner {:doc "Claimant name (required by handler)."}
+             :flags {:owner {:doc "Logical-session identity claiming the card (required by handler)."}
                      :branch {:doc "Work branch (required by handler)."}
                      :worktree {:doc "Optional worktree path."}
                      :run-id {:doc "Optional opaque run pointer (stamps kanban/run-id)."}}
              :positionals [{:name :id :required? true :doc "Kanban card id."}]
              :hook-class :mutating :deadline-class :standard}
     "note" {:doc "Append a note: user-visible updates on epics/features, development logs on tasks."
-            :flags {:by {:doc "Note attribution."}
+            :flags {:by {:doc "Logical-session identity authoring the note; claims intentionally use --owner."}
                     :kind {:doc "Open note/kind view hint: activity, decision, review-dump, summary."}}
             :positionals [{:name :id :required? true :doc "Kanban card or task id."}
                           {:name :text

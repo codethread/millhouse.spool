@@ -133,8 +133,9 @@
 (def ^:private by-flag
   {:type :string
    :doc (fmt/reflow
-         "|Who is acting, recorded on the closed item. Required to close a
-          |gate.")})
+         "|Logical-session identity acting on the workflow item, recorded on
+          |the closed item. Required to close a gate; this command uses --by,
+          |not the agent surface's --by-identity.")})
 
 (def ^:private workflow-arg-spec
   "Declared command surface for the `workflow` op."
@@ -504,8 +505,9 @@
             |control, and `strand workflow choices <run-id>` projects a ready
             |checkpoint's input contracts before choose. Pass --step when the
             |selected verb says the frontier is ambiguous, and always to close
-            |a gate, which also needs --by. If a mutation fails as
-            |workflow/frontier-stale, another worker moved the run: re-read
+            |a gate, which also needs --by with your logical-session identity
+            |(not --by-identity, which belongs to strand agent). If a mutation
+            |fails as workflow/frontier-stale, another worker moved the run: re-read
             |`strand workflow ready <run-id>` and act on what is there now.")})
 
 (def ^:private workflow-glossary

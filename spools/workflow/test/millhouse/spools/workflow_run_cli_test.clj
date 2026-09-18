@@ -822,7 +822,10 @@
     (fn [rt _]
       (activate-cli! rt)
       (let [entry (weaver/resolve-op rt 'workflow)
-            leaf (fn [verb] (get-in entry [:arg-spec :subcommands verb]))]
+            leaf (fn [verb] (get-in entry [:arg-spec :subcommands verb]))
+            complete-help (weaver/op! rt 'help ["workflow" "complete"])
+            by-help (some #(when (= "by" (:name %)) %)
+                          (get-in complete-help [:node :invocation :flags]))]
         (doseq [verb ["start" "complete" "choose" "next" "defer"]]
           (is (= :mutating (:hook-class (leaf verb))) verb)
           (is (= :standard (:deadline-class (leaf verb))) verb))
@@ -831,6 +834,11 @@
             "choices is checkpoint discovery: a read, never a mutation")
         (is (= [:read :unbounded] ((juxt :hook-class :deadline-class) (leaf "await")))
             "await blocks by design and writes nothing")
+        (is (re-find #"Logical-session identity"
+                     (get-in (leaf "complete") [:flags :by :doc])))
+        (is (re-find #"not the agent surface's --by-identity"
+                     (get-in (leaf "complete") [:flags :by :doc])))
+        (is (re-find #"not the agent surface's --by-identity" (:doc by-help)))
         (is (= #{"list" "show" "executors" "start" "ready" "choices" "complete"
                  "choose" "next" "defer" "await"}
                (set (keys (:subcommands (:arg-spec entry))))))
@@ -907,7 +915,9 @@
           (is (thrown? clojure.lang.ExceptionInfo
                        (parse ["dispatch" "r1" "--workflow" "solo"])))
           (is (thrown? clojure.lang.ExceptionInfo (parse ["ready" "r1" "--limit" "5"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["complete" "r1" "--notes" "done"]))))
+          (is (thrown? clojure.lang.ExceptionInfo (parse ["complete" "r1" "--notes" "done"])))
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
+                                (parse ["complete" "r1" "--by-identity" "worker"]))))
         (testing "argv reaches the engine through the handler"
           (is (= ["Do the work"]
                  (mapv :title (:ready (invoke (parse ["start" "run-argv" "--workflow" "solo"]))))))

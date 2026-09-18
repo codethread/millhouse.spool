@@ -36,23 +36,24 @@ tasks, note the doing-task as work progresses, then expose review and finish.
 
 ```sh
 card=$(strand kanban next | jq -r '.next.id')
-strand kanban claim "$card" --owner claude --branch kanban-spool
+# Use the same logical-session identity for each domain-specific actor flag.
+strand kanban claim "$card" --owner "$MILLSTRAND_AGENT_ID" --branch kanban-spool
 
 impl=$(strand kanban task add "$card" "Implement the change" | jq -r '.task.id')
 docs=$(strand kanban task add "$card" "Document the change" --depends-on "$impl" \
   | jq -r '.task.id')
-strand update "$impl" --attr owner=claude
+strand update "$impl" --attr owner="$MILLSTRAND_AGENT_ID"
 
 strand kanban note "$impl" "Implementation started; tests are next." \
-  --by claude --kind activity
-strand --stdin kanban note "$impl" :stdin --by claude --kind review-dump <<'NOTE'
+  --by "$MILLSTRAND_AGENT_ID" --kind activity
+strand --stdin kanban note "$impl" :stdin --by "$MILLSTRAND_AGENT_ID" --kind review-dump <<'NOTE'
 Validation:
 - clojure -M:test
 Next: hand the branch to review.
 NOTE
 
 strand update "$impl" --state closed
-strand update "$docs" --attr owner=claude
+strand update "$docs" --attr owner="$MILLSTRAND_AGENT_ID"
 # Once documentation is complete:
 strand update "$docs" --state closed
 
@@ -64,12 +65,15 @@ strand update "$card" --attr kanban/lane=claimed
 strand update "$card" --attr kanban/lane=in_review
 
 strand kanban note "$card" "Handover: implementation reviewed and ready to land." \
-  --by claude --kind summary
+  --by "$MILLSTRAND_AGENT_ID" --kind summary
 strand kanban finish "$card" --outcome done
 ```
 
-**Why this shape.** The claim makes the work discoverable by branch and keeps
-two agents from selecting the same pending feature. Tasks make a resumable
+**Why this shape.** The same logical-session identity is supplied under the
+flag each domain owns: `--owner` claims responsibility for the card, while
+`--by` attributes a note. `--by-identity` is not a Kanban flag; it belongs to
+`strand agent` operations. The claim makes the work discoverable by branch and
+keeps two agents from selecting the same pending feature. Tasks make a resumable
 doing-task and reuse the same dependency DAG that determines readiness. Closing
 tasks as they complete unblocks dependent work immediately. Task notes are the
 devlog for details and bulk findings; `board` and `card` surface the newest note
