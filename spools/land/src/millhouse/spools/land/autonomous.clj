@@ -45,7 +45,9 @@
      1. Resolve the canonical root with `wktree root` from {worktree}; use its
         .millstrand workspace explicitly for every subsequent strand command.
         Read card {card} for auto-run/workflow-run-id and auto-run/run-id. Verify
-        the latter is YOUR current Harnesses run; if not, stop for intervention.
+        the latter is YOUR current Harnesses run; if not, stop BEFORE accepting
+        a finisher and ask the coordinator to reconcile the authorized recovery
+        worker receipt. Do not silently wait on the old run or rewrite it yourself.
         Inspect that delivery run's ready frontier and its root with `strand
         subgraph ROOT_ID`. Locate the separate dependent step with
         auto-run/role=finisher and auto-run/card={card}. It must be unique.
@@ -81,8 +83,21 @@
      a recovery worker, inspect the target's auto-run/role: worker recovery serves
      the card or handoff-worker step; finisher recovery serves ONLY the finisher
      step from the canonical root and must never launch another finisher. Inspect
-     the original immutable request before any new launch. An accepted but blocked
-     finisher is retained for reconciliation, not replaced or given another key.
+     the original immutable request before any new launch. When NO finisher was
+     accepted, the coordinator may authorize a worker continuation after prior
+     workers settle, record the predecessor and new run IDs with the recovery
+     reason, and update the card's auto-run/run-id to the accepted CURRENT WORKER
+     before this handoff proceeds. The dispatch receipt is not immutable lineage;
+     the recorded Harnesses requests are. The new worker must pass the receipt
+     check above before publishing a finisher. Missing reconciliation is an
+     actionable stop before the finisher target is occupied.
+
+     When a finisher WAS accepted, do not launch another worker or change its
+     frozen worker ID. The coordinator must reconcile that exact request, both
+     receipts and the interrupted worker-step completion. Only successful recorded
+     worker settlement permits completing that handoff; failed or uncertain
+     settlement requires an explicit recovery decision, never invented success.
+     An accepted but blocked finisher is retained, not replaced or given another key.
 
      {failure-policy}
    " {:card card :branch branch :worktree worktree

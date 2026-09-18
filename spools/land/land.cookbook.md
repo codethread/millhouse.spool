@@ -50,9 +50,18 @@ For authorized recovery, inspect the target role before launching: a worker
 continuation serves the card or worker step; a finisher continuation serves the
 finisher step from the canonical root and **does not delegate again**. Inspect
 accepted requests before reconciling interrupted receipt writes or worker-step
-completion. An accepted blocked run is not a missing run. Keep its immutable
-key/payload and the original worker receipt; never point the worker receipt at
-the finisher or wait on the finisher itself.
+completion. If no finisher was accepted, a coordinator can authorize a worker
+continuation after prior workers settle, record the predecessor/new run IDs and
+reason, and update the card's `auto-run/run-id` before handoff. The new worker
+must verify that receipt before publishing a finisher; otherwise it stops with a
+request for coordinator reconciliation, leaving the finisher target unoccupied.
+
+An accepted blocked finisher is not a missing run. Do not create a new worker or
+change its frozen worker ID. Keep the immutable key/payload and reconcile the
+receipts and worker-step completion only with successful recorded worker
+settlement. Failed or uncertain settlement requires an explicit recovery decision,
+not invented success. Never point the worker receipt at the finisher or wait on
+the finisher itself.
 
 Refresh affects future pours, not existing combined-step delivery runs. Do not
 repour old work. At an already-reviewed old sign-off, explicitly authorized

@@ -15,11 +15,11 @@
 
 (defn- shell-gate [id title dependencies argv timeout failure-instruction]
   (workflow/gate id title :shell
-    :depends-on dependencies
-    :attributes {"shell/argv" argv
-                 "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                 "shell/timeout-secs" timeout}
-    failure-instruction))
+                 :depends-on dependencies
+                 :attributes {"shell/argv" argv
+                              "shell/cwd" (fn [{:keys [worktree]}] worktree)
+                              "shell/timeout-secs" timeout}
+                 failure-instruction))
 
 (defn- delivery [autonomous?]
   (let [failure-instruction

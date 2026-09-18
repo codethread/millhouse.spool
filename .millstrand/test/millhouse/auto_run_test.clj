@@ -25,7 +25,7 @@
                                        %))})
      :init-clj (slurp "init.clj")
      :files (into {} (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"]]
-                      [path (slurp path)]))}))
+                       [path (slurp path)]))}))
 
 (defn- role-step [strands role]
   (first (filter #(= role (attr-get % :auto-run/role)) strands)))
@@ -78,7 +78,10 @@
                                     "complete THIS"
                                     "Return immediately without waiting"
                                     "An accepted but blocked"
-                                    "stop for explicit recovery"]]
+                                    "stop for explicit recovery"
+                                    "stop BEFORE accepting"
+                                    "before this handoff proceeds"
+                                    "When a finisher WAS accepted, do not launch another worker"]]
                     (is (str/includes? instruction required) required))
                   (doseq [required ["This step is finisher-only"
                                     "Do not claim card fixture-card, implement new scope or launch another finisher"
@@ -110,26 +113,38 @@
         (testing "The reported combined-step recovery shape collides without weakening the guard"
           (let [old (workflow/start! "old-combined-handoff"
                                      (workflow/workflow "Old handoff"
-                                       (workflow/step :land "Review then launch a finisher here" :self)) {})
+                                                        (workflow/step :land "Review then launch a finisher here" :self)) {})
                 target (:id (first (:ready old)))
                 worker (harnesses/create! rt (assoc request :target target))]
             (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                   #"Target already has an active managed run"
                                   (harnesses/create! rt (assoc request :target target
-                                                              :request-id (str "auto-land-finisher/" target)))))
+                                                               :request-id (str "auto-land-finisher/" target)))))
             (is (= "ready" (attr-get (harnesses/run rt (:id worker)) :harness/status)))))
         (testing "A recovery targeting the worker step can accept the separate blocked finisher"
           (let [run-id "recovered-handoff"
+                card (weaver/add! rt {:title "Recovery card"})
+                prior-request (assoc request :target (:id card) :request-id "original-worker")
+                prior-worker (harnesses/create! rt prior-request)
+                _ (harnesses/stop! rt (:id prior-worker) {:reason "Disposable interruption"})
+                _ (weaver/update! rt (:id card)
+                                  {:attributes {:auto-run/run-id (:id prior-worker)}})
                 result (workflow/start! run-id
                                         (workflow/workflow "Delivery handoff"
-                                          (workflow/call :land #'autonomous/autonomous-land {}))
-                                        {:card "recovery-card" :feature "Recovery fixture"
+                                                           (workflow/call :land #'autonomous/autonomous-land {}))
+                                        {:card (:id card) :feature "Recovery fixture"
                                          :branch "auto/recovery-card" :worktree (:config-dir ctx)})
                 root (workflow/current-root run-id)
                 strands (:strands (graph/subgraph rt [(:id root)]))
                 worker-step (role-step strands "handoff-worker")
                 finisher-step (role-step strands "finisher")
                 worker (harnesses/create! rt (assoc request :target (:id worker-step)))
+                _ (is (not= (:id worker)
+                            (attr-get (weaver/show rt (:id card)) :auto-run/run-id))
+                      "The old receipt is not permission to publish a finisher")
+                ;; Explicit coordinator reconciliation before the new worker hands off.
+                _ (weaver/update! rt (:id card)
+                                  {:attributes {:auto-run/run-id (:id worker)}})
                 finisher-request (assoc request :target (:id finisher-step)
                                         :request-id (str "auto-land-finisher/" (:id finisher-step)))
                 finisher (harnesses/create! rt finisher-request)]
@@ -153,7 +168,10 @@
             (is (= "ready" (attr-get (harnesses/run rt (:id worker)) :harness/status)))
             (is (not (workflow/done? run-id)))
             (is (= (:id worker)
+                   (attr-get (weaver/show rt (:id card)) :auto-run/run-id)
                    (attr-get (weaver/show rt (:id finisher-step)) :auto-run/worker-run-id)))
+            (is (= (:id prior-worker) (:id (harnesses/create! rt prior-request)))
+                "Card receipt reconciliation does not rewrite an immutable Harnesses request")
             (is (= (:id finisher)
                    (attr-get (weaver/show rt (:id finisher-step)) :auto-run/finisher-run-id)))))))))
 

@@ -56,11 +56,22 @@ serves the card or `handoff-worker` step, not the finisher step. A run assigned 
 the finisher step must be the independent canonical-root finisher and must never
 launch another finisher. Do not rewrite the delivery-worker receipt to name it.
 
+If no finisher was accepted, an authorized coordinator may start a worker
+continuation after prior workers settle. Record the predecessor, accepted new
+worker ID and recovery reason, then update `auto-run/run-id` to that current
+worker before it reaches handoff. The worker must verify the reconciled receipt
+before accepting a finisher; a stale receipt is an actionable stop, not permission
+to await the earlier worker. Harnesses requests and their lineage remain immutable.
+
 After an interrupted handoff, inspect the exact immutable
 `auto-land-finisher/FINISHER_STEP_ID` request before doing anything else. A run may
 already be accepted but blocked because the worker did not record its receipt or
 close its step. Retain it for explicit reconciliation; do not replace it or vary
-the key/payload. A missing successful worker settlement still prevents sign-off.
+the key/payload. Do not start a new worker or rewrite the accepted finisher's
+frozen worker ID. After successful settlement of the recorded worker, a coordinator
+can reconcile the exact request, missing receipts and worker-step completion.
+Failed or uncertain settlement needs a new explicit recovery decision and must
+not be relabeled as success.
 
 Existing single-step workflow runs keep their poured instructions after refresh.
 Do not replace or repour them. For an explicitly authorized recovery already at
