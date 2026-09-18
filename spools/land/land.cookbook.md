@@ -18,6 +18,59 @@ strand workflow next land-my-change --choice accepted --input '{"reviewer":"revi
 
 The sign-off checkpoint then accepts either `approved`, with exact pull-request and squash-message input, or `abort`, with a reason. Existing user authorization to land need not be repeated. Use the standalone `review` workflow when review should finish without proceeding to sign-off.
 
+## Hand off autonomous delivery
+
+Opt in explicitly from the repository's full-land policy, after its own quality,
+CI and review-package gates. Do not use this call for a human-review policy:
+
+```clojure
+(require '[millhouse.spools.land.autonomous :as autonomous]
+         '[millhouse.spools.workflow :as workflow])
+
+;; Inside a delivery workflow with card, feature, branch and worktree params:
+(workflow/call :land #'autonomous/autonomous-land {}
+               :depends-on [:review-card])
+```
+
+The call has two ordinary steps, stamped with `auto-run/card` and
+`auto-run/role`: `handoff-worker` and `finisher`. Use the run root's subgraph to
+resolve their actual IDs. Never guess IDs from their titles. The worker drives
+shared `land` through required basic review to sign-off, accepts a canonical-root
+finisher on the **other** step with request key
+`auto-land-finisher/FINISHER_STEP_ID`, records `auto-run/worker-run-id` and
+`auto-run/finisher-run-id` on it, closes the worker step and returns. A compatible
+provider must accept blocked targets without launching them until ready.
+
+The finisher awaits successful settlement of the recorded worker before sign-off,
+then owns ordinary FIFO merge, cleanup and card closure. It closes its delivery
+step only after shared land and card completion. Failures retain all resources
+and reservations for explicit intervention; no automatic recovery is authorized.
+
+For authorized recovery, inspect the target role before launching: a worker
+continuation serves the card or worker step; a finisher continuation serves the
+finisher step from the canonical root and **does not delegate again**. Inspect
+accepted requests before reconciling interrupted receipt writes or worker-step
+completion. If no finisher was accepted, a coordinator can authorize a worker
+continuation after prior workers settle, record the predecessor/new run IDs and
+reason, and update the card's `auto-run/run-id` before handoff. The new worker
+must verify that receipt before publishing a finisher; otherwise it stops with a
+request for coordinator reconciliation, leaving the finisher target unoccupied.
+
+An accepted blocked finisher is not a missing run. Do not create a new worker or
+change its frozen worker ID. Keep the immutable key/payload and reconcile the
+receipts and worker-step completion only with successful recorded worker
+settlement. Failed or uncertain settlement requires an explicit recovery decision,
+not invented success. Never point the worker receipt at the finisher or wait on
+the finisher itself.
+
+Refresh affects future pours, not existing combined-step delivery runs. Do not
+repour old work. At an already-reviewed old sign-off, explicitly authorized
+recovery may launch the independent canonical-root finisher directly against the
+old handoff step after successful worker settlement and exact evidence checks.
+Supply a complete finisher-only prompt superseding the old worker instructions.
+Without that evidence, stop and request coordinator intervention before launching
+anything at the finisher target.
+
 ## Inspect or await the queue
 
 ```text

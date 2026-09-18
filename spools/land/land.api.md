@@ -41,6 +41,32 @@ Run one configured review agent, then require coordinator P1/P2 resolution.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land.clj#L100-L153">Source</a></sub></p>
 
 -----
+# <a name="millhouse.spools.land.autonomous">millhouse.spools.land.autonomous</a>
+
+
+Two-role handoff for consumer-owned automatic delivery workflows.
+
+
+
+
+## <a name="millhouse.spools.land.autonomous/autonomous-land">`autonomous-land`</a>
+
+
+
+
+Review and hand off to a distinct, initially blocked canonical-root finisher.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L150-L163">Source</a></sub></p>
+
+## <a name="millhouse.spools.land.autonomous/failure-policy">`failure-policy`</a>
+``` clojure
+(failure-policy card)
+```
+Function.
+
+Render the stop-on-failure contract shared by autonomous workers and finishers.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L11-L26">Source</a></sub></p>
+
+-----
 # <a name="millhouse.spools.land.card-actions">millhouse.spools.land.card-actions</a>
 
 
