@@ -155,6 +155,98 @@ Close a kanban card with an explicit outcome, polymorphic on `kanban/type`.
   Reopen is paired with abandon only; a completed epic remains closed.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L528-L555">Source</a></sub></p>
 
+## <a name="millhouse.spools.kanban/kanban">`kanban`</a>
+``` clojure
+(kanban ctx)
+```
+Function.
+
+Manage the user-facing kanban work board.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1523-L1527">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-batch">`kanban-batch`</a>
+``` clojure
+(kanban-batch {:keys [input]})
+```
+Function.
+
+Create pending feature cards with bodies and depends-on edges.
+
+  Input shape: {:items [{:key "slug" :title "Title" :body "optional"
+  :priority "p1|p2|p3|p4 (optional, default p3)"
+  :depends-on ["sibling-key-or-existing-strand-id"]}]}. `depends-on` values matching sibling
+  keys become batch-local edges; all other values are treated as durable strand
+  ids and fail loudly if absent.
+
+  ```sh
+  strand weave --pattern kanban-batch --input \
+    '{"items":[{"key":"design","title":"Design the board"},
+               {"key":"docs","title":"Write the docs",
+                "depends-on":["design"]}]}'
+  ```
+
+  The pattern validates the complete input before publishing the batch, so
+  duplicate keys and missing durable dependencies fail without a partial
+  backlog.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L287-L326">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-cards">`kanban-cards`</a>
+
+
+
+
+Select every Kanban card strand.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1540-L1543">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-dash">`kanban-dash`</a>
+
+
+
+
+Open the interactive Kanban board in the caller's terminal.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1535-L1538">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-epic-pending">`kanban-epic-pending`</a>
+
+
+
+
+Select active pending cards hanging directly under one epic.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1552-L1559">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-export">`kanban-export`</a>
+``` clojure
+(kanban-export ctx)
+```
+Function.
+
+Return a card's full parent-of subtree with its internal depends-on edges.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1529-L1533">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-identity-work">`kanban-identity-work`</a>
+
+
+
+
+Select an identity's Kanban epics, features, and tasks.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1561-L1590">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-pending">`kanban-pending`</a>
+
+
+
+
+Select active Kanban cards in the pending lane.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1545-L1550">Source</a></sub></p>
+
+## <a name="millhouse.spools.kanban/kanban-runtime">`kanban-runtime`</a>
+
+
+
+
+Own Kanban runtime-state setup for the module lifetime.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1603-L1606">Source</a></sub></p>
+
 ## <a name="millhouse.spools.kanban/label-add!">`label-add!`</a>
 ``` clojure
 (label-add! runtime id labels)
