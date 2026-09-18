@@ -212,6 +212,13 @@
           (is (str/includes? (:prime entry) "strand help kanban"))
           (is (str/includes? (:prime entry) "Every agent doing direct user work"))
           (is (str/includes? (:prime entry) "decompose the feature into tasks"))
+          (doseq [lane ["pending" "in_review" "claimed" "in_production"]]
+            (is (str/includes? (:prime entry)
+                               (str "strand update CARD_ID --attr kanban/lane=" lane))))
+          (is (str/includes? (:prime entry) "strand update TASK_ID --state closed"))
+          (is (str/includes? (:prime entry)
+                             "Important user-visible notes must always be on the epic or feature"))
+          (is (str/includes? (:prime entry) "Use task notes as a development log"))
           (is (str/includes? (:prime entry) "latest note is the resume read"))
           (is (str/includes? (:prime entry) "exactly one active work root"))
           (is (str/includes? (:prime entry) "strand weave --pattern kanban-batch")))
@@ -255,13 +262,13 @@
               (is (nil? (:next (op! rt "next"))))
               (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be pending"
                                     (op! rt "claim" id "--owner" "other" "--branch" "b")))))
-          (testing "review, rework, and finish enforce the review lane"
-            (let [reviewing (op! rt "review" id)]
-              (is (= "in_review" (get-in reviewing [:card :attributes :kanban/lane])))
-              (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be claimed"
-                                    (op! rt "review" id)))
-              (is (= "claimed" (get-in (op! rt "rework" id) [:card :attributes :kanban/lane])))
-              (is (= "in_review" (get-in (op! rt "review" id) [:card :attributes :kanban/lane]))))
+          (testing "direct updates move review lanes without losing work-root attributes"
+            (doseq [lane ["in_review" "claimed" "in_review"]]
+              (weaver/update! rt id {:attributes {:kanban/lane lane}})
+              (let [stored (weaver/show rt id)]
+                (is (= lane (get-in stored [:attributes :kanban/lane])))
+                (is (= "agent" (get-in stored [:attributes :owner])))
+                (is (= "kanban-spool" (get-in stored [:attributes :branch])))))
             (let [finished (op! rt "finish" id)]
               (is (= "closed" (get-in finished [:card :state])))
               (is (nil? (get-in finished [:card :attributes :kanban/lane])))
@@ -271,21 +278,18 @@
   (with-kanban
     (fn [rt]
       (let [id (get-in (op! rt "add" "Observe release") [:card :id])]
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be in_review"
-                              (op! rt "production" id)))
         (op! rt "claim" id "--owner" "agent" "--branch" "production-test")
-        (op! rt "review" id)
-        (is (= "in_production" (get-in (op! rt "production" id) [:card :attributes :kanban/lane])))
+        (weaver/update! rt id {:attributes {:kanban/lane "in_review"}})
+        (weaver/update! rt id {:attributes {:kanban/lane "in_production"}})
         (let [board (op! rt "board")]
           (is (= [id] (mapv :id (:in_production board))))
           (is (nil? (:unknown-lane board)))
           (is (str/includes? (kanban/board-str board) "IN PRODUCTION (1)")))
-        (is (= "claimed" (get-in (op! rt "rework" id) [:card :attributes :kanban/lane])))
-        (op! rt "review" id)
-        (op! rt "production" id)
-        (is (= "closed" (get-in (op! rt "finish" id) [:card :state])))
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be active"
-                              (op! rt "production" id)))))))
+        (weaver/update! rt id {:attributes {:kanban/lane "claimed"}})
+        (is (= [id] (mapv :id (:claimed (op! rt "board")))))
+        (weaver/update! rt id {:attributes {:kanban/lane "in_review"}})
+        (weaver/update! rt id {:attributes {:kanban/lane "in_production"}})
+        (is (= "closed" (get-in (op! rt "finish" id) [:card :state])))))))
 
 (deftest kanban-declared-subcommands-help-and-parser-errors
   (with-kanban
@@ -296,8 +300,12 @@
         (let [detail (weaver/op! rt 'help ["kanban"])
               children (get-in detail [:node :children])
               verbs (mapv :name children)]
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "production" "promote" "reopen" "review" "rework" "task"] verbs))
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "reopen" "task"] verbs))
           (is (not-any? #(contains? #{"about" "prime"} (:name %)) children))))
+      (testing "simple transition wrappers are no longer accepted"
+        (doseq [verb ["promote" "review" "production" "rework"]]
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown subcommand"
+                                (op! rt verb "card-id")))))
       (testing "depth-N help resolves task add to its classified leaf"
         (let [detail (weaver/op! rt 'help ["kanban" "task" "add"])
               node (:node detail)]
@@ -319,7 +327,7 @@
                                             (op! rt "bogus")))]
           (is (= :missing-subcommand (:reason (ex-data missing))))
           (is (= :unknown-subcommand (:reason (ex-data unknown))))
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "production" "promote" "reopen" "review" "rework" "task"]
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "reopen" "task"]
                  (:available (ex-data missing))))
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
@@ -346,7 +354,7 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no barred lines"
                           (fmt/reflow "prose that lost its bars")))))
 
-(deftest kanban-refinement-lane-and-promote
+(deftest kanban-refinement-lane-and-direct-promotion
   (with-kanban
     (fn [rt]
       (let [idea (op! rt "add" "Vague idea" "--lane" "refinement")
@@ -356,12 +364,9 @@
           (is (nil? (:next (op! rt "next"))))
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be pending"
                                 (op! rt "claim" idea-id "--owner" "a" "--branch" "b"))))
-        (testing "promote moves the card into the pending lane"
-          (is (= "pending" (get-in (op! rt "promote" idea-id)
-                                   [:card :attributes :kanban/lane])))
-          (is (= idea-id (get-in (op! rt "next") [:next :id])))
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be refinement"
-                                (op! rt "promote" idea-id))))
+        (testing "an explicit update makes the refinement card actionable"
+          (weaver/update! rt idea-id {:attributes {:kanban/lane "pending"}})
+          (is (= idea-id (get-in (op! rt "next") [:next :id]))))
         (testing "add rejects unknown statuses and types"
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"pending or refinement"
                                 (op! rt "add" "Bad lane" "--lane" "someday")))
@@ -854,7 +859,7 @@
             done-id (get-in (op! rt "add" "Done already") [:card :id])]
         (op! rt "claim" working-id "--owner" "agent" "--branch" "feature-x")
         (op! rt "claim" review-id "--owner" "reviewer" "--branch" "feature-y")
-        (op! rt "review" review-id)
+        (weaver/update! rt review-id {:attributes {:kanban/lane "in_review"}})
         (op! rt "claim" done-id "--owner" "agent" "--branch" "done-x")
         (op! rt "finish" done-id "--outcome" "abandoned")
         (let [board (op! rt "board")]
@@ -1076,7 +1081,7 @@
               (is (= "Wire the thing" (get-in claimed [:doing-task :title])))
               (is (= "doing" (get-in claimed [:doing-task :status])))))
           (testing "the in_review lane carries the doing-task title too"
-            (op! rt "review" feature-id)
+            (weaver/update! rt feature-id {:attributes {:kanban/lane "in_review"}})
             (let [reviewing (some #(when (= feature-id (:id %)) %) (:in_review (op! rt "board")))]
               (is (= "Wire the thing" (get-in reviewing [:doing-task :title])))))
           (testing "board-str renders the doing-task line"

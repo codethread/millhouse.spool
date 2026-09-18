@@ -38,11 +38,17 @@ claimed or served by `next`.
 
 The active lanes are:
 
-- `refinement` — an idea that waits for an explicit `promote` act;
+- `refinement` — an idea that waits for explicit promotion to `pending`;
 - `pending` — actionable work, ordered p1 first and oldest first within a priority;
 - `claimed` — work has started and the card records its owner and branch;
-- `in_review` — work is waiting for review; `rework` returns it to `claimed`.
-- `in_production` — optional post-merge deployment validation, settling, or coordinated release work; `production` enters it from `in_review`, `finish` closes it, and `rework` returns it to `claimed`. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
+- `in_review` — work is waiting for review; update back to `claimed` for rework.
+- `in_production` — optional post-merge deployment validation, settling, or coordinated release work; update into it from `in_review`, use `finish` to close it, or update back to `claimed` for rework. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
+
+Simple lane changes use `strand update CARD_ID --attr kanban/lane=LANE`,
+with `pending` for promotion, `in_review` for review, `claimed` for rework,
+and `in_production` for optional observation. These are direct attribute patches,
+not guarded transitions; inspect the current card and follow this lane discipline.
+Use `claim`, `finish`, and `reopen` for their structured lifecycle behavior.
 
 Finishing removes the lane and closes the strand. Features record `done` by
 default or an explicitly supplied outcome, and close their open tasks. Epics
@@ -73,13 +79,18 @@ Tasks are the optional `feature > task` tier. `task add` marks a child with
 `kanban/task=true` and can add repeatable `depends-on` edges. Task status is
 derived from strand state, dependency closure, and the core `owner` attribute:
 `closed`, `blocked`, `doing`, or `ready`. The first `doing` task is the board's
-resume signal; status is never stored and therefore cannot drift.
+resume signal; status is never stored and therefore cannot drift. Complete each
+task as you go with `strand update TASK_ID --state closed`, rather than waiting
+for the feature to finish. Finish cascades mark remaining open tasks as
+`unactioned`, not completed work.
 
-Notes use the shared `notes` relation and target only a card or task. Put
-progress, decisions, and review dumps on the doing-task; keep the card's notes
-as short handover summaries. `card` and `board` expose each task's newest note
-as `latest-note`, so a cold agent can resume from the doing-task without a
-conversation transcript. `note/kind` is an open view hint; suggested values
+Notes use the shared `notes` relation and target only a card or task. Important
+user-visible notes must always be on the epic or feature: decisions, milestones,
+blockers, review outcomes, and handovers must not be buried only in task notes.
+Task notes are a development log users will rarely see; use them for implementation
+details, command output, detailed review findings, and resume context. `card` and
+`board` expose each task's newest note as `latest-note`, so a cold agent can resume
+from the doing-task without a conversation transcript. `note/kind` is an open view hint; suggested values
 are `activity`, `decision`, `review-dump`, and `summary`.
 
 Card-to-card blockers use core `depends-on` edges. The `related` projection on
@@ -97,8 +108,7 @@ The declared command tree is available through `strand help kanban`; its main
 flow is:
 
 ```text
-add · board · card · next · priority · label · promote · claim · note · task
-review · rework · finish · reopen
+add · board · card · next · priority · label · claim · note · task · finish · reopen
 ```
 
 Use `board` for the grouped lanes, epics, closed count, and cross-card
@@ -110,7 +120,8 @@ Kanban does not rename generic graph operations. Use Batteries `add`, `update`,
 `note`, and `show` for ordinary execution strands; apply `kanban-batch` through
 `weave`; discover the registered Kanban queries through `query`; and consume
 them through `list` or `ready`. The `kanban` verbs are the board-specific
-projections and guarded card transitions layered on those primitives.
+projections and structured card operations layered on those primitives; simple
+lane changes and task completion use `strand update` directly.
 
 The REPL-only `print-board!` and pure `board-str` render a human ASCII board.
 The `kanban-dash` binary provides a polling terminal dashboard with optional

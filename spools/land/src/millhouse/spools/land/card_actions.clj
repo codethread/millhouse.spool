@@ -15,20 +15,28 @@
   "Move an optional card into review; an already-reviewed card is unchanged."
   [runtime {:keys [card]}]
   (when card
-    (case (attr-get (card-view runtime card) :kanban/lane)
-      "in_review" nil
-      "claimed" (kanban/review! runtime card)
-      (fail! "Card must be claimed or in review" {:card card})))
+    (let [view (card-view runtime card)]
+      (case (attr-get view :kanban/lane)
+        "in_review" nil
+        "claimed" (do
+                    (when-not (= "active" (:state view))
+                      (fail! "Card must be active to review" {:card card}))
+                    (weaver/update! runtime card {:attributes {:kanban/lane "in_review"}}))
+        (fail! "Card must be claimed or in review" {:card card}))))
   nil)
 
 (defn rework!
   "Return an optional card to claimed after abort; repeat calls are harmless."
   [runtime {:keys [card]}]
   (when card
-    (case (attr-get (card-view runtime card) :kanban/lane)
-      "claimed" nil
-      "in_review" (kanban/rework! runtime card)
-      (fail! "Aborted landing card must be claimed or in review" {:card card})))
+    (let [view (card-view runtime card)]
+      (case (attr-get view :kanban/lane)
+        "claimed" nil
+        "in_review" (do
+                      (when-not (= "active" (:state view))
+                        (fail! "Card must be active to rework" {:card card}))
+                      (weaver/update! runtime card {:attributes {:kanban/lane "claimed"}}))
+        (fail! "Aborted landing card must be claimed or in review" {:card card}))))
   nil)
 
 (defn finish!

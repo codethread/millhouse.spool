@@ -216,7 +216,7 @@
                    (:title (first (workflow/ready run-id)))))
             (card-actions/rework! rt {:card card})
             (is (= "claimed" (card-lane rt card)))
-            (is (= "in_review" (do (kanban/review! rt card)
+            (is (= "in_review" (do (weaver/update! rt card {:attributes {:kanban/lane "in_review"}})
                                    (card-lane rt card)))))
           (finally
             (test-support/delete-tree! root)))))))
