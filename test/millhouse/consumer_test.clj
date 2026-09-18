@@ -23,6 +23,30 @@
      'millhouse.spools/land {:local/root (str (repository-root) "/spools/land")}
      'millhouse.spools/kanban {:local/root (str (repository-root) "/spools/kanban")}}}))
 
+(defn- land-only-consumer-deps-edn []
+  (pr-str
+   {:deps
+    {'millhouse.spools/land {:local/root (str (repository-root) "/spools/land")}}}))
+
+(def ^:private land-only-init
+  "(require '[millstrand.api.current.alpha :as current]
+            '[millstrand.api.runtime.alpha :as runtime])
+   (let [rt (current/runtime)]
+     (runtime/module! rt :consumer/workflow
+       {:ns 'millhouse.spools.workflow
+        :required? true})
+     (runtime/module! rt :consumer/workflow-providers
+       {:ns 'millhouse.spools.workflow.spool
+        :after [:consumer/workflow]
+        :required? true})
+     (runtime/module! rt :consumer/kanban
+       {:ns 'millhouse.spools.kanban
+        :required? true})
+     (runtime/module! rt :consumer/land
+       {:ns 'millhouse.spools.land.spool
+        :after [:consumer/workflow-providers :consumer/kanban]
+        :required? true}))")
+
 (def ^:private init
   "(require '[millstrand.api.current.alpha :as current]
             '[millstrand.api.runtime.alpha :as runtime]
@@ -91,6 +115,30 @@
              (get-in status [:modules :millhouse/workflow-all :after])))
       (is (contains? workflow-names :publish-spool-kondo))
       (is (every? workflow-names [:land :land-merge :land-abort])))))
+
+(deftest land-only-consumer-resolves-and-activates-transitive-siblings
+  (test-alpha/with-weaver-world
+    [ctx {:deps-edn (land-only-consumer-deps-edn)
+          :init-clj land-only-init}]
+    (let [{:keys [modules workflows op-names]}
+          (test-alpha/repl!
+           ctx
+           '(do
+              (require '[millhouse.spools.workflow :as workflow]
+                       '[millstrand.api.current.alpha :as current]
+                       '[millstrand.api.runtime.alpha :as runtime]
+                       '[millstrand.api.weaver.alpha :as weaver])
+              (let [rt (current/runtime)]
+                {:modules (set (keys (:modules (runtime/status rt))))
+                 :workflows (set (keys (workflow/workflows)))
+                 :op-names (set (map :name (weaver/ops rt)))})))]
+      (is (= #{:consumer/workflow
+               :consumer/workflow-providers
+               :consumer/kanban
+               :consumer/land}
+             modules))
+      (is (every? workflows [:review :land :land-merge :land-abort]))
+      (is (contains? op-names "merge-queue")))))
 
 (deftest repository-kondo-config-keeps-producer-ownership
   (let [root (io/file (repository-root))
