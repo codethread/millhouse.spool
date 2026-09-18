@@ -14,6 +14,17 @@
   shared `land` for quality, one basic review, FIFO merge, card completion, and
   branch/worktree cleanup.
 
+## Automatic assignments
+
+- Read [the auto-run policy](docs/auto-run.md) and drive the exact workflow run
+  created by the dispatcher; do not create a replacement run.
+- `auto-human-review` stops at its human checkpoint. `auto-full-land` hands
+  shared landing to an independent finisher before sign-off; the worker must not
+  approve sign-off, merge, remove its worktree, or finish the card.
+- On an autonomous delivery failure, add `auto-run-failure`, record evidence and
+  retained resources on the card, and stop without retrying or withdrawing a
+  merge reservation.
+
 ## Testing
 
 The default suite requires namespaces serially, then runs them concurrently with isolated output and summaries:
