@@ -9,6 +9,7 @@
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.spool.alpha :as spool]
+            [millhouse.spools.identity :as identity]
             [millhouse.spools.kanban :as kanban]
             [millstrand.test.alpha :as t]))
 
@@ -61,8 +62,9 @@
                             (spool/entity-projection (dissoc strand field)))))))
 
 (defn- activate-kanban!
-  "Activate Kanban from source so its authoring forms are collected."
+  "Activate Identity and Kanban from source so role contributions can publish."
   [rt]
+  (runtime/module! rt :identity {:ns 'millhouse.spools.identity})
   (let [result (runtime/module! rt :kanban {:ns 'millhouse.spools.kanban})
         status (get-in result [:modules :kanban :status])]
     (when-not (contains? #{:applied :unchanged} status)
@@ -122,6 +124,7 @@
         (str "(require '[millstrand.api.current.alpha :as current]\n"
              "         '[millstrand.api.runtime.alpha :as runtime])\n"
              "(def runtime (current/runtime))\n"
+             "(runtime/module! runtime :identity {:ns 'millhouse.spools.identity})\n"
              "(runtime/module! runtime :kanban {:ns 'millhouse.spools.kanban})\n")]
     (t/run-with-weaver-world
      {:storage :sqlite-memory
@@ -199,6 +202,16 @@
                  "kanban-identity-work"}
                (set (keys (:queries surface)))))))))
 
+(deftest kanban-publishes-explicit-owner-and-reporter-attribution-roles
+  (with-kanban
+    (fn [rt]
+      (let [by-key (into {} (map (juxt :key clojure.core/identity))
+                         (identity/attribution-contributions rt))]
+        (is (= {:attribute :kanban/reporter :relation "reported"}
+               (select-keys (by-key :kanban/reporter) [:attribute :relation])))
+        (is (= {:attribute :kanban/owner :relation "claimed"}
+               (select-keys (by-key :kanban/owner) [:attribute :relation])))))))
+
 (deftest kanban-publishes-canonical-discovery-metadata
   (with-kanban
     (fn [rt]
@@ -250,25 +263,27 @@
                                   (op! rt "claim" id "--branch" "feature-branch")))
             (is (thrown-with-msg? clojure.lang.ExceptionInfo #"requires --branch"
                                   (op! rt "claim" id "--owner" "agent"))))
-          (testing "claim stamps status and work-root attributes"
+          (testing "claim writes an atomic source record and work-root transition"
             (let [claimed (op! rt "claim" id "--owner" "agent" "--branch" "kanban-spool"
                                "--worktree" "/tmp/wt")]
               (is (= "claimed" (get-in claimed [:card :attributes :kanban/lane])))
-              (is (= "agent" (get-in claimed [:card :attributes :owner])))
-              (is (= "kanban-spool" (get-in claimed [:card :attributes :branch])))
-              ;; regression: the claimed status must survive the round trip to
-              ;; storage (string/keyword attr-key collisions once dropped it)
+              (is (= "agent" (get-in claimed [:claim :owner])))
+              (is (= "kanban-spool" (get-in claimed [:claim :branch])))
+              (is (= "/tmp/wt" (get-in claimed [:claim :worktree])))
+              (is (nil? (get-in claimed [:card :attributes :owner])))
+              (is (= "true" (get-in (weaver/show rt (get-in claimed [:claim :id]))
+                                    [:attributes :kanban/ownership-claim])))
               (is (= "claimed" (get-in (weaver/show rt id) [:attributes :kanban/lane])))
               (is (nil? (:next (op! rt "next"))))
-              (is (thrown-with-msg? clojure.lang.ExceptionInfo #"must be pending"
-                                    (op! rt "claim" id "--owner" "other" "--branch" "b")))))
-          (testing "direct updates move review lanes without losing work-root attributes"
+              (is (= "handed-off"
+                     (:result (op! rt "claim" id "--owner" "other" "--branch" "b"))))))
+          (testing "direct updates move review lanes without changing projected ownership"
             (doseq [lane ["in_review" "claimed" "in_review"]]
               (weaver/update! rt id {:attributes {:kanban/lane lane}})
               (let [stored (weaver/show rt id)]
                 (is (= lane (get-in stored [:attributes :kanban/lane])))
-                (is (= "agent" (get-in stored [:attributes :owner])))
-                (is (= "kanban-spool" (get-in stored [:attributes :branch])))))
+                (is (= "other" (:owner (kanban/current-ownership rt id))))
+                (is (= "b" (:branch (kanban/current-ownership rt id))))))
             (let [finished (op! rt "finish" id)]
               (is (= "closed" (get-in finished [:card :state])))
               (is (nil? (get-in finished [:card :attributes :kanban/lane])))
@@ -332,34 +347,161 @@
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
 
-(deftest kanban-actor-flags-remain-domain-specific
-  ;; The identity startup instruction is consumed by cold agents. Keep its
-  ;; command-specific terms truthful: owner claims responsibility; by authors
-  ;; notes; unsupported universal aliases must fail before any mutation.
+(deftest kanban-actor-flags-keep-owner-and-actor-distinct
   (with-kanban
     (fn [rt]
       (let [entry (weaver/resolve-op rt 'kanban)
             claim-flags (get-in entry [:arg-spec :subcommands "claim" :flags])
             note-flags (get-in entry [:arg-spec :subcommands "note" :flags])
-            claim-help (weaver/op! rt 'help ["kanban" "claim"])
-            note-help (weaver/op! rt 'help ["kanban" "note"])
-            help-flag (fn [help flag]
-                        (some #(when (= flag (:name %)) %) (get-in help [:node :invocation :flags])))
             card-id (get-in (op! rt "add" "Attributed work") [:card :id])]
-        (is (str/includes? (get-in claim-flags [:owner :doc]) "Logical-session identity"))
-        (is (str/includes? (get-in note-flags [:by :doc]) "Logical-session identity"))
-        (is (str/includes? (:doc (help-flag claim-help "owner")) "Logical-session identity"))
-        (is (str/includes? (:doc (help-flag note-help "by")) "Logical-session identity"))
+        (is (contains? claim-flags :owner))
+        (is (contains? claim-flags :by-identity))
+        (is (= #{:by :kind} (set (keys note-flags))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
                               (op! rt "claim" card-id "--by" "worker" "--branch" "branch")))
+        (let [claimed (op! rt "claim" card-id "--owner" "worker"
+                           "--by-identity" "dispatcher" "--branch" "branch")]
+          (is (= "worker" (get-in claimed [:claim :owner])))
+          (is (= "dispatcher" (get-in claimed [:claim :by-identity]))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
-                              (op! rt "claim" card-id "--by-identity" "worker" "--branch" "branch")))
-        (op! rt "claim" card-id "--owner" "worker" "--branch" "branch")
-        (is (= "worker" (get-in (weaver/show rt card-id) [:attributes :owner])))
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
-                              (op! rt "note" card-id "No alias" "--by-identity" "worker")))
-        (let [noted (op! rt "note" card-id "Attributed note" "--by" "worker")]
-          (is (= "worker" (get-in noted [:strand :attributes :note/by]))))))))
+                              (op! rt "note" card-id "No alias"
+                                   "--by-identity" "worker")))
+        (let [noted (op! rt "note" card-id "Attributed note" "--by" "reviewer")]
+          (is (= "reviewer" (get-in noted [:strand :attributes :note/by])))
+          (is (= "worker" (:owner (kanban/current-ownership rt card-id)))))))))
+
+(deftest kanban-add-preserves-anonymous-and-explicit-reporters-without-owning
+  (with-kanban
+    (fn [rt]
+      (let [anonymous (op! rt "add" "Anonymous")
+            created (op! rt "add" "Created" "--by-identity" "creator")
+            reported (op! rt "add" "Reported" "--by-identity" "creator"
+                          "--reported-by" "reporter")]
+        (is (nil? (get-in anonymous [:card :attributes :kanban/reporter])))
+        (is (nil? (kanban/current-ownership rt (get-in anonymous [:card :id]))))
+        (is (= "creator" (get-in created [:card :attributes :kanban/reporter])))
+        (is (= "creator" (get-in created [:card :attributes :identity/by-identity])))
+        (is (= "reporter" (get-in reported [:card :attributes :kanban/reporter])))
+        (is (= "creator" (get-in reported [:card :attributes :identity/by-identity])))
+        (is (every? #(nil? (kanban/current-ownership rt (get-in % [:card :id])))
+                    [created reported]))))))
+
+(deftest reporter-enrichment-reconciles-without-changing-raw-evidence
+  (with-kanban
+    (fn [rt]
+      (let [card-id (get-in (op! rt "add" "Late reporter"
+                                 "--reported-by" "late-reporter") [:card :id])]
+        (is (= {:identity "late-reporter" :identity-strand-ids []}
+               (:reporter (op! rt "card" card-id))))
+        (let [identity-strand (weaver/add! rt
+                                           {:title "late-reporter"
+                                            :attributes {:identity/session "true"
+                                                         :identity/id "late-reporter"
+                                                         :identity/harness "test"
+                                                         :identity/native-session-id "reporter-native"}})]
+          (identity/reconcile-attributions! rt)
+          (is (= {:identity "late-reporter"
+                  :identity-strand-ids [(:id identity-strand)]}
+                 (:reporter (op! rt "card" card-id))))
+          (is (= "late-reporter"
+                 (get-in (weaver/show rt card-id) [:attributes :kanban/reporter]))))))))
+
+(deftest kanban-claims-preserve-a-b-a-history-and-exact-retry-idempotency
+  (with-kanban
+    (fn [rt]
+      (let [card-id (get-in (op! rt "add" "Handoff history") [:card :id])]
+        (op! rt "claim" card-id "--owner" "owner-a" "--by-identity" "dispatcher"
+             "--branch" "a")
+        (op! rt "claim" card-id "--owner" "owner-b" "--branch" "b")
+        (op! rt "claim" card-id "--owner" "owner-a" "--branch" "a-return")
+        (let [history (kanban/ownership-history rt card-id)
+              replay (op! rt "claim" card-id "--owner" "owner-a" "--branch" "a-return")]
+          (is (= ["owner-a" "owner-b" "owner-a"] (mapv :owner history)))
+          (is (= [1 2 3] (mapv :order history)))
+          (is (= "owner-a" (:owner (kanban/current-ownership rt card-id))))
+          (is (= "unchanged" (:result replay)))
+          (is (= 3 (count (kanban/ownership-history rt card-id)))))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"retries must be exact"
+                              (op! rt "claim" card-id "--owner" "owner-a"
+                                   "--branch" "different")))))))
+
+(deftest ownership-source-records-reject-rewrite-and-burn
+  (with-kanban
+    (fn [rt]
+      (let [card-id (get-in (op! rt "add" "Immutable claim") [:card :id])
+            claim-id (get-in (op! rt "claim" card-id "--owner" "owner"
+                                  "--branch" "branch") [:claim :id])]
+        (let [rewrite (try
+                        (weaver/update! rt claim-id
+                                        {:attributes {:kanban/claimed-at "later"}})
+                        nil
+                        (catch clojure.lang.ExceptionInfo ex ex))
+              burn (try
+                     (graph/burn-by-ids! rt [claim-id])
+                     nil
+                     (catch clojure.lang.ExceptionInfo ex ex))]
+          (is (= "kanban/immutable-ownership-claim"
+                 (:hook/cause-code (ex-data rewrite))))
+          (is (= "kanban/immutable-ownership-claim"
+                 (:hook/cause-code (ex-data burn)))))
+        (is (= "owner" (:owner (kanban/current-ownership rt card-id))))))))
+
+(deftest equal-time-and-concurrent-claims-have-one-deterministic-current-owner
+  (with-kanban
+    (fn [rt]
+      (let [card-id (get-in (op! rt "add" "Concurrent handoff") [:card :id])
+            at "2026-09-19T08:00:00Z"]
+        (with-redefs [kanban/claim-time (constantly at)]
+          (let [left (future (op! rt "claim" card-id "--owner" "left" "--branch" "left"))
+                right (future (op! rt "claim" card-id "--owner" "right" "--branch" "right"))]
+            @left
+            @right))
+        (let [history (kanban/ownership-history rt card-id)
+              current (kanban/current-ownership rt card-id)]
+          (is (= 2 (count history)))
+          (is (= [at at] (mapv :claimed-at history)))
+          (is (= (last (sort (map :id history))) (:id current)))
+          (is (= (:owner current)
+                 (:owner (get-in (op! rt "card" card-id) [:ownership :current])))))))))
+
+(deftest latest-unresolved-owner-remains-current-after-late-registration
+  (with-kanban
+    (fn [rt]
+      (let [card-id (get-in (op! rt "add" "Late identity") [:card :id])]
+        (op! rt "claim" card-id "--owner" "known-first" "--branch" "known")
+        (op! rt "claim" card-id "--owner" "late-owner" "--branch" "late")
+        (is (= "late-owner" (:owner (kanban/current-ownership rt card-id))))
+        (is (empty? (:owner-identity-strand-ids
+                     (kanban/current-ownership rt card-id))))
+        (let [identity-strand (weaver/add! rt
+                                           {:title "late-owner"
+                                            :attributes {:identity/session "true"
+                                                         :identity/id "late-owner"
+                                                         :identity/harness "test"
+                                                         :identity/native-session-id "late-native"}})]
+          (identity/reconcile-attributions! rt)
+          (is (= "late-owner" (:owner (kanban/current-ownership rt card-id))))
+          (is (= [(:id identity-strand)]
+                 (:owner-identity-strand-ids
+                  (kanban/current-ownership rt card-id)))))))))
+
+(deftest task-ownership-distinguishes-inheritance-from-direct-claims
+  (with-kanban
+    (fn [rt]
+      (let [feature-id (get-in (op! rt "add" "Owned feature") [:card :id])
+            task-id (get-in (op! rt "task" "add" feature-id "Owned task") [:task :id])]
+        (op! rt "claim" feature-id "--owner" "feature-owner" "--branch" "feature")
+        (let [inherited (first (:tasks (op! rt "task" "list" feature-id)))]
+          (is (= "feature-owner" (:owner inherited)))
+          (is (= "inherited" (:owner-source inherited)))
+          (is (= "ready" (:status inherited))))
+        (op! rt "claim" task-id "--owner" "task-owner"
+             "--by-identity" "feature-owner")
+        (let [direct (first (:tasks (op! rt "task" "list" feature-id)))]
+          (is (= "task-owner" (:owner direct)))
+          (is (= "direct" (:owner-source direct)))
+          (is (= "doing" (:status direct)))
+          (is (= "feature-owner" (get-in direct [:ownership :claim :by-identity]))))))))
 
 (deftest fill-wraps-prose-and-preserves-indented-blocks
   (testing "flush-left lines soft-wrap; a bare bar starts a new item; an indented line keeps the item verbatim"
@@ -561,20 +703,23 @@
             definition (graph/resolve-query rt "kanban-identity-work")]
         (op! rt "claim" feature "--owner" agent "--branch" "identity-work")
         (op! rt "claim" unrelated "--owner" other "--branch" "elsewhere")
-        (testing "the state-neutral query returns owned cards plus inherited tasks and epic"
-          (is (= #{epic feature task blocked}
+        (testing "the named query selects direct durable claim targets"
+          (is (= #{feature}
                  (set (graph/query-ids rt "kanban-identity-work" {:identity agent}))))
           (is (= #{unrelated}
                  (set (graph/query-ids rt "kanban-identity-work" {:identity other})))))
-        (testing "ready applies active-state and dependency filtering to the same query"
-          (is (= #{epic feature task}
-                 (set (map :id (weaver/ready rt definition {:identity agent}))))))
-        (testing "list retains closed history while ready excludes cascade-closed descendants"
+        (testing "the helper expands direct history to inherited tasks and containing epics"
+          (let [work (kanban/identity-work rt agent)]
+            (is (= #{epic feature} (set (map :id (:cards work)))))
+            (is (= #{task blocked} (set (map :id (:tasks work)))))
+            (is (= [agent] (mapv :owner (:claims work))))))
+        (testing "handoff and finish preserve the former owner's history"
+          (op! rt "claim" feature "--owner" other "--branch" "handoff")
           (op! rt "finish" feature)
-          (is (= #{epic feature task blocked}
+          (is (= #{feature}
                  (set (graph/query-ids rt "kanban-identity-work" {:identity agent}))))
-          (is (= #{epic}
-                 (set (map :id (weaver/ready rt definition {:identity agent}))))))
+          (is (= #{epic feature} (set (map :id (:cards (kanban/identity-work rt agent))))))
+          (is (= #{task blocked} (set (map :id (:tasks (kanban/identity-work rt agent)))))))
         (testing "identity is an explicit query parameter"
           (is (= [:identity] (:params definition)))
           (is (= [:identity] (graph/referenced-params definition)))
@@ -634,10 +779,12 @@
 (deftest kanban-epic-abandon-cascades-reversibly-and-reopen-inverts
   (with-kanban
     (fn [rt]
-      (let [epic-id (get-in (op! rt "add" "Abandoned theme" "--type" "epic") [:card :id])
+      (let [epic-id (get-in (op! rt "add" "Abandoned theme" "--type" "epic"
+                                 "--reported-by" "epic-reporter") [:card :id])
             done-id (get-in (op! rt "add" "Already done" "--epic" epic-id) [:card :id])
             pending-id (get-in (op! rt "add" "Still queued" "--epic" epic-id) [:card :id])
-            claimed-id (get-in (op! rt "add" "In flight" "--epic" epic-id) [:card :id])]
+            claimed-id (get-in (op! rt "add" "In flight" "--epic" epic-id
+                                    "--reported-by" "feature-reporter") [:card :id])]
         ;; one child is finished (done) before the abandon; two are still open
         (op! rt "claim" done-id "--owner" "agent" "--branch" "done-branch")
         (op! rt "finish" done-id)
@@ -653,6 +800,7 @@
               (is (= "closed" (:state epic)))
               (is (= "abandoned" (get-in epic [:attributes :kanban/outcome])))
               (is (= "pending" (get-in epic [:attributes :kanban/abandon-restore-lane])))
+              (is (= "epic-reporter" (get-in epic [:attributes :kanban/reporter])))
               (is (nil? (get-in epic [:attributes :kanban/lane]))))
             (testing "each cascaded child closes abandoned with its own restore lane"
               (is (= "closed" (:state pending)))
@@ -663,7 +811,8 @@
               (is (= "closed" (:state claimed)))
               (is (= "unactioned" (get-in claimed [:attributes :kanban/outcome])))
               (is (= "parent-cascade" (get-in claimed [:attributes :kanban/closed-by])))
-              (is (= "claimed" (get-in claimed [:attributes :kanban/abandon-restore-lane]))))
+              (is (= "claimed" (get-in claimed [:attributes :kanban/abandon-restore-lane])))
+              (is (= "feature-reporter" (get-in claimed [:attributes :kanban/reporter]))))
             (testing "an already-closed child is left untouched and carries no marker"
               (is (= "closed" (:state done)))
               (is (= "done" (get-in done [:attributes :kanban/outcome])))
@@ -688,6 +837,8 @@
               (is (nil? (get-in pending [:attributes :kanban/abandon-restore-lane])))
               (is (= "active" (:state claimed)))
               (is (= "claimed" (get-in claimed [:attributes :kanban/lane])))
+              (is (= "agent" (:owner (kanban/current-ownership rt claimed-id))))
+              (is (= "feature-reporter" (get-in claimed [:attributes :kanban/reporter])))
               (is (nil? (get-in claimed [:attributes :kanban/abandon-restore-lane]))))
             (testing "the pre-done child was never abandoned, so reopen leaves it closed/done"
               (is (= "closed" (:state done)))
@@ -751,6 +902,7 @@
                 stored (weaver/show rt id)]
             (is (= "closed" (get-in finished [:card :state])))
             (is (= "superseded" (get-in finished [:card :attributes :kanban/outcome])))
+            (is (= "agent" (:owner (kanban/current-ownership rt id))))
             (is (nil? (get-in stored [:attributes :kanban/lane])))
             (is (no-blank-string-attrs? stored))
             (let [task (weaver/show rt task-id)]
@@ -1046,11 +1198,10 @@
             (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not a feature card"
                                   (op! rt "task" "list" epic-id)))))))))
 
-(deftest kanban-task-status-derives-from-graph-and-owner
-  ;; Self-contained DAG (DELTA-Nwt-001.J2): the four statuses derive from
-  ;; state=closed, the depends-on frontier, and the owner attr only — never a
-  ;; delegation or harness-run attribute is set, so the litmus (delete delegation,
-  ;; the derivation still computes) holds.
+(deftest kanban-task-status-derives-from-graph-and-direct-claim
+  ;; The four statuses derive from lifecycle, depends-on, and durable direct
+  ;; task claims. Feature ownership is visible as inheritance but does not mark
+  ;; every ready child doing.
   (with-kanban
     (fn [rt]
       (let [feature-id (get-in (op! rt "add" "DAG feature") [:card :id])
@@ -1061,7 +1212,7 @@
                                     "--depends-on" ready-id) [:task :id])
             status-of (fn [] (into {} (map (juxt :id :status))
                                    (:tasks (op! rt "task" "list" feature-id))))]
-        (weaver/update! rt doing-id {:attributes {:owner "agent-a"}})
+        (op! rt "claim" doing-id "--owner" "agent-a")
         (weaver/update! rt done-id {:state "closed"})
         (testing "the four statuses derive purely from graph + core attrs"
           (let [status (status-of)]
@@ -1081,7 +1232,7 @@
       (let [feature-id (get-in (op! rt "add" "Card-view task feature") [:card :id])
             ready-id (get-in (op! rt "task" "add" feature-id "Ready task") [:task :id])
             doing-id (get-in (op! rt "task" "add" feature-id "Doing task") [:task :id])]
-        (weaver/update! rt doing-id {:attributes {:owner "agent-a"}})
+        (op! rt "claim" doing-id "--owner" "agent-a")
         (testing "card view lists child tasks with their derived statuses"
           (let [tasks (:tasks (op! rt "card" feature-id))]
             (is (= #{ready-id doing-id} (set (map :id tasks))))
@@ -1104,7 +1255,7 @@
       (let [feature-id (get-in (op! rt "add" "Doing-task feature") [:card :id])]
         (op! rt "claim" feature-id "--owner" "agent-a" "--branch" "doing-branch")
         (let [doing-id (get-in (op! rt "task" "add" feature-id "Wire the thing") [:task :id])]
-          (weaver/update! rt doing-id {:attributes {:owner "agent-a"}})
+          (op! rt "claim" doing-id "--owner" "agent-a")
           (testing "the claimed lane carries the derived doing-task title"
             (let [claimed (some #(when (= feature-id (:id %)) %) (:claimed (op! rt "board")))]
               (is (= "Wire the thing" (get-in claimed [:doing-task :title])))
@@ -1123,11 +1274,11 @@
       (let [card-id (get-in (op! rt "add" "Run-linked feature") [:card :id])]
         (let [claimed (op! rt "claim" card-id "--owner" "agent" "--branch" "widgets"
                            "--run-id" "widgets-run")]
-          (is (= "widgets-run"
-                 (get-in claimed [:card :attributes :kanban/run-id]))))
+          (is (= "widgets-run" (get-in claimed [:claim :run-id])))
+          (is (nil? (get-in claimed [:card :attributes :kanban/run-id]))))
         (is (= "widgets-run"
                (get-in (op! rt "card" card-id)
-                       [:card :attributes :kanban/run-id])))))))
+                       [:ownership :current :run-id])))))))
 
 (deftest state-shape-matches-declared-version
   ;; Drift alarm for kanban's versioned spool-state: update this key set and
