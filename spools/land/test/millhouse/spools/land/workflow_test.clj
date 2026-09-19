@@ -55,7 +55,7 @@
   ([run-id]
    (complete-ready! run-id {}))
   ([run-id attributes]
-   (workflow/complete! run-id {:by "test-agent" :attributes attributes})))
+   (workflow/complete! run-id {:by-identity "test-agent" :attributes attributes})))
 
 (def ^:private reviewed-base
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")

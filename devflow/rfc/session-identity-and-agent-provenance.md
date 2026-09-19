@@ -6,6 +6,13 @@
 - **Follow-up strand:** [`99501` — Revisit session identity and agent provenance](strand://99501)
 - **Conversation provenance:** Pi session `01a01133-4166-7e90-baaa-60cc2d0cf1eb`
 
+> **Historical note.** This parked RFC captures the pre-implementation surface.
+> The shipped contract now uses `--owner` only for ownership and canonical
+> `--by-identity` / `identity/by-identity` for domain actor attribution. Native
+> `--identity` / `--parent-identity` references and workflow executor/run
+> provenance remain separate. Old examples below are preserved as exploration
+> context, not current CLI guidance; use live help and the spool READMEs.
+
 ## 1. Brief
 
 Agents currently receive no canonical identity. When a Kanban operation requires

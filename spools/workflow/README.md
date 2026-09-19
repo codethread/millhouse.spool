@@ -107,11 +107,29 @@ literal; its evaluated result must be a non-blank string.
 ## Actor attribution
 
 Workflow mutations that record an actor (`complete`, `next`, `choose`, and
-`defer`) use `--by ID`, where `ID` is the caller's logical-session identity.
+`defer`) use `--by-identity ID` and persist canonical
+`identity/by-identity`, where `ID` is a friendly actor identity. Resolution in
+the identity registry is best-effort enrichment, so a nonblank unresolved value
+still records valid work attribution. The old `--by` spelling is not an alias.
 This matches Kanban note authorship and deliberately differs from Kanban claim
-ownership (`--owner ID`) and Harnesses agent operations (`--by-identity ID`).
-Read `strand help workflow <verb>` for whether a particular action records an
-actor; do not pass an unsupported alias.
+ownership (`--owner ID`) and native-session references (`--identity` and
+`--parent-identity`). Executor-owned completions instead record
+`workflow/executor` plus an optional opaque `workflow/executor-run-id`; these
+fields are provenance, never actor identity or authorization. The downstream
+Harnesses agent adapter contract is:
+
+```clojure
+(workflow/run-complete! {:run-id workflow-run-id
+                         :step gate-id
+                         :executor "agent"
+                         :executor-run-id harnesses-run-id
+                         :attributes outcome-attributes})
+```
+
+`:step` is mandatory for gates; `:attributes` and `:context` are optional. The
+adapter must not send its run ID as `:by-identity`. Provenance does not bypass
+protected-gate lifecycle hooks. Read `strand help workflow <verb>` for each
+action's supported flags.
 
 See the focused documentation above for graph composition, routing, run driving,
 executor request contracts, recovery, discovery, and reusable workflow inputs.

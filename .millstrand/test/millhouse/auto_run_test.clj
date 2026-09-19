@@ -163,7 +163,7 @@
                             {:attributes {:auto-run/worker-run-id (:id worker)
                                           :auto-run/finisher-run-id (:id finisher)}})
             (is (= [(:id finisher-step)]
-                   (mapv :id (:ready (workflow/complete! run-id {:by "fixture-worker"})))))
+                   (mapv :id (:ready (workflow/complete! run-id {:by-identity "fixture-worker"})))))
             (is (assignment/launch-ready? rt finisher))
             (is (= "ready" (attr-get (harnesses/run rt (:id worker)) :harness/status)))
             (is (not (workflow/done? run-id)))

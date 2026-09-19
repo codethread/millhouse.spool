@@ -412,10 +412,10 @@
         (let [data (failure #(verb "complete" "run-gate" :step gate))]
           (is (= :workflow/gate-actor-required (:reason data)))
           (is (= "agent" (:gate data))))
-        (let [result (verb "complete" "run-gate" :step gate :by "ci-bot")]
+        (let [result (verb "complete" "run-gate" :step gate :by-identity "ci-bot")]
           (is (true? (:done result)))
           (is (= "ci-bot"
-                 (get-in (weaver/show rt gate) [:attributes :workflow/outcome-by]))))))))
+                 (get-in (weaver/show rt gate) [:attributes :identity/by-identity]))))))))
 
 ;; --- choose -----------------------------------------------------------------
 
@@ -427,11 +427,11 @@
       (let [start (started "run-choose" :mixed)
             checkpoint (item-id start "Sign the work off")
             result (invoke {:subcommand ["choose"] :run-id "run-choose" :choice "ship"
-                            :input {"verdict" "pass"} :by "reviewer"})
+                            :input {"verdict" "pass"} :by-identity "reviewer"})
             closed (:attributes (weaver/show rt checkpoint))]
         (is (= "workflow choose" (:operation result)))
         (is (= "ship" (:workflow/outcome closed)))
-        (is (= "reviewer" (:workflow/outcome-by closed)))
+        (is (= "reviewer" (:identity/by-identity closed)))
         (is (= {:verdict "pass"} (:workflow/outcome-input closed)))
         (is (= ["Do the work" "Wait for CI"] (mapv :title (:ready result)))
             "the sibling frontier is untouched")))))
@@ -573,7 +573,7 @@
         (is (= :workflow/gate-actor-required
                (reason-of #(verb "next" "run-advance-gate" :step gate))))
         (is (true? (:done (verb "next" "run-advance-gate"
-                                :step gate :by "ci-bot"))))))))
+                                :step gate :by-identity "ci-bot"))))))))
 
 (deftest next-directs-a-ready-defer-to-the-role-specific-verb
   (with-runtime
@@ -604,7 +604,7 @@
       (let [root-id (get-in (verb "ready" "run-final-defer") [:root :id])
             result (invoke {:subcommand ["defer"] :run-id "run-final-defer"
                             :workflow "follow-on" :params {"scope" "queue"}
-                            :by "worker"})]
+                            :by-identity "worker"})]
         (is (= "workflow defer" (:operation result)))
         (is (= root-id (get-in result [:root :id]))
             "a final defer keeps the declaring root")
@@ -648,7 +648,7 @@
       ;; through real argv, so the declared arg-spec — subcommand, positional, and
       ;; every flag — is what the verb is reached by, not a hand-built arg map.
       (let [filled (from-argv rt ["defer" "run-middle-defer"
-                                  "--workflow" "solo" "--by" "worker"])]
+                                  "--workflow" "solo" "--by-identity" "worker"])]
         (is (= "workflow defer" (:operation filled)))
         (is (= ["Do the work"] (mapv :title (:ready filled))))
         (verb "complete" "run-middle-defer")
@@ -767,7 +767,7 @@
                :input {"verdict" "pass"}})
       (verb "complete" "run-await")
       (verb "complete" "run-await" :step (item-id (verb "ready" "run-await") "Wait for CI")
-            :by "ci-bot")
+            :by-identity "ci-bot")
       (let [result (verb "await" "run-await" :timeout-secs 5)]
         (is (= :done (:reason result)))
         (is (true? (:done result)))))))
@@ -798,8 +798,8 @@
       (started "run-empty-flags" :solo)
       (is (thrown? clojure.lang.ExceptionInfo (verb "complete" "run-empty-flags" :step ""))
           "an empty --step is a stated selector the request spec refuses, not inference")
-      (is (thrown? clojure.lang.ExceptionInfo (verb "complete" "run-empty-flags" :by ""))
-          "an empty --by is refused rather than dropped")
+      (is (thrown? clojure.lang.ExceptionInfo (verb "complete" "run-empty-flags" :by-identity ""))
+          "an empty --by-identity is refused rather than dropped")
       (is (= ["Do the work"] (mapv :title (:ready (verb "ready" "run-empty-flags"))))
           "neither refused request mutated the run"))))
 
@@ -824,7 +824,7 @@
       (let [entry (weaver/resolve-op rt 'workflow)
             leaf (fn [verb] (get-in entry [:arg-spec :subcommands verb]))
             complete-help (weaver/op! rt 'help ["workflow" "complete"])
-            by-help (some #(when (= "by" (:name %)) %)
+            by-help (some #(when (= "by-identity" (:name %)) %)
                           (get-in complete-help [:node :invocation :flags]))]
         (doseq [verb ["start" "complete" "choose" "next" "defer"]]
           (is (= :mutating (:hook-class (leaf verb))) verb)
@@ -834,11 +834,11 @@
             "choices is checkpoint discovery: a read, never a mutation")
         (is (= [:read :unbounded] ((juxt :hook-class :deadline-class) (leaf "await")))
             "await blocks by design and writes nothing")
-        (is (re-find #"Logical-session identity"
-                     (get-in (leaf "complete") [:flags :by :doc])))
-        (is (re-find #"not the agent surface's --by-identity"
-                     (get-in (leaf "complete") [:flags :by :doc])))
-        (is (re-find #"not the agent surface's --by-identity" (:doc by-help)))
+        (is (re-find #"Friendly identity"
+                     (get-in (leaf "complete") [:flags :by-identity :doc])))
+        (is (re-find #"identity/by-identity"
+                     (get-in (leaf "complete") [:flags :by-identity :doc])))
+        (is (re-find #"identity/by-identity" (:doc by-help)))
         (is (= #{"list" "show" "executors" "start" "ready" "choices" "complete"
                  "choose" "next" "defer" "await"}
                (set (keys (:subcommands (:arg-spec entry))))))
@@ -864,7 +864,7 @@
         (check "next" (verb "next" "run-returns"
                             :step (item-id (verb "ready" "run-returns")
                                            "Wait for CI")
-                            :by "ci-bot"))
+                            :by-identity "ci-bot"))
         (check "await" (verb "await" "run-returns" :timeout-secs 0))
         (started "run-returns-defer" :final-defer)
         (verb "complete" "run-returns-defer")
@@ -886,8 +886,8 @@
                (parse ["start" "r1" "--workflow" "scoped"
                        "--params" (json/write-str {:scope "queue"})])))
         (is (= {:subcommand ["ready"] :run-id "r1"} (parse ["ready" "r1"])))
-        (is (= {:subcommand ["complete"] :run-id "r1" :step "s-1" :by "agent"}
-               (parse ["complete" "r1" "--step" "s-1" "--by" "agent"])))
+        (is (= {:subcommand ["complete"] :run-id "r1" :step "s-1" :by-identity "agent"}
+               (parse ["complete" "r1" "--step" "s-1" "--by-identity" "agent"])))
         (is (= {:subcommand ["complete"] :run-id "r1"
                 :attr {"acme/verdict" "pass"} :attributes {"acme/exit" 0}}
                (parse ["complete" "r1" "--attr" "acme/verdict=pass"
@@ -898,10 +898,10 @@
         (is (= {:subcommand ["choose"] :run-id "r1" :choice "ship" :input {"verdict" "pass"}}
                (parse ["choose" "r1" "ship" "--input" (json/write-str {:verdict "pass"})])))
         (is (= {:subcommand ["next"] :run-id "r1" :choice "ship"
-                :input {"verdict" "pass"} :step "s-1" :by "agent"}
+                :input {"verdict" "pass"} :step "s-1" :by-identity "agent"}
                (parse ["next" "r1" "--choice" "ship"
                        "--input" (json/write-str {:verdict "pass"})
-                       "--step" "s-1" "--by" "agent"])))
+                       "--step" "s-1" "--by-identity" "agent"])))
         (is (= {:subcommand ["defer"] :run-id "r1" :workflow "follow-on"}
                (parse ["defer" "r1" "--workflow" "follow-on"])))
         (is (= {:subcommand ["await"] :run-id "r1" :timeout-secs 30}
@@ -916,8 +916,12 @@
                        (parse ["dispatch" "r1" "--workflow" "solo"])))
           (is (thrown? clojure.lang.ExceptionInfo (parse ["ready" "r1" "--limit" "5"])))
           (is (thrown? clojure.lang.ExceptionInfo (parse ["complete" "r1" "--notes" "done"])))
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
-                                (parse ["complete" "r1" "--by-identity" "worker"]))))
+          (doseq [argv [["complete" "r1" "--by" "worker"]
+                        ["next" "r1" "--by" "worker"]
+                        ["choose" "r1" "approve" "--by" "worker"]
+                        ["defer" "r1" "--workflow" "follow-on" "--by" "worker"]]]
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
+                                  (parse argv)))))
         (testing "argv reaches the engine through the handler"
           (is (= ["Do the work"]
                  (mapv :title (:ready (invoke (parse ["start" "run-argv" "--workflow" "solo"]))))))

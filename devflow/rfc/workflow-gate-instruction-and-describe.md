@@ -48,7 +48,8 @@ surface—for agents to distinguish:
 
 A `gate` remains role `"step"`, but carries `workflow/gate` with the waiter
 name (for example `"ci"`, `"human"`, or `"shell"`). Its ready view carries
-`:gate`; `complete!` requires a non-blank `:by` so the durable history says who
+`:gate`; `complete!` requires either non-blank actor (`:by-identity`) or trusted
+executor (`:executor`) provenance so the durable record says who or what
 asserted that the external condition was satisfied.
 
 The coordinator should treat a ready gate as **poll / hand off / await; do not
@@ -60,7 +61,7 @@ ordinary ready step       → workflow next <run-id>
 ready checkpoint          → workflow next <run-id> --choice <choice>
 ready defer               → workflow defer <run-id> --workflow <name> --params <json>
 ready gate                → await / hand off / observe executor
-external result confirmed → workflow next <run-id> --step <gate-id> --by <actor>
+external result confirmed → workflow next <run-id> --step <gate-id> --by-identity <actor>
 ```
 
 A gate can coexist with ordinary steps or other ready items. Every lifecycle
@@ -92,8 +93,9 @@ presence of `:gate` changes the worker protocol:
 - use the waiter name to identify the external owner or executor;
 - use optional descriptive metadata such as `:instruction` to understand the
   intended external action or wait; and
-- close only with an explicit strand ID and `:by`, after the external condition
-  is actually known to hold.
+- close only with an explicit strand ID and `--by-identity`, after the external
+  condition is actually known to hold; trusted adapters use the programmatic
+  executor-provenance completion contract instead.
 
 An unqualified next with only gates ready fails rather than silently asserting
 completion. A gate is also excluded from ordinary-step inference when a gate
@@ -107,7 +109,8 @@ the ready frontier—**before it is closed**.
 
 After close it is absent from `ready` because the gate is no longer ready. The
 underlying strand and its attributes remain inspectable through ordinary graph
-reads. The close records `workflow/outcome-by`.
+reads. A domain close records `identity/by-identity`; an executor-owned close
+records `workflow/executor` and optional `workflow/executor-run-id`.
 
 ### 3.4 Critical clarification: a shell gate does not execute its instruction
 

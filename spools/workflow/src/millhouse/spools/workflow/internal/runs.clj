@@ -78,12 +78,13 @@
 
 (def ^:private gate-actor-guidance
   (fmt/reflow
-   "|Re-run with --by naming who closed the gate."))
+   "|Re-run with --by-identity naming who closed the gate. Trusted executor
+    |adapters instead use the Clojure completion API's executor provenance."))
 
 (def ^:private gate-selection-guidance
   (fmt/reflow
-   "|A gate is never inferred. Re-run with --step naming it and --by naming who
-    |closed it."))
+   "|A gate is never inferred. Re-run with --step naming it and --by-identity
+    |naming who closed it."))
 
 (def ^:private defer-guidance
   (fmt/reflow
@@ -131,15 +132,18 @@
                        "Workflow attention result is invalid"
                        {:run-id run-id}))
 
-(defn require-gate-actor!
-  "Return gate `item` once `by` attributes a deliberate close of it.
+(defn require-gate-provenance!
+  "Return gate `item` once its deliberate close has actor or executor provenance.
 
-  A gate records that something outside this run happened, and `by` is the whole
-  record of who decided so. The engine requires it too; refusing here keeps the
-  failure in the same role vocabulary as the rest of the verb."
-  [run-id item by]
-  (when (and (:gate item) (not (util/non-blank-string? by)))
-    (fail! "Closing a workflow gate requires an actor"
+  User-facing workflow mutations supply `by-identity`. Trusted adapters may
+  instead supply `executor`; executor names and run IDs are not identity evidence.
+  Refusing here keeps the failure in the same role vocabulary as the rest of the
+  verb."
+  [run-id item by-identity executor]
+  (when (and (:gate item)
+             (not (or (util/non-blank-string? by-identity)
+                      (util/non-blank-string? executor))))
+    (fail! "Closing a workflow gate requires actor or executor provenance"
            {:reason :workflow/gate-actor-required
             :run-id run-id
             :step (:id item)

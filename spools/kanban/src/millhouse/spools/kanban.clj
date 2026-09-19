@@ -807,7 +807,8 @@
              :note (if clipped? (str (subs note 0 note-text-cap) " …") note)
              :at (or (attr-value strand :note/at) (:created_at strand))}
       clipped? (assoc :truncated true)
-      (attr-value strand :note/by) (assoc :by (attr-value strand :note/by))
+      (attr-value strand :identity/by-identity)
+      (assoc :by-identity (attr-value strand :identity/by-identity))
       (attr-value strand note-kind-attr) (assoc :kind (attr-value strand note-kind-attr)))))
 
 (defn- latest-notes-by-target
@@ -994,27 +995,29 @@
   "Append a note to a card or task via the blessed notes relation.
 
   The note rides the shared `notes` edge (`millstrand.api.notes.alpha/note!`) with
-  optional inherited `note/by` attribution and the kanban-owned `note/kind` view
-  hint, so concurrent agents never race a read-merge-write cycle. Every note
-  keeps its own timestamp and attribution. Note the doing-task as you go — that
-  is what `kanban card <id>` surfaces as each task's `:latest-note` — and keep
-  important user-visible notes on the epic or feature, not only in the task's
-  development log. `--kind` stamps the open `note/kind`
-  view hint (blessed values: activity, decision, review-dump, summary). A
-  task note reports its owning card alongside the task when one parents it.
+  optional canonical `identity/by-identity` attribution and the kanban-owned
+  `note/kind` view hint, so concurrent agents never race a read-merge-write cycle.
+  Every note keeps its own timestamp and attribution. Note the doing-task as you
+  go — that is what `kanban card <id>` surfaces as each task's `:latest-note` —
+  and keep important user-visible notes on the epic or feature, not only in the
+  task's development log. `--kind` stamps the open `note/kind` view hint (blessed
+  values: activity, decision, review-dump, summary). A task note reports its
+  owning card alongside the task when one parents it.
 
   ```sh
   strand kanban note task01 \"Parser is green; review next\" \\
-    --by claude --kind activity
-  strand --stdin kanban note task01 :stdin --by claude --kind review-dump <<'NOTE'
+    --by-identity claude --kind activity
+  strand --stdin kanban note task01 :stdin --by-identity claude --kind review-dump <<'NOTE'
   Review findings and command output belong on the task, not the card.
   NOTE
   ```"
   [runtime id text flags]
   (let [target (note-target runtime (require-non-blank! :id id))
         text (require-non-blank! :text text)
+        actor (some->> (get flags "--by-identity")
+                       (require-non-blank! :by-identity))
         decorating (cond-> {}
-                     (get flags "--by") (assoc :by (get flags "--by"))
+                     actor (assoc :identity/by-identity actor)
                      (get flags "--kind") (assoc note-kind-attr
                                                  (require-non-blank! :kind
                                                                      (get flags "--kind"))))
@@ -1618,7 +1621,8 @@
              :positionals [{:name :id :required? true :doc "Feature card or task id."}]
              :hook-class :mutating :deadline-class :standard}
     "note" {:doc "Append a note: user-visible updates on epics/features, development logs on tasks."
-            :flags {:by {:doc "Friendly identity authoring the note; never changes ownership."}
+            :flags {:by-identity
+                    {:doc "Friendly identity authoring the note; never changes ownership."}
                     :kind {:doc "Open note/kind view hint: activity, decision, review-dump, summary."}}
             :positionals [{:name :id :required? true :doc "Kanban card or task id."}
                           {:name :text

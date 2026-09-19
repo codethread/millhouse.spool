@@ -282,7 +282,7 @@
   no prose field a reader would have to consult instead of the exit code."
   [run-id gate-id attempt-id custody-handle exit output]
   (workflow/complete! run-id
-                      {:step gate-id :by "shell"
+                      {:step gate-id :executor "shell"
                        :attributes (cond-> {"shell/running" nil
                                             "shell/attempt-id" attempt-id
                                             "shell/custody-handle" custody-handle
@@ -1211,7 +1211,7 @@
                               \"shell/timeout-secs\" 600})
   ```
 
-  A zero exit closes the gate through `workflow/complete!` with `:by \"shell\"`
+  A zero exit closes the gate through `workflow/complete!` with `:executor \"shell\"`
   and records `shell/exit-code` plus the bounded 16 KiB combined stdout/stderr
   tail in `shell/output`. A non-zero exit, timeout, spawn error, or invalid
   request leaves the gate ready with `gate/error`; process failures also record

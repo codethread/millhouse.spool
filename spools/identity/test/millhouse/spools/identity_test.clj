@@ -250,9 +250,11 @@
         (is (= "minted" (:result fresh)))
         (is (= (assoc fresh :result "recovered") resumed))
         (is (= (str "Your Millstrand identity is " (:identity fresh)
-                    ". Use it as `--owner " (:identity fresh) "` for `kanban claim`, `--by "
-                    (:identity fresh) "` for Kanban notes and workflow mutations, and `--by-identity "
-                    (:identity fresh) "` for agent operations. Inspect live help; never pass an unsupported flag or invent another identity.")
+                    ". Use it as `--owner " (:identity fresh)
+                    "` for `kanban claim` and `--by-identity " (:identity fresh)
+                    "` for Kanban notes, workflow mutations, and agent operations. "
+                    "Keep `--identity` and `--parent-identity` for native-session references. "
+                    "Inspect live help; never pass an unsupported flag or invent another identity.")
                (:instruction fresh)))
         (is (= "pi" (attr-get record :identity/harness)))
         (is (= "native-1" (attr-get record :identity/native-session-id)))

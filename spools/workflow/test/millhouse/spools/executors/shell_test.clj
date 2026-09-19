@@ -1082,7 +1082,8 @@
                                                     :probe @after-probe}))})]
                 (is (= ["After"] (mapv :title (:ready after))))
                 (is (= "closed" (get-in after [:gate :state])))
-                (is (= "shell" (get-in after [:gate :attributes :workflow/outcome-by])))
+                (is (= "shell" (get-in after [:gate :attributes :workflow/executor])))
+                (is (nil? (get-in after [:gate :attributes :identity/by-identity])))
                 (is (= "shell-ok" (get-in after [:gate :attributes :shell/output]))))))))
       (finally
         (when (and @mill-process (.isAlive ^Process @mill-process))
@@ -1111,7 +1112,8 @@
       (let [gate-id (:id (shell-gate-strand rt "pass"))
             closed (await-eventually #(let [g (weaver/show rt gate-id)]
                                         (when (= "closed" (:state g)) g)))]
-        (is (= "shell" (attr closed :workflow/outcome-by)))
+        (is (= "shell" (attr closed :workflow/executor)))
+        (is (nil? (attr closed :identity/by-identity)))
         (is (zero? (attr closed :shell/exit-code)))
         (is (string? (attr closed :shell/output)))
         (is (nil? (attr closed :gate/error)))
@@ -1131,7 +1133,7 @@
         (is (str/includes? (attr errored :gate/error) "exited 1"))
         ;; the gate stays ready and stamped, not masquerading as a closed step
         (is (= [gate-id] (mapv :id (filter #(= "shell" (:gate %)) (workflow/ready "fail")))))
-        (is (nil? (attr (weaver/show rt gate-id) :workflow/outcome-by)))
+        (is (nil? (attr (weaver/show rt gate-id) :identity/by-identity)))
         ;; discoverable through both the stall predicate and the coordinator query
         (is (= gate-id (:gate (shell/shell-stalled? (ready-shell-gate "fail")))))
         (is (some #(= gate-id (:id %)) (weaver/list-query rt 'stalled-shell-gates {})))))))

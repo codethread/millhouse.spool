@@ -465,27 +465,27 @@
       (let [gate (first (:ready (workflow/complete! "pr-flow")))]
         (is (= "Wait for CI on pr-42" (:title gate)))
         (is (= "ci" (:gate gate)))
-        (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by "ci-bot"}))))))
-        (is (= "ci-bot" (get-in (weaver/show rt (:id gate)) [:attributes :workflow/outcome-by]))))
+        (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by-identity "ci-bot"}))))))
+        (is (= "ci-bot" (get-in (weaver/show rt (:id gate)) [:attributes :identity/by-identity]))))
       ;; red verdict routes into the fix-CI loop, which recomposes the CI round
       (is (= "Diagnose CI failure" (:title (first (:ready (workflow/choose! "pr-flow" :red))))))
       (is (= "Push CI fix" (:title (first (:ready (workflow/complete! "pr-flow"))))))
       (is (= "Wait for CI on pr-42" (:title (first (:ready (workflow/complete! "pr-flow"))))))
-      (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by "ci-bot"}))))))
+      (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by-identity "ci-bot"}))))))
       ;; green verdict hands off to the review round
       (let [review-gate (first (:ready (workflow/choose! "pr-flow" :green)))]
         (is (= "Wait for reviewer feedback on pr-42" (:title review-gate)))
         (is (= "human" (:gate review-gate))))
-      (is (= "Judge review outcome" (:title (first (:ready (workflow/complete! "pr-flow" {:by "reviewer"}))))))
+      (is (= "Judge review outcome" (:title (first (:ready (workflow/complete! "pr-flow" {:by-identity "reviewer"}))))))
       ;; changes requested: fix-and-push recomposes the same CI round, whose
       ;; green verdict flows back into review — the nested loop the flow needs
       (is (= "Address review comments" (:title (first (:ready (workflow/choose! "pr-flow" :changes-requested))))))
       (is (= "Wait for CI on pr-42" (:title (first (:ready (workflow/complete! "pr-flow"))))))
-      (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by "ci-bot"}))))))
+      (is (= "Judge CI result" (:title (first (:ready (workflow/complete! "pr-flow" {:by-identity "ci-bot"}))))))
       (is (= "Wait for reviewer feedback on pr-42" (:title (first (:ready (workflow/choose! "pr-flow" :green))))))
-      (is (= "Judge review outcome" (:title (first (:ready (workflow/complete! "pr-flow" {:by "reviewer"}))))))
+      (is (= "Judge review outcome" (:title (first (:ready (workflow/complete! "pr-flow" {:by-identity "reviewer"}))))))
       ;; approval routes to merge; the run closes itself when merge completes
-      (is (= "Merge pr-42" (:title (first (:ready (workflow/choose! "pr-flow" :approved {} {:by "agent-driver"}))))))
+      (is (= "Merge pr-42" (:title (first (:ready (workflow/choose! "pr-flow" :approved {} {:by-identity "agent-driver"}))))))
       (is (= {:ready [] :done true} (workflow/complete! "pr-flow")))
       (is (workflow/done? "pr-flow")))))
 
@@ -527,7 +527,7 @@
         (is (= "ci-watch" (:skills gate))))
       ;; red verdict routes into the fix loop: the non-overridden fix action
       ;; keeps the github reference (partial override at work)
-      (workflow/complete! "pr-forge-gl" {:by "gitlab-ci"})
+      (workflow/complete! "pr-forge-gl" {:by-identity "gitlab-ci"})
       (let [diagnose (first (:ready (workflow/choose! "pr-forge-gl" :red)))]
         (is (= "Diagnose CI failure" (:title diagnose)))
         (is (= "pr.ci.fix" (:action-ref diagnose)))
@@ -798,7 +798,7 @@
                                 (workflow/complete! "bad-step-run" {:step "no-such-step"})))
           (is (= "active" (:state (weaver/show rt a-id)))))))))
 
-(deftest workflow-gate-requires-by-and-records-who-closed-it
+(deftest workflow-gate-requires-actor-or-executor-and-records-provenance
   (with-runtime
     (fn [rt _]
       (let [definition (workflow/workflow
@@ -807,36 +807,63 @@
                         (workflow/gate :ci "Wait for CI to go green" :ci :depends-on [:push])
                         (workflow/step :deploy "Deploy" :self :depends-on [:ci]))]
         (workflow/start! "gated-run" definition {})
-        ;; the non-gate :push step closes without :by, reaching the gate
+        ;; the non-gate :push step closes without :by-identity, reaching the gate
         (let [gate (first (:ready (workflow/complete! "gated-run")))
               gate-id (:id gate)]
           (is (= "ci" (:gate gate)))
           (is (= "step" (:role gate)))
-          ;; the gate refuses to close without :by and stays active
+          ;; the gate refuses to close without :by-identity and stays active
           (try
             (workflow/complete! "gated-run")
-            (is false "expected gate complete to fail without :by")
+            (is false "expected gate complete to fail without :by-identity")
             (catch clojure.lang.ExceptionInfo e
-              (is (re-find #"Gate steps require a non-blank :by" (ex-message e)))
+              (is (re-find #"Gate steps require actor or executor provenance" (ex-message e)))
               (is (= "ci" (:gate (ex-data e))))
               (is (= "ci" (get-in (ex-data e) [:step :gate])))))
-          ;; a nil or blank :by is no better than a missing one
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Gate steps require a non-blank :by"
-                                (workflow/complete! "gated-run" {:by nil})))
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Gate steps require a non-blank :by"
-                                (workflow/complete! "gated-run" {:by "  "})))
+          ;; a nil or blank :by-identity is no better than a missing one
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                #"completion provenance must be a non-blank string"
+                                (workflow/complete! "gated-run" {:by-identity nil})))
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                #"completion provenance must be a non-blank string"
+                                (workflow/complete! "gated-run" {:by-identity "  "})))
           (is (= "active" (:state (weaver/show rt gate-id))))
-          ;; an external actor closes the gate with :by; :deploy becomes ready
-          (let [remaining (:ready (workflow/complete! "gated-run" {:by "ci"
+          ;; an external actor closes the gate with :by-identity; :deploy becomes ready
+          (let [remaining (:ready (workflow/complete! "gated-run" {:by-identity "ci"
                                                                    :attributes {"ci/result" "green"}}))
                 closed (weaver/show rt gate-id)]
             (is (= "closed" (:state closed)))
-            (is (= "ci" (get-in closed [:attributes :workflow/outcome-by])))
+            (is (= "ci" (get-in closed [:attributes :identity/by-identity])))
             (is (= "green" (get-in closed [:attributes :ci/result])))
             (is (= [{:title "Deploy" :role "step"}]
                    (mapv #(select-keys % [:title :role]) remaining)))))))))
 
-(deftest workflow-non-gate-step-closes-without-by
+(deftest workflow-completion-api-separates-executor-and-run-id-from-identity
+  (with-runtime
+    (fn [rt _]
+      (let [definition (workflow/workflow
+                        "Adapter gate"
+                        (workflow/gate :agent "Await delegated run" :agent))
+            gate (first (:ready (workflow/start! "adapter-run" definition {})))
+            result (workflow/run-complete!
+                    {:run-id "adapter-run"
+                     :step (:id gate)
+                     :executor "agent"
+                     :executor-run-id "unresolved-run-42"})
+            closed (weaver/show rt (:id gate))]
+        (is (true? (:done result)))
+        (is (= "agent" (get-in closed [:attributes :workflow/executor])))
+        (is (= "unresolved-run-42"
+               (get-in closed [:attributes :workflow/executor-run-id])))
+        (is (nil? (get-in closed [:attributes :identity/by-identity]))
+            "an opaque Harnesses run ID is never recorded as identity evidence")
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (workflow/run-complete!
+                      {:run-id "adapter-run"
+                       :step (:id gate)
+                       :executor-run-id "orphan-run"})))))))
+
+(deftest workflow-non-gate-step-closes-without-provenance
   (with-runtime
     (fn [rt _]
       (let [definition (workflow/workflow "Plain run" (workflow/step :a "Do A" :self))
@@ -844,19 +871,22 @@
         (is (= {:ready [] :done true} (workflow/complete! "plain-gate-run")))
         (let [closed (weaver/show rt (:id step))]
           (is (= "closed" (:state closed)))
-          (is (nil? (get-in closed [:attributes :workflow/outcome-by]))))))))
+          (is (nil? (get-in closed [:attributes :identity/by-identity]))))))))
 
-(deftest workflow-non-gate-step-records-by-when-supplied
-  ;; :by is recorded on any step completion when supplied (provenance parity),
+(deftest workflow-non-gate-step-records-actor-when-supplied
+  ;; :by-identity is recorded on any step completion when supplied (provenance parity),
   ;; even though only gates require it
   (with-runtime
     (fn [rt _]
       (let [definition (workflow/workflow "Plain run with by" (workflow/step :a "Do A" :self))
             [step] (:ready (workflow/start! "plain-by-run" definition {}))]
-        (is (= {:ready [] :done true} (workflow/complete! "plain-by-run" {:by "agent-driver"})))
+        (is (= {:ready [] :done true}
+               (workflow/complete! "plain-by-run"
+                                   {:by-identity "not-registered-worker"})))
         (let [closed (weaver/show rt (:id step))]
           (is (= "closed" (:state closed)))
-          (is (= "agent-driver" (get-in closed [:attributes :workflow/outcome-by]))))))))
+          (is (= "not-registered-worker"
+                 (get-in closed [:attributes :identity/by-identity]))))))))
 
 (workflow/defworkflow empty-continuation-workflow
   "Finish a routed run without new work."
@@ -906,7 +936,7 @@
             (is (not= old-root-id (:id new-root)))
             (is (= "active" (:state new-root)))))))))
 
-(deftest workflow-choose-records-outcome-by
+(deftest workflow-choose-records-actor-identity
   (with-runtime
     (fn [rt _]
       (let [definition (workflow/workflow
@@ -914,11 +944,11 @@
                         (workflow/checkpoint :approve "Approve it"
                                              :choices [{:key :approved :label "Approve"}]))
             [step] (:ready (workflow/start! "signoff-run" definition {}))]
-        (workflow/choose! "signoff-run" :approved {} {:by "agent:reviewer"})
+        (workflow/choose! "signoff-run" :approved {} {:by-identity "agent:reviewer"})
         (let [strand (weaver/show rt (:id step))]
           (is (= "closed" (:state strand)))
           (is (= "approved" (get-in strand [:attributes :workflow/outcome])))
-          (is (= "agent:reviewer" (get-in strand [:attributes :workflow/outcome-by]))))))))
+          (is (= "agent:reviewer" (get-in strand [:attributes :identity/by-identity]))))))))
 
 (defn- loopy-body
   "The shared body of the loopy stage and its revision round.
@@ -1577,7 +1607,8 @@
                                            [:= [:attr "workflow/procedure"] "inner"]]
                                        {}))]
           (is (= "closed" (:state join)))
-          (is (= "engine" (get-in join [:attributes :workflow/outcome-by]))))
+          (is (= "engine" (get-in join [:attributes :workflow/executor])))
+          (is (nil? (get-in join [:attributes :identity/by-identity]))))
         (is (= {:ready [] :done true} (workflow/complete! "join-run")))
         (is (workflow/done? "join-run"))))))
 
@@ -1635,7 +1666,7 @@
                            {})
           (is (= ["Wait"]
                  (mapv :title (:ready (workflow/advance! "advance-with-gate")))))
-          (let [thrown (try (workflow/advance! "advance-with-gate" {:by "ci-bot"})
+          (let [thrown (try (workflow/advance! "advance-with-gate" {:by-identity "ci-bot"})
                             (catch clojure.lang.ExceptionInfo e e))]
             (is (= :workflow/ready-next-absent (:reason (ex-data thrown))))
             (is (= ["Wait"] (mapv :title (:ready (ex-data thrown)))))
@@ -3456,7 +3487,7 @@
           (is (= "defer" (:role pending)))
           (is (= ["wt-two-step"] (:workflows pending)))
           (let [filled (workflow/defer! "sandwich" :wt-two-step
-                                        {:defer-scope "the thing"} {:by "worker-1"})
+                                        {:defer-scope "the thing"} {:by-identity "worker-1"})
                 join (weaver/show rt (:id pending))]
             (is (= ["Plan the thing"] (mapv :title (:ready filled)))
                 "the expansion is ready; step c is not")
@@ -3474,15 +3505,20 @@
                        (:workflow/deferred-definition attrs)))
                 (is (re-matches #"[0-9a-f]{16}" (:workflow/deferred-fingerprint attrs)))
                 (is (= {:defer-scope "the thing"} (:workflow/deferred-params attrs)))
-                (is (= "worker-1" (:workflow/deferred-by attrs)))
+                (is (= "worker-1" (:identity/by-identity attrs)))
                 (is (nil? (:workflow/outcome attrs))
                     "a filled defer is procedure bookkeeping, not an outcome")))
             (workflow/complete! "sandwich")
-            (let [after-ship (workflow/complete! "sandwich")]
+            (let [after-ship (workflow/complete! "sandwich")
+                  closed-join (weaver/show rt (:id pending))]
               (is (= ["Step c"] (mapv :title (:ready after-ship)))
                   "step c becomes ready only once the expansion's exits close")
-              (is (= "closed" (:state (weaver/show rt (:id pending))))
-                  "the join auto-closed through the existing cascade"))
+              (is (= "closed" (:state closed-join))
+                  "the join auto-closed through the existing cascade")
+              (is (= "worker-1" (get-in closed-join [:attributes :identity/by-identity]))
+                  "auto-close preserves the deliberate defer actor")
+              (is (= "engine" (get-in closed-join [:attributes :workflow/executor]))
+                  "engine provenance does not overwrite actor evidence"))
             (is (true? (:done (workflow/complete! "sandwich"))))))))))
 
 (deftest a-final-defer-returns-without-abandoning-parallel-siblings
@@ -3584,7 +3620,7 @@
         (doseq [[label call] [[:blank-run-id #(workflow/defer! "" :wt-spike {})]
                               [:string-workflow #(workflow/defer! "req-1" "wt-spike" {})]
                               [:non-map-params #(workflow/defer! "req-1" :wt-spike [1 2])]
-                              [:blank-by #(workflow/defer! "req-1" :wt-spike {} {:by ""})]]]
+                              [:blank-by #(workflow/defer! "req-1" :wt-spike {} {:by-identity ""})]]]
           (testing (name label)
             (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                   #"Invalid workflow defer request"
@@ -4028,7 +4064,7 @@
       (workflow/start! "history" (defer-sandwich #{:wt-two-step}) {})
       (workflow/complete! "history")
       (let [defer-id (:id (workflow/ready-step "history"))]
-        (workflow/defer! "history" :wt-two-step {} {:by "worker-1"})
+        (workflow/defer! "history" :wt-two-step {} {:by-identity "worker-1"})
         (dotimes [_ 3] (workflow/complete! "history"))
         (let [molecules (workflow/run-history "history")
               events (mapcat :events molecules)]

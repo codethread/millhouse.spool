@@ -356,18 +356,19 @@
             card-id (get-in (op! rt "add" "Attributed work") [:card :id])]
         (is (contains? claim-flags :owner))
         (is (contains? claim-flags :by-identity))
-        (is (= #{:by :kind} (set (keys note-flags))))
+        (is (= #{:by-identity :kind} (set (keys note-flags))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
                               (op! rt "claim" card-id "--by" "worker" "--branch" "branch")))
         (let [claimed (op! rt "claim" card-id "--owner" "worker"
                            "--by-identity" "dispatcher" "--branch" "branch")]
           (is (= "worker" (get-in claimed [:claim :owner])))
           (is (= "dispatcher" (get-in claimed [:claim :by-identity]))))
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by-identity"
-                              (op! rt "note" card-id "No alias"
-                                   "--by-identity" "worker")))
-        (let [noted (op! rt "note" card-id "Attributed note" "--by" "reviewer")]
-          (is (= "reviewer" (get-in noted [:strand :attributes :note/by])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
+                              (op! rt "note" card-id "No alias" "--by" "worker")))
+        (let [noted (op! rt "note" card-id "Attributed note"
+                         "--by-identity" "unregistered-reviewer")]
+          (is (= "unregistered-reviewer"
+                 (get-in noted [:strand :attributes :identity/by-identity])))
           (is (= "worker" (:owner (kanban/current-ownership rt card-id)))))))))
 
 (deftest kanban-add-preserves-anonymous-and-explicit-reporters-without-owning
@@ -941,16 +942,17 @@
           (weaver/update! rt card-id {:edges [{:type "parent-of" :to (:id task)}
                                               {:type "parent-of" :to (:id review)}]})
           (weaver/update! rt (:id review) {:edges [{:type "depends-on" :to (:id task)}]})
-          (op! rt "note" card-id "Decided to keep lane names" "--by" "agent-a")
+          (op! rt "note" card-id "Decided to keep lane names" "--by-identity" "agent-a")
           (op! rt "note" card-id
                "Done: impl. Next: review. Validation: tests green."
-               "--by" "agent-a")
+               "--by-identity" "agent-a")
           (testing "card view joins notes newest-first, work, and frontier"
             (let [view (op! rt "card" card-id)]
               (is (= card-id (get-in view [:card :id])))
               (is (= 2 (count (:notes view))))
               (is (= "Done: impl. Next: review. Validation: tests green."
                      (:note (first (:notes view)))))
+              (is (= "agent-a" (:by-identity (first (:notes view)))))
               (is (= #{(:id task) (:id review)}
                      (set (map :id (:active-work view)))))
               ;; review depends on the task, so only the task is ready
@@ -974,10 +976,10 @@
             task-id (get-in (op! rt "task" "add" feature-id "Wire the thing") [:task :id])]
         (testing "a task note reports the task and its owning card"
           (let [noted (op! rt "note" task-id "Done: wiring. Next: tests."
-                           "--by" "agent-a" "--kind" "activity")]
+                           "--by-identity" "agent-a" "--kind" "activity")]
             (is (= task-id (:task noted)))
             (is (= feature-id (:card noted)))
-            (is (= "agent-a" (get-in noted [:strand :attributes :note/by])))
+            (is (= "agent-a" (get-in noted [:strand :attributes :identity/by-identity])))
             (is (= "activity" (get-in noted [:strand :attributes :note/kind])))
             (is (nil? (get-in noted [:strand :attributes :kanban/note])))))
         (testing "the newest task note surfaces as :latest-note in every task projection"
