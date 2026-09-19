@@ -69,7 +69,7 @@ without the dispatcher-added `operation` key):
   "identity": "warm-silver-lemur",
   "strand-id": "abc12",
   "result": "minted",
-  "instruction": "Your Millstrand identity is warm-silver-lemur. Use it as `--owner warm-silver-lemur` for `kanban claim`, `--by warm-silver-lemur` for Kanban notes and workflow mutations, and `--by-identity warm-silver-lemur` for agent operations. Inspect live help; never pass an unsupported flag or invent another identity."
+  "instruction": "Your Millstrand identity is warm-silver-lemur. Use it as `--owner warm-silver-lemur` for `kanban claim` and `--by-identity warm-silver-lemur` for Kanban notes, workflow mutations, and agent operations. Keep `--identity` and `--parent-identity` for native-session references. Inspect live help; never pass an unsupported flag or invent another identity."
 }
 ```
 
@@ -86,13 +86,17 @@ identity flags to one command:
 | Surface | Flag | Stored meaning |
 | --- | --- | --- |
 | `strand kanban claim` | `--owner ID` | Current owner of the card/work root (`owner`) |
-| `strand kanban note` | `--by ID` | Author attribution on the note (`note/by`) |
-| `strand workflow complete`, `next`, `choose`, `defer` | `--by ID` | Workflow actor: `workflow/outcome-by` when closing an item, `workflow/deferred-by` when filling a defer |
+| `strand kanban note` | `--by-identity ID` | Author attribution on the durable note (`identity/by-identity`) |
+| `strand workflow complete`, `next`, `choose`, `defer` | `--by-identity ID` | Actor attribution on the durable action/result item (`identity/by-identity`) |
 | `strand agent ...` and `strand identity register` | `--by-identity ID` | Identity authorizing an agent or identity operation |
 
-Existing `owner` and `note/by` values remain readable. These are intentional
-domain distinctions, not compatibility aliases: use `strand help <command>`
-for the exact accepted flags and fail rather than guessing.
+These are intentional domain distinctions, not compatibility aliases: the old
+actor spelling `--by` is rejected. `--by-identity` values are friendly identity
+strings; an unresolved nonblank actor remains valid work attribution while
+identity graph enrichment proceeds best-effort. Executor names and opaque run
+IDs belong in workflow executor provenance, not in identity attribution. Use
+`strand help <command>` for the exact accepted flags and fail rather than
+guessing.
 
 `--identity NAME` is a session-scoped reference, not a rename or adoption
 request. `NAME` must resolve uniquely and already be bound to the exact harness

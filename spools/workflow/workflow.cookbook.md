@@ -267,7 +267,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
   whole procedure".
 - **The join auto-closes — never complete it by hand.** When you close the last
   inner step beneath a `call`, its `procedure` join closes in the *same*
-  transaction (stamped `workflow/outcome-by "engine"`). Joins never surface as
+  transaction (stamped `workflow/executor "engine"`). Joins never surface as
   ready work, so an agent driving the run sees the parent's next step, not a
   bookkeeping strand (contract [`README.md`](./README.md)).
 - **One definition, many call sites.** The same `review` can be `call`-ed by a proposal stage and a spec stage with different `:artifact` params; a CI-round sub-flow can be recomposed by every stage that pushes commits. That is the point of `call` over duplication.
@@ -313,7 +313,7 @@ Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spool
 
 (workflow/defer! "intake-123" :devflow
                  {:feature "kanban-web-ui"}
-                 {:by "worker-1"})
+                 {:by-identity "worker-1"})
 ```
 
 `defer!` leaves the current root in place. It pours the selected workflow below that root and changes the defer into a procedure join. When the selected routine finishes, the join closes and `:record` becomes ready.
@@ -346,7 +346,7 @@ Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the
   {:entrypoints #{:start}}
   (workflow/bind-defers final-selection {:perform-work #{:spike :devflow}}))
 
-(workflow/defer! "intake-456" :spike {:scope "queue"} {:by "worker-2"})
+(workflow/defer! "intake-456" :spike {:scope "queue"} {:by-identity "worker-2"})
 ```
 
 The selected routine pours below the existing root. The defer join closes when that routine exits, but the run is done only when `:audit` is also closed. Filling the final defer never closes the declaring root early and never abandons parallel siblings.
@@ -361,7 +361,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
 
 **Situation.** Some steps aren't the driving agent's to *do* — they're waits: CI must go green, a sub-agent must finish, a human must weigh in. The agent should be told to poll or hand off, not to try the work itself.
 
-**Composition.** Model each wait as a `gate` with a freeform waiter hint (`:ci`, `:agent`, `:human`). The external actor closes it via `complete!` with a mandatory `:by`. Optionally register an executor for a waiter class so `await!` stays quiet while an adapter is healthy. The verdict routes here use the symbol form, so each one must name a Var holding a definition of its own.
+**Composition.** Model each wait as a `gate` with a freeform waiter hint (`:ci`, `:agent`, `:human`). A domain actor closes it via `complete!` with mandatory `:by-identity` attribution. A trusted executor adapter instead uses `run-complete!` with `:executor` and, when available, its opaque `:executor-run-id`. Optionally register an executor for a waiter class so `await!` stays quiet while an adapter is healthy. The verdict routes here use the symbol form, so each one must name a Var holding a definition of its own.
 
 ```clojure
 (require '[clojure.spec.alpha :as s]
@@ -389,8 +389,13 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
                                    {:key :red :label "CI red"
                                     :next 'my.ns/pr-fix-ci}])))
 
-;; the external actor (or an adapter) closes the gate — :by is mandatory
-(workflow/complete! "pr-flow" {:step ci-wait-id :by "ci-bot"})
+;; a domain actor closes the gate with actor attribution
+(workflow/complete! "pr-flow" {:step ci-wait-id :by-identity "ci-operator"})
+;; or a trusted adapter reports executor provenance, keeping opaque run IDs separate
+(workflow/run-complete! {:run-id "pr-flow"
+                         :step ci-wait-id
+                         :executor "agent"
+                         :executor-run-id "opaque-harnesses-run-42"})
 ;; the driving agent then observes the world and decides the verdict checkpoint
 (workflow/choose! "pr-flow" :green)
 ```
@@ -402,9 +407,12 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   wait for `<waiter>`". `step-view` surfaces it as `:gate "ci"`, so a driving
   agent treats a ready gate as **poll/hand off, don't do** (contract
   [`README.md`](./README.md)).
-- **`:by` is mandatory on a gate close** and records `workflow/outcome-by`, so
-  the audit trail always names who satisfied the wait. `complete!` fails loudly
-  if you try to close a gate without it.
+- **A gate close requires provenance.** Domain actions use `:by-identity`, stored
+  as `identity/by-identity`; trusted adapters use `:executor`, optionally paired
+  with `:executor-run-id`. `run-complete!` accepts exactly those fields alongside
+  `:run-id`, explicit `:step`, `:attributes`, and `:context`. An executor run ID
+  without its executor is rejected, and executor provenance never becomes an
+  identity or grants permission to close protected queue gates.
 - **Executors keep `await!` honest per waiter class.** Register an executor for
   `:agent` and a coordinator's `await!` stays silent while that adapter is
   healthy, waking only on a genuine stall. A waiter with *no* registered

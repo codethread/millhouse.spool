@@ -107,8 +107,9 @@ claiming a feature does not make all ready tasks active at once. Complete each
 task as you go with `strand update TASK_ID --state closed`. Finish cascades mark
 remaining open tasks as `unactioned`, not completed work.
 
-Notes retain their current `--by ID`/`note/by` contract until the dedicated
-actor-flag migration lands. Note/review authorship never changes ownership.
+Notes accept `--by-identity ID` and persist canonical
+`identity/by-identity` attribution on each durable note record. The old `--by`
+spelling is not an alias. Note/review authorship never changes ownership.
 
 Notes use the shared `notes` relation and target only a card or task. Important
 user-visible notes must always be on the epic or feature: decisions, milestones,

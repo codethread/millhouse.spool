@@ -244,7 +244,7 @@ Return durable stall detail for a ready `:shell` gate view, or nil.
                               "shell/timeout-secs" 600})
   ```
 
-  A zero exit closes the gate through `workflow/complete!` with `:by "shell"`
+  A zero exit closes the gate through `workflow/complete!` with `:executor "shell"`
   and records `shell/exit-code` plus the bounded 16 KiB combined stdout/stderr
   tail in `shell/output`. A non-zero exit, timeout, spawn error, or invalid
   request leaves the gate ready with `gate/error`; process failures also record

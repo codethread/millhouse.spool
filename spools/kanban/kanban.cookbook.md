@@ -45,8 +45,8 @@ docs=$(strand kanban task add "$card" "Document the change" --depends-on "$impl"
 strand kanban claim "$impl" --owner "$MILLSTRAND_AGENT_ID"
 
 strand kanban note "$impl" "Implementation started; tests are next." \
-  --by "$MILLSTRAND_AGENT_ID" --kind activity
-strand --stdin kanban note "$impl" :stdin --by "$MILLSTRAND_AGENT_ID" --kind review-dump <<'NOTE'
+  --by-identity "$MILLSTRAND_AGENT_ID" --kind activity
+strand --stdin kanban note "$impl" :stdin --by-identity "$MILLSTRAND_AGENT_ID" --kind review-dump <<'NOTE'
 Validation:
 - clojure -M:test
 Next: hand the branch to review.
@@ -65,14 +65,14 @@ strand update "$card" --attr kanban/lane=claimed
 strand update "$card" --attr kanban/lane=in_review
 
 strand kanban note "$card" "Handover: implementation reviewed and ready to land." \
-  --by "$MILLSTRAND_AGENT_ID" --kind summary
+  --by-identity "$MILLSTRAND_AGENT_ID" --kind summary
 strand kanban finish "$card" --outcome done
 ```
 
 **Why this shape.** The same friendly identity may fill different roles:
-`--owner` claims responsibility, `claim --by-identity` records a distinct acting
-identity, and the current note contract uses `--by` for authorship. A dispatcher
-can claim on behalf of a worker by supplying owner and actor. Each claim is a
+`--owner` claims responsibility while `--by-identity` records the actor on a
+claim or note. A dispatcher can claim on behalf of a worker by supplying owner
+and actor; note authorship never changes ownership. Each claim is a
 durable source record, and a changed owner is an explicit handoff; no pending
 lane toggle is needed. Same-owner retries must repeat the exact context. Tasks
 make a resumable

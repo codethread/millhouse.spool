@@ -199,10 +199,11 @@
   is a `:choice`, a closed gate is a `:gate-closed`, and any other step is a
   `:step-closed`; `:at` is the strand's `updated_at`, used for event ordering.
 
-  The projected keys are the engine's own three outcome attributes and nothing
-  else. A caller's outcome vocabulary rides `complete!`'s `:attributes` onto the
-  closed strand, which `show` and the query language already read; projecting a
-  chosen key here would privilege one spool's word for an outcome over another's."
+  The projection includes the engine outcome, canonical actor attribution, and
+  executor provenance attributes and nothing from a caller's custom vocabulary.
+  A caller's outcome vocabulary rides `complete!`'s `:attributes` onto the closed
+  strand, which `show` and the query language already read; projecting a chosen
+  key here would privilege one spool's word for an outcome over another's."
   [strand]
   (let [role (attr strand :workflow/role)
         gate (attr strand :workflow/gate)
@@ -215,7 +216,12 @@
              :title (:title strand)
              :at (:updated_at strand)}
       (attr strand :workflow/outcome) (assoc :outcome (attr strand :workflow/outcome))
-      (attr strand :workflow/outcome-by) (assoc :by (attr strand :workflow/outcome-by))
+      (attr strand :identity/by-identity)
+      (assoc :by-identity (attr strand :identity/by-identity))
+      (attr strand :workflow/executor)
+      (assoc :executor (attr strand :workflow/executor))
+      (attr strand :workflow/executor-run-id)
+      (assoc :executor-run-id (attr strand :workflow/executor-run-id))
       (attr strand :workflow/outcome-input) (assoc :input (attr strand :workflow/outcome-input)))))
 
 (defn molecule-history

@@ -172,7 +172,8 @@
       (let [gate-id (:id (gate-strand rt "pass"))
             closed (await-eventually #(let [gate (weaver/show rt gate-id)]
                                         (when (= "closed" (:state gate)) gate)))]
-        (is (= "code" (attr closed :workflow/outcome-by)))
+        (is (= "code" (attr closed :workflow/executor)))
+        (is (nil? (attr closed :identity/by-identity)))
         (is (= {:nested [1 true "ok"]} (attr closed :code/result)))
         (is (nil? (attr closed :code/running)))
         (is (nil? (attr closed :gate/error)))

@@ -102,7 +102,7 @@
 
 (defn close-batch
   "Return one batch payload closing `primary-id` (merging `primary-attrs`) plus
-  each cascaded procedure `join-ids` (stamped `workflow/outcome-by \"engine\"`
+  each cascaded procedure `join-ids` (stamped `workflow/executor \"engine\"`
   for provenance), updating each existing strand in place by its durable id ref.
 
   The five-arg arity also merges `root-attrs` onto `root-id`, keeping run-context
@@ -114,7 +114,7 @@
                    (seq primary-attrs) (assoc :attributes primary-attrs))
          joins (mapv (fn [id]
                        {:ref (keyword id) :state "closed"
-                        :attributes {"workflow/outcome-by" "engine"}})
+                        :attributes {"workflow/executor" "engine"}})
                      join-ids)
          root (when (seq root-attrs)
                 {:ref (keyword root-id) :attributes root-attrs})
@@ -344,11 +344,11 @@
 
 (defn choice-outcome
   "Build the checkpoint outcome attributes recorded for `choice`/`input`,
-  stamping `workflow/outcome-by` when `opts` carries `:by`."
+  stamping `identity/by-identity` when `opts` carries `:by-identity`."
   [choice input opts]
   (cond-> {"workflow/outcome" choice
            "workflow/outcome-input" input}
-    (contains? opts :by) (assoc "workflow/outcome-by" (:by opts))))
+    (contains? opts :by-identity) (assoc "identity/by-identity" (:by-identity opts))))
 
 (defn terminal-batch
   "Return the batch for a terminal (non-routing) choice: close the chosen
@@ -495,8 +495,8 @@
                          "workflow/deferred-definition" (str (:definition target))
                          "workflow/deferred-fingerprint" (defs/fingerprint target)
                          "workflow/deferred-params" (:params built)}
-                  (contains? opts :by) (assoc "workflow/deferred-by" (:by opts))
-                  empty-expansion? (assoc "workflow/outcome-by" "engine"))]
+                  (contains? opts :by-identity) (assoc "identity/by-identity" (:by-identity opts))
+                  empty-expansion? (assoc "workflow/executor" "engine"))]
     {:refs refs
      :strands (conj expansion-strands
                     (cond-> {:ref :defer :attributes outcome}

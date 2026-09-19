@@ -103,29 +103,33 @@
   [["complete! with spoofed actor and disguised waiter"
     #(workflow/complete! run-id
                          {:step gate-id
-                          :by "merge-turn"
+                          :by-identity "merge-turn"
                           :attributes {"workflow/gate" "human"
                                        "land/queue-completion" "grant"}
                           :context {:spoofed true}})]
+   ["complete! with executor provenance but without queue custody"
+    #(workflow/complete! run-id
+                         {:step gate-id
+                          :executor "merge-turn"})]
    ["advance! with spoofed actor and disguised waiter"
     #(workflow/advance! run-id
                         {:step gate-id
-                         :by "merge-release"
+                         :by-identity "merge-release"
                          :attributes {"workflow/gate" "code"}})]
    ["worker complete request"
     #(workflow/run-complete!
-      {:run-id run-id :step gate-id :by "merge-turn"
+      {:run-id run-id :step gate-id :by-identity "merge-turn"
        :attributes {"workflow/gate" "shell"}
        :context {:worker-spoofed true}})]
    ["worker next request"
-    #(workflow/run-next! {:run-id run-id :step gate-id :by "merge-release"})]
+    #(workflow/run-next! {:run-id run-id :step gate-id :by-identity "merge-release"})]
    ["workflow complete CLI delegation"
     #(weaver/op! rt :workflow
-                 ["complete" run-id "--step" gate-id "--by" "merge-turn"
+                 ["complete" run-id "--step" gate-id "--by-identity" "merge-turn"
                   "--attributes" (json/write-str {"workflow/gate" "human"})])]
    ["workflow next CLI delegation"
     #(weaver/op! rt :workflow
-                 ["next" run-id "--step" gate-id "--by" "merge-release"])]])
+                 ["next" run-id "--step" gate-id "--by-identity" "merge-release"])]])
 
 (defn- assert-generic-completion-rejected!
   [rt run-id gate-id]
@@ -138,7 +142,7 @@
 (defn- turn-repair-request
   [root gate]
   {:kind :skipped-turn
-   :by "repair-operator"
+   :by-identity "repair-operator"
    :reason "Restore a pre-guard skipped queue turn"
    :evidence {:root-id (:id root)
               :gate-id (:id gate)
@@ -147,7 +151,7 @@
 (defn- release-repair-request
   [root release entry lock]
   {:kind :skipped-release
-   :by "repair-operator"
+   :by-identity "repair-operator"
    :reason "Settle a pre-guard skipped queue release"
    :evidence {:root-id (:id root)
               :gate-id (:id release)
@@ -165,7 +169,7 @@
   (let [gate (first (workflow/ready run-id))]
     (workflow/complete! run-id
                         {:step (:id gate)
-                         :by "shell"
+                         :executor "shell"
                          :attributes {"shell/exit-code" 0
                                       "shell/output" output}})
     gate))
@@ -180,7 +184,7 @@
     (complete-shell! run-id (str "Fast-forward\n " merge-commit))
     (let [release (ready-gate run-id "merge-release")
           lock-id (get-in (queue/status rt) [:lock :id])]
-      (workflow/complete! run-id {:step (:id release) :by "merge-release"})
+      (workflow/complete! run-id {:step (:id release) :executor "merge-release"})
       {:root root
        :entry entry
        :lock (weaver/show rt lock-id)
@@ -263,7 +267,7 @@
       (try
         (doseq [actor ["human" "shell" "code"]]
           (let [gate (first (workflow/ready "unrelated"))]
-            (workflow/complete! "unrelated" {:step (:id gate) :by actor})))
+            (workflow/complete! "unrelated" {:step (:id gate) :by-identity actor})))
         (is (workflow/done? "unrelated"))
         (finally
           (close-guard! rt))))))
@@ -472,7 +476,7 @@
             entry (queue/join! rt "repair-turn")
             sequence (attr-get entry :queue/sequence)
             request (turn-repair-request root gate)]
-        (workflow/complete! "repair-turn" {:step (:id gate) :by "merge-turn"})
+        (workflow/complete! "repair-turn" {:step (:id gate) :executor "merge-turn"})
         (install-guard! rt)
         (try
           (is (= (:id entry) (:entry-id (queue/repair! rt "repair-turn" request))))
@@ -497,7 +501,7 @@
             sequence (attr-get entry :queue/sequence)
             request (turn-repair-request root turn)]
         (queue/grant! rt "owner-a")
-        (workflow/complete! "skipped-b" {:step (:id turn) :by "merge-turn"})
+        (workflow/complete! "skipped-b" {:step (:id turn) :executor "merge-turn"})
         (let [prepare (complete-shell!
                        "skipped-b"
                        (str "land prepare: validated skipped-b at " branch-head))
@@ -548,7 +552,7 @@
             turn (ready-gate "race-skipped-b" "merge-turn")
             request (turn-repair-request root turn)]
         (queue/grant! rt "race-owner-a")
-        (workflow/complete! "race-skipped-b" {:step (:id turn) :by "merge-turn"})
+        (workflow/complete! "race-skipped-b" {:step (:id turn) :executor "merge-turn"})
         (complete-shell!
          "race-skipped-b"
          (str "land prepare: validated race-skipped-b at " branch-head))
@@ -676,7 +680,7 @@
         (spit output-file "")
         (spit error-file "")
         (queue/grant! rt "inflight-owner-a")
-        (workflow/complete! "inflight-skipped-b" {:step (:id turn) :by "merge-turn"})
+        (workflow/complete! "inflight-skipped-b" {:step (:id turn) :executor "merge-turn"})
         (install-guard! rt)
         (try
           (with-redefs-fn
@@ -806,7 +810,7 @@
       (let [root (workflow/current-root "unreserved")
             gate (ready-gate "unreserved" "merge-turn")
             request (turn-repair-request root gate)]
-        (workflow/complete! "unreserved" {:step (:id gate) :by "merge-turn"})
+        (workflow/complete! "unreserved" {:step (:id gate) :executor "merge-turn"})
         (install-guard! rt)
         (try
           (let [result (queue/repair! rt "unreserved" request)
@@ -824,7 +828,7 @@
       (let [root (workflow/current-root "attempted-turn")
             turn (ready-gate "attempted-turn" "merge-turn")
             _ (queue/join! rt "attempted-turn")]
-        (workflow/complete! "attempted-turn" {:step (:id turn) :by "merge-turn"})
+        (workflow/complete! "attempted-turn" {:step (:id turn) :executor "merge-turn"})
         ;; Select the unique irreversible shell gate rather than the first shell gate.
         (let [irreversible (first (filter #(true? (attr-get % :land/irreversible))
                                           (:strands (graph/subgraph
@@ -958,6 +962,23 @@
                                 (queue/repair! rt "failed-settlement" request)))
           (is (= before {:entry (weaver/show rt (:id entry))
                          :lock (weaver/show rt (:id lock))})))))))
+
+(deftest merge-queue-repair-cli-uses-only-canonical-actor-flag
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :test/workflow 'millhouse.spools.workflow)
+      (test-support/activate-spool! rt :test/land 'millhouse.spools.land.spool
+                                    :after [:test/workflow])
+      (let [flags (get-in (weaver/resolve-op rt 'merge-queue)
+                          [:arg-spec :subcommands "repair" :flags])]
+        (is (contains? flags :by-identity))
+        (is (not (contains? flags :by)))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"Unknown flag --by"
+             (weaver/op! rt :merge-queue
+                         ["repair" "run-1" "--kind" "skipped-turn"
+                          "--by" "operator" "--reason" "evidence"
+                          "--evidence" "{}"])))))))
 
 (deftest land-activation-protects-and-scans-persisted-queue-gates
   (with-runtime

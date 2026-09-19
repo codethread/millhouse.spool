@@ -75,8 +75,9 @@
      4. Confirm the accepted run and record its ID on the finisher step as
         auto-run/finisher-run-id using strand update, and in a card handoff note.
         Only after both worker and finisher receipts are recorded, complete THIS
-        worker step with your identity. Return immediately without waiting for
-        the grunt or performing further worktree operations. Do not complete the
+        worker step with `strand workflow complete DELIVERY_RUN_ID --step
+        WORKER_STEP_ID --by-identity YOUR_IDENTITY`. Return immediately without
+        waiting for the grunt or performing further worktree operations. Do not complete the
         finisher step. The grunt waits for your successful settlement before signoff.
 
      Recovery requires explicit authorization after any failure. Before launching
@@ -137,8 +138,9 @@
      Do not finish the card early or advance it by a generic lane edit.
 
      Verify land is done and the card is closed with outcome done. Only then
-     complete THIS finisher step with your identity and landing evidence, and
-     return a concise final handover. If that last bookkeeping action fails AFTER
+     complete THIS finisher step with `strand workflow complete DELIVERY_RUN_ID
+     --step FINISHER_STEP_ID --by-identity YOUR_IDENTITY` plus landing evidence,
+     and return a concise final handover. If that last bookkeeping action fails AFTER
      the card is closed, label/note the failure but do not reopen already-landed
      work or repeat the merge. Failure before land finishes leaves the card open.
      Never delete resources outside the shared cleanup contract.

@@ -235,7 +235,7 @@
                   #(workflow/complete!
                     run-id
                     {:step (:id gate)
-                     :by "merge-turn"
+                     :executor "merge-turn"
                      :attributes
                      (completion-attributes "grant" run-id gate entry lock)}))))))))))
 
@@ -284,7 +284,7 @@
                 #(workflow/complete!
                   run-id
                   {:step (:id gate)
-                   :by "merge-release"
+                   :executor "merge-release"
                    :attributes
                    (completion-attributes "release" run-id gate entry lock)})))))))))
 
@@ -457,13 +457,13 @@
     evidence))
 
 (defn- require-repair-request!
-  [{:keys [kind by reason evidence] :as request}]
-  (when-not (exact-keys? #{:kind :by :reason :evidence} request)
+  [{:keys [kind by-identity reason evidence] :as request}]
+  (when-not (exact-keys? #{:kind :by-identity :reason :evidence} request)
     (fail! "Merge queue repair request has unknown or missing keys"
            {:keys (set (keys request))
-            :expected #{:kind :by :reason :evidence}}))
-  (when-not (s/valid? ::non-blank by)
-    (fail! "Merge queue repair requires a non-blank actor" {:by by}))
+            :expected #{:kind :by-identity :reason :evidence}}))
+  (when-not (s/valid? ::non-blank by-identity)
+    (fail! "Merge queue repair requires a non-blank actor" {:by-identity by-identity}))
   (when-not (s/valid? ::non-blank reason)
     (fail! "Merge queue repair requires a non-blank reason" {:reason reason}))
   (assoc request :evidence (require-evidence! kind evidence)))
@@ -501,9 +501,9 @@
       gate)))
 
 (defn- repair-attributes
-  [kind by reason evidence]
+  [kind by-identity reason evidence]
   {"land/repair-kind" (name kind)
-   "land/repair-by" by
+   "identity/by-identity" by-identity
    "land/repair-reason" reason
    "land/repair-evidence" evidence
    "land/repaired-at" (str (runtime/now (current/runtime)))})
@@ -512,7 +512,7 @@
   [strand]
   (when-let [kind (attr-get strand :land/repair-kind)]
     {:kind (keyword kind)
-     :by (attr-get strand :land/repair-by)
+     :by-identity (attr-get strand :identity/by-identity)
      :reason (attr-get strand :land/repair-reason)
      :evidence (attr-get strand :land/repair-evidence)}))
 
@@ -598,7 +598,8 @@
 (defn- rewound-shell-attributes
   [prior-error]
   {:gate/error prior-error
-   :workflow/outcome-by nil
+   :workflow/executor nil
+   :workflow/executor-run-id nil
    :shell/running nil
    :shell/attempt-id nil
    :shell/custody-handle nil
@@ -639,7 +640,7 @@
     {:root root :strands strands :gate gate :entry entry}))
 
 (defn- repair-skipped-turn!
-  [runtime run-id {:keys [kind by reason evidence] :as request}]
+  [runtime run-id {:keys [kind by-identity reason evidence] :as request}]
   (let [{:keys [root-id gate-id]} evidence
         root (require-recorded-root runtime run-id root-id)
         initial-strands (run-strands root)
@@ -682,7 +683,7 @@
                                :attributes
                                {:gate/error (get prior-errors (:id shell))}}))
                           shells)
-                    attributes (repair-attributes kind by reason evidence)
+                    attributes (repair-attributes kind by-identity reason evidence)
                     refs (into {gate-ref gate-id}
                                (map (fn [shell]
                                       [(keyword (:id shell)) (:id shell)]))
@@ -762,7 +763,7 @@
               :validated-head (prepared-head prepare branch)}))))
 
 (defn- repair-skipped-release!
-  [runtime run-id {:keys [kind by reason evidence] :as request}]
+  [runtime run-id {:keys [kind by-identity reason evidence] :as request}]
   (let [{:keys [root-id gate-id entry-id lock-id]} evidence
         entry (require-entry entry-id)]
     (if (idempotent-repair? entry request)
@@ -805,7 +806,7 @@
                            (merge {:queue/outcome "merged"
                                    :queue/released-at
                                    (str (runtime/now (current/runtime)))}
-                                  (repair-attributes kind by reason evidence))}
+                                  (repair-attributes kind by-identity reason evidence))}
                  lock-id {:state "closed"}})
         (repair-result kind run-id root-id gate-id entry-id)))))
 
@@ -855,8 +856,8 @@
               :hook-class :mutating :deadline-class :unbounded
               :flags {:kind {:type :string :required? true
                              :doc "skipped-turn or skipped-release."}
-                      :by {:type :string :required? true :spec ::non-blank
-                           :doc "Trusted actor performing the repair."}
+                      :by-identity {:type :string :required? true :spec ::non-blank
+                                    :doc "Trusted actor performing the repair."}
                       :reason {:type :string :required? true :spec ::non-blank}
                       :evidence {:type :string :parse :json :required? true
                                  :doc "Exact JSON evidence for the selected repair kind."}}
@@ -885,7 +886,7 @@
            " {})}
   [ctx]
   (let [runtime (:op/runtime ctx)
-        {:keys [subcommand run-id entry-id timeout-secs kind by reason evidence]}
+        {:keys [subcommand run-id entry-id timeout-secs kind by-identity reason evidence]}
         (:op/args ctx)]
     (case (first subcommand)
       "join" {:entry (join! runtime run-id)}
@@ -894,7 +895,7 @@
       "withdraw" (withdraw! runtime entry-id reason)
       "repair" (repair! runtime run-id
                         {:kind (keyword kind)
-                         :by by
+                         :by-identity by-identity
                          :reason reason
                          :evidence (workflow/json->params evidence)}))))
 

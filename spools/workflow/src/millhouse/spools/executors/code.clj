@@ -315,7 +315,7 @@
       #(workflow/complete!
         run-id
         {:step gate-id
-         :by "code"
+         :executor "code"
          :attributes (cond-> {"code/running" nil}
                        (some? result) (assoc "code/result" result))}))
     (fail-gate! gate-id token

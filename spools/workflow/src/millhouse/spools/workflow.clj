@@ -142,16 +142,17 @@
   A gate stays an ordinary step (role `\"step\"`, so done-semantics are
   untouched) stamped with `workflow/gate <waiter>`, a freeform actor hint such
   as `:ci`, `:human`, or `:agent`. `step-view` surfaces it as `:gate`, and
-  `complete!` refuses to close it without a `:by` recording who closed it. The
-  driving agent should treat a ready gate as a poll/hand-off point, not work to
-  do. `register-executor!` keys a stall predicate by this same waiter name, so
+  `complete!` refuses to close it without actor (`:by-identity`) or trusted
+  executor (`:executor`) provenance. The driving agent should treat a ready gate
+  as a poll/hand-off point, not work to do. `register-executor!` keys a stall predicate by this same waiter name, so
   `await!` can stay silent on a healthy executor-owned gate. Accepts the same
   opts as `step`.
 
   Like `step`, a gate accepts an optional final instruction after its keyword
   options. Example: `(gate :ci title :ci :depends-on [:push] instruction)`; a
-  fulfiller closes the ready gate with
-  `(complete! run-id {:step gate-id :by actor})`."
+  domain actor closes the ready gate with
+  `(complete! run-id {:step gate-id :by-identity actor})`; executor adapters use
+  the documented `run-complete!` request contract."
   [id title waiter & args]
   (let [opts (parse-instruction-opts args :gate)]
     (reject-unknown-keys! opts step-opt-keys :gate)
@@ -543,7 +544,7 @@
   "Return a read-only, creation-ordered projection of every molecule ever poured
   for run-id (any state) as a vector of
   `{:root {:id :title :state :created_at} :events [{:type :id :title
-  :outcome :by :input :at} …]}` maps.
+  :outcome :by-identity :executor :executor-run-id :input :at} …]}` maps.
 
   `:type` is `:step-closed`, `:choice`, or `:gate-closed`; events are ordered by
   their strand's `updated_at`. A defer contributes none: a filled one is
@@ -574,15 +575,18 @@
   direct Clojure caller and a worker verb are held to one contract. `:context`
   is a keyword-keyed map shallow-merged over the root's `workflow/context` in
   the same batch; new values replace existing values whole, and are normalized
-  by `default-context` so only JSON-safe values persist. A non-blank `:by` is
-  recorded as \"workflow/outcome-by\" on any step it is supplied for, but is
-  only required when closing a gate step (one built with `gate`).
+  by `default-context` so only JSON-safe values persist. A non-blank
+  `:by-identity` is recorded as \"identity/by-identity\" on any step it is supplied
+  for. Trusted adapters may instead supply non-blank `:executor`, recorded as
+  \"workflow/executor\", and optional `:executor-run-id`, recorded separately as
+  \"workflow/executor-run-id\". A run id without its executor is invalid. A gate
+  step (one built with `gate`) requires actor or executor provenance.
 
   When the closed step is the last active inner step beneath a `procedure`
   join, the join closes in the same transaction (see `cascade-join-ids`). All
   validation happens before any mutation.
 
-  Example: `(complete! run-id {:by actor})` closes the sole ready ordinary
+  Example: `(complete! run-id {:by-identity actor})` closes the sole ready ordinary
   step."
   ([run-id]
    (complete! run-id {}))
@@ -590,6 +594,19 @@
    (let [rt (current/runtime)]
      (util/require-map! opts [:opts])
      (routing/refuse-notes! "complete!" opts)
+     (reject-unknown-keys! opts
+                           #{:step :by-identity :executor :executor-run-id
+                             :attributes :context}
+                           :complete)
+     (doseq [key [:by-identity :executor :executor-run-id]
+             :when (contains? opts key)]
+       (when-not (non-blank-string? (get opts key))
+         (fail! "Workflow completion provenance must be a non-blank string"
+                {:key key :value (get opts key)})))
+     (when (and (contains? opts :executor-run-id)
+                (not (contains? opts :executor)))
+       (fail! "Workflow executor run id requires an executor"
+              {:executor-run-id (:executor-run-id opts)}))
      (when (contains? opts :attributes)
        (require-valid! :millhouse.spools.workflow.request/attributes (:attributes opts)
                        "Invalid workflow complete attributes"))
@@ -615,12 +632,19 @@
                       {:reason :workflow/step-is-defer
                        :run-id run-id :step (query/strand->view step)}))
              (let [gate (query/attr step :workflow/gate)
-                   by (:by opts)]
-               (when (and gate (not (non-blank-string? by)))
-                 (fail! "Gate steps require a non-blank :by to record who closed them"
-                        {:run-id run-id :step (query/strand->view step) :gate gate :by by}))
+                   actor (:by-identity opts)
+                   executor (:executor opts)
+                   executor-run-id (:executor-run-id opts)]
+               (when (and gate (not (or (non-blank-string? actor)
+                                        (non-blank-string? executor))))
+                 (fail! "Gate steps require actor or executor provenance"
+                        {:run-id run-id :step (query/strand->view step) :gate gate
+                         :by-identity actor :executor executor}))
                (let [attrs (cond-> (or (routing/close-attributes! opts) {})
-                             (non-blank-string? by) (assoc "workflow/outcome-by" by))
+                             actor (assoc "identity/by-identity" actor)
+                             executor (assoc "workflow/executor" executor)
+                             executor-run-id
+                             (assoc "workflow/executor-run-id" executor-run-id))
                      root (query/current-root-with-rt rt run-id)
                      existing-context (query/attr root :workflow/context)
                      _ (when (and (contains? opts :context)
@@ -646,7 +670,7 @@
 
   opts may include `:step` (materialized strand id) to select among multiple
   ready checkpoints; without it, exactly one checkpoint must be ready. opts may
-  also include `:by`, recorded as \"workflow/outcome-by\" on the closed
+  also include `:by-identity`, recorded as \"identity/by-identity\" on the closed
   checkpoint alongside \"workflow/outcome\"/\"workflow/outcome-input\" to
   persist who made the choice (unenforced per TEN-002).
 
@@ -673,6 +697,11 @@
   ([run-id choice input opts]
    (let [rt (current/runtime)]
      (util/require-map! opts [:opts])
+     (reject-unknown-keys! opts #{:step :by-identity} :choose)
+     (when (and (contains? opts :by-identity)
+                (not (non-blank-string? (:by-identity opts))))
+       (fail! "Workflow actor must be a non-blank string"
+              {:by-identity (:by-identity opts)}))
      (guard/with-run!
        rt run-id
        (fn []
@@ -712,8 +741,8 @@
   `params` is the target's own — its `:defaults` under exactly what is supplied
   here, validated whole against its `:param-spec`; caller context is never
   merged, so passing no params and passing `{}` are the same request. `opts` may
-  carry `:step` to disambiguate a run with more than one ready defer, and `:by`
-  recorded as `workflow/deferred-by`.
+  carry `:step` to disambiguate a run with more than one ready defer, and `:by-identity`
+  recorded as `identity/by-identity`.
 
   The rewrite and the pour ride one `batch/apply!`, so a failing apply commits
   nothing and the defer stays ready. Resolution through mutation holds the run's
@@ -726,6 +755,7 @@
   ([run-id workflow params opts]
    (let [rt (current/runtime)]
      (util/require-map! opts [:opts])
+     (reject-unknown-keys! opts #{:step :by-identity} :defer)
      (require-valid! ::defer-request
                      (merge {:run-id run-id :workflow workflow :params params} opts)
                      "Invalid workflow defer request")
@@ -754,11 +784,11 @@
   Resolves the ready step (honoring an optional `:step` selector). When it is a
   checkpoint, `opts` must carry `:choice` (fail loudly otherwise); `advance!`
   calls `choose!` with that choice, its `:input` (default `{}`), and the
-  pass-through `:by`/`:step` opts. When it is a plain step, `:choice` must be
+  pass-through `:by-identity`/`:step` opts. When it is a plain step, `:choice` must be
   absent (fail loudly otherwise); `advance!` calls `complete!` with the
-  pass-through `:attributes`/`:step`/`:by` opts. `:input` is checkpoint-only,
+  pass-through `:attributes`/`:step`/`:by-identity` opts. `:input` is checkpoint-only,
   while `:attributes` is ordinary-step-only. A gate is never inferred: closing
-  one requires both its explicit `:step` and a non-blank `:by`, and rejects
+  one requires both its explicit `:step` and a non-blank `:by-identity`, and rejects
   `:choice` and `:input` like an ordinary step.
 
   A defer is not advanceable and says so loudly: filling one selects a target
@@ -798,9 +828,9 @@
                          :run-id run-id
                          :step view
                          :attributes (:attributes opts)
-                         :allowed #{:choice :input :step :by}}))
+                         :allowed #{:choice :input :step :by-identity}}))
                (choose! run-id (:choice opts) (get opts :input {})
-                        (assoc (select-keys opts [:by]) :step (:id view))))
+                        (assoc (select-keys opts [:by-identity]) :step (:id view))))
 
              "step"
              (do
@@ -810,16 +840,16 @@
                          :run-id run-id
                          :step view
                          :choice (:choice opts)
-                         :allowed #{:attributes :step :by}}))
+                         :allowed #{:attributes :step :by-identity}}))
                (when (contains? opts :input)
                  (fail! "advance! on a step rejects :input"
                         {:reason :workflow/advance-input-without-checkpoint
                          :run-id run-id
                          :step view
                          :input (:input opts)
-                         :allowed #{:attributes :step :by}}))
+                         :allowed #{:attributes :step :by-identity}}))
                (complete! run-id
-                          (assoc (select-keys opts [:attributes :by])
+                          (assoc (select-keys opts [:attributes :by-identity])
                                  :step (:id view))))
 
              (fail! "Cannot advance an unknown workflow role"
@@ -1287,8 +1317,8 @@
 (defn run-complete!
   "Close the ready ordinary step of `request`'s run and return the run result.
 
-  `request` is `{:run-id … :step … :by … :attributes {…} :context {…}}`, all
-  but the run id optional. Without `:step` the sole ready ordinary step is
+  `request` is `{:run-id … :step … :by-identity … :executor …
+  :executor-run-id … :attributes {…} :context {…}}`, all but the run id optional. Without `:step` the sole ready ordinary step is
   inferred; a checkpoint or defer ready alongside it does not make that
   ambiguous, because neither is a step this verb could act on.
 
@@ -1302,25 +1332,40 @@
   its existing value whole, including a nested map.
 
   A gate is never inferred. Closing one is an assertion that something outside
-  the run happened, so it takes both an explicit `:step` and a `:by` recording
-  who decided so. `::complete-request` owns the request shape."
+  the run happened, so it takes an explicit `:step` plus either domain actor
+  `:by-identity` or trusted adapter `:executor` provenance. An adapter may pair
+  its executor with opaque `:executor-run-id`; the run id is rejected without
+  its executor and is never stored as identity attribution. These fields record
+  evidence only: they do not bypass lifecycle hooks or authorize protected
+  queue gates. `::complete-request` owns the request shape."
   [request]
   (let [rt (current/runtime)
-        {:keys [run-id by attributes context]} (require-valid! ::complete-request request
-                                                               "Invalid workflow complete request")]
+        validated (require-valid! ::complete-request request
+                                  "Invalid workflow complete request")
+        _ (reject-unknown-keys!
+           validated
+           #{:run-id :step :by-identity :executor :executor-run-id
+             :attributes :context}
+           :complete)
+        {:keys [run-id by-identity executor executor-run-id attributes context]}
+        validated]
     (mutate-run! rt "workflow complete" :step request
                  (fn [target]
-                   (runs/require-gate-actor! run-id target by)
-                   (complete! run-id (cond-> {:step (:id target)}
-                                       by (assoc :by by)
-                                       attributes (assoc :attributes attributes)
-                                       (contains? request :context)
-                                       (assoc :context context)))))))
+                   (runs/require-gate-provenance! run-id target
+                                                  by-identity executor)
+                   (complete! run-id
+                              (cond-> {:step (:id target)}
+                                by-identity (assoc :by-identity by-identity)
+                                executor (assoc :executor executor)
+                                executor-run-id (assoc :executor-run-id executor-run-id)
+                                attributes (assoc :attributes attributes)
+                                (contains? request :context)
+                                (assoc :context context)))))))
 
 (defn run-choose!
   "Record `request`'s choice on the ready checkpoint and return the run result.
 
-  `request` is `{:run-id … :choice … :input {…} :step … :by …}`, all but the run
+  `request` is `{:run-id … :choice … :input {…} :step … :by-identity …}`, all but the run
   id and choice optional. Without `:step` the sole ready checkpoint is inferred.
   `:input` is the choice's own contract — a JSON worker keywordizes it with
   `json->params` first — and a routed choice pours its continuation in the same
@@ -1328,24 +1373,28 @@
   `::choose-request` owns the request shape."
   [request]
   (let [rt (current/runtime)
-        {:keys [run-id choice input by]} (require-valid! ::choose-request request
-                                                         "Invalid workflow choose request")]
+        validated (require-valid! ::choose-request request
+                                  "Invalid workflow choose request")
+        _ (reject-unknown-keys! validated
+                                #{:run-id :choice :input :step :by-identity}
+                                :choose)
+        {:keys [run-id choice input by-identity]} validated]
     (mutate-run! rt "workflow choose" :checkpoint request
                  (fn [target]
                    (choose! run-id choice (or input {})
                             (cond-> {:step (:id target)}
-                              by (assoc :by by)))))))
+                              by-identity (assoc :by-identity by-identity)))))))
 
 (defn run-next!
   "Advance the ready ordinary step, checkpoint, or explicitly selected gate and
   return the run result.
 
-  `request` is `{:run-id … :choice … :input {…} :step … :by …}`, with only the
+  `request` is `{:run-id … :choice … :input {…} :step … :by-identity …}`, with only the
   run id required. Without `:step`, exactly one non-gate ordinary step or
   checkpoint must be ready. A checkpoint requires `:choice`; an ordinary step
   rejects it. `:input` is the selected checkpoint choice's JSON-worker input
   and is rejected for an ordinary step or gate. A gate is never inferred and
-  requires both `:step` and a non-blank `:by`; it also rejects `:choice` and
+  requires both `:step` and a non-blank `:by-identity`; it also rejects `:choice` and
   `:input`.
 
   A defer is not advanceable because selecting its target and params is a
@@ -1355,11 +1404,11 @@
   (let [rt (current/runtime)
         validated (require-valid! ::next-request request
                                   "Invalid workflow next request")
-        _ (reject-unknown-keys! validated #{:run-id :choice :input :step :by} :next)
-        {:keys [run-id choice input by]} validated]
+        _ (reject-unknown-keys! validated #{:run-id :choice :input :step :by-identity} :next)
+        {:keys [run-id choice input by-identity]} validated]
     (mutate-run! rt "workflow next" :advance request
                  (fn [target]
-                   (runs/require-gate-actor! run-id target by)
+                   (runs/require-gate-provenance! run-id target by-identity nil)
                    (when (and (= "checkpoint" (:role target))
                               (not (contains? request :choice)))
                      (fail! "workflow next on a checkpoint requires --choice"
@@ -1385,12 +1434,12 @@
                              (cond-> {:step (:id target)}
                                (contains? request :choice) (assoc :choice choice)
                                (contains? request :input) (assoc :input input)
-                               by (assoc :by by)))))))
+                               by-identity (assoc :by-identity by-identity)))))))
 
 (defn run-defer!
   "Fill the ready defer of `request`'s run and return the run result.
 
-  `request` is `{:run-id … :workflow … :params {…} :step … :by …}`, with params,
+  `request` is `{:run-id … :workflow … :params {…} :step … :by-identity …}`, with params,
   step, and actor optional. Without `:step`, the sole ready defer is inferred. A
   selected target must be in the defer's materialized allowlist and declare the
   `:call` entrypoint; its params are its own. The target pours beneath the
@@ -1399,13 +1448,17 @@
   declaring workflow does next. `::defer-request` owns the request shape."
   [request]
   (let [rt (current/runtime)
-        {:keys [run-id workflow params by]} (require-valid! ::defer-request request
-                                                            "Invalid workflow defer request")]
+        validated (require-valid! ::defer-request request
+                                  "Invalid workflow defer request")
+        _ (reject-unknown-keys! validated
+                                #{:run-id :workflow :params :step :by-identity}
+                                :defer)
+        {:keys [run-id workflow params by-identity]} validated]
     (mutate-run! rt "workflow defer" :defer request
                  (fn [target]
                    (defer! run-id workflow (or params {})
                            (cond-> {:step (:id target)}
-                             by (assoc :by by)))))))
+                             by-identity (assoc :by-identity by-identity)))))))
 
 (defn run-await
   "Block until `request`'s run is done or needs a worker, and return the result.
@@ -1599,7 +1652,9 @@
 (s/def :millhouse.spools.workflow.request/workflow ::registry-name)
 (s/def :millhouse.spools.workflow.request/params :millhouse.spools.workflow.values/params)
 (s/def :millhouse.spools.workflow.request/step non-blank-string?)
-(s/def :millhouse.spools.workflow.request/by non-blank-string?)
+(s/def :millhouse.spools.workflow.request/by-identity non-blank-string?)
+(s/def :millhouse.spools.workflow.request/executor non-blank-string?)
+(s/def :millhouse.spools.workflow.request/executor-run-id non-blank-string?)
 ;; Attributes a worker merges onto the step it closes. String keys, because these
 ;; are strand attribute keys as the wire and the query language spell them, not
 ;; the keywordized params a definition's `:param-spec` judges.
@@ -1609,7 +1664,7 @@
                    :millhouse.spools.workflow.request/workflow]
           :opt-un [:millhouse.spools.workflow.request/params
                    :millhouse.spools.workflow.request/step
-                   :millhouse.spools.workflow.request/by]))
+                   :millhouse.spools.workflow.request/by-identity]))
 
 ;; --- discovery request and projection shapes ------------------------------
 
@@ -1771,7 +1826,7 @@
   (s/keys :opt-un [:millhouse.spools.workflow.advance/choice
                    :millhouse.spools.workflow.request/input
                    :millhouse.spools.workflow.request/step
-                   :millhouse.spools.workflow.request/by
+                   :millhouse.spools.workflow.request/by-identity
                    :millhouse.spools.workflow.request/attributes]))
 
 ;; One request spec per worker verb, and the whole of what each verb accepts.
@@ -1788,23 +1843,28 @@
   (s/keys :req-un [:millhouse.spools.workflow.request/run-id]
           :opt-un [:millhouse.spools.workflow.request/step]))
 (s/def ::complete-request
-  (s/keys :req-un [:millhouse.spools.workflow.request/run-id]
-          :opt-un [:millhouse.spools.workflow.request/step
-                   :millhouse.spools.workflow.request/by
-                   :millhouse.spools.workflow.request/attributes
-                   :millhouse.spools.workflow.request/context]))
+  (s/and
+   (s/keys :req-un [:millhouse.spools.workflow.request/run-id]
+           :opt-un [:millhouse.spools.workflow.request/step
+                    :millhouse.spools.workflow.request/by-identity
+                    :millhouse.spools.workflow.request/executor
+                    :millhouse.spools.workflow.request/executor-run-id
+                    :millhouse.spools.workflow.request/attributes
+                    :millhouse.spools.workflow.request/context])
+   #(or (not (contains? % :executor-run-id))
+        (contains? % :executor))))
 (s/def ::choose-request
   (s/keys :req-un [:millhouse.spools.workflow.request/run-id
                    :millhouse.spools.workflow.request/choice]
           :opt-un [:millhouse.spools.workflow.request/input
                    :millhouse.spools.workflow.request/step
-                   :millhouse.spools.workflow.request/by]))
+                   :millhouse.spools.workflow.request/by-identity]))
 (s/def ::next-request
   (s/keys :req-un [:millhouse.spools.workflow.request/run-id]
           :opt-un [:millhouse.spools.workflow.request/choice
                    :millhouse.spools.workflow.request/input
                    :millhouse.spools.workflow.request/step
-                   :millhouse.spools.workflow.request/by]))
+                   :millhouse.spools.workflow.request/by-identity]))
 (s/def ::await-request
   (s/keys :req-un [:millhouse.spools.workflow.request/run-id]
           :opt-un [:millhouse.spools.workflow.request/timeout-secs]))
@@ -1994,7 +2054,7 @@
                      |:attributes, :condition, :loop, :description, :state, then instruction.")
             :workflow/gate (fmt/reflow "
                             |Marks the step an external wait point, surfaced by
-                            |step-view as :gate; complete! requires :by to close it. A
+                            |step-view as :gate; complete! requires :by-identity to close it. A
                             |waiter with no registered executor always needs attention;
                             |a registered executor's stall predicate decides.")}})
 
@@ -2264,7 +2324,7 @@
 (def ^:private checkpoint-opt-keys (into step-opt-keys #{:kind :choices}))
 (def ^:private call-opt-keys #{:title :depends-on :attributes})
 (def ^:private defer-opt-keys #{:description :attributes :depends-on :title})
-(def ^:private advance-opt-keys #{:choice :input :step :by :attributes})
+(def ^:private advance-opt-keys #{:choice :input :step :by-identity :attributes})
 (def ^:private workflow-opt-keys
   #{:attributes :state :form :doc :entrypoints :param-spec :defaults
     :example :param-docs})

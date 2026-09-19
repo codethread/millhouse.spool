@@ -54,7 +54,7 @@
   [args]
   (-> {:run-id (:run-id args)}
       (carry args :step :step)
-      (carry args :by :by)))
+      (carry args :by-identity :by-identity)))
 
 (defn- with-json-object
   "Return `request` with `args`' `flag` parsed into `key` as a params map.
@@ -130,13 +130,12 @@
          "|Ready step id, to disambiguate a frontier with more than one item
           |this verb could act on. Required to close a gate.")})
 
-(def ^:private by-flag
+(def ^:private by-identity-flag
   {:type :string
    :doc (fmt/reflow
-         "|Logical-session identity acting on the workflow operation. Required
-          |to close a gate; stored as the outcome actor when closing an item or
-          |as workflow/deferred-by when filling a defer. This command uses --by,
-          |not the agent surface's --by-identity.")})
+         "|Friendly identity acting on the workflow operation. Required to
+          |close a gate when no trusted executor owns the completion; stored as
+          |canonical identity/by-identity evidence on the acted-on item.")})
 
 (def ^:private workflow-arg-spec
   "Declared command surface for the `workflow` op."
@@ -262,7 +261,7 @@
                 :deadline-class :standard
                 :positionals [run-id-positional]
                 :flags {:step step-flag
-                        :by by-flag
+                        :by-identity by-identity-flag
                         :context
                         {:type :string
                          :parse :json
@@ -290,7 +289,7 @@
                          (fmt/reflow
                           "|A gate is never inferred. Closing one asserts that
                            |something outside the run happened, so it takes both
-                           |--step and --by.")
+                           |--step and --by-identity.")
                          (fmt/reflow
                           "|Attributes ride the closing mutation, so no observer
                            |sees the step closed without them. The engine records
@@ -308,7 +307,7 @@
                        :parse :json
                        :doc "JSON object satisfying the choice's own input contract."}
                       :step step-flag
-                      :by by-flag}
+                      :by-identity by-identity-flag}
               :annotations
               {:notes [(fmt/reflow
                         "|A routed choice pours its continuation in the same
@@ -328,7 +327,7 @@
                      :parse :json
                      :doc "JSON object satisfying the choice's own input contract."}
                     :step step-flag
-                    :by by-flag}
+                    :by-identity by-identity-flag}
             :annotations
             {:notes [(fmt/reflow
                       "|An ordinary step needs no choice. A checkpoint
@@ -341,7 +340,7 @@
                        |drive it with workflow defer instead.")
                      (fmt/reflow
                       "|A gate is never inferred and still requires both
-                       |--step and --by.")]
+                       |--step and --by-identity.")]
              :failure-modes ["workflow/ready-next-absent"
                              "workflow/ready-next-ambiguous"
                              "workflow/ready-next-incompatible"
@@ -364,7 +363,7 @@
                       :parse :json
                       :doc "JSON object of the target's own params."}
                      :step step-flag
-                     :by by-flag}
+                     :by-identity by-identity-flag}
              :annotations
              {:notes [(fmt/reflow
                        "|Returning composition: the selected workflow pours beneath
@@ -506,8 +505,8 @@
             |control, and `strand workflow choices <run-id>` projects a ready
             |checkpoint's input contracts before choose. Pass --step when the
             |selected verb says the frontier is ambiguous, and always to close
-            |a gate, which also needs --by with your logical-session identity
-            |(not --by-identity, which belongs to strand agent). If a mutation
+            |a gate, which also needs --by-identity with your friendly identity.
+            |If a mutation
             |fails as workflow/frontier-stale, another worker moved the run: re-read
             |`strand workflow ready <run-id>` and act on what is there now.")})
 

@@ -18,7 +18,7 @@ Attach a reserved identity to one actual native session exactly once.
 
   `:reservation-id` is the capability returned by `reserve!`. Replaying the same
   attachment converges; another harness or native session fails before writes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L509-L517">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L510-L518">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/attribution-contributions">`attribution-contributions`</a>
 ``` clojure
@@ -59,7 +59,7 @@ Compatibility binding for existing managed and maintenance providers.
   Mint/recovery and `:run-id` provenance retain the historical result shape.
   `:expected-identity` remains an assertion: without an existing native binding,
   or on mismatch, it fails before minting or adding edges.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L610-L637">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L611-L638">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/close-attribution-engine!">`close-attribution-engine!`</a>
 ``` clojure
@@ -80,7 +80,7 @@ Return the collision-safe native key for a Codex `(session_id, agent_id)` child.
 
   Pi callers do not transform IDs: they pass the child's actual native session
   ID directly to `startup!`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L639-L651">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L640-L652">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/contribute-attribution!">`contribute-attribution!`</a>
 ``` clojure
@@ -117,7 +117,7 @@ Resolve an existing identity by friendly ID, failing when absent or ambiguous.
 Function.
 
 Dispatch `strand identity` operations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L847-L863">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L848-L864">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/identity?">`identity?`</a>
 ``` clojure
@@ -179,7 +179,7 @@ Receive an identity from an exact running origin Weaver ID.
   and the durable origin workspace and strand ID. Edges and reservations stay
   local. Forwarding an imported descriptor preserves its original provenance.
   Conflicting names, sessions or origin pointers fail without writes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L725-L747">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L726-L748">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/reconcile-attributions!">`reconcile-attributions!`</a>
 ``` clojure
@@ -223,7 +223,7 @@ Register an existing local identity in an exact destination Weaver ID.
   propagate without automatic retry. `identity/origin-workspace` is the durable
   lookup pointer, so an origin Weaver restart does not change the descriptor.
   Registration does not start, restart or reconfigure Weavers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L749-L786">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L750-L787">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/reserve!">`reserve!`</a>
 ``` clojure
@@ -235,7 +235,7 @@ Mint an unattached identity reservation for an optional managed caller.
 
   The returned opaque `:reservation-id` is required to attach the identity; the
   friendly name alone never authorizes attachment.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L580-L608">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L581-L609">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/startup!">`startup!`</a>
 ``` clojure
@@ -249,7 +249,7 @@ Resolve identity at native startup without launcher state.
   `:identity` must already name this exact binding. An optional reservation
   attaches through the managed compatibility path. Parent and run targets are
   validated before the transactional identity/provenance write.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L568-L578">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L569-L579">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/validate-attribution-contributions!">`validate-attribution-contributions!`</a>
 ``` clojure
