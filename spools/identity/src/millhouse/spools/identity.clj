@@ -4,9 +4,16 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.walk :as walk]
+            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.batch.alpha :as batch]
+            [millstrand.api.current.alpha :as current]
+            [millstrand.api.events.alpha :as events]
+            [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.peers.alpha :as peers]
+            [millstrand.api.registry.alpha :as registry]
+            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
             [millstrand.api.weaver.alpha :as weaver])
   (:import [java.io RandomAccessFile]
@@ -37,6 +44,17 @@
 (s/def ::parent-identity (s/and string? (complement str/blank?)))
 (s/def ::reservation-id (s/and string? (complement str/blank?)))
 (s/def ::expected-identity (s/and string? (complement str/blank?)))
+(s/def ::attribute qualified-keyword?)
+(s/def ::relation (s/and string? (complement str/blank?)))
+(s/def ::attribution-contribution
+  (s/and (s/keys :req-un [::attribute ::relation])
+         #(= #{:attribute :relation} (set (keys %)))))
+(s/def ::contribution-key keyword?)
+(s/def ::source-ids
+  (s/coll-of (s/and string? (complement str/blank?)) :kind coll?))
+(s/def ::lifecycle-context
+  (s/and map? #(s/valid? ::runtime (:runtime %))))
+(s/def ::attribution-handle #{:identity/attribution})
 
 (def ^:private startup-request-keys
   #{:harness :native-session-id :model :thinking-level :run-id :identity
@@ -94,6 +112,252 @@
       (fail! "Identity does not resolve uniquely"
              {:identity friendly-id :matches (mapv :id matches)}))
     (first matches)))
+
+(def attribution-kind
+  "Owner-partitioned registry kind for explicit spool attribution roles."
+  :millhouse.spools.identity/attributions)
+
+(def ^:private canonical-attribution
+  {:key :identity/by-identity
+   :attribute :identity/by-identity
+   :relation "attributed"})
+
+(authoring/register-registry-kind! attribution-kind ::attribution-contribution)
+
+(defn validate-attribution-contributions!
+  "Validate the effective custom attribution contribution set.
+
+  Each attribute and relation is owned by exactly one contribution. The
+  canonical `:identity/by-identity`/`attributed` pair is reserved. This function
+  is public because the runtime resolves it as the registry candidate validator."
+  [{:keys [entries] :as context}]
+  (let [contributions (mapv (fn [[key contribution]]
+                              (assoc contribution :key key))
+                            entries)
+        all (conj contributions canonical-attribution)]
+    (doseq [field [:attribute :relation]
+            :let [duplicates (->> all
+                                  (group-by field)
+                                  (keep (fn [[value matches]]
+                                          (when (< 1 (count matches)) value)))
+                                  (sort-by str)
+                                  vec)]
+            :when (seq duplicates)]
+      (fail! "Attribution contributions must own unique attributes and relations"
+             {:field field :duplicates duplicates :contributions all})))
+  context)
+
+(defn- new-attribution-kinds []
+  (doto (registry/registry)
+    (registry/declare-kind!
+     {:id attribution-kind
+      :entry-spec ::attribution-contribution
+      :binding-moment :identity/reconcile
+      :candidate-validator
+      'millhouse.spools.identity/validate-attribution-contributions!})))
+
+(defn- attribution-kinds [rt]
+  (runtime/spool-state rt ::attribution-kinds new-attribution-kinds))
+
+(runtime/collect-kind!
+ ::attribution-kinds
+ {:id attribution-kind
+  :entry-spec ::attribution-contribution
+  :binding-moment :identity/reconcile
+  :candidate-validator
+  'millhouse.spools.identity/validate-attribution-contributions!})
+
+(defn contribute-attribution!
+  "Publish one explicit spool-owned attribution role during module collection.
+
+  `key` identifies the contribution. `attribute` is the durable raw friendly-ID
+  attribute on source records, and `relation` is the role-specific edge name.
+  Both are exclusive to the contribution. Outside module collection the call is
+  passive, matching `runtime/collect-entry!`.
+
+  ```clojure
+  (identity/contribute-attribution!
+    :kanban/reporter :kanban/reporter \"reported\")
+  ```"
+  [key attribute relation]
+  (require-valid! ::contribution-key key
+                  "Attribution contribution key must be a keyword")
+  (runtime/collect-entry!
+   attribution-kind key
+   (require-valid! ::attribution-contribution
+                   {:attribute attribute :relation relation}
+                   "Attribution contribution is invalid")))
+
+(defn attribution-contributions
+  "Return the canonical and effective explicit attribution contributions.
+
+  The canonical entry is always first; custom entries follow in deterministic
+  key order. No attribute namespace is scanned or inferred."
+  [rt]
+  (let [custom (registry/effective (attribution-kinds rt) attribution-kind)
+        contributions (into [canonical-attribution]
+                            (map (fn [[key contribution]]
+                                   (assoc contribution :key key)))
+                            custom)]
+    (validate-attribution-contributions!
+     {:entries (into {} (map (juxt :key #(select-keys % [:attribute :relation])))
+                     (rest contributions))})
+    contributions))
+
+(defn- projection-status [identity-index raw]
+  (if (nil? raw)
+    {:status :absent :identity-strand-ids []}
+    (if-not (s/valid? ::identity raw)
+      {:status :malformed :identity-strand-ids []}
+      (let [matches (sort (map :id (get identity-index raw)))]
+        {:status (case (count matches)
+                   0 :unresolved
+                   1 :resolved
+                   :ambiguous)
+         :identity-strand-ids (vec matches)}))))
+
+(defn inspect-attributions
+  "Project durable identity attribution evidence and its current graph links.
+
+  The zero-filter form scans every source carrying a configured attribute plus
+  any source with a managed edge. `source-ids`, when supplied, bounds that
+  projection and every id must exist. Each result always contains
+  `:source-id`, `:contribution`, `:attribute`, `:relation`, raw `:identity`,
+  `:status`, exact `:identity-strand-ids`, and current
+  `:linked-identity-strand-ids`. Status is `:resolved`, `:unresolved`,
+  `:ambiguous`, `:malformed`, or `:absent`."
+  ([rt] (inspect-attributions rt nil))
+  ([rt source-ids]
+   (when source-ids
+     (require-valid! ::source-ids source-ids
+                     "Attribution source ids must be non-blank strings"))
+   (let [strands (weaver/list rt)
+         strands-by-id (into {} (map (juxt :id clojure.core/identity)) strands)
+         requested (when source-ids (set source-ids))
+         _ (doseq [source-id requested]
+             (when-not (contains? strands-by-id source-id)
+               (fail! "Attribution source not found" {:source-id source-id})))
+         identity-index (group-by #(attr-get % :identity/id)
+                                  (filter identity? strands))
+         all-ids (mapv :id strands)]
+     (->> (attribution-contributions rt)
+          (mapcat
+           (fn [{:keys [key attribute relation]}]
+             (let [edges (if (seq all-ids)
+                           (graph/incoming-edges rt all-ids relation)
+                           [])
+                   linked-by-source (group-by :to_strand_id edges)
+                   evidence-ids (into #{}
+                                      (keep (fn [strand]
+                                              (when (some? (attr-get strand attribute))
+                                                (:id strand))))
+                                      strands)
+                   candidate-ids (into evidence-ids (keys linked-by-source))]
+               (for [source-id (sort candidate-ids)
+                     :when (or (nil? requested) (contains? requested source-id))
+                     :let [source (get strands-by-id source-id)
+                           raw (attr-get source attribute)
+                           linked (->> (get linked-by-source source-id)
+                                       (map :from_strand_id)
+                                       sort
+                                       vec)]]
+                 (merge {:source-id source-id
+                         :contribution key
+                         :attribute attribute
+                         :relation relation
+                         :identity raw
+                         :linked-identity-strand-ids linked}
+                        (projection-status identity-index raw))))))
+          (sort-by (juxt :source-id (comp str :contribution)))
+          vec))))
+
+(defn- sync-projection! [rt projection]
+  (let [{:keys [source-id relation status identity-strand-ids
+                linked-identity-strand-ids]} projection
+        expected (when (= :resolved status) (first identity-strand-ids))
+        stale (remove #{expected} linked-identity-strand-ids)
+        missing? (and expected (not-any? #{expected} linked-identity-strand-ids))
+        linked-refs (into {}
+                          (map-indexed (fn [index id]
+                                         [(keyword (str "linked-" index)) id]))
+                          stale)
+        expected-ref (when missing? :resolved-identity)
+        refs (cond-> (assoc linked-refs :source source-id)
+               expected-ref (assoc expected-ref expected))
+        edges (into (mapv (fn [[ref _]]
+                            {:op :remove :from ref :to :source :type relation})
+                          linked-refs)
+                    (when expected-ref
+                      [{:op :upsert :from expected-ref :to :source :type relation}]))]
+    (when (seq edges)
+      (batch/apply! rt {:refs refs :strands [] :edges edges :burn []}))
+    (count edges)))
+
+(defn reconcile-attributions!
+  "Converge attribution edges from durable source attributes.
+
+  Exact unique local identity matches create `identity -> source` edges using
+  each contribution's relation. Unknown and ambiguous names are nonfatal and
+  leave no relation; stale links are removed. Malformed evidence fails before
+  any write. Repeated reconciliation with a converged graph performs no write.
+  The optional `source-ids` collection bounds an explicit repair. Returns exactly
+  `:scanned`, `:resolved`, `:unresolved`, `:ambiguous`, `:absent`, and `:writes`;
+  `:writes` counts edge mutations submitted by this call."
+  ([rt] (reconcile-attributions! rt nil))
+  ([rt source-ids]
+   (let [projections (inspect-attributions rt source-ids)
+         malformed (filterv #(= :malformed (:status %)) projections)]
+     (when (seq malformed)
+       (fail! "Malformed identity attribution evidence"
+              {:attributions malformed}))
+     (let [writes (reduce + (map #(sync-projection! rt %) projections))
+           statuses (frequencies (map :status projections))]
+       {:scanned (count projections)
+        :resolved (get statuses :resolved 0)
+        :unresolved (get statuses :unresolved 0)
+        :ambiguous (get statuses :ambiguous 0)
+        :absent (get statuses :absent 0)
+        :writes writes}))))
+
+(def ^:private attribution-event-types
+  #{:strand/added :strand/updated :batch/applied})
+
+(defn on-attribution-event
+  "Post-commit event handler that accelerates durable attribution convergence."
+  [_event]
+  (reconcile-attributions! (current/runtime)))
+
+(defn open-attribution-engine!
+  "Register the attribution handler and reconcile durable sources at activation."
+  [{:keys [runtime] :as context}]
+  (require-valid! ::lifecycle-context context
+                  "Invalid identity attribution lifecycle context")
+  (events/register-handler!
+   runtime :identity/attribution attribution-event-types
+   'millhouse.spools.identity/on-attribution-event
+   {:spool "identity"})
+  (try
+    (reconcile-attributions! runtime)
+    :identity/attribution
+    (catch Throwable cause
+      (events/unregister-handler! runtime :identity/attribution)
+      (throw (ex-info "Identity attribution activation failed and was reverted"
+                      {:effect/id (:effect/id context)} cause)))))
+
+(defn close-attribution-engine!
+  "Unregister the attribution handler. Durable evidence and edges remain."
+  [{:keys [runtime resource] :as context}]
+  (require-valid! ::lifecycle-context context
+                  "Invalid identity attribution lifecycle context")
+  (require-valid! ::attribution-handle resource
+                  "Invalid identity attribution resource")
+  (events/unregister-handler! runtime :identity/attribution)
+  {:reconciled :removed})
+
+(lifecycle/defresource! attribution-engine
+  "Own post-commit attribution reconciliation for the active identity module."
+  {:open 'millhouse.spools.identity/open-attribution-engine!
+   :close 'millhouse.spools.identity/close-attribution-engine!})
 
 (defn- unique-native-binding [runtime harness native-session-id]
   (let [matches (by-native-session runtime harness native-session-id)]
@@ -571,7 +835,13 @@
                                      {:name :agent-id :type :string :required? true}]}
     "show" {:doc "Show an identity by its friendly ID."
             :hook-class :read :deadline-class :standard
-            :positionals [{:name :friendly-id :type :string :required? true}]}}})
+            :positionals [{:name :friendly-id :type :string :required? true}]}
+    "attributions" {:doc "Inspect durable attribution evidence and graph links."
+                    :hook-class :read :deadline-class :standard
+                    :positionals [{:name :source-id :type :string}]}
+    "reconcile" {:doc "Reconcile durable attribution evidence into graph links."
+                 :hook-class :mutating :deadline-class :standard
+                 :positionals [{:name :source-id :type :string}]}}})
 
 #_{:clj-kondo/ignore [:redefined-var]}
 (millstrand/defop! identity
@@ -587,4 +857,7 @@
     "bind" (bind! runtime (select-keys args bind-request-keys))
     "codex-child-key" {:native-session-id
                        (codex-child-session-id (:parent-session-id args) (:agent-id args))}
-    "show" (current runtime (:friendly-id args))))
+    "show" (current runtime (:friendly-id args))
+    "attributions" {:attributions
+                    (inspect-attributions runtime (some-> (:source-id args) vector))}
+    "reconcile" (reconcile-attributions! runtime (some-> (:source-id args) vector))))

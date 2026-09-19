@@ -18,7 +18,35 @@ Attach a reserved identity to one actual native session exactly once.
 
   `:reservation-id` is the capability returned by `reserve!`. Replaying the same
   attachment converges; another harness or native session fails before writes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L245-L253">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L509-L517">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/attribution-contributions">`attribution-contributions`</a>
+``` clojure
+(attribution-contributions rt)
+```
+Function.
+
+Return the canonical and effective explicit attribution contributions.
+
+  The canonical entry is always first; custom entries follow in deterministic
+  key order. No attribute namespace is scanned or inferred.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L191-L205">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/attribution-engine">`attribution-engine`</a>
+
+
+
+
+Own post-commit attribution reconciliation for the active identity module.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L357-L360">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/attribution-kind">`attribution-kind`</a>
+
+
+
+
+Owner-partitioned registry kind for explicit spool attribution roles.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L116-L118">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/bind!">`bind!`</a>
 ``` clojure
@@ -31,7 +59,16 @@ Compatibility binding for existing managed and maintenance providers.
   Mint/recovery and `:run-id` provenance retain the historical result shape.
   `:expected-identity` remains an assertion: without an existing native binding,
   or on mismatch, it fails before minting or adding edges.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L346-L373">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L610-L637">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/close-attribution-engine!">`close-attribution-engine!`</a>
+``` clojure
+(close-attribution-engine! {:keys [runtime resource], :as context})
+```
+Function.
+
+Unregister the attribution handler. Durable evidence and edges remain.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L347-L355">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/codex-child-session-id">`codex-child-session-id`</a>
 ``` clojure
@@ -43,7 +80,26 @@ Return the collision-safe native key for a Codex `(session_id, agent_id)` child.
 
   Pi callers do not transform IDs: they pass the child's actual native session
   ID directly to `startup!`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L375-L387">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L639-L651">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/contribute-attribution!">`contribute-attribution!`</a>
+``` clojure
+(contribute-attribution! key attribute relation)
+```
+Function.
+
+Publish one explicit spool-owned attribution role during module collection.
+
+  `key` identifies the contribution. `attribute` is the durable raw friendly-ID
+  attribute on source records, and `relation` is the role-specific edge name.
+  Both are exclusive to the contribution. Outside module collection the call is
+  passive, matching `runtime/collect-entry!`.
+
+  ```clojure
+  (identity/contribute-attribution!
+    :kanban/reporter :kanban/reporter "reported")
+  ```
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L170-L189">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/current">`current`</a>
 ``` clojure
@@ -52,7 +108,7 @@ Return the collision-safe native key for a Codex `(session_id, agent_id)` child.
 Function.
 
 Resolve an existing identity by friendly ID, failing when absent or ambiguous.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L89-L96">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L107-L114">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/identity">`identity`</a>
 ``` clojure
@@ -61,7 +117,7 @@ Resolve an existing identity by friendly ID, failing when absent or ambiguous.
 Function.
 
 Dispatch `strand identity` operations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L577-L590">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L847-L863">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/identity?">`identity?`</a>
 ``` clojure
@@ -70,7 +126,43 @@ Dispatch `strand identity` operations.
 Function.
 
 Return true when `strand` is an identity record.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L68-L71">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L86-L89">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/inspect-attributions">`inspect-attributions`</a>
+``` clojure
+(inspect-attributions rt)
+(inspect-attributions rt source-ids)
+```
+Function.
+
+Project durable identity attribution evidence and its current graph links.
+
+  The zero-filter form scans every source carrying a configured attribute plus
+  any source with a managed edge. `source-ids`, when supplied, bounds that
+  projection and every id must exist. Each result always contains
+  `:source-id`, `:contribution`, `:attribute`, `:relation`, raw `:identity`,
+  `:status`, exact `:identity-strand-ids`, and current
+  `:linked-identity-strand-ids`. Status is `:resolved`, `:unresolved`,
+  `:ambiguous`, `:malformed`, or `:absent`.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L219-L272">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/on-attribution-event">`on-attribution-event`</a>
+``` clojure
+(on-attribution-event _event)
+```
+Function.
+
+Post-commit event handler that accelerates durable attribution convergence.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L325-L328">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/open-attribution-engine!">`open-attribution-engine!`</a>
+``` clojure
+(open-attribution-engine! {:keys [runtime], :as context})
+```
+Function.
+
+Register the attribution handler and reconcile durable sources at activation.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L330-L345">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/receive!">`receive!`</a>
 ``` clojure
@@ -87,7 +179,25 @@ Receive an identity from an exact running origin Weaver ID.
   and the durable origin workspace and strand ID. Edges and reservations stay
   local. Forwarding an imported descriptor preserves its original provenance.
   Conflicting names, sessions or origin pointers fail without writes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L461-L483">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L725-L747">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/reconcile-attributions!">`reconcile-attributions!`</a>
+``` clojure
+(reconcile-attributions! rt)
+(reconcile-attributions! rt source-ids)
+```
+Function.
+
+Converge attribution edges from durable source attributes.
+
+  Exact unique local identity matches create `identity -> source` edges using
+  each contribution's relation. Unknown and ambiguous names are nonfatal and
+  leave no relation; stale links are removed. Malformed evidence fails before
+  any write. Repeated reconciliation with a converged graph performs no write.
+  The optional `source-ids` collection bounds an explicit repair. Returns exactly
+  `:scanned`, `:resolved`, `:unresolved`, `:ambiguous`, `:absent`, and `:writes`;
+  `:writes` counts edge mutations submitted by this call.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L296-L320">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/register!">`register!`</a>
 ``` clojure
@@ -113,7 +223,7 @@ Register an existing local identity in an exact destination Weaver ID.
   propagate without automatic retry. `identity/origin-workspace` is the durable
   lookup pointer, so an origin Weaver restart does not change the descriptor.
   Registration does not start, restart or reconfigure Weavers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L485-L522">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L749-L786">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/reserve!">`reserve!`</a>
 ``` clojure
@@ -125,7 +235,7 @@ Mint an unattached identity reservation for an optional managed caller.
 
   The returned opaque `:reservation-id` is required to attach the identity; the
   friendly name alone never authorizes attachment.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L316-L344">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L580-L608">Source</a></sub></p>
 
 ## <a name="millhouse.spools.identity/startup!">`startup!`</a>
 ``` clojure
@@ -139,4 +249,17 @@ Resolve identity at native startup without launcher state.
   `:identity` must already name this exact binding. An optional reservation
   attaches through the managed compatibility path. Parent and run targets are
   validated before the transactional identity/provenance write.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L304-L314">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L568-L578">Source</a></sub></p>
+
+## <a name="millhouse.spools.identity/validate-attribution-contributions!">`validate-attribution-contributions!`</a>
+``` clojure
+(validate-attribution-contributions! {:keys [entries], :as context})
+```
+Function.
+
+Validate the effective custom attribution contribution set.
+
+  Each attribute and relation is owned by exactly one contribution. The
+  canonical `:identity/by-identity`/`attributed` pair is reserved. This function
+  is public because the runtime resolves it as the registry candidate validator.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/identity/src/millhouse/spools/identity.clj#L127-L148">Source</a></sub></p>

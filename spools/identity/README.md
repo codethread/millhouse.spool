@@ -1,6 +1,6 @@
 # Millhouse identity spool
 
-[API reference](./identity.api.md)
+[API reference](./identity.api.md) · [Cookbook](./identity.cookbook.md)
 
 `millhouse.spools.identity` gives each native Codex or Pi session one friendly,
 workspace-local identity. Native startup needs only the harness name and the
@@ -105,6 +105,79 @@ binding and otherwise mints.
 self-edge. `--run-id ID` adds the idempotent `performed` edge
 `current identity -> run`. Both targets are validated before identity or edge
 writes.
+
+## Best-effort attribution
+
+`:identity/by-identity` (wire key `identity/by-identity`) is the canonical
+attribution evidence attribute. Its value is the supplied friendly identity
+string, never a strand ID. A source operation must durably store that string as
+part of its own successful mutation; local identity lookup is not a prerequisite
+for recording otherwise-valid work.
+
+The identity spool projects exact, workspace-local matches into an `attributed`
+edge:
+
+```text
+identity --attributed--> durable source record
+```
+
+This direction keeps an identity's participation queryable alongside existing
+`performed` history. The source attribute remains authoritative evidence. The
+edge is an idempotent enrichment and never replaces, rewrites, or guesses the
+raw string.
+
+`inspect-attributions` returns a vector of source-centric projections.
+`strand identity attributions [SOURCE_ID]` wraps that same vector as
+`{"attributions": [...]}` (plus the dispatcher `operation` key). Each projection
+has these stable keys:
+
+- `source-id`, `contribution`, `attribute`, and `relation`
+- `identity`: the raw durable string, or `nil` for a stale link whose evidence
+  was removed
+- `status`: `resolved`, `unresolved`, `ambiguous`, `malformed`, or `absent`
+- `identity-strand-ids`: all exact local matches
+- `linked-identity-strand-ids`: current graph links for that relation
+
+Only one exact local match resolves. Unknown and ambiguous names are visible,
+nonfatal lookup outcomes and produce no edge. A later local registration or
+identity creation triggers reconciliation. There is no fuzzy matching,
+cross-workspace guessing, peer auto-registration, placeholder identity, or
+session rename. A malformed value is not a best-effort lookup outcome: source
+CLIs must reject it before writing, and reconciliation fails loudly if malformed
+evidence nevertheless exists.
+
+Activation registers a post-commit handler for strand creation/update and batch
+application, then scans durable sources. Events accelerate convergence but are
+not history storage. Edge-only reconciliation batches contain no strand changes,
+so their own event cannot recurse into another write. Repeated and duplicate
+delivery converges without writes. Use `reconcile-attributions!` or
+`strand identity reconcile [SOURCE_ID]` for an explicit repair. Both return the
+exact summary keys `scanned`, `resolved`, `unresolved`, `ambiguous`, `absent`,
+and `writes`; `writes` counts submitted edge mutations. The CLI also includes
+its dispatcher `operation` key. Runtime handler exceptions remain visible
+through the Millstrand event failure API.
+
+Native startup, reservation, attachment, binding, and registration do **not**
+use this best-effort path. Their exact binding and conflict checks remain strict
+and fail before writes.
+
+### Explicit spool-owned roles
+
+Roles such as reporter, owner, or caller retain separate durable attributes and
+relations. A module publishes each role explicitly during source collection:
+
+```clojure
+(identity/contribute-attribution!
+  :kanban/reporter :kanban/reporter-identity "reported")
+```
+
+The helper takes contribution key, qualified source attribute, and relation.
+Attributes and relations are exclusive; the canonical
+`:identity/by-identity`/`attributed` pair is reserved. The event handler reads
+only that canonical pair and effective explicit contributions. It never scans
+arbitrary `identity/*` attributes or infers their semantics. Spool-owned source
+records are what preserve historical reporter, owner, or caller evidence when a
+current scalar attribute is later overwritten.
 
 ### Native child keys
 

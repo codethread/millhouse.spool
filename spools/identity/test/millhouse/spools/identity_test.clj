@@ -6,6 +6,7 @@
             [clojure.test :refer [deftest is testing]]
             [millhouse.spools.identity :as identity]
             [millhouse.test-support :as test-support]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.peers.alpha :as peers]
             [millstrand.api.spool.alpha :refer [attr-get]]
@@ -35,6 +36,204 @@
   {:strands (weaver/list runtime)
    :parents (identity-edges runtime "parent-of")
    :runs (identity-edges runtime "performed")})
+
+(defn- add-named-identity! [runtime friendly-id]
+  (weaver/add! runtime
+               {:title friendly-id
+                :attributes {:identity/session "true"
+                             :identity/id friendly-id
+                             :identity/harness "test"
+                             :identity/native-session-id (str "native-" friendly-id)}}))
+
+(defn- attribution-edges [runtime source-id relation]
+  (graph/incoming-edges runtime [source-id] relation))
+
+(deftest attribution-reconciliation-resolves-only-exact-unique-local-identities
+  (test-support/with-runtime
+    (fn [runtime _]
+      (let [known (add-named-identity! runtime "known-kind-otter")
+            _ (add-named-identity! runtime "duplicate-kind-otter")
+            _ (add-named-identity! runtime "duplicate-kind-otter")
+            sources (into {}
+                          (map (fn [[label friendly-id]]
+                                 [label
+                                  (weaver/add!
+                                   runtime
+                                   {:title (name label)
+                                    :attributes {:identity/by-identity friendly-id}})]))
+                          {:known "known-kind-otter"
+                           :unknown "missing-kind-otter"
+                           :ambiguous "duplicate-kind-otter"
+                           :fuzzy "known-kind-otte"})
+            ignored (weaver/add!
+                     runtime
+                     {:title "not inferred"
+                      :attributes {:identity/owner "known-kind-otter"}})
+            result (identity/reconcile-attributions! runtime)
+            statuses (into {} (map (juxt :source-id :status))
+                           (identity/inspect-attributions runtime))]
+        (is (= {:scanned 4 :resolved 1 :unresolved 2 :ambiguous 1
+                :absent 0 :writes 1}
+               result))
+        (is (= :resolved (get statuses (:id (:known sources)))))
+        (is (= :unresolved (get statuses (:id (:unknown sources)))))
+        (is (= :ambiguous (get statuses (:id (:ambiguous sources)))))
+        (is (= :unresolved (get statuses (:id (:fuzzy sources)))))
+        (is (nil? (get statuses (:id ignored))))
+        (is (= [{:from_strand_id (:id known)
+                 :to_strand_id (:id (:known sources))
+                 :edge_type "attributed"}]
+               (mapv #(select-keys % [:from_strand_id :to_strand_id :edge_type])
+                     (attribution-edges runtime (:id (:known sources)) "attributed"))))
+        (is (empty? (attribution-edges runtime (:id (:unknown sources)) "attributed")))
+        (is (empty? (attribution-edges runtime (:id (:ambiguous sources)) "attributed")))
+        (is (empty? (attribution-edges runtime (:id (:fuzzy sources)) "attributed")))))))
+
+(deftest explicit-spool-contributions-keep-role-relations-distinct
+  (test-support/with-runtime
+    (fn [runtime _]
+      (activate-identity! runtime)
+      (test-support/activate-spool!
+       runtime :identity-attribution-fixture
+       'millhouse.test-modules.identity-attribution
+       :after [:millhouse/spools-identity])
+      (let [caller (add-named-identity! runtime "caller-kind-otter")
+            source (weaver/add!
+                    runtime
+                    {:title "call"
+                     :attributes {:support/caller-identity "caller-kind-otter"}})]
+        (test-alpha/await-quiescent! runtime)
+        (is (= [{:key :identity/by-identity
+                 :attribute :identity/by-identity
+                 :relation "attributed"}
+                {:key :support/caller
+                 :attribute :support/caller-identity
+                 :relation "called"}]
+               (identity/attribution-contributions runtime)))
+        (is (= [(:id caller)]
+               (mapv :from_strand_id
+                     (attribution-edges runtime (:id source) "called"))))
+        (is (empty? (attribution-edges runtime (:id source) "attributed")))))))
+
+(deftest attribution-events-handle-late-identities-batch-fanout-and-edits
+  (test-support/with-runtime
+    (fn [runtime _]
+      (activate-identity! runtime)
+      (let [late-source (weaver/add!
+                         runtime
+                         {:title "late"
+                          :attributes {:identity/by-identity "late-kind-otter"}})]
+        (test-alpha/await-quiescent! runtime)
+        (is (= :unresolved
+               (:status (first (identity/inspect-attributions
+                                runtime [(:id late-source)])))))
+        (let [late (add-named-identity! runtime "late-kind-otter")]
+          (test-alpha/await-quiescent! runtime)
+          (is (= (:id late)
+                 (:from_strand_id
+                  (first (attribution-edges runtime (:id late-source) "attributed")))))
+          (add-named-identity! runtime "late-kind-otter")
+          (test-alpha/await-quiescent! runtime)
+          (is (= :ambiguous
+                 (:status (first (identity/inspect-attributions
+                                  runtime [(:id late-source)])))))
+          (is (empty? (attribution-edges runtime (:id late-source) "attributed")))))
+      (let [result (batch/apply!
+                    runtime
+                    {:refs {}
+                     :strands [{:ref :identity
+                                :title "batch-kind-otter"
+                                :attributes {:identity/session "true"
+                                             :identity/id "batch-kind-otter"
+                                             :identity/harness "test"
+                                             :identity/native-session-id "batch-native"}}
+                               {:ref :source
+                                :title "batch source"
+                                :attributes {:identity/by-identity "batch-kind-otter"}}]
+                     :edges []
+                     :burn []})
+            identity-id (get-in result [:refs :identity])
+            source-id (get-in result [:refs :source])]
+        (test-alpha/await-quiescent! runtime)
+        (is (= [identity-id]
+               (mapv :from_strand_id
+                     (attribution-edges runtime source-id "attributed"))))
+        (let [replacement (add-named-identity! runtime "replacement-kind-otter")]
+          (weaver/update! runtime source-id
+                          {:attributes {:identity/by-identity
+                                        "replacement-kind-otter"}})
+          (test-alpha/await-quiescent! runtime)
+          (is (= [(:id replacement)]
+                 (mapv :from_strand_id
+                       (attribution-edges runtime source-id "attributed"))))
+          (weaver/update! runtime source-id
+                          {:attributes {:identity/by-identity nil}})
+          (test-alpha/await-quiescent! runtime)
+          (is (empty? (attribution-edges runtime source-id "attributed")))
+          (is (empty? (identity/inspect-attributions runtime [source-id]))))))))
+
+(deftest duplicate-delivery-and-repeated-reconciliation-write-only-on-change
+  (test-support/with-runtime
+    (fn [runtime _]
+      (let [_ (add-named-identity! runtime "once-kind-otter")
+            source (weaver/add!
+                    runtime
+                    {:title "source"
+                     :attributes {:identity/by-identity "once-kind-otter"}})
+            writes (atom 0)
+            apply! batch/apply!]
+        (with-redefs [batch/apply! (fn [& args]
+                                     (swap! writes inc)
+                                     (apply apply! args))]
+          (let [first-delivery (identity/on-attribution-event
+                                {:event/type :strand/added})
+                duplicate-delivery (identity/on-attribution-event
+                                    {:event/type :strand/added})]
+            (is (= 1 (:writes first-delivery)))
+            (is (zero? (:writes duplicate-delivery)))
+            (test-alpha/await-quiescent! runtime)
+            (reset! writes 0)
+            (is (zero? (:writes (identity/reconcile-attributions! runtime))))
+            (is (zero? @writes))))
+        (is (= 1 (count (attribution-edges runtime (:id source) "attributed"))))))))
+
+(deftest activation-recovers-attribution-from-durable-sources-after-restart
+  (let [root (test-support/temp-dir "millhouse-attribution-restart")
+        ids (atom nil)]
+    (try
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{runtime :runtime}]
+         (let [agent (add-named-identity! runtime "restart-kind-otter")
+               source (weaver/add!
+                       runtime
+                       {:title "durable source"
+                        :attributes {:identity/by-identity "restart-kind-otter"}})]
+           (reset! ids {:agent (:id agent) :source (:id source)})
+           (is (empty? (attribution-edges runtime (:id source) "attributed"))))))
+      (test-alpha/run-with-weaver-world
+       {:root root}
+       (fn [{runtime :runtime}]
+         (activate-identity! runtime)
+         (is (= [(:agent @ids)]
+                (mapv :from_strand_id
+                      (attribution-edges runtime (:source @ids) "attributed"))))))
+      (finally
+        (test-support/delete-tree! root)))))
+
+(deftest malformed-attribution-is-visible-and-fails-reconciliation-loudly
+  (test-support/with-runtime
+    (fn [runtime _]
+      (let [source (weaver/add!
+                    runtime
+                    {:title "malformed"
+                     :attributes {:identity/by-identity ""}})
+            projection (first (identity/inspect-attributions runtime [(:id source)]))]
+        (is (= :malformed (:status projection)))
+        (is (= "" (:identity projection)))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Malformed identity attribution evidence"
+                              (identity/reconcile-attributions! runtime)))))))
 
 (deftest startup-mints-once-and-recovers-without-launcher-state
   (test-support/with-runtime
@@ -402,7 +601,14 @@
                                          "--identity" (:identity reserved)
                                          "codex" "cli-thread"
                                          (:reservation-id reserved)])
-            child-key (from-argv runtime ["codex-child-key" "parent" "agent"])]
+            child-key (from-argv runtime ["codex-child-key" "parent" "agent"])
+            actor (add-named-identity! runtime "cli-kind-otter")
+            source (weaver/add!
+                    runtime
+                    {:title "CLI attribution"
+                     :attributes {:identity/by-identity "cli-kind-otter"}})
+            attributions (from-argv runtime ["attributions" (:id source)])
+            reconciled (from-argv runtime ["reconcile" (:id source)])]
         (is (= "minted" (:result fresh)))
         (is (= "recovered" (:result resumed)))
         (is (= "reserved" (:result reserved)))
@@ -415,7 +621,16 @@
                (mapv :operation [fresh resumed reserved attached])))
         (is (= {:operation "identity codex-child-key"
                 :native-session-id (identity/codex-child-session-id "parent" "agent")}
-               child-key))))))
+               child-key))
+        (is (= "identity attributions" (:operation attributions)))
+        (is (= {:source-id (:id source)
+                :identity "cli-kind-otter"
+                :status :resolved
+                :identity-strand-ids [(:id actor)]}
+               (select-keys (first (:attributions attributions))
+                            [:source-id :identity :status :identity-strand-ids])))
+        (is (= "identity reconcile" (:operation reconciled)))
+        (is (= 1 (:resolved reconciled)))))))
 
 (defn- with-registration-world [f]
   (test-support/with-runtime
@@ -455,11 +670,19 @@
                                             :reservation-id (:reservation-id reserved)
                                             :parent-identity (:identity parent) :run-id (:id run)})
             name (:identity bound)
+            source (weaver/add!
+                    target
+                    {:title "waiting for registration"
+                     :attributes {:identity/by-identity name}})
             argv ["register" name "--to-weaver" "target-id" "--by-identity" name]
             result (from-argv origin argv)
+            _ (test-alpha/await-quiescent! target)
             record (identity/current target name)
             baseline (graph-snapshot target)]
         (is (= "registered" (:result result)))
+        (is (= [(:id record)]
+               (mapv :from_strand_id
+                     (attribution-edges target (:id source) "attributed"))))
         (is (= "thread" (attr-get record :identity/native-session-id)))
         (is (= "astra" (attr-get record :identity/model)))
         (is (= (:workspace (first @rows)) (attr-get record :identity/origin-workspace)))
