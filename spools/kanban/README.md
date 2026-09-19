@@ -22,6 +22,9 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
          '[millstrand.api.runtime.alpha :as runtime])
 
 (def runtime (current/runtime))
+(runtime/module! runtime :millhouse/identity
+  {:ns 'millhouse.spools.identity
+   :required? true})
 (runtime/module! runtime :millhouse/kanban
   {:ns 'millhouse.spools.kanban
    :required? true})
@@ -70,23 +73,42 @@ grouping card and `--epic` attaches a feature beneath an existing epic. The
 `kanban-batch` weave pattern creates a set of pending features atomically and
 resolves dependencies by sibling key or durable strand id.
 
+`add --by-identity ACTOR` records canonical creator attribution and defaults the
+reporter to that actor. `--reported-by REPORTER` makes the durable reporter role
+explicitly different. Both flags are optional, so anonymous unowned backlog
+creation remains valid. Reporting never claims work.
+
 Claim a feature before doing direct user work. `claim` requires `--owner ID`
-and `--branch`; `ID` is the logical-session identity that owns the work root.
-`worktree` is optional for work in the main checkout, and `run-id` can carry an
-opaque workflow pointer. The card is the branch's discoverable work root;
-execution strands beneath it use `parent-of` edges. Notes use `--by ID` for
-author attribution, deliberately distinct from claim ownership. Inspect live
-help rather than substituting `--by-identity`, which belongs to agent
-operations.
+and, for a feature, `--branch`; `ID` is the friendly identity in the owner role.
+`--by-identity ACTOR` records a distinct acting identity, such as a dispatcher
+claiming on behalf of a worker. `worktree` is optional. `run-id` is retained only
+as nonauthoritative context on the claim record; run participation remains in
+`serves`/`performed` relations.
+
+Every claim or handoff atomically creates a closed `kanban/ownership-claim=true`
+source record and a `claim --claims--> target` edge. Records carry
+`kanban/owner`, immutable `kanban/claimed-at`, optional distinct
+`identity/by-identity`, and optional branch/worktree/run context. The Kanban
+pre-commit guard rejects updates, supersession, batch replacement, or burn of
+an existing claim record. History sorts
+by `(claimed-at, record-id)`; the final record is current even if its owner does
+not resolve locally. Repeating the exact current-owner request returns
+`result=unchanged` without a write. A changed owner is an explicit handoff, so
+A→B→A creates three records without pending-lane toggles. A same-owner request
+with changed context fails as ambiguous rather than silently mutating history.
 
 Tasks are the optional `feature > task` tier. `task add` marks a child with
-`kanban/task=true` and can add repeatable `depends-on` edges. Task status is
-derived from strand state, dependency closure, and the core `owner` attribute:
-`closed`, `blocked`, `doing`, or `ready`. The first `doing` task is the board's
-resume signal; status is never stored and therefore cannot drift. Complete each
-task as you go with `strand update TASK_ID --state closed`, rather than waiting
-for the feature to finish. Finish cascades mark remaining open tasks as
-`unactioned`, not completed work.
+`kanban/task=true` and can add repeatable `depends-on` edges. `claim TASK
+--owner ID` creates a direct task claim (no branch required). Without one, task
+ownership projects from the feature as `owner-source=inherited`; a direct claim
+projects `owner-source=direct` and overrides inheritance. Status is `closed`,
+`blocked`, `doing`, or `ready`; only direct task ownership produces `doing`, so
+claiming a feature does not make all ready tasks active at once. Complete each
+task as you go with `strand update TASK_ID --state closed`. Finish cascades mark
+remaining open tasks as `unactioned`, not completed work.
+
+Notes retain their current `--by ID`/`note/by` contract until the dedicated
+actor-flag migration lands. Note/review authorship never changes ownership.
 
 Notes use the shared `notes` relation and target only a card or task. Important
 user-visible notes must always be on the epic or feature: decisions, milestones,
@@ -137,7 +159,50 @@ the internal `parent-of` and `depends-on` edges. The Bun consumer under
 `scripts/kanban-export` turns that payload into a self-contained HTML progress
 view.
 
-## 5. Millstrand state and APIs
+## 5. Ownership projection contract
+
+Identity reconciliation uses these explicit directions:
+
+```text
+reporter identity --reported--> card
+owner identity --claimed--> ownership claim --claims--> feature or task
+actor identity --attributed--> card or claim (when identity/by-identity exists)
+```
+
+Board and `next` compact cards expose the latest claim as top-level `owner`,
+`claim-id`, `claimed-at`, and optional `branch`/`worktree`; `reporter` is
+`{"identity": STRING, "identity-strand-ids": [ID...]}`. Those fields are
+projections from source records and enrichment edges, never the legacy scalar
+`owner` attribute.
+
+`card ID` additionally returns:
+
+```json
+{
+  "reporter": {"identity": "reporter", "identity-strand-ids": []},
+  "ownership": {
+    "current": {"id": "claim2", "owner": "worker-b", "claimed-at": "...", "order": 2,
+                "owner-identity-strand-ids": []},
+    "history": [{"id": "claim1", "owner": "worker-a", "claimed-at": "...", "order": 1,
+                 "owner-identity-strand-ids": []}]
+  }
+}
+```
+
+Optional claim keys are `by-identity`, `branch`, `worktree`, and `run-id`.
+Empty identity-strand IDs mean unresolved or ambiguous enrichment; the raw owner
+and latest ordering do not change. Use `strand identity attributions CLAIM_ID`
+when a consumer needs the exact `resolved|unresolved|ambiguous` diagnostic.
+Anonymous cards return `reporter: null`; never-claimed targets return
+`current: null, history: []`.
+
+Task projections add `owner`, `owner-source` (`direct` or `inherited`), and
+`ownership: {source, claim, feature?}`. `identity-work` returns
+`{identity, cards, tasks, claims}`. The named query is intentionally the
+one-edge direct selection; use the helper when containing epics and inherited
+tasks are required.
+
+## 6. Millstrand state and APIs
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
@@ -147,7 +212,9 @@ view.
 | Card query | `kanban-cards` from `defquery` | Selects every strand marked `kanban/card=true`. |
 | Pending query | `kanban-pending` from `defquery` | Selects active cards in the `pending` lane. |
 | Epic query | `kanban-epic-pending` from `defquery` | Selects an epic's direct pending cards for composition with `strand ready`. |
-| Identity work query | `kanban-identity-work` from `defquery` | Selects an identity's epic, owned features, and directly or indirectly owned tasks across all states; use `strand list` for history or `strand ready` for the active frontier. |
-| Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task/run markers, provenance, and abandon restore state. |
+| Identity work query | `kanban-identity-work` from `defquery` | Selects direct feature/task claim targets and reported cards from durable raw identity evidence; it never reads scalar `owner`. |
+| Identity work helper | `identity-work` | Expands direct history to inherited tasks and containing epics and returns exact `identity`, `cards`, `tasks`, and `claims` keys across all states. |
+| Ownership helpers | `ownership-history`, `current-ownership`, `task-ownership` | Return ordered claim maps (`id`, `owner`, `claimed-at`, `order`, `owner-identity-strand-ids`, optional actor/context) and direct/inherited task ownership. |
+| Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task markers, reporter, and abandon restore state. Claim records own ownership/run context. |
 | Label state | `kanban.label/<slug>` attributes | Stores one independent `"true"` marker per normalized free-form label. |
 | Lifecycle resource | `kanban-runtime` | Declares the Kanban vocabularies and owns process-lifetime runtime state. |

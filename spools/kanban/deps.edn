@@ -3,7 +3,8 @@
  {io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "09a2cad2ab4ee203051ed3cc66bb0a177105a979"
-   :deps/root "."}}
+   :deps/root "."}
+  millhouse.spools/identity {:local/root "../identity"}}
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]

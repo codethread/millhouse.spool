@@ -36,13 +36,13 @@ tasks, note the doing-task as work progresses, then expose review and finish.
 
 ```sh
 card=$(strand kanban next | jq -r '.next.id')
-# Use the same logical-session identity for each domain-specific actor flag.
+# Owner is the role; by-identity is an optional distinct actor.
 strand kanban claim "$card" --owner "$MILLSTRAND_AGENT_ID" --branch kanban-spool
 
 impl=$(strand kanban task add "$card" "Implement the change" | jq -r '.task.id')
 docs=$(strand kanban task add "$card" "Document the change" --depends-on "$impl" \
   | jq -r '.task.id')
-strand update "$impl" --attr owner="$MILLSTRAND_AGENT_ID"
+strand kanban claim "$impl" --owner "$MILLSTRAND_AGENT_ID"
 
 strand kanban note "$impl" "Implementation started; tests are next." \
   --by "$MILLSTRAND_AGENT_ID" --kind activity
@@ -53,7 +53,7 @@ Next: hand the branch to review.
 NOTE
 
 strand update "$impl" --state closed
-strand update "$docs" --attr owner="$MILLSTRAND_AGENT_ID"
+strand kanban claim "$docs" --owner "$MILLSTRAND_AGENT_ID"
 # Once documentation is complete:
 strand update "$docs" --state closed
 
@@ -69,11 +69,13 @@ strand kanban note "$card" "Handover: implementation reviewed and ready to land.
 strand kanban finish "$card" --outcome done
 ```
 
-**Why this shape.** The same logical-session identity is supplied under the
-flag each domain owns: `--owner` claims responsibility for the card, while
-`--by` attributes a note. `--by-identity` is not a Kanban flag; it belongs to
-`strand agent` operations. The claim makes the work discoverable by branch and
-keeps two agents from selecting the same pending feature. Tasks make a resumable
+**Why this shape.** The same friendly identity may fill different roles:
+`--owner` claims responsibility, `claim --by-identity` records a distinct acting
+identity, and the current note contract uses `--by` for authorship. A dispatcher
+can claim on behalf of a worker by supplying owner and actor. Each claim is a
+durable source record, and a changed owner is an explicit handoff; no pending
+lane toggle is needed. Same-owner retries must repeat the exact context. Tasks
+make a resumable
 doing-task and reuse the same dependency DAG that determines readiness. Closing
 tasks as they complete unblocks dependent work immediately. Task notes are the
 devlog for details and bulk findings; `board` and `card` surface the newest note
@@ -123,12 +125,12 @@ serve only that epic's direct pending features.
 **Situation.** A new agent has no conversation context, while several branches
 may have review work ready at once.
 
-**Composition.** The identity query is state-neutral. Use it with `list` for
-complete history, or with `ready` for active epic context, owned features, and
-directly or indirectly owned tasks that are not blocked by an active dependency.
-Then open the feature's resume view and use the cross-card review frontier for
-coordination. Mark review strands with an open review signal such as
-`kind=review`.
+**Composition.** The identity query is state-neutral and selects direct claim
+targets plus reported cards from durable evidence. The Clojure `identity-work`
+helper expands those targets to containing epics, inherited tasks, and all
+matching claim records. Open the feature's resume view and use the cross-card
+review frontier for coordination. Mark review strands with an open review
+signal such as `kind=review`.
 
 ```sh
 strand list --query kanban-identity-work \
@@ -136,7 +138,7 @@ strand list --query kanban-identity-work \
 strand ready --query kanban-identity-work \
   --param identity="$MILLSTRAND_AGENT_ID"
 strand kanban board | jq '{claimed, in_review, needs_review: .["needs-review"]}'
-strand kanban card "$card" | jq '{card, tasks, notes, active_work: .["active-work"], ready, related}'
+strand kanban card "$card" | jq '{card, reporter, ownership, tasks, notes, active_work: .["active-work"], ready, related}'
 
 review=$(strand add "Review the implementation" --attr kind=review | jq -r '.id')
 strand update "$card" --edge parent-of:"$review"

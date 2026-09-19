@@ -39,8 +39,12 @@
        {:ns 'millhouse.spools.workflow.spool
         :after [:consumer/workflow]
         :required? true})
+     (runtime/module! rt :consumer/identity
+       {:ns 'millhouse.spools.identity
+        :required? true})
      (runtime/module! rt :consumer/kanban
        {:ns 'millhouse.spools.kanban
+        :after [:consumer/identity]
         :required? true})
      (runtime/module! rt :consumer/land
        {:ns 'millhouse.spools.land.spool
@@ -67,8 +71,12 @@
         (runtime/module! rt :millhouse/cron
           {:ns 'millhouse.spools.cron
            :required? true})
+        (runtime/module! rt :millhouse/identity
+          {:ns 'millhouse.spools.identity
+           :required? true})
         (runtime/module! rt :millhouse/kanban
           {:ns 'millhouse.spools.kanban
+           :after [:millhouse/identity]
            :required? true})
         (runtime/module! rt :millhouse/land
           {:ns 'millhouse.spools.land.spool
@@ -98,6 +106,7 @@
                :millhouse/workflow-all
                :millhouse/chime
                :millhouse/cron
+               :millhouse/identity
                :millhouse/kanban
                :millhouse/land}
              (set (keys outcomes))))
@@ -105,6 +114,7 @@
                'millhouse.spools.workflow.spool
                'millhouse.spools.chime
                'millhouse.spools.cron
+               'millhouse.spools.identity
                'millhouse.spools.kanban
                'millhouse.spools.land.spool}
              (set (map :ns (vals outcomes)))))
@@ -134,6 +144,7 @@
                  :op-names (set (map :name (weaver/ops rt)))})))]
       (is (= #{:consumer/workflow
                :consumer/workflow-providers
+               :consumer/identity
                :consumer/kanban
                :consumer/land}
              modules))

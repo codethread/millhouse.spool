@@ -10,24 +10,30 @@
   `kanban/priority` (p1 immediate blocker .. p4 someday, default p3) orders
   lanes and `kanban next`.
 
-  Cards are work roots: claiming stamps `owner`/`branch`/`worktree`, and
-  execution strands hang beneath the card with `parent-of` edges — the kanban
-  spool complements the engines that produce them, it does not replace them.
-  Notes are closed note strands on cards and tasks; important user-visible notes
+  Cards are work roots: each claim/handoff writes an immutable ownership record;
+  current owner is the latest `(claimed-at, record-id)` projection, while branch
+  and worktree are operational context. Execution strands hang beneath the card
+  with `parent-of` edges — the kanban spool complements the engines that produce
+  them, it does not replace them. Notes are closed note strands on cards and
+  tasks; important user-visible notes
   belong on the epic or feature, while task notes are the development log.
   A cold agent self-discovers in-flight work with
   `kanban board` -> `kanban card <id>` -> the doing-task and its
   `latest-note`."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [millhouse.spools.identity :as identity]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.notes.alpha :as notes]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.millstrand.alpha :as millstrand]
-            [millstrand.api.spool.alpha :refer [attr-get entity-projection]]))
+            [millstrand.api.spool.alpha :refer [attr-get entity-projection]])
+  (:import [java.time Instant]))
 
 (def ^:private card-attr :kanban/card)
 (def ^:private lane-attr :kanban/lane)
@@ -39,6 +45,16 @@
 (def ^:private run-id-attr :kanban/run-id)
 (def ^:private closed-by-attr :kanban/closed-by)
 (def ^:private restore-lane-attr :kanban/abandon-restore-lane)
+(def ^:private reporter-attr :kanban/reporter)
+(def ^:private ownership-claim-attr :kanban/ownership-claim)
+(def ^:private owner-attr :kanban/owner)
+(def ^:private claimed-at-attr :kanban/claimed-at)
+(def ^:private claim-relation "claims")
+(def ^:private owner-relation "claimed")
+(def ^:private reporter-relation "reported")
+
+(identity/contribute-attribution! :kanban/reporter reporter-attr reporter-relation)
+(identity/contribute-attribution! :kanban/owner owner-attr owner-relation)
 
 (def ^:private addable-lanes #{"pending" "refinement"})
 (def ^:private active-lanes #{"refinement" "pending" "claimed" "in_review" "in_production"})
@@ -160,7 +176,11 @@
   [flags]
   (let [lane (or (get flags "--lane") "pending")
         type (or (get flags "--type") "feature")
-        priority (require-priority! (or (get flags "--priority") default-priority))]
+        priority (require-priority! (or (get flags "--priority") default-priority))
+        actor (some->> (get flags "--by-identity")
+                       (require-non-blank! :by-identity))
+        reporter (some->> (or (get flags "--reported-by") actor)
+                          (require-non-blank! :reported-by))]
     (when-not (contains? addable-lanes lane)
       (throw (ex-info "kanban add --lane must be pending or refinement"
                       {:lane lane :allowed (sort addable-lanes)})))
@@ -171,26 +191,89 @@
              lane-attr lane
              type-attr type
              priority-attr priority}
+      actor (assoc :identity/by-identity actor)
+      reporter (assoc reporter-attr reporter)
       (get flags "--body") (assoc :body (get flags "--body"))
       (get flags "--source") (assoc :kanban/source (get flags "--source"))
       (seq (get flags "--label")) (merge (label-attrs (get flags "--label") "true")))))
 
+(defn- linked-identity-ids
+  "Return identity strand ids linked to source-id by relation, in stable order."
+  [rt source-id relation]
+  (->> (graph/incoming-edges rt [source-id] relation)
+       (map :from_strand_id)
+       sort
+       vec))
+
+(defn reporter
+  "Project a card's durable reporter evidence and current graph enrichment.
+
+  Returns nil for anonymous cards. The raw friendly identity remains present
+  even while `:identity-strand-ids` is empty because resolution is best effort."
+  [rt card]
+  (when-let [raw (attr-value card reporter-attr)]
+    {:identity raw
+     :identity-strand-ids (linked-identity-ids rt (:id card) reporter-relation)}))
+
+(defn- ownership-claim?
+  [strand]
+  (= "true" (attr-value strand ownership-claim-attr)))
+
+(defn ownership-history
+  "Return a target's immutable ownership claims in deterministic order.
+
+  Claims sort by `kanban/claimed-at`, then durable record id. `:order` is the
+  one-based position in that order; the final claim is current, including when
+  its raw owner cannot yet resolve to an identity strand."
+  [rt target-id]
+  (let [claim-ids (mapv :from_strand_id
+                        (graph/incoming-edges rt [target-id] claim-relation))
+        claims (->> (graph/strands-by-ids rt claim-ids)
+                    (filter ownership-claim?)
+                    (sort-by (juxt #(attr-value % claimed-at-attr) :id))
+                    vec)]
+    (mapv (fn [order claim]
+            (let [owner (attr-value claim owner-attr)]
+              (cond-> {:id (:id claim)
+                       :owner owner
+                       :claimed-at (attr-value claim claimed-at-attr)
+                       :order order
+                       :owner-identity-strand-ids
+                       (linked-identity-ids rt (:id claim) owner-relation)}
+                (attr-value claim :identity/by-identity)
+                (assoc :by-identity (attr-value claim :identity/by-identity))
+                (attr-value claim :branch) (assoc :branch (attr-value claim :branch))
+                (attr-value claim :worktree) (assoc :worktree (attr-value claim :worktree))
+                (attr-value claim run-id-attr) (assoc :run-id (attr-value claim run-id-attr)))))
+          (range 1 (inc (count claims)))
+          claims)))
+
+(defn current-ownership
+  "Return the latest explicit claim for target-id, or nil when never claimed."
+  [rt target-id]
+  (peek (ownership-history rt target-id)))
+
 (defn- compact-card
   "Return the compact card shape used in board/next output."
-  [strand]
-  (cond-> {:id (:id strand)
-           :title (:title strand)
-           :state (:state strand)
-           :lane (attr-value strand lane-attr)
-           :type (card-type strand)
-           :priority (card-priority strand)
-           :created_at (:created_at strand)}
-    (attr-value strand :owner) (assoc :owner (attr-value strand :owner))
-    (attr-value strand :branch) (assoc :branch (attr-value strand :branch))
-    (attr-value strand :worktree) (assoc :worktree (attr-value strand :worktree))
-    (attr-value strand :kanban/source) (assoc :source (attr-value strand :kanban/source))
-    (attr-value strand :kanban/outcome) (assoc :outcome (attr-value strand :kanban/outcome))
-    (seq (card-labels strand)) (assoc :labels (card-labels strand))))
+  [rt strand]
+  (let [current (current-ownership rt (:id strand))
+        reporter-view (reporter rt strand)]
+    (cond-> {:id (:id strand)
+             :title (:title strand)
+             :state (:state strand)
+             :lane (attr-value strand lane-attr)
+             :type (card-type strand)
+             :priority (card-priority strand)
+             :created_at (:created_at strand)}
+      current (assoc :owner (:owner current)
+                     :claim-id (:id current)
+                     :claimed-at (:claimed-at current))
+      (:branch current) (assoc :branch (:branch current))
+      (:worktree current) (assoc :worktree (:worktree current))
+      reporter-view (assoc :reporter reporter-view)
+      (attr-value strand :kanban/source) (assoc :source (attr-value strand :kanban/source))
+      (attr-value strand :kanban/outcome) (assoc :outcome (attr-value strand :kanban/outcome))
+      (seq (card-labels strand)) (assoc :labels (card-labels strand)))))
 
 (defn- card-strand
   "Return id's kanban card strand, failing loudly if it is absent or not a card."
@@ -325,17 +408,6 @@
                                     depends-on))))
             items))))
 
-(defn- require-lane!
-  "Return strand when it is active in the expected kanban lane."
-  [op strand expected]
-  (when-not (= "active" (:state strand))
-    (throw (ex-info (str "Kanban card must be active to " op)
-                    {:id (:id strand) :state (:state strand)})))
-  (when-not (= expected (attr-value strand lane-attr))
-    (throw (ex-info (str "Kanban card must be " expected " to " op)
-                    {:id (:id strand) :lane (attr-value strand lane-attr)})))
-  strand)
-
 (defn- update-card!
   "Write only the changed `attrs` (and optional `state`) onto a kanban card.
 
@@ -399,37 +471,129 @@
   (when-let [run (get flags "--run-id")]
     (require-non-blank! :run-id run)))
 
-(defn claim!
-  "Claim a pending feature card, stamping the work-root attributes.
+(defn- claim-target
+  "Return an active feature or task that may receive an ownership claim."
+  [rt id]
+  (let [target (or (weaver/show rt id)
+                   (throw (ex-info "Kanban claim target not found" {:id id})))]
+    (when-not (= "active" (:state target))
+      (throw (ex-info "Kanban claim target must be active"
+                      {:id id :state (:state target)})))
+    (cond
+      (= "true" (attr-value target task-attr)) target
+      (= "true" (attr-value target card-attr))
+      (do
+        (when (= "epic" (card-type target))
+          (throw (ex-info "Kanban epics cannot be claimed; claim a feature under the epic"
+                          {:id id})))
+        (when-not (contains? #{"pending" "claimed" "in_review" "in_production"}
+                             (attr-value target lane-attr))
+          (throw (ex-info "Kanban feature must be pending or already in a work lane to claim"
+                          {:id id :lane (attr-value target lane-attr)})))
+        target)
+      :else
+      (throw (ex-info "Kanban claim target must be a feature card or task"
+                      {:id id :attributes (:attributes target)})))))
 
-  `--owner` is the logical-session identity owning this work root; it and
-  `--branch` are mandatory so every claimed card answers who is driving it and
-  on which branch. Notes intentionally use `--by`, not `--owner`; `--worktree`
-  is optional (direct work in the main checkout has no separate worktree).
-  `--run-id` optionally stamps an
-  opaque run pointer for agents to query through their workflow directly. Epics
-  group work and are never claimed themselves.
+(defn- claim-time
+  "Return the immutable wall-clock evidence for a new ownership action."
+  []
+  (str (Instant/now)))
+
+(defn- claim-context
+  "Return the replay-comparable context carried by a claim projection."
+  [claim]
+  (select-keys claim [:owner :by-identity :branch :worktree :run-id]))
+
+(defn claim!
+  "Claim or hand off an active feature or task with durable ordered history.
+
+  `--owner` is the role identity. `--by-identity` optionally records a distinct
+  actor; when actor and owner are equal only the owner role is stored. Features
+  require `--branch`; tasks are direct claims and do not. A changed owner on an
+  already claimed target is an explicit handoff/reclaim. Repeating the exact
+  current-owner request is idempotent and performs no write; a same-owner request
+  with different context fails rather than pretending it is either a retry or a
+  new action.
+
+  The claim record and feature lane/context transition commit in one batch.
+  `kanban/run-id`, when supplied, is context on that record only and is never an
+  ownership authority. Current owner is the final `(claimed-at, record-id)`
+  projection, not the target's legacy scalar `owner` attribute.
 
   ```sh
-  strand kanban claim abc12 --owner claude --branch feature-timeouts \\
-    --worktree /work/feature-timeouts
+  strand kanban claim abc12 --owner worker --by-identity dispatcher \\
+    --branch feature-timeouts --worktree /work/feature-timeouts
   ```"
   [runtime id flags]
-  (let [strand (require-lane! "claim" (card-strand runtime (require-non-blank! :id id)) "pending")]
-    (when (= "epic" (card-type strand))
-      (throw (ex-info "Kanban epics cannot be claimed; claim a feature under the epic"
-                      {:id (:id strand)})))
-    (let [owner (require-flag! "kanban claim" flags "--owner")
-          branch (require-flag! "kanban claim" flags "--branch")
-          run (claim-run-id flags)
-          attrs (cond-> {lane-attr "claimed"
-                         :owner owner
-                         :branch branch}
-                  (get flags "--worktree") (assoc :worktree (get flags "--worktree"))
-                  run (assoc run-id-attr run))
-          updated (update-card! runtime strand attrs nil)]
-      {:operation "kanban claim"
-       :card (entity-projection updated)})))
+  (let [target (claim-target runtime (require-non-blank! :id id))
+        feature? (= "true" (attr-value target card-attr))
+        owner (require-non-blank!
+               :owner (require-flag! "kanban claim" flags "--owner"))
+        actor (some->> (get flags "--by-identity")
+                       (require-non-blank! :by-identity))
+        distinct-actor (when (and actor (not= actor owner)) actor)
+        branch (if feature?
+                 (require-non-blank!
+                  :branch (require-flag! "kanban claim" flags "--branch"))
+                 (some->> (get flags "--branch") (require-non-blank! :branch)))
+        worktree (some->> (get flags "--worktree") (require-non-blank! :worktree))
+        run (claim-run-id flags)
+        requested (cond-> {:owner owner}
+                    distinct-actor (assoc :by-identity distinct-actor)
+                    branch (assoc :branch branch)
+                    worktree (assoc :worktree worktree)
+                    run (assoc :run-id run))
+        current (current-ownership runtime id)]
+    (if (= owner (:owner current))
+      (do
+        (when-not (= requested (claim-context current))
+          (throw (ex-info "Same-owner claim differs from current context; retries must be exact"
+                          {:id id
+                           :current (claim-context current)
+                           :requested requested})))
+        (cond-> {:operation "kanban claim"
+                 :result "unchanged"
+                 :target (entity-projection target)
+                 :claim current}
+          feature? (assoc :card (entity-projection target))
+          (not feature?) (assoc :task (entity-projection target))))
+      (let [at (claim-time)
+            record-attributes (cond-> {ownership-claim-attr "true"
+                                       :kind "ownership-claim"
+                                       owner-attr owner
+                                       claimed-at-attr at}
+                                distinct-actor (assoc :identity/by-identity distinct-actor)
+                                branch (assoc :branch branch)
+                                worktree (assoc :worktree worktree)
+                                run (assoc run-id-attr run))
+            target-attributes (when feature?
+                                {lane-attr "claimed"
+                                 :owner nil
+                                 :branch branch
+                                 :worktree worktree
+                                 run-id-attr nil})
+            result (batch/apply!
+                    runtime
+                    {:refs {:target id}
+                     :strands (cond-> [{:ref :claim
+                                        :title (str "Ownership: " owner " -> " (:title target))
+                                        :state "closed"
+                                        :attributes record-attributes}]
+                                target-attributes
+                                (conj {:ref :target :attributes target-attributes}))
+                     :edges [{:op :upsert :from :claim :to :target :type claim-relation}]
+                     :burn []})
+            claim-id (get-in result [:refs :claim])
+            updated-target (weaver/show runtime id)
+            claim (some #(when (= claim-id (:id %)) %)
+                        (ownership-history runtime id))]
+        (cond-> {:operation "kanban claim"
+                 :result (if current "handed-off" "claimed")
+                 :target (entity-projection updated-target)
+                 :claim claim}
+          feature? (assoc :card (entity-projection updated-target))
+          (not feature?) (assoc :task (entity-projection updated-target)))))))
 
 (defn- direct-feature-children
   "Return an epic's direct `parent-of` children that are feature cards, sorted by id.
@@ -683,28 +847,54 @@
          (sort-by :id)
          vec)))
 
-(defn- derive-task-status
-  "Derive a task's status from core graph state and the core `owner` attr only.
+(defn- task-feature
+  "Return the direct feature parent of task, or nil when the task is orphaned."
+  [rt task]
+  (let [parent-ids (mapv :from_strand_id
+                         (graph/incoming-edges rt [(:id task)] "parent-of"))]
+    (->> (graph/strands-by-ids rt parent-ids)
+         (filter #(and (= "true" (attr-value % card-attr))
+                       (= "feature" (card-type %))))
+         first)))
 
-  `dep-states` is the seq of `:state` values of the task's `depends-on` targets.
-  Reads no execution-engine vocabulary: `closed` on a closed strand,
-  `blocked` while any dependency is unclosed, then `doing`/`ready` split on
-  whether an `owner` is stamped."
-  [task dep-states]
+(defn task-ownership
+  "Project direct task ownership or inherited current feature ownership.
+
+  A direct claim wins. Inheritance is a read projection only: it does not create
+  a task claim record and does not make every task appear actively `doing`."
+  [rt task]
+  (if-let [direct (current-ownership rt (:id task))]
+    {:source "direct" :claim direct}
+    (when-let [feature (task-feature rt task)]
+      (when-let [inherited (current-ownership rt (:id feature))]
+        {:source "inherited"
+         :feature (:id feature)
+         :claim inherited}))))
+
+(defn- derive-task-status
+  "Derive task status from lifecycle, dependency closure, and direct ownership.
+
+  Inherited feature ownership remains visible in the task projection but does
+  not mark every ready task doing; only a task's own explicit claim does."
+  [task dep-states direct-owner?]
   (cond
     (= "closed" (:state task)) "closed"
     (some #(not= "closed" %) dep-states) "blocked"
-    (some? (attr-value task :owner)) "doing"
+    direct-owner? "doing"
     :else "ready"))
 
 (defn- compact-task
   "Return the compact task shape used in `task list` output."
-  [strand]
-  (cond-> {:id (:id strand)
-           :title (:title strand)
-           :state (:state strand)}
-    (attr-value strand :owner) (assoc :owner (attr-value strand :owner))
-    (attr-value strand :body) (assoc :body (attr-value strand :body))))
+  [rt strand]
+  (let [ownership (task-ownership rt strand)
+        current (:claim ownership)]
+    (cond-> {:id (:id strand)
+             :title (:title strand)
+             :state (:state strand)}
+      ownership (assoc :owner (:owner current)
+                       :owner-source (:source ownership)
+                       :ownership ownership)
+      (attr-value strand :body) (assoc :body (attr-value strand :body)))))
 
 (defn- tasks-with-status
   "Return compact tasks decorated with their derived status and newest note.
@@ -724,11 +914,13 @@
                              {} dep-edges)
         latest-note (latest-notes-by-target rt (mapv :id tasks))]
     (mapv (fn [task]
-            (cond-> (assoc (compact-task task)
-                           :status (derive-task-status
-                                    task
-                                    (map target-state (get deps-by-task (:id task)))))
-              (latest-note (:id task)) (assoc :latest-note (latest-note (:id task)))))
+            (let [ownership (task-ownership rt task)]
+              (cond-> (assoc (compact-task rt task)
+                             :status (derive-task-status
+                                      task
+                                      (map target-state (get deps-by-task (:id task)))
+                                      (= "direct" (:source ownership))))
+                (latest-note (:id task)) (assoc :latest-note (latest-note (:id task))))))
           tasks)))
 
 (defn task-add!
@@ -794,13 +986,9 @@
     strand))
 
 (defn- owning-card
-  "Return the kanban card that parents task-strand, or nil when unparented."
+  "Return the kanban feature that parents task-strand, or nil when unparented."
   [rt task-strand]
-  (let [parent-ids (mapv :from_strand_id
-                         (graph/incoming-edges rt [(:id task-strand)] "parent-of"))]
-    (->> (graph/strands-by-ids rt parent-ids)
-         (filter #(= "true" (attr-value % card-attr)))
-         first)))
+  (task-feature rt task-strand))
 
 (defn note!
   "Append a note to a card or task via the blessed notes relation.
@@ -958,6 +1146,9 @@
         ready (ready-work runtime active-work)]
     {:operation "kanban card"
      :card (select-keys card [:id :title :state :attributes :created_at :updated_at])
+     :reporter (reporter runtime card)
+     :ownership {:current (current-ownership runtime (:id card))
+                 :history (ownership-history runtime (:id card))}
      :tasks (tasks-with-status runtime (feature-tasks runtime (:id card)))
      :notes (mapv compact-note notes)
      :active-work (mapv summarize-strand active-work)
@@ -972,6 +1163,55 @@
   "Return all kanban card strands."
   [runtime]
   (weaver/list runtime [:= [:attr "kanban/card"] "true"] {}))
+
+(defn identity-work
+  "Project an identity's durable Kanban participation hierarchy.
+
+  Returns historical direct claim targets, inherited tasks, containing epics,
+  reporter cards, and every matching claim record. This helper expands the
+  one-edge `kanban-identity-work` named query without consulting scalar `owner`.
+  Closed strands remain present; callers choose their own active frontier."
+  [rt friendly-id]
+  (let [friendly-id (require-non-blank! :identity friendly-id)
+        claim-records (->> (weaver/list rt)
+                           (filter #(and (ownership-claim? %)
+                                         (= friendly-id (attr-value % owner-attr))))
+                           (sort-by :id)
+                           vec)
+        direct-ids (->> (graph/outgoing-edges rt (mapv :id claim-records) claim-relation)
+                        (map :to_strand_id)
+                        set)
+        direct (graph/strands-by-ids rt (vec direct-ids))
+        direct-cards (filterv #(= "true" (attr-value % card-attr)) direct)
+        direct-tasks (filterv task-strand? direct)
+        features (filterv #(= "feature" (card-type %)) direct-cards)
+        inherited-tasks (mapcat #(feature-tasks rt (:id %)) features)
+        epic-ids (->> (graph/incoming-edges rt (mapv :id features) "parent-of")
+                      (map :from_strand_id)
+                      set)
+        epics (->> (graph/strands-by-ids rt (vec epic-ids))
+                   (filter #(and (= "true" (attr-value % card-attr))
+                                 (= "epic" (card-type %)))))
+        reported (filterv #(= friendly-id (attr-value % reporter-attr)) (cards rt))
+        selected-cards (->> (concat direct-cards epics reported)
+                            (reduce (fn [m card] (assoc m (:id card) card)) {})
+                            vals
+                            (sort-by :id)
+                            vec)
+        selected-tasks (->> (concat direct-tasks inherited-tasks)
+                            (reduce (fn [m task] (assoc m (:id task) task)) {})
+                            vals
+                            (sort-by :id)
+                            vec)
+        claims (->> direct-ids
+                    (mapcat #(ownership-history rt %))
+                    (filter #(= friendly-id (:owner %)))
+                    (sort-by (juxt :claimed-at :id))
+                    vec)]
+    {:identity friendly-id
+     :cards (mapv #(compact-card rt %) selected-cards)
+     :tasks (tasks-with-status rt selected-tasks)
+     :claims claims}))
 
 (defn- label-filter
   "Return a predicate selecting cards that carry every requested label.
@@ -1051,7 +1291,7 @@
                             (member? %)))
               by-priority
               first
-              compact-card))))
+              (compact-card runtime)))))
 
 (defn- epic-membership
   "Return {feature-card-id epic-id} for direct features under epics."
@@ -1121,10 +1361,10 @@
          membership (epic-membership runtime epics)
          all-membership (when all? (epic-membership runtime all-epics))
          with-epic (fn [card]
-                     (cond-> (compact-card card)
+                     (cond-> (compact-card runtime card)
                        (membership (:id card)) (assoc :epic (membership (:id card)))))
          all-with-epic (fn [card]
-                         (cond-> (compact-card card)
+                         (cond-> (compact-card runtime card)
                            (all-membership (:id card))
                            (assoc :epic (all-membership (:id card)))))
          lane (fn [lane-name]
@@ -1138,7 +1378,7 @@
                       by-created
                       (mapv with-epic))]
      (cond-> {:operation "kanban board"
-              :epics (mapv compact-card (by-created epics))
+              :epics (mapv #(compact-card runtime %) (by-created epics))
               :refinement (lane "refinement")
               :pending (lane "pending")
               :claimed (mapv (fn [card]
@@ -1256,10 +1496,12 @@
     |
     |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
     |someday work. `kanban next` returns the highest-priority pending feature, oldest
-    |first within its priority. A claim stamps owner and branch, plus worktree when one
-    |exists; run-id is an optional opaque workflow pointer. Card state lives in
+    |first within its priority. Add may record a creator actor and durable reporter
+    |without owning backlog work. A claim/handoff writes an immutable ownership record;
+    |current owner is the latest claimed-at then record-id projection. Branch/worktree
+    |and optional nonauthoritative run-id are claim context. Card/task state lives in
     |kanban/card, kanban/type, kanban/lane, kanban/outcome, kanban/priority,
-    |kanban/source, kanban/task, kanban/run-id, and kanban/abandon-restore-lane.
+    |kanban/source, kanban/task, and kanban/abandon-restore-lane.
     |Labels are open kanban.label/<slug>=true markers rather than a fixed vocabulary.
     |
     |Kanban owns board projections and structured card operations: add, board, card, next,
@@ -1296,8 +1538,9 @@
     |Important user-visible notes must always be on the epic or feature, not only
     |on a task users will rarely see. Summarize decisions, milestones, blockers,
     |review outcomes, and handovers there; keep the detailed devlog on the task.
-    |Every branch has exactly one active work root stamped with branch and owner
-    |(and worktree when it exists); its children inherit that context through parent-of.
+    |Every branch has exactly one active work root with an explicit current ownership
+    |claim (and worktree when it exists); tasks inherit feature ownership until directly
+    |claimed. Children inherit graph context through parent-of.
     |
     |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
     |list` or `strand ready` with the registered kanban queries for generic selection.
@@ -1322,6 +1565,8 @@
    :subcommands
    {"add" {:doc "Create a feature or epic card."
            :flags {:body {:doc "Longer card context."}
+                   :by-identity {:doc "Optional creator actor; also the default reporter."}
+                   :reported-by {:doc "Optional reporter identity distinct from the creator actor."}
                    :source {:doc "Path or URL for design context."}
                    :lane {:doc "Initial lane: pending or refinement."}
                    :type {:doc "Card type: feature or epic."}
@@ -1364,15 +1609,16 @@
                 :positionals [{:name :id :required? true :doc "Kanban card id."}
                               {:name :priority :required? true :doc "Priority: p1, p2, p3, or p4."}]
                 :hook-class :mutating :deadline-class :standard}
-    "claim" {:doc "Claim a pending feature card."
-             :flags {:owner {:doc "Logical-session identity claiming the card (required by handler)."}
-                     :branch {:doc "Work branch (required by handler)."}
+    "claim" {:doc "Claim or hand off an active feature or task."
+             :flags {:owner {:doc "Friendly identity taking the owner role (required)."}
+                     :by-identity {:doc "Optional acting identity when distinct from owner."}
+                     :branch {:doc "Work branch (required for feature claims; optional for tasks)."}
                      :worktree {:doc "Optional worktree path."}
-                     :run-id {:doc "Optional opaque run pointer (stamps kanban/run-id)."}}
-             :positionals [{:name :id :required? true :doc "Kanban card id."}]
+                     :run-id {:doc "Optional nonauthoritative run context on the claim record."}}
+             :positionals [{:name :id :required? true :doc "Feature card or task id."}]
              :hook-class :mutating :deadline-class :standard}
     "note" {:doc "Append a note: user-visible updates on epics/features, development logs on tasks."
-            :flags {:by {:doc "Logical-session identity authoring the note; claims intentionally use --owner."}
+            :flags {:by {:doc "Friendly identity authoring the note; never changes ownership."}
                     :kind {:doc "Open note/kind view hint: activity, decision, review-dump, summary."}}
             :positionals [{:name :id :required? true :doc "Kanban card or task id."}
                           {:name :text
@@ -1561,45 +1807,70 @@
            [:edge/in "parent-of" [:= :id [:param :epic]]]]})
 
 (millstrand/defquery! kanban-identity-work
-  "Select an identity's Kanban epics, features, and tasks."
+  "Select cards and tasks in an identity's durable participation history.
+
+  A directly claimed feature or task remains selected after handoff when any
+  linked ownership record names the identity; reporter cards are included as
+  participation without implying ownership. Use `identity-work` to expand direct
+  targets to inherited tasks and containing epics."
   {:usage (str "strand list --query kanban-identity-work "
-               "--param identity=$MILLSTRAND_AGENT_ID")}
+               "--param identity=<friendly-id>")}
   {:params [:identity]
    :where
    [:or
-    ;; Cards or tasks directly owned by the identity.
+    ;; Direct claim targets. The public `identity-work` helper expands these to
+    ;; inherited tasks and containing epics because endpoint queries deliberately
+    ;; forbid nested edge predicates.
     [:and
-     [:= [:attr "owner"] [:param :identity]]
      [:or
       [:= [:attr "kanban/card"] "true"]
-      [:= [:attr "kanban/task"] "true"]]]
-
-    ;; Tasks inherit ownership from their parent card.
-    [:and
-     [:= [:attr "kanban/task"] "true"]
-     [:edge/in "parent-of"
+      [:= [:attr "kanban/task"] "true"]]
+     [:edge/in "claims"
       [:and
-       [:= [:attr "kanban/card"] "true"]
-       [:= [:attr "owner"] [:param :identity]]]]]
+       [:= [:attr "kanban/ownership-claim"] "true"]
+       [:= [:attr "kanban/owner"] [:param :identity]]]]]
 
-    ;; Include epics containing cards owned by the identity.
+    ;; Reporting is participation, but does not imply task ownership.
     [:and
      [:= [:attr "kanban/card"] "true"]
-     [:= [:attr "kanban/type"] "epic"]
-     [:edge/out "parent-of"
-      [:and
-       [:= [:attr "kanban/card"] "true"]
-       [:= [:attr "owner"] [:param :identity]]]]]]})
+     [:= [:attr "kanban/reporter"] [:param :identity]]]]})
+
+(def ^:private ownership-mutation-hook-types
+  #{:strand/update-before-commit
+    :strand/supersede-before-commit
+    :strand/burn-before-commit
+    :batch/apply-before-commit})
+
+(defn immutable-ownership-record-guard!
+  "Reject mutation or deletion of an existing ownership source record."
+  [ctx]
+  (let [records (case (:mutation/operation ctx)
+                  :strand/update [(:strand/before ctx)]
+                  :strand/supersede [(:strand/before ctx)]
+                  :strand/burn (:strand/before ctx)
+                  :batch/apply (concat (map :before (:batch/updated ctx))
+                                       (map :before (:batch/burned ctx)))
+                  [])]
+    (when-let [record (first (filter ownership-claim? records))]
+      (throw (ex-info "Kanban ownership claim records are immutable"
+                      {:code "kanban/immutable-ownership-claim"
+                       :claim-id (:id record)
+                       :operation (:mutation/operation ctx)})))))
 
 (defn open-kanban!
-  "Materialize Kanban's process-lifetime runtime state."
+  "Materialize Kanban state and protect immutable ownership source records."
   [{:keys [runtime]}]
   (runtime/spool-state runtime ::state {:version state-version} new-state)
+  (hooks/register-hook!
+   runtime :kanban/immutable-ownership-records ownership-mutation-hook-types
+   'millhouse.spools.kanban/immutable-ownership-record-guard!
+   {:doc "Keep Kanban ownership claim source records immutable."})
   {:opened :kanban})
 
 (defn close-kanban!
-  "Close Kanban's module resource without retracting process-lifetime state."
-  [_context]
+  "Remove Kanban's ownership guard without retracting durable graph state."
+  [{:keys [runtime]}]
+  (hooks/unregister-hook! runtime :kanban/immutable-ownership-records)
   {:closed :kanban})
 
 (lifecycle/defresource! kanban-runtime
