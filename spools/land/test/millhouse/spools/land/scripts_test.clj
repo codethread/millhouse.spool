@@ -160,6 +160,9 @@
           "  if [ -n \"${GH_TEST_HEAD_AFTER_CHECKS:-}\" ]; then\n"
           "    printf '%s\\n' \"$GH_TEST_HEAD_AFTER_CHECKS\" >\"$GH_TEST_HEAD_FILE\"\n"
           "  fi\n"
+          "  if [ -n \"${GH_TEST_REMOTE_AFTER_CHECKS:-}\" ]; then\n"
+          "    git push --quiet origin \"$GH_TEST_REMOTE_AFTER_CHECKS:refs/heads/$GH_TEST_BRANCH\"\n"
+          "  fi\n"
           "  exit \"${GH_TEST_CHECK_EXIT:-0}\"\n"
           "fi\n"
           "exit 64\n")
@@ -282,6 +285,37 @@
                                       "GH_TEST_HEAD_AFTER_CHECKS" moved-head))]
         (is (not (zero? (:exit result))))
         (is (str/includes? (:output result) "PR head changed during checks"))
+        (let [calls (str/split-lines (slurp log))]
+          (is (= 3 (count calls)))
+          (is (= (str "pr checks " branch " --watch --fail-fast")
+                 (second calls)))))
+      (finally
+        (test-support/delete-tree! (:root fixture))))))
+
+(deftest pr-checks-rejects-a-pushed-head-that-changes-during-the-watch
+  (let [fixture (fixture)
+        {:keys [env log]} (pr-check-env fixture)]
+    (try
+      (let [remote-head
+            (str/trim
+             (test-support/run-git!
+              (:worktree fixture) "commit-tree"
+              (str (:feature-head fixture) "^{tree}")
+              "-p" (:feature-head fixture) "-m" "remote successor during checks"))
+            result (run-script (:worktree fixture) "pr-checks.sh"
+                               ["required" branch "1" "0"]
+                               (assoc env
+                                      "GH_TEST_CHECK_COUNT" "1"
+                                      "GH_TEST_REMOTE_AFTER_CHECKS" remote-head))]
+        (is (not (zero? (:exit result))))
+        (is (str/includes? (:output result)
+                           "pushed origin/feature/land-script-test HEAD changed during checks"))
+        (is (= remote-head
+               (first (str/split
+                       (str/trim (test-support/run-git!
+                                  (:worktree fixture) "ls-remote" "origin"
+                                  (str "refs/heads/" branch)))
+                       #"\s+"))))
         (let [calls (str/split-lines (slurp log))]
           (is (= 3 (count calls)))
           (is (= (str "pr checks " branch " --watch --fail-fast")
