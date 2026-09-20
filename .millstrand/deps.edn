@@ -1,7 +1,7 @@
 {:deps
  {io.millstrand/batteries
   {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "310368dff9174bd889ad21d4ed8196952684eaf9"
+   :git/sha "8e220eab7de2fabe7880c6a4c71de6cd903c34bb"
    :deps/root "spools/batteries"}
   millhouse.spools/identity {:local/root "../spools/identity"}
   millhouse.spools/land {:local/root "../spools/land"}
@@ -23,11 +23,11 @@
    :deps/root "kanban-adapter"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "4e920fa712d059d73a2a156a46b4686f0833db67"
+   :git/sha "ef277fc06768c9a842ed6d6313fc85f950855852"
    :deps/root "spools/config"}
   codethread/ralph
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "3dcf5f051842512d444b9d111d3998f4078081f6"
+   :git/sha "ef277fc06768c9a842ed6d6313fc85f950855852"
    :deps/root "spools/ralph"}}
  :aliases {:test {:extra-paths ["test"]
                   :main-opts ["-m" "millhouse.auto-run-test"]}}}
