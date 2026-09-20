@@ -256,6 +256,17 @@
                          "|A stored input spec that no longer resolves is
                           |reported with registered false; choose is where that
                           |absence fails loudly.")]}}
+    "retry-validation" {:doc "Reserve one opted-in failed shell validation attempt, never assert success."
+                        :hook-class :mutating
+                        :deadline-class :standard
+                        :positionals [run-id-positional]
+                        :flags {:step (assoc step-flag :required? true)
+                                :by-identity (assoc by-identity-flag :required? true)
+                                :request-id {:type :string :required? true :doc "Immutable request key."}
+                                :expected-revision {:type :string :required? true :doc "Exact recipe revision token."}
+                                :reason {:type :string :required? true :doc "Explicit retry reason."}
+                                :episode-ref {:type :string :doc "External recovery episode/action reference."}
+                                :dry-run {:type :boolean :doc "Read-only eligibility inspection."}}}
     "complete" {:doc "Close the ready ordinary step of a run."
                 :hook-class :mutating
                 :deadline-class :standard
@@ -451,6 +462,7 @@
                           ;; are owned by the engine's ::choices-result spec
                           ;; and the millstrand.api.spec.alpha node grammar.
                           :choices :json}}
+    "retry-validation" {:type :map :required {:state :string} :extra :json}
     "complete" run-result-return
     "choose" run-result-return
     "next" run-result-return
@@ -557,6 +569,9 @@
       "ready" (workflow/run-ready {:run-id (:run-id args)})
       "choices" (workflow/run-choices (-> {:run-id (:run-id args)}
                                           (carry args :step :step)))
+      "retry-validation" (workflow/retry-validation!
+                          (select-keys args [:run-id :step :request-id :expected-revision
+                                             :reason :by-identity :episode-ref :dry-run]))
       "complete" (workflow/run-complete!
                   (-> (with-attributes (run-request args) args argv)
                       (with-json-object args :context :context)))
@@ -575,7 +590,7 @@
       (throw (ex-info "Unsupported workflow subcommand"
                       {:subcommand subcommand
                        :allowed ["list" "show" "executors" "start" "ready" "choices"
-                                 "complete" "choose" "next" "defer" "await"]})))))
+                                 "complete" "choose" "next" "defer" "await" "retry-validation"]})))))
 
 (defn seed-workflow-glossary!
   "Seed the Workflow CLI's process-lifetime failure glossary."

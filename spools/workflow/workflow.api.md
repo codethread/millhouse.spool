@@ -734,7 +734,22 @@ Register a workflow definition under a stable keyword `name`.
 Function.
 
 Return the live resolved registered workflow definition for `name`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1479-L1482">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1490-L1493">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow/retry-validation!">`retry-validation!`</a>
+``` clojure
+(retry-validation! request)
+```
+Function.
+
+Reserve one guarded shell validation attempt; acceptance is not success.
+
+  Request requires :run-id, :step, :request-id, :expected-revision, :reason and
+  :by-identity nonblank strings. Optional :dry-run is boolean; :episode-ref is
+  a nonblank external action reference. Returns accepted/eligible/refused/replayed
+  state with retained action or plan evidence. Only future opted-in shell gates
+  qualify. The shell provider owns custody checks, locking and execution.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1258-L1267">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-await">`run-await`</a>
 ``` clojure
@@ -751,7 +766,7 @@ Block until `request`'s run is done or needs a worker, and return the result.
   never returned, because a run whose whole frontier is executor-owned and
   healthy is exactly what this call waits through. `::await-request` owns the
   request shape and `::attention-result` the answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1463-L1477">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1474-L1488">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-choices">`run-choices`</a>
 ``` clojure
@@ -770,7 +785,7 @@ Return the ready checkpoint's choice explanations with live input contracts.
   multiple ready checkpoints, and without it exactly one checkpoint must be
   ready. `::choices-request` owns the request shape and `::choices-result` the
   answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1292-L1315">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1303-L1326">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-choose!">`run-choose!`</a>
 ``` clojure
@@ -786,7 +801,7 @@ Record `request`'s choice on the ready checkpoint and return the run result.
   `json->params` first — and a routed choice pours its continuation in the same
   mutation, so the returned frontier is already the continuation's.
   `::choose-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1365-L1386">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1376-L1397">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-complete!">`run-complete!`</a>
 ``` clojure
@@ -817,7 +832,7 @@ Close the ready ordinary step of `request`'s run and return the run result.
   its executor and is never stored as identity attribution. These fields record
   evidence only: they do not bypass lifecycle hooks or authorize protected
   queue gates. `::complete-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1317-L1363">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1328-L1374">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-defer!">`run-defer!`</a>
 ``` clojure
@@ -834,7 +849,7 @@ Fill the ready defer of `request`'s run and return the run result.
   current root and the run resumes when it finishes, so the returned frontier is
   the expansion's — or, for a target that materializes nothing, whatever the
   declaring workflow does next. `::defer-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1439-L1461">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1450-L1472">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-history">`run-history`</a>
 ``` clojure
@@ -877,7 +892,7 @@ Advance the ready ordinary step, checkpoint, or explicitly selected gate and
   A defer is not advanceable because selecting its target and params is a
   different request; failures direct the worker to `workflow defer`.
   `::next-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1388-L1437">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1399-L1448">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-ready">`run-ready`</a>
 ``` clojure
@@ -893,7 +908,7 @@ Return the run result for `request`'s run without touching it.
   complete current frontier — every ready item of every role, in definition and
   loop order — because a worker filtering for its own role can do so, while one
   that never saw a sibling item cannot. `::ready-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1258-L1270">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1269-L1281">Source</a></sub></p>
 
 ## <a name="millhouse.spools.workflow/run-start!">`run-start!`</a>
 ``` clojure
@@ -1129,3 +1144,97 @@ Function.
 
 Return the current registry map of workflow name (keyword) -> definition symbol.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow.clj#L1160-L1163">Source</a></sub></p>
+
+-----
+# <a name="millhouse.spools.workflow.validation">millhouse.spools.workflow.validation</a>
+
+
+Opt-in validation recipes. Consumers install configuration from a lifecycle resource.
+
+
+
+
+## <a name="millhouse.spools.workflow.validation/*before-images*">`*before-images*`</a>
+
+
+
+
+Transaction-scoped expected rows for the guarded retry operation.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L32-L34">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/*completion*">`*completion*`</a>
+
+
+
+
+Executor-owned exact gate/attempt pair during terminal success.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L36-L38">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/before-commit">`before-commit`</a>
+``` clojure
+(before-commit ctx)
+```
+Function.
+
+Fence retries against transaction pre-images and protect frozen recipe data.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L40-L60">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/close!">`close!`</a>
+``` clojure
+(close! rt handle)
+```
+Function.
+
+Remove a consumer lifecycle resource's validation configuration.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L85-L90">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/freeze">`freeze`</a>
+``` clojure
+(freeze attributes)
+```
+Function.
+
+Freeze selected recipe configuration and shell request at pour time.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L105-L119">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/inspect">`inspect`</a>
+``` clojure
+(inspect rt stage run-id gate expected previous)
+```
+Function.
+
+Invoke the read-only recipe at retry, launch or completion; fail closed.
+
+  Returns the closed decision map. An allow requires a nonblank revision;
+  whenever expected is supplied it must match, otherwise the result refuses.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L121-L151">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/open!">`open!`</a>
+``` clojure
+(open! rt config)
+```
+Function.
+
+Install closed {:recipes {qualified-versioned-key {:inspect qualified-symbol}}}.
+
+  Call from the consumer's lifecycle resource open callback; return the handle
+  to close!. Registration is inert until a future shell gate selects a recipe.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L62-L83">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/shell-request">`shell-request`</a>
+``` clojure
+(shell-request attributes)
+```
+Function.
+
+Project the normal shell request, preserving missing optional fields.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L97-L103">Source</a></sub></p>
+
+## <a name="millhouse.spools.workflow.validation/wire-data">`wire-data`</a>
+``` clojure
+(wire-data x)
+```
+Function.
+
+Normalize persisted nested attribute map keys to their JSON wire spelling.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/workflow/validation.clj#L9-L16">Source</a></sub></p>
