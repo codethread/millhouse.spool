@@ -55,7 +55,9 @@
   pushed `branch`. `allow-empty` accepts a zero-length GitHub check rollup after
   those validations. Any nonempty rollup is delegated to `gh pr checks --watch
   --fail-fast`; `required` waits up to 120 seconds for initial check registration,
-  then fails specifically if the rollup is still empty."
+  then fails specifically if the rollup is still empty. After a successful
+  checks wait, the gate revalidates PR, local, and pushed heads against the
+  original frozen commit."
   [policy branch]
   (sh-gate pr-checks-script "pr-checks" policy branch "120" "5"))
 

@@ -67,6 +67,7 @@ current_branch=$(git branch --show-current) \
 local_head=$(git rev-parse HEAD) || die "cannot read local branch HEAD"
 [ "$pr_head_oid" = "$local_head" ] \
   || die "PR head $pr_head_oid does not match local HEAD $local_head"
+frozen_head=$local_head
 
 remote_line=$(git ls-remote --exit-code origin "refs/heads/$branch") \
   || die "cannot read pushed origin/$branch"
@@ -92,13 +93,32 @@ if [ "$check_count" -eq 0 ]; then
     sleep "$poll_interval_secs"
     query_pr
     validate_pr_metadata
-    [ "$pr_head_oid" = "$local_head" ] \
-      || die "PR head $pr_head_oid changed while waiting; expected $local_head"
-    [ "$pr_head_oid" = "$pushed_head" ] \
-      || die "PR head $pr_head_oid does not match pushed origin/$branch HEAD $pushed_head"
+    [ "$pr_head_oid" = "$frozen_head" ] \
+      || die "PR head $pr_head_oid changed while waiting; expected $frozen_head"
   done
 fi
 
 # Once at least one check exists, GitHub CLI owns pending/pass/fail semantics.
-# Its exit status is the gate result and is intentionally not reinterpreted.
-exec gh pr checks "$branch" --watch --fail-fast
+# Its failing exit status is intentionally not reinterpreted. Success is
+# followed by another structured identity read so a force-push during the wait
+# cannot make checks for a different commit satisfy this frozen-head gate.
+gh pr checks "$branch" --watch --fail-fast
+
+query_pr
+validate_pr_metadata
+current_branch_after=$(git branch --show-current) \
+  || die "cannot re-read the checked-out branch after checks"
+[ "$current_branch_after" = "$branch" ] \
+  || die "checked-out branch changed during checks: $current_branch_after; expected $branch"
+local_head_after=$(git rev-parse HEAD) || die "cannot re-read local HEAD after checks"
+[ "$local_head_after" = "$frozen_head" ] \
+  || die "local HEAD changed during checks: $local_head_after; expected $frozen_head"
+remote_line_after=$(git ls-remote --exit-code origin "refs/heads/$branch") \
+  || die "cannot re-read pushed origin/$branch after checks"
+pushed_head_after=$(printf '%s\n' "$remote_line_after" | awk 'NR == 1 { print $1 }')
+[ "$pushed_head_after" = "$frozen_head" ] \
+  || die "pushed origin/$branch HEAD changed during checks: $pushed_head_after; expected $frozen_head"
+[ "$pr_head_oid" = "$frozen_head" ] \
+  || die "PR head changed during checks: $pr_head_oid; expected $frozen_head"
+
+printf '%s\n' "PR checks gate: checks passed at unchanged $branch HEAD $frozen_head"

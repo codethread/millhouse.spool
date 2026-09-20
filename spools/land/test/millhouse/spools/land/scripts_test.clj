@@ -130,8 +130,10 @@
   [fixture]
   (let [fake-bin (io/file (:root fixture) "pr-check-bin")
         gh-log (io/file (:root fixture) "pr-check-gh.log")
-        view-count (io/file (:root fixture) "pr-check-view-count")]
+        view-count (io/file (:root fixture) "pr-check-view-count")
+        head-file (io/file (:root fixture) "pr-check-head")]
     (spit view-count "0\n")
+    (spit head-file (str (:feature-head fixture) "\n"))
     (write-file!
      fake-bin "gh"
      (str "#!/bin/sh\n"
@@ -145,7 +147,7 @@
           "  printf '%s\\n' \"${GH_TEST_STATE:-OPEN}\"\n"
           "  printf '%s\\n' \"${GH_TEST_BASE:-main}\"\n"
           "  printf '%s\\n' \"${GH_TEST_BRANCH}\"\n"
-          "  printf '%s\\n' \"${GH_TEST_HEAD}\"\n"
+          "  cat \"$GH_TEST_HEAD_FILE\"\n"
           "  if [ \"$view_count\" -le \"${GH_TEST_EMPTY_VIEWS:-0}\" ]; then\n"
           "    printf '0\\n'\n"
           "  else\n"
@@ -155,18 +157,22 @@
           "fi\n"
           "if [ \"${1-} ${2-}\" = 'pr checks' ]; then\n"
           "  printf '%s\\n' \"${GH_TEST_CHECK_OUTPUT:-checks passed}\"\n"
+          "  if [ -n \"${GH_TEST_HEAD_AFTER_CHECKS:-}\" ]; then\n"
+          "    printf '%s\\n' \"$GH_TEST_HEAD_AFTER_CHECKS\" >\"$GH_TEST_HEAD_FILE\"\n"
+          "  fi\n"
           "  exit \"${GH_TEST_CHECK_EXIT:-0}\"\n"
           "fi\n"
           "exit 64\n")
      true)
     {:env {"GH_TEST_LOG" (.getPath gh-log)
            "GH_TEST_VIEW_COUNT" (.getPath view-count)
+           "GH_TEST_HEAD_FILE" (.getPath head-file)
            "GH_TEST_BRANCH" branch
-           "GH_TEST_HEAD" (:feature-head fixture)
            "PATH" (str (.getPath fake-bin) java.io.File/pathSeparator
                        (System/getenv "PATH"))}
      :log gh-log
-     :view-count view-count}))
+     :view-count view-count
+     :head-file head-file}))
 
 (deftest pr-checks-allows-only-explicit-empty-policy
   (let [fixture (fixture)
@@ -211,20 +217,25 @@
           (is (= expected-success? (zero? (:exit result))) case-name)
           (is (str/includes? (:output result) check-output) case-name)
           (let [calls (str/split-lines (slurp log))
-                expected-view-calls (if (= "1" empty-views) 2 1)]
-            (is (= (inc expected-view-calls) (count calls)) case-name)
+                expected-view-calls (if (= "1" empty-views) 2 1)
+                expected-call-count (if expected-success?
+                                      (+ 2 expected-view-calls)
+                                      (inc expected-view-calls))]
+            (is (= expected-call-count (count calls)) case-name)
             (is (str/includes? (first calls)
                                "--json isDraft,state,baseRefName,headRefName,headRefOid,statusCheckRollup")
                 case-name)
             (is (= (str "pr checks " branch " --watch --fail-fast")
-                   (last calls))
+                   (if expected-success?
+                     (nth calls (- (count calls) 2))
+                     (last calls)))
                 case-name))))
       (finally
         (test-support/delete-tree! (:root fixture))))))
 
 (deftest pr-checks-rejects-pr-identity-mismatches-before-check-wait
   (let [fixture (fixture)
-        {:keys [env log]} (pr-check-env fixture)
+        {:keys [env log head-file]} (pr-check-env fixture)
         other-head (str/join (repeat 40 "a"))]
     (try
       (doseq [[case-name overrides expected]
@@ -232,7 +243,6 @@
                ["closed" {"GH_TEST_STATE" "CLOSED"} "expected OPEN"]
                ["wrong base" {"GH_TEST_BASE" "release"} "expected main"]
                ["wrong head branch" {"GH_TEST_BRANCH" "feature/other"} "PR head is"]
-               ["wrong PR head" {"GH_TEST_HEAD" other-head} "does not match local HEAD"]
                ["invalid check count" {"GH_TEST_CHECK_COUNT" "unknown"}
                 "invalid check count"]]]
         (spit log "")
@@ -244,12 +254,38 @@
           (is (= 1 (count (str/split-lines (slurp log))))
               (str case-name " must stop after the metadata query"))))
       (spit log "")
+      (spit head-file (str other-head "\n"))
+      (let [result (run-script (:worktree fixture) "pr-checks.sh"
+                               ["allow-empty" branch] env)]
+        (is (not (zero? (:exit result))))
+        (is (str/includes? (:output result) "does not match local HEAD")))
+      (spit head-file (str (:feature-head fixture) "\n"))
+      (spit log "")
       (let [result (run-script (:worktree fixture) "pr-checks.sh"
                                ["allow-empty" "feature/other"]
                                (assoc env "GH_TEST_BRANCH" "feature/other"))]
         (is (not (zero? (:exit result))))
         (is (str/includes? (:output result) "checked-out branch")))
       (is (= 1 (count (str/split-lines (slurp log)))))
+      (finally
+        (test-support/delete-tree! (:root fixture))))))
+
+(deftest pr-checks-rejects-a-pr-head-that-changes-during-the-watch
+  (let [fixture (fixture)
+        {:keys [env log]} (pr-check-env fixture)
+        moved-head (str/join (repeat 40 "b"))]
+    (try
+      (let [result (run-script (:worktree fixture) "pr-checks.sh"
+                               ["required" branch "1" "0"]
+                               (assoc env
+                                      "GH_TEST_CHECK_COUNT" "1"
+                                      "GH_TEST_HEAD_AFTER_CHECKS" moved-head))]
+        (is (not (zero? (:exit result))))
+        (is (str/includes? (:output result) "PR head changed during checks"))
+        (let [calls (str/split-lines (slurp log))]
+          (is (= 3 (count calls)))
+          (is (= (str "pr checks " branch " --watch --fail-fast")
+                 (second calls)))))
       (finally
         (test-support/delete-tree! (:root fixture))))))
 

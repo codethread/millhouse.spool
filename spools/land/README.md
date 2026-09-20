@@ -35,7 +35,9 @@ validating that the PR is open, ready, based on `main`, and at the exact
 checked-out and pushed branch HEAD. If the rollup contains any checks, both
 policies delegate pending/pass/fail handling to `gh pr checks --watch
 --fail-fast`. Every registration poll revalidates the structured `gh pr view`
-identity; the gate never interprets stderr text.
+identity. After a successful check wait, the gate re-reads structured PR
+metadata and local and pushed branch heads, requiring all three to remain at the
+original frozen commit. It never interprets stderr text.
 
 ```clojure
 (support/pr-checks-argv "required" branch)

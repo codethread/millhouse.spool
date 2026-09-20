@@ -358,7 +358,7 @@ Resolve the canonical checkout while the feature worktree still exists.
 Function.
 
 Build a short, retryable card bookkeeping gate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L96-L103">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L98-L105">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/land-cleanup-argv">`land-cleanup-argv`</a>
 ``` clojure
@@ -370,7 +370,7 @@ Freeze cleanup and obtain its expected branch HEAD from the merged PR.
 
   A rebase may have changed HEAD after the continuation was poured. The merged
   PR retains that identity even when a previous cleanup removed the worktree.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L84-L94">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L86-L96">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/land-cleanup-script">`land-cleanup-script`</a>
 
@@ -378,7 +378,7 @@ Freeze cleanup and obtain its expected branch HEAD from the merged PR.
 
 
 Clean up the landed feature branch and worktree.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L80-L82">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L82-L84">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/land-merge-script">`land-merge-script`</a>
 
@@ -386,7 +386,7 @@ Clean up the landed feature branch and worktree.
 
 
 Idempotently ready and squash-merge the feature PR.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L62-L64">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L64-L66">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/land-pull-main-script">`land-pull-main-script`</a>
 
@@ -397,7 +397,7 @@ Fast-forward the canonical main checkout to origin/main.
 
   This stays inline as the small-script exemplar: eight lines of shell and no
   data-shaping logic do not earn a separate file.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L66-L78">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L68-L80">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/land-quality-gate-script">`land-quality-gate-script`</a>
 
@@ -429,8 +429,10 @@ Return argv for the shared PR checks gate.
   pushed `branch`. `allow-empty` accepts a zero-length GitHub check rollup after
   those validations. Any nonempty rollup is delegated to `gh pr checks --watch
   --fail-fast`; `required` waits up to 120 seconds for initial check registration,
-  then fails specifically if the rollup is still empty.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L50-L60">Source</a></sub></p>
+  then fails specifically if the rollup is still empty. After a successful
+  checks wait, the gate revalidates PR, local, and pushed heads against the
+  original frozen commit.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L50-L62">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.support/script">`script`</a>
 ``` clojure
@@ -457,4 +459,4 @@ Return shell argv that runs script with name as `$0` and args as positionals.
 Function.
 
 Build a shell gate whose request is frozen with the worktree context.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L105-L113">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/support.clj#L107-L115">Source</a></sub></p>
