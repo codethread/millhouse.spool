@@ -26,6 +26,24 @@ A repository may retain a richer local review as a separate workflow. The shared
 
 Landing scripts are loaded from classpath resources when the namespace loads, then embedded into shell-gate requests. A changed branch cannot swap the script after the workflow is poured. Preparation rebases onto `origin/main`, validates the final pushed HEAD through the repository contract, and records that exact SHA in Git metadata. Merge requires the local, remote, pull-request, and validated-marker SHAs to match and uses `gh pr merge --match-head-commit`.
 
+Automatic delivery workflows should build their CI shell gate with
+`millhouse.spools.land.support/pr-checks-argv`, passing an explicit policy and
+the expected feature branch. `"required"` waits up to 120 seconds for GitHub's
+initial check registration, then fails specifically if the rollup is still
+empty. `"allow-empty"` accepts an empty rollup immediately, but only after
+validating that the PR is open, ready, based on `main`, and at the exact
+checked-out and pushed branch HEAD. If the rollup contains any checks, both
+policies delegate pending/pass/fail handling to `gh pr checks --watch
+--fail-fast`. Every registration poll revalidates the structured `gh pr view`
+identity. After a successful check wait, the gate re-reads structured PR
+metadata and local and pushed branch heads, requiring all three to remain at the
+original frozen commit. It never interprets stderr text.
+
+```clojure
+(support/pr-checks-argv "required" branch)
+(support/pr-checks-argv "allow-empty" branch)
+```
+
 Each target repository must own an executable `.millstrand/land-quality.sh`. It runs with `LAND_EXPECTED_BRANCH` and `LAND_EXPECTED_HEAD`. The generic spool does not guess a build command or silently fall back.
 
 Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. No Millstrand warm-REPL behavior is hardcoded.

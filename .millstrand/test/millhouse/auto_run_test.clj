@@ -76,13 +76,14 @@
                                     "auto-run/worker-run-id"
                                     "auto-run/finisher-run-id"
                                     "complete THIS"
-                                    "Return immediately without waiting"
                                     "An accepted but blocked"
                                     "stop for explicit recovery"
                                     "stop BEFORE accepting"
                                     "before this handoff proceeds"
                                     "When a finisher WAS accepted, do not launch another worker"]]
                     (is (str/includes? instruction required) required))
+                  (is (re-find #"Return immediately\s+without\s+waiting" instruction)
+                      "Return immediately without waiting")
                   (doseq [required ["This step is finisher-only"
                                     "Do not claim card fixture-card, implement new scope or launch another finisher"
                                     "--query agent-run-settled"
