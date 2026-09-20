@@ -11,7 +11,7 @@
   millhouse.spools/kanban {:local/root "../spools/kanban"}
   ct.spools/harnesses
   {:git/url "https://github.com/codethread/harnesses.spool.git"
-   :git/sha "6410da676b3b41be55a58f4abc5fe773cfc75cb9"
+   :git/sha "6b5ad39d8711a033dc7f33fd52c78901393ea44e"
    :deps/root "."}
   codethread/devflow
   {:git/url "https://github.com/codethread/devflow.spool.git"
