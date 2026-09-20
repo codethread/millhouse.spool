@@ -43,6 +43,22 @@
   "POSIX script that validates and runs the target repository's quality contract."
   (script "land-quality-gate.sh"))
 
+(def ^:private pr-checks-script
+  "Validate exact PR identity, then enforce the consumer's checks policy."
+  (script "pr-checks.sh"))
+
+(defn pr-checks-argv
+  "Return argv for the shared PR checks gate.
+
+  `policy` must be `\"required\"` or `\"allow-empty\"`. Both policies require an
+  open, non-draft PR into `main` whose branch and head match the checked-out and
+  pushed `branch`. `allow-empty` accepts a zero-length GitHub check rollup after
+  those validations. Any nonempty rollup is delegated to `gh pr checks --watch
+  --fail-fast`; `required` waits up to 120 seconds for initial check registration,
+  then fails specifically if the rollup is still empty."
+  [policy branch]
+  (sh-gate pr-checks-script "pr-checks" policy branch "120" "5"))
+
 (def land-merge-script
   "Idempotently ready and squash-merge the feature PR."
   (script "land-merge.sh"))
