@@ -7,8 +7,10 @@
             [clojure.test :refer [deftest is]]
             [millhouse.spools.executors.shell :as shell]
             [millhouse.spools.workflow :as workflow]
+            [millhouse.spools.workflow.validation :as validation]
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.api.events.alpha :as events]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.process.alpha :as process]
             [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.weaver.alpha :as weaver]
@@ -82,7 +84,8 @@
                              :on-timeout #(throw (ex-info "Timed out" {}))})))
 
 (defn- attr [strand k]
-  (get-in strand [:attributes k]))
+  (let [value (get-in strand [:attributes k])]
+    (if (= "validation" (namespace k)) (validation/wire-data value) value)))
 
 (defn- single-gate
   "A run whose first ready step is a `:shell` gate, followed by a dependent step."
@@ -1444,3 +1447,192 @@
                                         :after [:millhouse/spools-workflow])
           (is (identical? pool (binding [shell/*runtime* rt] (:worker-executor (#'shell/state))))
               "unchanged refresh preserves the runtime-owned worker pool"))))))
+
+(defn inspect-disposable-validation
+  "Non-Land fixture: revision is the contents of a disposable candidate file."
+  [_runtime {:keys [params]}]
+  {:decision :allow :revision (str/trim (slurp (get params "candidate")))
+   :reason "Disposable candidate inspected" :evidence []})
+
+(defn- validation-config []
+  {:recipes {:disposable/check-v1
+             {:inspect 'millhouse.spools.executors.shell-test/inspect-disposable-validation}}})
+
+(deftest validation-failure-repair-one-attempt-and-replay
+  (with-shell
+    (fn [rt]
+      (let [candidate (temp-file ".candidate")
+            launches (temp-file ".launches")
+            handle (validation/open! rt (validation-config))]
+        (try
+          (spit candidate "broken")
+          (workflow/start!
+           "validation-repair"
+           (single-gate "validation-repair"
+                        {"validation/recipe" "disposable/check-v1"
+                         "validation/params" {"candidate" (str candidate)}
+                         "shell/argv" ["sh" "-c"
+                                       (str "echo attempt >> '" launches "'; test \"$(cat '"
+                                            candidate "')\" = repaired")]}) {})
+          (await-eventually #(some? (attr (shell-gate-strand rt "validation-repair") :validation/receipt)))
+          (await-eventually #(nil? (attr (shell-gate-strand rt "validation-repair") :shell/attempt-id)))
+          (let [gate (shell-gate-strand rt "validation-repair")
+                request {:run-id "validation-repair" :step (:id gate) :request-id "repair-1"
+                         :expected-revision "repaired" :reason "Repair disposable candidate"
+                         :by-identity "fixture-owner"}]
+            (is (= "confirmed" (get (attr gate :validation/receipt) "acknowledgement")))
+            (spit candidate "repaired")
+            (is (= "eligible" (:state (workflow/retry-validation! (assoc request :dry-run true)))))
+            (is (= gate (weaver/show rt (:id gate))))
+            (is (= "accepted" (:state (workflow/retry-validation! request))))
+            (await-eventually #(= "closed" (:state (weaver/show rt (:id gate)))))
+            (is (= "replayed" (:state (workflow/retry-validation! request))))
+            (is (= "refused" (:state (workflow/retry-validation! (assoc request :reason "different")))))
+            (is (= "refused" (:state (workflow/retry-validation!
+                                      (assoc request :step (:id (first (workflow/ready "validation-repair"))))))))
+            (is (= 2 (count (str/split-lines (slurp launches)))))
+            (let [final (weaver/show rt (:id gate))
+                  action (first (attr final :validation/actions))]
+              (is (= 1 (get-in action ["old-attempt" "exit"])))
+              (is (= "broken" (get-in action ["old-attempt" "revision"])))
+              (is (= "shell" (attr final :workflow/executor))))
+            (is (= "refused" (:state (workflow/retry-validation! (assoc request :request-id "closed"))))))
+          (finally (validation/close! rt handle)))))))
+
+(deftest validation-interrupted-acknowledgement-permits-honest-progress
+  (with-shell
+    (fn [rt]
+      (let [candidate (temp-file ".candidate")
+            handle (validation/open! rt (validation-config))
+            ack process/acknowledge!]
+        (try
+          (spit candidate "revision-one")
+          (with-redefs [process/acknowledge!
+                        (fn [& args]
+                          (apply ack args)
+                          (throw (ex-info "Acknowledgement confirmation lost" {})))]
+            (workflow/start!
+             "validation-lost-ack"
+             (single-gate "validation-lost-ack"
+                          {"validation/recipe" "disposable/check-v1"
+                           "validation/params" {"candidate" (str candidate)}
+                           "shell/argv" ["sh" "-c" "exit 1"]}) {})
+            (await-eventually #(str/includes? (or (attr (shell-gate-strand rt "validation-lost-ack") :gate/error) "")
+                                              "Acknowledgement confirmation lost")))
+          (let [gate (shell-gate-strand rt "validation-lost-ack")
+                result (workflow/retry-validation!
+                        {:run-id "validation-lost-ack" :step (:id gate) :request-id "explicit-second"
+                         :expected-revision "revision-one" :reason "One more explicit check"
+                         :by-identity "fixture-owner"})]
+            (is (= "accepted" (:state result)))
+            (is (= "unknown" (get-in result [:action "old-attempt" "acknowledgement"])))
+            (is (true? (get-in result [:action "old-attempt" "terminal-observed"])))
+            (await-eventually #(= "confirmed" (get (attr (weaver/show rt (:id gate)) :validation/receipt)
+                                                   "acknowledgement"))))
+          (finally (validation/close! rt handle)))))))
+
+(defn- with-failed-validation [f]
+  (with-shell
+    (fn [rt]
+      (let [candidate (temp-file ".candidate")
+            handle (validation/open! rt (validation-config))]
+        (try
+          (spit candidate "one")
+          (workflow/start! "refusals"
+                           (single-gate "refusals"
+                                        {"validation/recipe" "disposable/check-v1"
+                                         "validation/params" {"candidate" (str candidate)}
+                                         "shell/argv" ["sh" "-c" "exit 1"]}) {})
+          (await-eventually #(and (attr (shell-gate-strand rt "refusals") :validation/receipt)
+                                  (nil? (attr (shell-gate-strand rt "refusals") :shell/attempt-id))))
+          (let [gate (shell-gate-strand rt "refusals")]
+            (f rt candidate gate {:run-id "refusals" :step (:id gate) :request-id "one"
+                                  :expected-revision "one" :reason "Explicit validation"
+                                  :by-identity "fixture-owner"}))
+          (finally (validation/close! rt handle)))))))
+
+(deftest validation-revision-current-attempt-and-live-custody-refuse
+  (with-failed-validation
+    (fn [rt candidate gate request]
+      (spit candidate "two")
+      (is (= "refused" (:state (workflow/retry-validation! request))))
+      (spit candidate "one")
+      (let [receipt (attr gate :validation/receipt)]
+        (with-redefs [process/list-owned
+                      (fn [_ _] [{:key (get receipt "attempt-id")
+                                  :handle (get receipt "custody-handle") :phase :running}])]
+          (is (= "refused" (:state (workflow/retry-validation! request)))))
+        (with-redefs [process/list-owned
+                      (fn [_ _] [{:key (get receipt "attempt-id")
+                                  :handle (get receipt "custody-handle") :phase :unknown}])]
+          (is (= "refused" (:state (workflow/retry-validation! request))))))
+      (weaver/update! rt (:id gate) {:attributes {"shell/attempt-id" "newer"}})
+      (is (= "refused" (:state (workflow/retry-validation! request))))
+      (is (empty? (attr (weaver/show rt (:id gate)) :validation/actions))))))
+
+(deftest validation-completion-revision-drift-is-not-success
+  (with-shell
+    (fn [rt]
+      (let [candidate (temp-file ".candidate")
+            handle (validation/open! rt (validation-config))
+            launch process/launch!]
+        (try
+          (spit candidate "one")
+          (with-redefs [process/launch! (fn [& args]
+                                          (let [result (apply launch args)]
+                                            (spit candidate "two")
+                                            result))]
+            (workflow/start! "drift"
+                             (single-gate "drift"
+                                          {"validation/recipe" "disposable/check-v1"
+                                           "validation/params" {"candidate" (str candidate)}
+                                           "shell/argv" ["sh" "-c" "exit 0"]}) {})
+            (await-eventually #(attr (shell-gate-strand rt "drift") :gate/error)))
+          (let [gate (shell-gate-strand rt "drift")]
+            (is (= "active" (:state gate)))
+            (is (= "Validation revision changed" (attr gate :gate/error)))
+            (is (= "one" (get (attr gate :validation/receipt) "revision"))))
+          (finally (validation/close! rt handle)))))))
+
+(deftest validation-frozen-registration-and-executor-success-are-protected
+  (with-failed-validation
+    (fn [rt _candidate gate _request]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (weaver/update! rt (:id gate)
+                                   {:attributes {"validation/recipe" "other/check-v1"}})))
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (workflow/complete! "refusals" {:step (:id gate)
+                                                   :by-identity "shell"})))
+      (is (= "active" (:state (weaver/show rt (:id gate))))))))
+
+(deftest validation-batch-preimage-fence-rolls-back-authorization
+  (with-failed-validation
+    (fn [rt _candidate gate request]
+      (let [apply-batch batch/apply!
+            inject? (atom true)]
+        (with-redefs [batch/apply!
+                      (fn [runtime payload & context]
+                        (when (compare-and-set! inject? true false)
+                          (weaver/update! runtime (:id gate)
+                                          {:attributes {"gate/error" "Newer failure projection"}}))
+                        (apply apply-batch runtime payload context))]
+          (is (thrown? clojure.lang.ExceptionInfo (workflow/retry-validation! request))))
+        (is (= "Newer failure projection" (attr (weaver/show rt (:id gate)) :gate/error)))
+        (is (nil? (attr (weaver/show rt (:id gate)) :validation/actions)))
+        (is (empty? (weaver/list rt [:= [:attr "validation/action-request-id"] "one"] {})))))))
+
+(deftest validation-does-not-rearm-unmarked-or-other-executor-gates
+  (with-shell
+    (fn [_rt]
+      (doseq [waiter [:shell :code :agent :merge-turn]]
+        (let [run-id (str "unmarked-" (name waiter))]
+          (workflow/start! run-id
+                           (workflow/workflow "Unmarked"
+                                              (workflow/gate :check "Check" waiter
+                                                             :attributes {"gate/error" "failed"})) {})
+          (let [gate (first (workflow/ready run-id))]
+            (is (= "refused"
+                   (:state (workflow/retry-validation!
+                            {:run-id run-id :step (:id gate) :request-id "refuse"
+                             :expected-revision "one" :reason "Cannot retry arbitrary gates"
+                             :by-identity "fixture-owner"}))))))))))

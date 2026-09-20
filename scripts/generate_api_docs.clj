@@ -4,7 +4,8 @@
 (def git-branch "main")
 
 (def spool-docs
-  [{:source "spools/workflow/src/millhouse/spools/workflow.clj"
+  [{:source ["spools/workflow/src/millhouse/spools/workflow.clj"
+             "spools/workflow/src/millhouse/spools/workflow/validation.clj"]
     :outfile "spools/workflow/workflow.api.md"}
    {:source "spools/chime/src/millhouse/spools/chime.clj"
     :outfile "spools/chime/chime.api.md"}

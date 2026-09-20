@@ -6,6 +6,8 @@
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
 - [shell executor cookbook](./shell.cookbook.md) · [shell executor API](./shell.api.md)
 - [Millstrand workflows API](./millstrand-workflows.api.md)
+- [Explicit guarded validation retry](./validation.md) — opt-in recipes, schemas,
+  terminal evidence and best-effort resumability
 
 ## Activation model
 

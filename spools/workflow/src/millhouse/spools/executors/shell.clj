@@ -18,6 +18,9 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.spools.workflow :as workflow]
+            [millhouse.spools.workflow.validation :as validation]
+            [millhouse.spools.workflow.internal.guard :as guard]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.process.alpha :as process]
@@ -99,7 +102,8 @@
       (fail! "Shell executor worker pool is missing from spool state" {})))
 
 (defn- attr [strand k]
-  (attr-get strand k))
+  (let [value (attr-get strand k)]
+    (if (= "validation" (namespace k)) (validation/wire-data value) value)))
 
 (defn- stamped?
   "True when attribute `k` is present on `gate`, false when the key is absent.
@@ -281,13 +285,14 @@
   The whole outcome is this executor's own `shell/*` vocabulary: the engine keeps
   no prose field a reader would have to consult instead of the exit code."
   [run-id gate-id attempt-id custody-handle exit output]
-  (workflow/complete! run-id
-                      {:step gate-id :executor "shell"
-                       :attributes (cond-> {"shell/running" nil
-                                            "shell/attempt-id" attempt-id
-                                            "shell/custody-handle" custody-handle
-                                            "shell/exit-code" exit}
-                                     (some? output) (assoc "shell/output" output))}))
+  (binding [validation/*completion* [gate-id attempt-id]]
+    (workflow/complete! run-id
+                        {:step gate-id :executor "shell"
+                         :attributes (cond-> {"shell/running" nil
+                                              "shell/attempt-id" attempt-id
+                                              "shell/custody-handle" custody-handle
+                                              "shell/exit-code" exit}
+                                       (some? output) (assoc "shell/output" output))})))
 
 (defn- custody-output
   "Read a bounded stdout-then-stderr tail from retained Mill output.
@@ -394,15 +399,39 @@
   (if-let [gate (attempt-gate gate-id attempt-id custody-handle)]
     (if (= "closed" (:state gate))
       :already-committed
-      (let [output (custody-output (:output record))]
+      (let [output (custody-output (:output record))
+            opted? (attr gate :validation/recipe)
+            inspection (when (and opted? (:exit record) (zero? (terminal-exit record)))
+                         (try
+                           (validation/inspect (rt) :complete run-id gate
+                                               (attr gate :validation/revision)
+                                               (attr gate :validation/previous-attempt))
+                           (catch Exception e
+                             {:decision :unknown :reason (str "Validation completion inspection failed: " (ex-message e))})))
+            inspection-error (when (and inspection (not= :allow (:decision inspection)))
+                               (:reason inspection))]
+        (when opted?
+          (stamp-attempt! gate-id attempt-id custody-handle
+                          {"validation/receipt"
+                           {"attempt-id" attempt-id "custody-handle" custody-handle
+                            "terminal-observed" true
+                            "settled" (not= :uncertain (get-in record [:cancellation :stop]))
+                            "acknowledgement" "unknown"
+                            "revision" (attr gate :validation/revision)
+                            "recipe" opted? "exit" (terminal-exit record)
+                            "output" output
+                            "error" (or (attr gate :gate/error) inspection-error
+                                        (when-not (and (not timed-out?) (:exit record) (zero? (terminal-exit record)))
+                                          (terminal-error record timed-out?)))}}))
         ;; A quiesced gate is frozen even when the process happened to exit
         ;; successfully before cancellation. Never let that terminal fact
         ;; route the workflow past the coordinator's withdrawal marker.
         (if (and (not (stamped? gate :gate/error))
+                 (not inspection-error)
                  (not timed-out?) (:exit record) (zero? (terminal-exit record)))
           (pass! run-id gate-id attempt-id custody-handle 0 output)
           (fail-attempt! gate-id attempt-id custody-handle
-                         (or (attr gate :gate/error)
+                         (or (attr gate :gate/error) inspection-error
                              (terminal-error record
                                              (or timed-out?
                                                  (= "timed-out"
@@ -445,6 +474,9 @@
           (when-not timed-out?
             (cancel-timeout! runtime attempt-id))
           (process/acknowledge! runtime custody-owner custody-handle)
+          (when-let [receipt (attr (weaver/show runtime gate-id) :validation/receipt)]
+            (stamp-attempt! gate-id attempt-id custody-handle
+                            {"validation/receipt" (assoc receipt "acknowledgement" "confirmed")}))
           (if (clear-attempt! gate-id attempt-id custody-handle)
             :acknowledged
             :stale))))))
@@ -545,6 +577,15 @@
                  (not (stamped? gate :gate/error))
                  (nil? (attr gate :shell/custody-handle)))
         (let [_ (require-request! gate)
+              _ (when (attr gate :validation/recipe)
+                  (let [inspection (validation/inspect runtime :launch
+                                                       (attr gate :validation/run-id) gate
+                                                       (attr gate :validation/revision)
+                                                       (attr gate :validation/previous-attempt))]
+                    (when-not (= :allow (:decision inspection))
+                      (fail! (:reason inspection) {:reason :workflow/validation-launch-refused}))
+                    (stamp-attempt! gate-id attempt-id nil
+                                    {"validation/revision" (:revision inspection)})))
               raw-argv (parse-argv gate)
               timeout-secs (parse-timeout gate)
               deadline (or (parse-deadline (attr gate :shell/timeout-deadline)
@@ -626,6 +667,7 @@
           (stamp! (:id gate)
                   (cond-> {"shell/running" attempt-id
                            "shell/attempt-id" attempt-id}
+                    (attr gate :validation/recipe) (assoc "validation/run-id" run-id)
                     deadline (assoc timeout-deadline-attribute
                                     (deadline-string deadline)))))
         (.execute (worker-executor)
@@ -914,6 +956,126 @@
                                  {:run-id run-id :gate-id gate-id
                                   :attempt-id attempt-id :result result}))))))))))
         gates)})))
+
+(defn- retry-request! [request]
+  (let [required #{:run-id :step :request-id :expected-revision :reason :by-identity}
+        allowed (conj required :dry-run :episode-ref)]
+    (when-not (and (map? request)
+                   (every? allowed (keys request))
+                   (every? #(non-blank-string? (get request %)) required)
+                   (or (not (contains? request :dry-run)) (boolean? (:dry-run request)))
+                   (or (not (contains? request :episode-ref))
+                       (non-blank-string? (:episode-ref request))))
+      (fail! "Invalid validation retry request"
+             {:reason :workflow/validation-request :value request})))
+  request)
+
+(defn- retry-plan [runtime request]
+  (let [{:keys [run-id step expected-revision]} request
+        gate (weaver/show runtime step)
+        root (active-root-for-gate runtime gate)
+        receipt (attr gate :validation/receipt)
+        frontier (workflow/ready run-id)
+        attempt (attr gate :shell/attempt-id)
+        facts (process/list-owned runtime custody-owner)
+        matches (filter #(= (get receipt "attempt-id") (:key %)) facts)
+        reasons (cond-> []
+                  (not= run-id (attr root :workflow/run-id)) (conj "Active root does not match run")
+                  (not= "active" (:state gate)) (conj "Gate is closed or inactive")
+                  (not= "shell" (attr gate :workflow/gate)) (conj "Gate is not shell-owned")
+                  (not-any? #(= step (:id %)) frontier) (conj "Gate is not ready")
+                  (not (stamped? gate :gate/error)) (conj "Gate has no recorded failure")
+                  (not (attr gate :validation/recipe)) (conj "Gate did not opt in")
+                  (not (and (true? (get receipt "terminal-observed")) (true? (get receipt "settled"))
+                            (non-blank-string? (get receipt "attempt-id"))
+                            (non-blank-string? (get receipt "custody-handle"))
+                            (non-blank-string? (get receipt "revision"))
+                            (= (attr gate :validation/revision) (get receipt "revision"))
+                            (= (attr gate :validation/recipe) (get receipt "recipe"))))
+                  (conj "Current terminal attempt evidence is missing")
+                  (and (attr gate :shell/running)
+                       (not= (attr gate :shell/running) (get receipt "attempt-id")))
+                  (conj "Running claim does not match receipt")
+                  (and (nil? attempt) (or (attr gate :shell/running) (attr gate :shell/custody-handle)))
+                  (conj "Incomplete current custody tuple")
+                  (and attempt (not= attempt (get receipt "attempt-id")))
+                  (conj "Receipt is not the current attempt")
+                  (and (attr gate :shell/custody-handle)
+                       (not= (attr gate :shell/custody-handle) (get receipt "custody-handle")))
+                  (conj "Custody handle does not match receipt")
+                  (or (> (count matches) 1)
+                      (some #(or (not (process-terminal? %))
+                                 (= :uncertain (get-in % [:cancellation :stop]))
+                                 (not= (:handle %) (get receipt "custody-handle"))) matches))
+                  (conj "Process custody is running, uncertain or mismatched"))
+        inspection (when (empty? reasons)
+                     (validation/inspect runtime :retry run-id gate expected-revision receipt))
+        reasons (cond-> reasons
+                  (and inspection (not= :allow (:decision inspection)))
+                  (conj (:reason inspection)))]
+    {:gate gate :root root :receipt receipt :frontier frontier
+     :inspection inspection :reasons reasons}))
+
+(defn retry-validation!
+  "Reserve exactly one explicitly requested attempt on a failed opted-in gate.
+
+  Lock order is shell scan monitor then workflow run guard, matching terminal
+  completion. The registered precommit hook compares gate and root pre-images
+  inside the batch transaction. No queue hook is bypassed. A known settled
+  terminal receipt permits progress when acknowledgement bookkeeping is unknown;
+  the uncertainty stays in the action, never becomes confirmed acknowledgement.
+  Dry-run reads only. Repeat the same request key to reconcile an ambiguous result."
+  [request]
+  (retry-request! request)
+  (let [runtime (rt)
+        {:keys [run-id step request-id dry-run expected-revision]} request
+        payload (into {} (map (fn [[k v]] [(name k) v])) (dissoc request :dry-run))]
+    #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+    #_{:splint/disable [lint/locking-object]}
+    (locking (scan-monitor)
+      (guard/with-run!
+        runtime run-id
+        (fn []
+          (let [gate (weaver/show runtime step)
+                actions (or (attr gate :validation/actions) [])
+                previous (some-> (first (weaver/list runtime
+                                                     [:and [:= [:attr "validation/action-run-id"] run-id]
+                                                      [:= [:attr "validation/action-request-id"] request-id]] {}))
+                                 (attr :validation/action))]
+            (if previous
+              (if (= payload (get previous "request"))
+                {:state "replayed" :action previous}
+                {:state "refused" :reasons ["Request key payload conflict"] :action previous})
+              (let [{:keys [gate root receipt frontier inspection reasons]} (retry-plan runtime request)
+                    plan {:state (if (seq reasons) "refused" "eligible")
+                          :old-attempt receipt :recipe (attr gate :validation/recipe)
+                          :revision expected-revision :frontier frontier :reasons reasons}]
+                (if (or dry-run (seq reasons))
+                  plan
+                  (let [action {"id" (str (java.util.UUID/randomUUID))
+                                "request" payload "old-attempt" receipt
+                                "error" (attr gate :gate/error)
+                                "recipe" (attr gate :validation/recipe)
+                                "evidence" (:evidence inspection)}]
+                    (binding [validation/*before-images* {(:id gate) gate (:id root) root}]
+                      (batch/apply!
+                       runtime
+                       {:refs {:gate (:id gate) :root (:id root)}
+                        :strands [{:ref :root :attributes {}}
+                                  {:ref :action :title "Validation retry authorization"
+                                   :attributes {"validation/action-run-id" run-id
+                                                "validation/action-request-id" request-id
+                                                "validation/action" action}}
+                                  {:ref :gate
+                                   :attributes {"gate/error" nil "shell/output" nil
+                                                "shell/exit-code" nil "shell/running" nil
+                                                "shell/attempt-id" nil "shell/custody-handle" nil
+                                                "shell/timeout-deadline" nil "shell/timeout-intent" nil
+                                                "validation/receipt" nil
+                                                "validation/previous-attempt" receipt
+                                                "validation/revision" expected-revision
+                                                "validation/actions" (conj actions action)}}]}))
+                    {:state "accepted" :action action}))))))))))
 
 (defn- shell-gates
   [runtime]

@@ -840,7 +840,7 @@
                      (get-in (leaf "complete") [:flags :by-identity :doc])))
         (is (re-find #"identity/by-identity" (:doc by-help)))
         (is (= #{"list" "show" "executors" "start" "ready" "choices" "complete"
-                 "choose" "next" "defer" "await"}
+                 "choose" "next" "defer" "await" "retry-validation"}
                (set (keys (:subcommands (:arg-spec entry))))))
         (is (= (set (keys (:subcommands (:arg-spec entry))))
                (set (keys (:subcommands (:returns entry))))))))))

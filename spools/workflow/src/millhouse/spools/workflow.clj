@@ -1255,6 +1255,17 @@
     (start! run-id workflow (or params {}))
     (runs/result rt "workflow start" run-id)))
 
+(defn retry-validation!
+  "Reserve one guarded shell validation attempt; acceptance is not success.
+
+  Request requires :run-id, :step, :request-id, :expected-revision, :reason and
+  :by-identity nonblank strings. Optional :dry-run is boolean; :episode-ref is
+  a nonblank external action reference. Returns accepted/eligible/refused/replayed
+  state with retained action or plan evidence. Only future opted-in shell gates
+  qualify. The shell provider owns custody checks, locking and execution."
+  [request]
+  ((requiring-resolve 'millhouse.spools.executors.shell/retry-validation!) request))
+
 (defn run-ready
   "Return the run result for `request`'s run without touching it.
 

@@ -12,7 +12,8 @@
             [millstrand.api.spool.alpha :refer [fail! require-valid!]]
             [millhouse.spools.workflow.internal.definitions :as defs]
             [millhouse.spools.workflow.internal.specs :as specs]
-            [millhouse.spools.workflow.internal.util :as util]))
+            [millhouse.spools.workflow.internal.util :as util]
+            [millhouse.spools.workflow.validation :as validation]))
 
 (defn- render [value params]
   (cond
@@ -378,7 +379,7 @@
                           {"workflow/position" position}
                           (when-let [description (:description step)]
                             {"description" description}))]
-    (cond-> attributes
+    (cond-> (validation/freeze attributes)
       (get attributes "workflow/choice-details")
       (update "workflow/choice-details" poured-choice-details))))
 
