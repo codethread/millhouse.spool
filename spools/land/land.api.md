@@ -99,7 +99,7 @@ Workflow callback for `finish!` in the code executor's bound runtime.
 ```
 Function.
 
-Move an optional card into review; an already-reviewed card is unchanged.
+Mark an optional card as needing human attention; in_review is unchanged.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L14-L26">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.card-actions/review-card!">`review-card!`</a>
@@ -117,7 +117,7 @@ Workflow callback for `review!` in the code executor's bound runtime.
 ```
 Function.
 
-Return an optional card to claimed after abort; repeat calls are harmless.
+Resume agent work on an optional card in claimed; repeat calls are harmless.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/card_actions.clj#L28-L40">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.card-actions/rework-card!">`rework-card!`</a>

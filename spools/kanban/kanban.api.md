@@ -9,8 +9,11 @@ User-facing kanban board over Millstrand strands.
   `feature` card (occasionally grouped under an `epic`), and every agent
   working directly with a user works under a claimed card. All card state
   lives under `kanban/*` attributes; `kanban/lane` is the active board lane
-  (`refinement` -> `pending` -> `claimed` -> `in_review`, optionally `in_production`) and `kanban/outcome`
-  records a finished card's outcome. The
+  (`refinement`, `pending`, `claimed`, `in_review`, or `in_production`) and `kanban/outcome`
+  records a finished card's outcome. Lanes show attention status, not sequential
+  progress: `claimed` means agent work is in progress, including agent review;
+  `in_review` means human attention is needed for review, approval, a blocker,
+  or a pending decision. The
   `kanban/priority` (p1 immediate blocker .. p4 someday, default p3) orders
   lanes and `kanban next`.
 
@@ -47,7 +50,7 @@ Create a kanban card in the pending (or refinement) lane.
   ```
 
   A refinement card stays out of `next` until explicitly moved to pending with `strand update`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L306-L332">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L309-L335">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/board">`board`</a>
 ``` clojure
@@ -72,7 +75,7 @@ Return the grouped board snapshot: epics, feature lanes, closed count.
 
   `all?` adds `:cards`, a compact all-state card collection with direct epic
   membership. The ordinary grouped active snapshot remains unchanged.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1338-L1402">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1341-L1405">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/board-str">`board-str`</a>
 ``` clojure
@@ -81,7 +84,7 @@ Return the grouped board snapshot: epics, feature lanes, closed count.
 Function.
 
 Render a `board` result map as a stacked-lane ASCII board string.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1457-L1478">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1460-L1481">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/card-view">`card-view`</a>
 ``` clojure
@@ -100,7 +103,7 @@ Return one card joined to its notes, tasks, work, and frontier.
   ;; => {:card ..., :tasks ..., :notes ..., :active-work ...,
   ;;     :ready ..., :related ...}
   ```
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1133-L1159">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1136-L1162">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/claim!">`claim!`</a>
 ``` clojure
@@ -127,7 +130,7 @@ Claim or hand off an active feature or task with durable ordered history.
   strand kanban claim abc12 --owner worker --by-identity dispatcher \
     --branch feature-timeouts --worktree /work/feature-timeouts
   ```
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L508-L596">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L511-L599">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/close-kanban!">`close-kanban!`</a>
 ``` clojure
@@ -136,7 +139,7 @@ Claim or hand off an active feature or task with durable ordered history.
 Function.
 
 Remove Kanban's ownership guard without retracting durable graph state.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1874-L1878">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1891-L1895">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/current-ownership">`current-ownership`</a>
 ``` clojure
@@ -145,7 +148,7 @@ Remove Kanban's ownership guard without retracting durable graph state.
 Function.
 
 Return the latest explicit claim for target-id, or nil when never claimed.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L251-L254">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L254-L257">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/finish!">`finish!`</a>
 ``` clojure
@@ -171,7 +174,7 @@ Close a kanban card with an explicit outcome, polymorphic on `kanban/type`.
   ```
 
   Reopen is paired with abandon only; a completed epic remains closed.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L694-L721">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L697-L724">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/identity-work">`identity-work`</a>
 ``` clojure
@@ -185,7 +188,7 @@ Project an identity's durable Kanban participation hierarchy.
   reporter cards, and every matching claim record. This helper expands the
   one-edge `kanban-identity-work` named query without consulting scalar `owner`.
   Closed strands remain present; callers choose their own active frontier.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1170-L1217">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1173-L1220">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/immutable-ownership-record-guard!">`immutable-ownership-record-guard!`</a>
 ``` clojure
@@ -194,7 +197,7 @@ Project an identity's durable Kanban participation hierarchy.
 Function.
 
 Reject mutation or deletion of an existing ownership source record.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1848-L1862">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1865-L1879">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban">`kanban`</a>
 ``` clojure
@@ -203,7 +206,7 @@ Reject mutation or deletion of an existing ownership source record.
 Function.
 
 Manage the user-facing kanban work board.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1775-L1779">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1792-L1796">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-batch">`kanban-batch`</a>
 ``` clojure
@@ -229,7 +232,7 @@ Create pending feature cards with bodies and depends-on edges.
   The pattern validates the complete input before publishing the batch, so
   duplicate keys and missing durable dependencies fail without a partial
   backlog.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L370-L409">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L373-L412">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-cards">`kanban-cards`</a>
 
@@ -237,7 +240,7 @@ Create pending feature cards with bodies and depends-on edges.
 
 
 Select every Kanban card strand.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1792-L1795">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1809-L1812">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-dash">`kanban-dash`</a>
 
@@ -245,7 +248,7 @@ Select every Kanban card strand.
 
 
 Open the interactive Kanban board in the caller's terminal.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1787-L1790">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1804-L1807">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-epic-pending">`kanban-epic-pending`</a>
 
@@ -253,7 +256,7 @@ Open the interactive Kanban board in the caller's terminal.
 
 
 Select active pending cards hanging directly under one epic.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1804-L1811">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1821-L1828">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-export">`kanban-export`</a>
 ``` clojure
@@ -262,7 +265,7 @@ Select active pending cards hanging directly under one epic.
 Function.
 
 Return a card's full parent-of subtree with its internal depends-on edges.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1781-L1785">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1798-L1802">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-identity-work">`kanban-identity-work`</a>
 
@@ -275,7 +278,7 @@ Select cards and tasks in an identity's durable participation history.
   linked ownership record names the identity; reporter cards are included as
   participation without implying ownership. Use `identity-work` to expand direct
   targets to inherited tasks and containing epics.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1813-L1840">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1830-L1857">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-pending">`kanban-pending`</a>
 
@@ -283,7 +286,7 @@ Select cards and tasks in an identity's durable participation history.
 
 
 Select active Kanban cards in the pending lane.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1797-L1802">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1814-L1819">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/kanban-runtime">`kanban-runtime`</a>
 
@@ -291,7 +294,7 @@ Select active Kanban cards in the pending lane.
 
 
 Own Kanban runtime-state setup for the module lifetime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1880-L1883">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1897-L1900">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/label-add!">`label-add!`</a>
 ``` clojure
@@ -304,7 +307,7 @@ Add labels to a card, one `kanban.label/<slug>` attribute key per label.
   Adding a label a card already carries is idempotent, and labels are free-form:
   no vocabulary is registered up front, so a new label exists the moment it is
   first used.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L451-L458">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L454-L461">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/label-list">`label-list`</a>
 ``` clojure
@@ -317,7 +320,7 @@ Return every label in use on active cards with the count of cards carrying it.
   Labels have no registry of their own, so the board's own cards are the
   vocabulary: this is how an agent discovers which labels exist before reusing
   one instead of coining a near-duplicate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1233-L1246">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1236-L1249">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/label-rm!">`label-rm!`</a>
 ``` clojure
@@ -329,7 +332,7 @@ Remove labels from a card by deleting their attribute keys.
 
   Removing a label a card does not carry is a no-op, so an unlabel is safe to
   repeat without first reading the card.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L460-L466">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L463-L469">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/next-card">`next-card`</a>
 ``` clojure
@@ -351,7 +354,7 @@ Return the highest-priority (p1 first) oldest active pending feature card, or ni
   (next-card runtime ["reliability"])
   (next-card runtime nil "ep789")
   ```
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1271-L1297">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1274-L1300">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/note!">`note!`</a>
 ``` clojure
@@ -378,7 +381,7 @@ Append a note to a card or task via the blessed notes relation.
   Review findings and command output belong on the task, not the card.
   NOTE
   ```
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L994-L1032">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L997-L1035">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/open-kanban!">`open-kanban!`</a>
 ``` clojure
@@ -387,7 +390,7 @@ Append a note to a card or task via the blessed notes relation.
 Function.
 
 Materialize Kanban state and protect immutable ownership source records.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1864-L1872">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1881-L1889">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/ownership-history">`ownership-history`</a>
 ``` clojure
@@ -400,7 +403,7 @@ Return a target's immutable ownership claims in deterministic order.
   Claims sort by `kanban/claimed-at`, then durable record id. `:order` is the
   one-based position in that order; the final claim is current, including when
   its raw owner cannot yet resolve to an identity strand.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L222-L249">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L225-L252">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/print-board!">`print-board!`</a>
 ``` clojure
@@ -409,7 +412,7 @@ Return a target's immutable ownership claims in deterministic order.
 Function.
 
 Print the live board as ASCII; the human view for `mill weaver repl`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1480-L1483">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L1483-L1486">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/reopen!">`reopen!`</a>
 ``` clojure
@@ -427,7 +430,7 @@ Reopen an abandoned epic, reversing exactly the cascade a matching abandon close
   own stored restore lane; a child closed before the abandon (no marker) was
   legitimately done and stays closed. Reopen is a true inverse, never a blanket
   reopen.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L737-L782">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L740-L785">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/reporter">`reporter`</a>
 ``` clojure
@@ -439,7 +442,7 @@ Project a card's durable reporter evidence and current graph enrichment.
 
   Returns nil for anonymous cards. The raw friendly identity remains present
   even while `:identity-strand-ids` is empty because resolution is best effort.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L208-L216">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L211-L219">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/set-priority!">`set-priority!`</a>
 ``` clojure
@@ -448,7 +451,7 @@ Project a card's durable reporter evidence and current graph enrichment.
 Function.
 
 Set an active card's priority (p1 highest urgency .. p4 someday).
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L427-L437">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L430-L440">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/task-add!">`task-add!`</a>
 ``` clojure
@@ -466,7 +469,7 @@ Create a task strand under a feature card via a `parent-of` edge.
   strand kanban task add abc12 "Implement the parser"
   strand kanban task add abc12 "Document the parser" --depends-on task01
   ```
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L927-L951">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L930-L954">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/task-list">`task-list`</a>
 ``` clojure
@@ -475,7 +478,7 @@ Create a task strand under a feature card via a `parent-of` edge.
 Function.
 
 Project a feature card's tasks with their derived statuses.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L953-L959">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L956-L962">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/task-op">`task-op`</a>
 ``` clojure
@@ -484,7 +487,7 @@ Project a feature card's tasks with their derived statuses.
 Function.
 
 Dispatch a parsed `kanban task ...` action, failing loudly on an unknown one.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L961-L968">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L964-L971">Source</a></sub></p>
 
 ## <a name="millhouse.spools.kanban/task-ownership">`task-ownership`</a>
 ``` clojure
@@ -496,4 +499,4 @@ Project direct task ownership or inherited current feature ownership.
 
   A direct claim wins. Inheritance is a read projection only: it does not create
   a task claim record and does not make every task appear actively `doing`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L861-L873">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/src/millhouse/spools/kanban.clj#L864-L876">Source</a></sub></p>

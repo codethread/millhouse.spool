@@ -43,12 +43,18 @@ The active lanes are:
 
 - `refinement` — an idea that waits for explicit promotion to `pending`;
 - `pending` — actionable work, ordered p1 first and oldest first within a priority;
-- `claimed` — work has started and the card records its owner and branch;
-- `in_review` — work is waiting for review; update back to `claimed` for rework.
-- `in_production` — optional post-merge deployment validation, settling, or coordinated release work; update into it from `in_review`, use `finish` to close it, or update back to `claimed` for rework. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
+- `claimed` — in progress: an agent is working, including implementation, testing, agent-to-agent review, resolving findings, and authorized landing; the card records its owner and branch;
+- `in_review` — human attention is needed: human review, approval, blocker resolution, or a pending human decision. Record the exact request on the feature or epic; return to `claimed` when agent work resumes.
+- `in_production` — optional post-merge deployment validation, settling, or coordinated release work; update into it from `claimed` or `in_review`, use `finish` to close it, or update back to `claimed` for rework. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
+
+Lanes show attention status, not sequential progress. `in_review` is not further
+along than `claimed`: a human decision or blocker can need attention at any point.
+Agent review stays in `claimed`; it does not require a visit to `in_review`.
+Agent-resolvable blockers likewise stay in progress; use `depends-on` and notes
+to expose them without implying a human needs to act.
 
 Simple lane changes use `strand update CARD_ID --attr kanban/lane=LANE`,
-with `pending` for promotion, `in_review` for review, `claimed` for rework,
+with `pending` for promotion, `in_review` for human attention, `claimed` for agent work,
 and `in_production` for optional observation. These are direct attribute patches,
 not guarded transitions; inspect the current card and follow this lane discipline.
 Use `claim`, `finish`, and `reopen` for their structured lifecycle behavior.

@@ -10,7 +10,7 @@ strand workflow start land-my-change --workflow land --params '{"feature":"card-
 strand workflow ready land-my-change
 ```
 
-Resolve the pull request and let the optional card and quality gates complete. The configured provider then runs one `:agent` review at the pushed, quality-marked HEAD. When it succeeds, inspect the review gate's `harness/result` at `resolve-review`; success alone does not approve findings. Record the coordinator's adjudication through the checkpoint:
+Resolve the pull request and let the optional card and quality gates complete. The card gate resumes `claimed` (in progress), including when agent work resumes from human review; agent review and authorized landing do not use the human-attention `in_review` lane. The configured provider then runs one `:agent` review at the pushed, quality-marked HEAD. When it succeeds, inspect the review gate's `harness/result` at `resolve-review`; success alone does not approve findings. Record the coordinator's adjudication through the checkpoint:
 
 ```text
 strand workflow next land-my-change --choice accepted --input '{"reviewer":"reviewer","base":"0123456789abcdef0123456789abcdef01234567","head":"89abcdef0123456789abcdef0123456789abcdef","p1-p2":"none","summary":"Reviewed immutable range; no P1/P2 findings."}'
@@ -29,7 +29,7 @@ CI and review-package gates. Do not use this call for a human-review policy:
 
 ;; Inside a delivery workflow with card, feature, branch and worktree params:
 (workflow/call :land #'autonomous/autonomous-land {}
-               :depends-on [:review-card])
+               :depends-on [:ci])
 ```
 
 The call has two ordinary steps, stamped with `auto-run/card` and

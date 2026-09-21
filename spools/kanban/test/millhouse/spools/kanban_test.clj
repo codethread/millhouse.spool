@@ -222,6 +222,13 @@
           (is (str/includes? (:about entry) "p1 is an immediate blocker"))
           (is (str/includes? (:about entry) "kanban-batch"))
           (is (str/includes? (:about entry) "Batteries"))
+          (doseq [guidance [(:about entry) (:prime entry)]]
+            (is (str/includes? guidance "human decision"))
+            (is (str/includes? guidance "blocker resolution"))
+            (is (str/includes? guidance "not sequential stages"))
+            (is (str/includes? guidance "not further along")))
+          (is (str/includes? (:about entry) "Keep agent review and agent decisions in claimed"))
+          (is (str/includes? (:prime entry) "Keep all agent progress in claimed"))
           (is (str/includes? (:prime entry) "strand help kanban"))
           (is (str/includes? (:prime entry) "Every agent doing direct user work"))
           (is (str/includes? (:prime entry) "decompose the feature into tasks"))

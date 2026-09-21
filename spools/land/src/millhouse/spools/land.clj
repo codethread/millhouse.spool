@@ -105,16 +105,16 @@
    :param-docs {:feature "Work identity under review."
                 :branch "Pushed feature branch reviewed against origin/main."
                 :worktree "Absolute path to the clean feature worktree."
-                :card "Optional kanban card to move into review."
+                :card "Optional kanban card to keep in progress during agent review."
                 :pr-number "Optional pull request identity carried with the work."
                 :reviewer "Single configured agent seat; defaults to reviewer."}}
   (workflow/workflow
    (fn [{:keys [branch]}] (str "Review: " branch))
    {:attributes {"workflow/family" "review"}}
-   (support/card-gate :review-card "Move the optional card into review" []
-                      "millhouse.spools.land.card-actions/review-card!")
+   (support/card-gate :progress-card "Keep the optional card in progress during agent review" []
+                      "millhouse.spools.land.card-actions/rework-card!")
    (support/shell-gate
-    :review-quality "Validate the pushed HEAD before review" [:review-card]
+    :review-quality "Validate the pushed HEAD before review" [:progress-card]
     (fn [{:keys [branch]}]
       (support/sh-gate support/land-quality-gate-script "review-quality" branch))
     5400
