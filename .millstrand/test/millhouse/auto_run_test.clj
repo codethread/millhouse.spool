@@ -80,7 +80,13 @@
                                     "stop for explicit recovery"
                                     "stop BEFORE accepting"
                                     "before this handoff proceeds"
-                                    "When a finisher WAS accepted, do not launch another worker"]]
+                                    "When a finisher WAS accepted, do not launch another worker"
+                                    "positive execution or validation"
+                                    "auto-run/decision-question"
+                                    "auto-run/decision-role"
+                                    "Both signals may coexist"
+                                    "Unknown evidence stays"
+                                    "Healthy queue waits"]]
                     (is (str/includes? instruction required) required))
                   (is (re-find #"Return immediately\s+without\s+waiting" instruction)
                       "Return immediately without waiting")

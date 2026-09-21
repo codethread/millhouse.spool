@@ -9,18 +9,40 @@
   (s/keys :req-un [::land/card ::land/feature ::land/branch ::land/worktree]))
 
 (defn failure-policy
-  "Render the stop-on-failure contract shared by autonomous workers and finishers."
+  "Render the cause-and-attention contract shared by autonomous workers and finishers."
   [card]
   (format/prose
    "
-     On an observed delivery-gate, handoff or landing failure, add the label
-     `auto-run-failure` to card {card} and record the failing run/step, command,
-     evidence, retained resources and any held merge reservation in a card note.
-     Stop and leave the card open for manual intervention. Do not clear gate/error,
-     retry a failed gate, spawn a replacement, withdraw the merge turn or claim
-     success. These instructions override shared land's repair/retry guidance.
-     Await executor-owned gates; never manually assert a passing result.
-     Normal queue waits and await timeouts are not failures; reissue bounded waits.
+     Treat cause and current attention as independent signals. Add
+     `auto-run-failure` to card {card} only after positive execution or validation
+     evidence identifies the failed operation, concrete attempt and current
+     delivery/workflow. Record the delivery/run/step, command or operation,
+     attempt/custody reference, evidence, retained resources and any held merge
+     reservation in an attributed card note. A label alone is not failure proof
+     or recovery authority.
+
+     For a design, scope or authority question, add `needs-decision` and set
+     `auto-run/decision-question` to the exact nonblank question and
+     `auto-run/decision-role` to `human` or `operator`. The role is responsibility,
+     not actor identity. Record the question and context in an attributed note,
+     preserving who raised it and who answers it. A question alone is not a
+     failure. Both signals may coexist when a genuine failure also needs a
+     decision; resolve each independently, preserving notes and history.
+
+     On a positively evidenced failure:
+     Stop and leave the card open for manual intervention. Do not clear
+     gate/error, retry a failed gate, or spawn a replacement.
+
+     Never withdraw the merge turn or claim success. These instructions override
+     shared land's
+     repair/retry guidance. Unknown evidence stays
+     explicit and authorizes no retry, gate reset, replacement, merge action or
+     recovery. Await executor-owned gates;
+     never manually assert a passing result.
+
+     Healthy queue waits, bounded await timeouts and ordinary human checkpoints
+     remain normal waits. Reissue a bounded wait only when the delivery remains
+     healthy; if the timeout leaves evidence unknown, stop without retrying.
      Never stop a Weaver or unrelated processes. Labeling is best-effort if the
      CLI itself fails; report that failure in your final response.
    " {:card card}))

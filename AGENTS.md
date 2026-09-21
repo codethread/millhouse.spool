@@ -21,9 +21,19 @@
 - `auto-human-review` stops at its human checkpoint. `auto-full-land` hands
   shared landing to an independent finisher before sign-off; the worker must not
   approve sign-off, merge, remove its worktree, or finish the card.
-- On an autonomous delivery failure, add `auto-run-failure`, record evidence and
-  retained resources on the card, and stop without retrying or withdrawing a
-  merge reservation.
+- Add `auto-run-failure` only when positive execution or validation evidence
+  identifies the failed operation, concrete attempt and current delivery. Record
+  the run/step, command, evidence, retained resources and merge reservation in an
+  attributed note; a label is not proof or recovery authority.
+- Record a design, scope or authority question with `needs-decision`, the exact
+  nonblank `auto-run/decision-question`, and `auto-run/decision-role` limited to
+  `human` or `operator`. The role is responsibility, not actor identity; preserve
+  who raised and answered the question in attributed notes. Both signals may
+  coexist and must be resolved independently without erasing history.
+- Healthy waits, bounded await timeouts and ordinary human checkpoints remain
+  waits. Unknown evidence authorizes no retry, gate reset, replacement, merge
+  action or recovery. On a positively evidenced autonomous failure, stop without
+  retrying or withdrawing a merge reservation.
 
 ## Testing
 

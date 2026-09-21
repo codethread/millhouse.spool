@@ -43,11 +43,42 @@ before completing the worker step. The accepted finisher is blocked until that
 completion; it then waits for the original worker to settle successfully. The
 worker returns immediately and never completes the finisher step.
 
-On an observed autonomous gate, handoff, or landing failure, add
-`auto-run-failure`, note the command and evidence plus retained resources and
-merge reservation, and stop with the card open. Do not automatically retry,
-replace the worker, clear gate errors, or withdraw a merge turn. Normal bounded
-queue-wait timeouts are not failures.
+### Failure cause and decision attention
+
+`auto-run-failure` and `needs-decision` are independent signals, not delivery
+dispositions, and may coexist. Add `auto-run-failure` only with positive
+execution or validation evidence identifying the failed operation, concrete
+attempt and current delivery/workflow. Record the delivery/run/step, command or
+operation, attempt or custody reference, evidence, retained resources and any
+merge reservation in an attributed note. A label alone is not failure proof or
+recovery authority.
+
+For a design, scope or authority question, add `needs-decision` with the exact
+nonblank `auto-run/decision-question` and `auto-run/decision-role` set to only
+`human` or `operator`. The role names responsibility, not an actor identity.
+Record the question and context in an attributed note, preserving who raised it
+and who answers it. A question alone is not a failure. Resolve the two signals
+independently: resolving a decision removes only `needs-decision` and its two
+current fields; evidence-backed failure resolution removes only its failure
+signal. Preserve notes, history and unrelated attention.
+
+On a positively evidenced autonomous gate, handoff or landing failure, stop with
+the card open. Do not automatically retry, replace the worker, clear gate errors,
+withdraw a merge turn or claim success. Unknown evidence remains explicit and
+authorizes no retry, gate reset, replacement, merge action or recovery. Healthy
+waits, bounded await timeouts and
+ordinary human checkpoints remain normal waits; reissue a bounded wait only when
+the delivery remains healthy. Never stop a Weaver or unrelated process.
+
+Consumer examples are not additional types:
+
+| Situation | Signals and handling |
+| --- | --- |
+| Decision only | `needs-decision` plus its exact question and role; wait, not failure. |
+| Failure only | `auto-run-failure` plus attributed positive evidence; leave open for intervention. |
+| Failure and decision | Both signals; resolve each independently. |
+| Healthy wait or human checkpoint | Neither signal; continue waiting normally. |
+| Unknown evidence | Do not infer failure or authorize retry, gate reset, replacement, merge or recovery. |
 
 ## Authorized recovery
 

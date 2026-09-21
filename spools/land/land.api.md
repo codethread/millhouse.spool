@@ -55,7 +55,7 @@ Two-role handoff for consumer-owned automatic delivery workflows.
 
 
 Review and hand off to a distinct, initially blocked canonical-root finisher.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L152-L165">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L174-L187">Source</a></sub></p>
 
 ## <a name="millhouse.spools.land.autonomous/failure-policy">`failure-policy`</a>
 ``` clojure
@@ -63,8 +63,8 @@ Review and hand off to a distinct, initially blocked canonical-root finisher.
 ```
 Function.
 
-Render the stop-on-failure contract shared by autonomous workers and finishers.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L11-L26">Source</a></sub></p>
+Render the cause-and-attention contract shared by autonomous workers and finishers.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/spools/land/autonomous.clj#L11-L48">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.land.card-actions">millhouse.spools.land.card-actions</a>
