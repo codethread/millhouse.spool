@@ -12,7 +12,7 @@
     card))
 
 (defn review!
-  "Move an optional card into review; an already-reviewed card is unchanged."
+  "Mark an optional card as needing human attention; in_review is unchanged."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]
@@ -26,7 +26,7 @@
   nil)
 
 (defn rework!
-  "Return an optional card to claimed after abort; repeat calls are harmless."
+  "Resume agent work on an optional card in claimed; repeat calls are harmless."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]

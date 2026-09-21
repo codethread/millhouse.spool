@@ -72,9 +72,11 @@
 
 (defn- reach-review-resolution!
   [rt run-id card]
-  (card-actions/review! rt {:card card})
+  (is (= "millhouse.spools.land.card-actions/rework-card!"
+         (attr-get (weaver/show rt (:id (first (workflow/ready run-id)))) :code/fn)))
+  (card-actions/rework! rt {:card card})
   (complete-ready! run-id)
-  (is (= "in_review" (card-lane rt card)))
+  (is (= "claimed" (card-lane rt card)))
   (is (= "Validate the pushed HEAD before review"
          (:title (first (workflow/ready run-id)))))
   (complete-ready! run-id)
@@ -84,6 +86,7 @@
     (is (= "reviewer" (attr-get strand :harness/alias)))
     (is (re-find #"origin/main" (attr-get strand :harness/prompt)))
     (complete-ready! run-id {"harness/result" "No P1/P2 findings."}))
+  (is (= "claimed" (card-lane rt card)))
   (workflow/ready-checkpoint run-id))
 
 (defn- reach-signoff!
@@ -94,6 +97,7 @@
     (workflow/choose! run-id :accepted review-evidence)
     (is (= review-evidence
            (attr-get (weaver/show rt (:id resolution)) :workflow/outcome-input))))
+  (is (= "claimed" (card-lane rt card)))
   (workflow/ready-checkpoint run-id))
 
 (deftest standalone-review-runs-one-agent-before-coordinator-resolution
@@ -198,6 +202,8 @@
             _ (start-land! run-id params)]
         (try
           (reach-signoff! rt run-id card)
+          ;; A blocker requiring a human can arise at any point, including signoff.
+          (card-actions/review! rt {:card card})
           (let [ready (:ready (workflow/choose! run-id :abort
                                                 {:reason "Needs a larger change."}))
                 abort-root (workflow/current-root run-id)]
@@ -235,6 +241,7 @@
       (let [{:keys [root card params]} (card-fixture rt)
             run-id "activated-land"]
         (try
+          (card-actions/review! rt {:card card})
           (workflow/start! run-id :land params)
           (complete-ready! run-id)
           (let [quality
@@ -245,7 +252,7 @@
                  {:timeout-ms (test-support/await-budget-ms)
                   :on-timeout #(throw (ex-info "Land card callback did not resolve" {}))})]
             (is (= "shell" (:gate quality))))
-          (is (= "in_review" (card-lane rt card)))
+          (is (= "claimed" (card-lane rt card)))
           (is (every? (set (keys (workflow/workflows)))
                       [:review :land :land-merge :land-abort]))
           (is (= {:entries [] :lock nil :operation "merge-queue status"}

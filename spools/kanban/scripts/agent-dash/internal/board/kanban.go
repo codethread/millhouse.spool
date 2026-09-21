@@ -61,9 +61,9 @@ var prioColour = map[string]string{"p1": "red", "p2": "yellow"}
 
 func prioDim(p string) bool { return p == "p4" }
 
-// Board lane order is review-first urgency, not the spool's lifecycle order:
-// claimed work in flight, then the cards under review that a coordinator should
-// clear next (in_review), production observation, the actionable queue, then ideas in
+// Board lane order groups attention statuses, not sequential progress:
+// agent work in flight (claimed, including agent review), then human attention
+// (in_review: approvals, blockers, decisions), production observation, the queue, then ideas in
 // refinement. Closed strands sink regardless of their lane column — the
 // vocabulary-reset cutover leaves closed cards on historic kanban/status while
 // live cards carry kanban/lane and freshly closed ones kanban/outcome — and show

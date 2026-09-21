@@ -11,12 +11,15 @@ eligible, and existing dependencies must close before dispatch.
 `auto-human-review` by default. The only allowed workflows are:
 
 - `auto-human-review`: implement, run `make quality`, publish a ready PR, wait
-  for CI, move the card to review, and stop at an explicit human checkpoint.
+  for CI, move the card to `in_review` for human attention, and stop at an explicit human checkpoint.
 - `auto-full-land`: perform the same preparation, then call shared
   `millhouse.spools.land.autonomous/autonomous-land`. Its worker step drives
   `land` through basic review and accepts an independent canonical-root grunt
   against a **separate dependent finisher step** before sign-off. The grunt owns
-  FIFO merge, cleanup, and card completion.
+  FIFO merge, cleanup, and card completion. The card stays `claimed` (in progress)
+  throughout agent review and authorized landing; no human-review lane transition
+  is needed. `in_review` indicates a human approval, blocker, or pending decision,
+  not that work has reached a later stage.
 
 Per-card overrides use `auto-run/seat`, `auto-run/effort`, and
 `auto-run/workflow`. For example:

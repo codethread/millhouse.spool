@@ -52,12 +52,15 @@
                 gates (set (keep #(attr-get % :workflow/gate) strands))]
             (is (= ["Implement and verify the assigned feature"] (mapv :title (:ready result))))
             (is (contains? gates "shell"))
-            (is (contains? gates "code"))
+            (is (= (= name :auto-human-review) (contains? gates "code"))
+                "Only a human handoff moves the card into review")
             (is (not (contains? gates "agent")) "The finisher is an explicit handoff, not an eager agent gate")
             (if (= name :auto-human-review)
               (testing "Human review still stops without any landing delegation"
                 (let [checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
                   (is (= ["reviewed"] (:choices checkpoint)))
+                  (is (= ["millhouse.spools.land.card-actions/review-card!"]
+                         (keep #(attr-get % :code/fn) strands)))
                   (is (str/includes? (:instruction checkpoint) "Do not choose this checkpoint"))
                   (is (not-any? #(str/includes? (or (:instruction %) "") "auto-land-finisher/") views))
                   (is (every? #(str/includes? (:instruction %) "clear gate/error to retry")

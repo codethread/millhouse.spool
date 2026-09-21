@@ -5,8 +5,11 @@
   `feature` card (occasionally grouped under an `epic`), and every agent
   working directly with a user works under a claimed card. All card state
   lives under `kanban/*` attributes; `kanban/lane` is the active board lane
-  (`refinement` -> `pending` -> `claimed` -> `in_review`, optionally `in_production`) and `kanban/outcome`
-  records a finished card's outcome. The
+  (`refinement`, `pending`, `claimed`, `in_review`, or `in_production`) and `kanban/outcome`
+  records a finished card's outcome. Lanes show attention status, not sequential
+  progress: `claimed` means agent work is in progress, including agent review;
+  `in_review` means human attention is needed for review, approval, a blocker,
+  or a pending decision. The
   `kanban/priority` (p1 immediate blocker .. p4 someday, default p3) orders
   lanes and `kanban next`.
 
@@ -1487,15 +1490,22 @@
   (fmt/reflow "
     |Kanban cards are the user-to-agent work board. Every card is a feature by default;
     |an epic is a grouping card whose direct feature children use parent-of. Active cards
-    |move through refinement (awaiting explicit promotion), pending (the actionable queue),
-    |claimed, and in_review before finish closes them with an explicit outcome. Epics are
+    |use refinement (awaiting explicit promotion), pending (the actionable queue),
+    |claimed (in progress: an agent is working, including agent-to-agent review), and
+    |in_review (human review, approval, blocker resolution, or a pending human decision).
+    |These are attention statuses, not sequential stages: in_review is not further along
+    |than claimed and may be needed at any point. Keep agent review and agent decisions
+    |in claimed. Use in_review only when human attention is needed, and record the exact
+    |question or approval needed on the feature or epic. Return to claimed when agent
+    |work resumes. Finish closes cards with an explicit outcome. Epics are
     |never claimed: finish them from refinement or pending; both done and abandoned
     |cascade-close open feature children and tasks, but only abandoned is reversible.
     |Use `strand update ID --attr kanban/lane=LANE` for simple lane changes:
-    |pending for promotion, in_review for review, claimed for rework, and optionally
+    |pending for promotion, in_review for human attention, claimed for agent work, and optionally
     |in_production after merge while deployment validation, observation, or coordinated
-    |release work remains. `finish` closes the card. Direct review to finish remains
-    |available: no guard requires the production lane.
+    |release work remains. `finish` closes the card directly from claimed, in_review,
+    |or in_production when its outcome is satisfied: no guard requires human review
+    |or the production lane.
     |
     |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
     |someday work. `kanban next` returns the highest-priority pending feature, oldest
@@ -1547,13 +1557,20 @@
     |
     |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
     |list` or `strand ready` with the registered kanban queries for generic selection.
-    |Move claimed work to review with `strand update CARD_ID --attr kanban/lane=in_review`.
-    |For rework, use `strand update CARD_ID --attr kanban/lane=claimed`.
+    |Keep all agent progress in claimed, including implementation, testing, agent-to-agent
+    |review, resolving agent findings, and authorized landing. Review means human attention,
+    |not agent review: use `strand update CARD_ID --attr kanban/lane=in_review` when human
+    |review, approval, blocker resolution, or a pending human decision is needed, at any
+    |point in the work. Record the exact question, blocker, or approval needed on the
+    |feature or epic. Lanes are attention statuses, not sequential stages; in_review is
+    |not further along than claimed. When agent work resumes, use
+    |`strand update CARD_ID --attr kanban/lane=claimed`.
     |These are direct attribute patches, not guarded transitions: inspect the current
     |card and follow the lane discipline. Keep using `strand kanban claim`,
     |`strand kanban finish`, and `strand kanban reopen` for their structured behavior.
     |Finish only after the declared outcome is known. Once reviewed work is merged
-    |to main and its outcome is satisfied, finish it directly. From in_review, use
+    |to main and its outcome is satisfied, finish it directly from claimed or in_review.
+    |From either lane, use
     |`strand update CARD_ID --attr kanban/lane=in_production` only when post-merge
     |deployment validation, a settling period, or coordinated release work remains
     |(including related changes in a wider epic). This optional choice is agent policy,

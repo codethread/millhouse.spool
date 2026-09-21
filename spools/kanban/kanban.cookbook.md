@@ -13,7 +13,7 @@ strand kanban note TASK_ID "Deployment observations and detailed check output go
 strand kanban finish CARD_ID
 ```
 
-The update moves an `in_review` card to `in_production`. It is optional agent
+The update moves a `claimed` or `in_review` card to `in_production`. It is optional agent
 policy, not a required completion guard. Record the remaining work and completion
 criterion on the feature or epic where users will see it. Keep detailed observations
 in the task devlog and close each completed task with `strand update TASK_ID --state closed`.
@@ -32,7 +32,8 @@ calls. These recipes combine those surfaces into repeatable operating patterns.
 clear owner, branch, resume point, and review trail.
 
 **Composition.** Select with `next`, claim the card, split work into dependent
-tasks, note the doing-task as work progresses, then expose review and finish.
+tasks, note the doing-task as work progresses, and keep agent review in `claimed`.
+Use `in_review` only when a human needs to act, then resume agent work and finish.
 
 ```sh
 card=$(strand kanban next | jq -r '.next.id')
@@ -49,7 +50,7 @@ strand kanban note "$impl" "Implementation started; tests are next." \
 strand --stdin kanban note "$impl" :stdin --by-identity "$MILLSTRAND_AGENT_ID" --kind review-dump <<'NOTE'
 Validation:
 - clojure -M:test
-Next: hand the branch to review.
+Next: get agent review while the card stays claimed.
 NOTE
 
 strand update "$impl" --state closed
@@ -57,14 +58,15 @@ strand kanban claim "$docs" --owner "$MILLSTRAND_AGENT_ID"
 # Once documentation is complete:
 strand update "$docs" --state closed
 
+# Agent review and resolving agent findings stay in claimed.
+# Only if human approval or a human decision is needed:
+strand kanban note "$card" "Human decision needed: confirm the proposed behavior before landing." --kind decision
 strand update "$card" --attr kanban/lane=in_review
-# If review requests changes:
-strand kanban note "$card" "Review found changes needed before landing." --kind summary
+# Once the human responds and agent work resumes:
 strand update "$card" --attr kanban/lane=claimed
-# After addressing the findings:
-strand update "$card" --attr kanban/lane=in_review
 
-strand kanban note "$card" "Handover: implementation reviewed and ready to land." \
+# After reviewed work is merged and the outcome is satisfied:
+strand kanban note "$card" "Implementation reviewed and landed; outcome verified." \
   --by-identity "$MILLSTRAND_AGENT_ID" --kind summary
 strand kanban finish "$card" --outcome done
 ```
@@ -80,10 +82,11 @@ doing-task and reuse the same dependency DAG that determines readiness. Closing
 tasks as they complete unblocks dependent work immediately. Task notes are the
 devlog for details and bulk findings; `board` and `card` surface the newest note
 for a cold-start handoff. Important user-visible notes always belong on the epic
-or feature, not only on tasks users will rarely see. Review is a visible lane
-update, and the final card note records the
-handoff after the branch is ready rather than pretending that a closed card is
-self-explanatory.
+or feature, not only on tasks users will rarely see. Review is a human-attention
+status, not a later progress stage: a blocker or pending human decision can need
+`in_review` even before implementation. Agent-resolvable blockers and agent
+reviews stay in `claimed`. The final card note records the outcome rather than
+pretending that a closed card is self-explanatory.
 
 Simple lane changes are direct `strand update` patches, not guarded Kanban
 transitions. Inspect the current card and follow the lane discipline. Promote a
@@ -123,14 +126,15 @@ serve only that epic's direct pending features.
 ## 3. Resume work and collect review across cards
 
 **Situation.** A new agent has no conversation context, while several branches
-may have review work ready at once.
+may need human attention at once.
 
 **Composition.** The identity query is state-neutral and selects direct claim
 targets plus reported cards from durable evidence. The Clojure `identity-work`
 helper expands those targets to containing epics, inherited tasks, and all
 matching claim records. Open the feature's resume view and use the cross-card
-review frontier for coordination. Mark review strands with an open review
-signal such as `kind=review`.
+human-review frontier for coordination. Mark human-attention strands with an
+open review signal such as `kind=review`, `hitl=true`, or a human checkpoint.
+Do not stamp agent reviews with these human-attention signals.
 
 ```sh
 strand list --query kanban-identity-work \
@@ -140,7 +144,7 @@ strand ready --query kanban-identity-work \
 strand kanban board | jq '{claimed, in_review, needs_review: .["needs-review"]}'
 strand kanban card "$card" | jq '{card, reporter, ownership, tasks, notes, active_work: .["active-work"], ready, related}'
 
-review=$(strand add "Review the implementation" --attr kind=review | jq -r '.id')
+review=$(strand add "Human approval of the implementation" --attr kind=review | jq -r '.id')
 strand update "$card" --edge parent-of:"$review"
 strand update "$review" --edge depends-on:"$impl"
 

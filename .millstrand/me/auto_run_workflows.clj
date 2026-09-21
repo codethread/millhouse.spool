@@ -79,20 +79,18 @@
        (shell-gate :ci "Wait for the PR checks" [:prepare-pr]
                    (fn [{:keys [branch]}]
                      (land-support/pr-checks-argv "required" branch))
-                   2100 failure-instruction)
-       (workflow/gate
-        :review-card "Move the verified feature into review" :code
-        :depends-on [:ci]
-        :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
-                     "code/params" (fn [{:keys [card]}] {:card card})}
-        (if autonomous?
-          failure-instruction
-          "This is an automatic card transition after the review-package checks."))]
+                   2100 failure-instruction)]
       (if autonomous?
         [(workflow/call :land #'autonomous/autonomous-land {}
-                        :depends-on [:review-card]
+                        :depends-on [:ci]
                         :title "Review and hand off autonomous landing")]
-        [(workflow/checkpoint
+        [(workflow/gate
+          :review-card "Request human review of the verified feature" :code
+          :depends-on [:ci]
+          :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
+                       "code/params" (fn [{:keys [card]}] {:card card})}
+          "This is an automatic card transition at the human-attention boundary.")
+         (workflow/checkpoint
           :human-acceptance "Human review: return the passing PR and stop"
           :depends-on [:review-card]
           :kind :human
