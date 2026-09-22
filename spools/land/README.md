@@ -48,24 +48,6 @@ Each target repository must own an executable `.millstrand/land-quality.sh`. It 
 
 Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. No Millstrand warm-REPL behavior is hardcoded.
 
-## Autonomous delivery handoff
-
-Consumers opting into automatic full landing can call
-`millhouse.spools.land.autonomous/autonomous-land` after their quality, CI and
-review-package gates. It reuses `land` without changing its review, sign-off or
-FIFO semantics. The consumer supplies `card`, `feature`, `branch` and `worktree`,
-plus the existing auto-run card receipts and a Harnesses-compatible tracked
-`grunt` seat.
-
-The call expands into distinct `handoff-worker` and dependent `finisher` steps.
-A recovered worker can reserve the former without occupying the target it must
-hand off. The finisher is accepted while blocked, then becomes launch-ready when
-the worker records both receipts and closes only its own step. Its instructions
-require successful worker settlement before sign-off and prohibit delegation,
-including during recovery. This is an agent instruction/graph contract, not a
-new runtime admission guard. The provider's single-active-run and immutable
-request checks remain authoritative. See the [cookbook](./land.cookbook.md).
-
 ## Activation
 
 Add the Land coordinate. Its root depends on the sibling Workflow and Kanban roots:

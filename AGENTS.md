@@ -21,9 +21,8 @@
 - `auto-human-review` stops at its human checkpoint. `auto-full-land` hands
   shared landing to an independent finisher before sign-off; the worker must not
   approve sign-off, merge, remove its worktree, or finish the card.
-- On an autonomous delivery failure, add `auto-run-failure`, record evidence and
-  retained resources on the card, and stop without retrying or withdrawing a
-  merge reservation.
+- Follow Codethread's canonical agent blocker contract; repository policy adds
+  only the full-land custody boundaries.
 
 ## Testing
 

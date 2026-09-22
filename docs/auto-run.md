@@ -13,7 +13,7 @@ eligible, and existing dependencies must close before dispatch.
 - `auto-human-review`: implement, run `make quality`, publish a ready PR, wait
   for CI, move the card to `in_review` for human attention, and stop at an explicit human checkpoint.
 - `auto-full-land`: perform the same preparation, then call shared
-  `millhouse.spools.land.autonomous/autonomous-land`. Its worker step drives
+  `ct.spools.codethread.auto-run-land/autonomous-land`. Its worker step drives
   `land` through basic review and accepts an independent canonical-root grunt
   against a **separate dependent finisher step** before sign-off. The grunt owns
   FIFO merge, cleanup, and card completion. The card stays `claimed` (in progress)
@@ -46,11 +46,10 @@ before completing the worker step. The accepted finisher is blocked until that
 completion; it then waits for the original worker to settle successfully. The
 worker returns immediately and never completes the finisher step.
 
-On an observed autonomous gate, handoff, or landing failure, add
-`auto-run-failure`, note the command and evidence plus retained resources and
-merge reservation, and stop with the card open. Do not automatically retry,
-replace the worker, clear gate errors, or withdraw a merge turn. Normal bounded
-queue-wait timeouts are not failures.
+Follow Codethread's canonical agent blocker contract. Full-land failures leave
+the delivery open and retain owned resources and merge reservations; do not retry,
+replace workers, clear gate errors, or withdraw a merge turn without explicit
+recovery authorization. Normal bounded queue waits are not failures.
 
 ## Authorized recovery
 

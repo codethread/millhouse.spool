@@ -3,11 +3,12 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [clojure.data.json :as json]
             [clojure.test :refer [deftest is run-tests testing]]
             [ct.spools.codethread.auto-run :as auto-run]
+            [ct.spools.codethread.auto-run-land :as autonomous]
             [ct.spools.harnesses :as harnesses]
             [ct.spools.harnesses.assignment :as assignment]
-            [millhouse.spools.land.autonomous :as autonomous]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -40,6 +41,16 @@
       (is (= "auto-human-review" (get-in status [:config :workflow])))
       (is (empty? (:cards status)))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (let [card (weaver/add! rt {:title "Blocked work"})
+            evidence (weaver/add! rt {:title "Decision context"})]
+        (weaver/op! rt 'weave
+                    ["--pattern" "auto-run-needs-decision" "--input"
+                     (json/write-str {:strand (:id card) :evidence (:id evidence)})])
+        (let [reported (weaver/show rt (:id card))]
+          (is (= "needs-decision" (attr-get reported :auto-run/agent-blocked-status)))
+          (is (= (:id evidence) (attr-get reported :auto-run/agent-evidence)))
+          (is (= "true" (attr-get reported :kanban.label/agent-blocked))
+              "The repository activates the reporting patterns and label hook")))
       (current/with-runtime rt
         (doseq [name [:auto-human-review :auto-full-land]]
           (let [run-id (str "test-" (clojure.core/name name))
@@ -96,10 +107,14 @@
                                     "Verify land is done and the card is closed with outcome done"]]
                     (is (str/includes? (:instruction finisher) required) required))
                   (is (not (str/includes? (:instruction finisher) "agent run grunt")))
-                  (testing "Failed autonomous gates preserve work for manual intervention"
+                  (testing "The separately launched finisher receives shared signalling policy"
+                    (is (str/includes? (:instruction finisher)
+                                       "auto-run-needs-decision"))
+                    (is (str/includes? (:instruction finisher)
+                                       "auto-run-unknown-failure")))
+                  (testing "Full-land custody policy preserves failed work"
                     (doseq [view (concat [handoff finisher] (filter :gate views))]
-                      (is (str/includes? (:instruction view) "`auto-run-failure` to card fixture-card"))
-                      (is (str/includes? (:instruction view) "Stop and leave the card open"))
+                      (is (str/includes? (:instruction view) "Leave card fixture-card open"))
                       (is (str/includes? (:instruction view) "withdraw the merge turn")))))))))))))
 
 (deftest recovery-worker-does-not-reserve-its-finisher-target
