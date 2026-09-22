@@ -43,6 +43,9 @@ nav:
   - Home: index.md
   - Automatic delivery: docs/auto-run.md
   - Spools:
+      - Auto-run:
+          - Contract: spools/auto-run/README.md
+          - API: spools/auto-run/auto-run.api.md
       - Workflow:
           - Contract: spools/workflow/README.md
           - Cookbook: spools/workflow/workflow.cookbook.md

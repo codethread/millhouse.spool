@@ -849,8 +849,8 @@
                 :expected-format "ISO-8601 Instant string"}
                (ex-data failure)))))))
 
-(def ^:private canonical-m0-producer
-  "09a2cad2ab4ee203051ed3cc66bb0a177105a979")
+(def ^:private canonical-producer
+  "91361ef09eda4d09a24515a6ba3f99aa3090525a")
 
 (defn- millstrand-source-root []
   (test-alpha/spool-checkout-root "millstrand/api/process/alpha.clj"))
@@ -918,7 +918,7 @@
 
 (defn- weaver-status! [mill source state-home workspace]
   (json/read-str (mill-command! mill source state-home workspace
-                                ["weaver" "status"])
+                                ["weaver" "status" "--json"])
                  :key-fn keyword))
 
 (defn- build-mill! [source target state-home]
@@ -1017,11 +1017,11 @@
         after-probe (atom nil)]
     (try
       (run-command! ["mkfifo" (.getCanonicalPath release-fifo)] nil {} nil)
-      (is (= canonical-m0-producer
+      (is (= canonical-producer
              (str/trim (run-command! ["git" "-C" (.getCanonicalPath (io/file source))
                                       "rev-parse" "HEAD"]
                                      nil {} nil)))
-          "the acceptance world is built from the canonical M0 producer")
+          "the acceptance world is built from the pinned producer")
       (let [mill (build-mill! source mill-target state-home)
             workspace-path (.getCanonicalPath workspace)]
         (reset! mill-process (start-mill! mill source state-home mill-log))

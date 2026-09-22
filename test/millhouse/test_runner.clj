@@ -7,7 +7,8 @@
 
 (def test-namespaces
   "All test namespaces, in stable reporting order."
-  '[millhouse.spools.millstrand-workflows-test
+  '[millhouse.spools.auto-run-test
+    millhouse.spools.millstrand-workflows-test
     millhouse.authoring-forms-test
     millhouse.consumer-test
     millhouse.executor-discovery-test
@@ -32,7 +33,8 @@
   during weaver startup, before the test body can provide an in-process
   activation seam. Keep that namespace out of the parallel pool so its startup
   reloads cannot overlap another fixture's shared JVM namespace reloads."
-  #{'millhouse.consumer-test
+  #{'millhouse.spools.auto-run-test
+    'millhouse.consumer-test
     'millhouse.spools.executors.code-test
     'millhouse.spools.kanban-test
     'millhouse.spools.land.merge-queue-test

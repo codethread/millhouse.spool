@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: codethread/millstrand
-          ref: 09a2cad2ab4ee203051ed3cc66bb0a177105a979
+          ref: 91361ef09eda4d09a24515a6ba3f99aa3090525a
           path: skein-src
       - uses: actions/setup-java@v4
         with:
@@ -70,6 +70,7 @@ jobs:
               millhouse.spools.identity-test
           - shard: runtime
             namespaces: >-
+              millhouse.spools.auto-run-test
               millhouse.spools.workflow-cli-test
               millhouse.chime-test
               millhouse.spools.kanban-test
@@ -85,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: codethread/millstrand
-          ref: 09a2cad2ab4ee203051ed3cc66bb0a177105a979
+          ref: 91361ef09eda4d09a24515a6ba3f99aa3090525a
           path: skein-src
       - uses: actions/setup-java@v4
         with:

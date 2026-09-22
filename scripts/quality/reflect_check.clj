@@ -4,7 +4,8 @@
             [clojure.string :as str]))
 
 (def ^:private roots
-  {"spools/chime/src" "millhouse/spools"
+  {"spools/auto-run/src" "millhouse/spools"
+   "spools/chime/src" "millhouse/spools"
    "spools/cron/src" "millhouse/spools"
    "spools/workflow/src" "millhouse/spools"
    "spools/kanban/src" "millhouse/spools"
@@ -54,6 +55,9 @@
                            (.write original-err value offset length))))
                       (flush [] (.flush original-err))
                       (close [] nil))]
+    ;; Load dependencies before checking owned namespaces. Their source is
+    ;; validated by their producer; reload every local namespace below.
+    (run! require namespaces)
     (try
       (binding [*warn-on-reflection* true
                 *compile-path* (.getAbsolutePath compile-dir)

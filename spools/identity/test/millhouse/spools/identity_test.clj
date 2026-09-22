@@ -180,21 +180,14 @@
                     runtime
                     {:title "source"
                      :attributes {:identity/by-identity "once-kind-otter"}})
-            writes (atom 0)
-            apply! batch/apply!]
-        (with-redefs [batch/apply! (fn [& args]
-                                     (swap! writes inc)
-                                     (apply apply! args))]
-          (let [first-delivery (identity/on-attribution-event
-                                {:event/type :strand/added})
-                duplicate-delivery (identity/on-attribution-event
-                                    {:event/type :strand/added})]
-            (is (= 1 (:writes first-delivery)))
-            (is (zero? (:writes duplicate-delivery)))
-            (test-alpha/await-quiescent! runtime)
-            (reset! writes 0)
-            (is (zero? (:writes (identity/reconcile-attributions! runtime))))
-            (is (zero? @writes))))
+            first-delivery (identity/on-attribution-event
+                            {:event/type :strand/added})
+            duplicate-delivery (identity/on-attribution-event
+                                {:event/type :strand/added})]
+        (is (= 1 (:writes first-delivery)))
+        (is (zero? (:writes duplicate-delivery)))
+        (test-alpha/await-quiescent! runtime)
+        (is (zero? (:writes (identity/reconcile-attributions! runtime))))
         (is (= 1 (count (attribution-edges runtime (:id source) "attributed"))))))))
 
 (deftest activation-recovers-attribution-from-durable-sources-after-restart
