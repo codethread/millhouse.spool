@@ -1,5 +1,6 @@
 {:spool/format 1
- :roots {millhouse.spools/workflow {:root "spools/workflow"}
+ :roots {millhouse.spools/auto-run {:root "spools/auto-run"}
+         millhouse.spools/workflow {:root "spools/workflow"}
          millhouse.spools/chime {:root "spools/chime"}
          millhouse.spools/cron {:root "spools/cron"}
          millhouse.spools/land {:root "spools/land"}

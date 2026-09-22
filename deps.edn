@@ -4,6 +4,7 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "09a2cad2ab4ee203051ed3cc66bb0a177105a979"
    :deps/root "."}
+  millhouse.spools/auto-run {:local/root "spools/auto-run"}
   millhouse.spools/chime {:local/root "spools/chime"}
   millhouse.spools/cron {:local/root "spools/cron"}
   millhouse.spools/identity {:local/root "spools/identity"}
@@ -16,6 +17,7 @@
    :main-opts
    ["-m" "cljfmt.main" "check"
     "scripts" "test"
+    "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
@@ -27,6 +29,7 @@
    :main-opts
    ["-m" "cljfmt.main" "fix"
     "scripts" "test"
+    "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
@@ -35,11 +38,13 @@
     "spools/workflow/src" "spools/workflow/test"]}
   :api-docs
   {:extra-deps
-   {io.github.borkdude/quickdoc {:git/tag "v0.2.6" :git/sha "ce86780"}}
+   {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}
+    io.github.borkdude/quickdoc {:git/tag "v0.2.6" :git/sha "ce86780"}}
    :main-opts ["scripts/generate_api_docs.clj"]}
   :reflect-check
   {:extra-paths
    ["test"
+    "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"
@@ -50,6 +55,7 @@
   :lint/conventions
   {:extra-paths
    ["test"
+    "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"
@@ -62,6 +68,7 @@
    :main-opts
    ["-m" "noahtheduke.splint" "--output" "clj-kondo"
     "scripts" "test"
+    "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
     "spools/identity/src" "spools/identity/test"
@@ -71,6 +78,7 @@
   :test
   {:extra-paths
    ["test"
+    "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
     "spools/identity/test"

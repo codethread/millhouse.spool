@@ -1,9 +1,9 @@
 (ns millhouse.auto-run
   "Activate bounded automatic pickup using this repository's delivery workflows."
   (:require [clojure.java.io :as io]
-            [ct.spools.codethread.auto-run :as auto-run]
-            [ct.spools.codethread.auto-run-reporting :as reporting]
-            [ct.spools.codethread.auto-run-worktree]
+            [millhouse.spools.auto-run :as auto-run]
+            [millhouse.spools.auto-run-reporting :as reporting]
+            [millhouse.spools.auto-run-worktree]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -23,7 +23,7 @@
     :effort "low"
     :workflow "auto-human-review"
     :workflows #{"auto-human-review" "auto-full-land"}
-    :prepare 'ct.spools.codethread.auto-run-worktree/prepare!
+    :prepare 'millhouse.spools.auto-run-worktree/prepare!
     :enabled? true
     :max-running 2
     :interval-ms 15000}))

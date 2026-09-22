@@ -70,6 +70,7 @@ jobs:
               millhouse.spools.identity-test
           - shard: runtime
             namespaces: >-
+              millhouse.spools.auto-run-test
               millhouse.spools.workflow-cli-test
               millhouse.chime-test
               millhouse.spools.kanban-test

@@ -4,7 +4,13 @@
 (def git-branch "main")
 
 (def spool-docs
-  [{:source ["spools/workflow/src/millhouse/spools/workflow.clj"
+  [{:source ["spools/auto-run/src/millhouse/spools/auto_run.clj"
+             "spools/auto-run/src/millhouse/spools/auto_run_explain.clj"
+             "spools/auto-run/src/millhouse/spools/auto_run_reporting.clj"
+             "spools/auto-run/src/millhouse/spools/auto_run_worktree.clj"
+             "spools/auto-run/src/millhouse/spools/auto_run_land.clj"]
+    :outfile "spools/auto-run/auto-run.api.md"}
+   {:source ["spools/workflow/src/millhouse/spools/workflow.clj"
              "spools/workflow/src/millhouse/spools/workflow/validation.clj"]
     :outfile "spools/workflow/workflow.api.md"}
    {:source "spools/chime/src/millhouse/spools/chime.clj"

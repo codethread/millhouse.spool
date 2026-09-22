@@ -3,6 +3,7 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "91361ef09eda4d09a24515a6ba3f99aa3090525a"
    :deps/root "spools/batteries"}
+  millhouse.spools/auto-run {:local/root "../spools/auto-run"}
   millhouse.spools/identity {:local/root "../spools/identity"}
   millhouse.spools/land {:local/root "../spools/land"}
   millhouse.spools/workflow {:local/root "../spools/workflow"}
