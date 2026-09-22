@@ -2,13 +2,16 @@
   "Disposable Weaver tests for card admission and durable assignment receipts."
   (:require [clojure.test :refer [deftest is testing]]
             [millhouse.spools.auto-run :as auto-run]
+            [millhouse.spools.auto-run-land :as autonomous]
             [millhouse.spools.auto-run-reporting :as reporting]
             [millhouse.spools.auto-run-worktree :as worktree]
             [ct.spools.harnesses :as harnesses]
+            [ct.spools.harnesses.assignment :as assignment]
             [millhouse.spools.kanban :as kanban]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.current.alpha :as current]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.spool.alpha :refer [attr-get]]
@@ -136,6 +139,50 @@
   (weaver/update! rt (:id card)
                   {:attributes {:kanban/lane "pending" :owner nil}})
   card)
+
+(defn- role-step [strands role]
+  (first (filter #(= role (attr-get % :auto-run/role)) strands)))
+
+(deftest autonomous-land-reserves-an-immutable-blocked-finisher
+  (with-world
+    (fn [rt config]
+      (current/with-runtime rt
+        (let [card (card! rt {})
+              run-id "autonomous-land-handoff"
+              result (workflow/start!
+                      run-id
+                      (workflow/workflow
+                       "Delivery handoff"
+                       (workflow/call :land #'autonomous/autonomous-land {}))
+                      {:card (:id card) :feature "A bounded feature"
+                       :branch "auto/feature" :worktree (:repo config)})
+              root (workflow/current-root run-id)
+              strands (:strands (graph/subgraph rt [(:id root)]))
+              worker-step (role-step strands "handoff-worker")
+              finisher-step (role-step strands "finisher")
+              request {:harness :fake :mode :headless :cwd (:repo config)
+                       :prompt "Disposable handoff run"}
+              worker (harnesses/create! rt (assoc request :target (:id worker-step)))
+              finisher-request (assoc request
+                                      :target (:id finisher-step)
+                                      :request-id (str "auto-land-finisher/"
+                                                       (:id finisher-step)))
+              finisher (harnesses/create! rt finisher-request)]
+          (is (= [(:id worker-step)] (mapv :id (:ready result))))
+          (is (not= (:id worker-step) (:id finisher-step)))
+          (is (false? (boolean (assignment/launch-ready? rt finisher))))
+          (is (= (:id finisher) (:id (harnesses/create! rt finisher-request))))
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #"Request id is already held by a different harness request"
+               (harnesses/create! rt (assoc finisher-request :prompt "Changed payload"))))
+          (weaver/update! rt (:id finisher-step)
+                          {:attributes {:auto-run/worker-run-id (:id worker)
+                                        :auto-run/finisher-run-id (:id finisher)}})
+          (is (= [(:id finisher-step)]
+                 (mapv :id (:ready (workflow/complete! run-id
+                                                       {:by-identity "fixture-worker"})))))
+          (is (assignment/launch-ready? rt finisher)))))))
 
 (deftest eligibility-uses-current-ownership-not-scalar-or-participation-history
   (with-world

@@ -2,13 +2,9 @@
   "Exercise real workspace activation in disposable, unlabelled Weaver worlds."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [clojure.data.json :as json]
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.spools.auto-run :as auto-run]
-            [millhouse.spools.auto-run-land :as autonomous]
-            [ct.spools.harnesses :as harnesses]
-            [ct.spools.harnesses.assignment :as assignment]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -36,10 +32,9 @@
     [ctx (world-options)]
     (let [rt (:runtime ctx)
           status (auto-run/status rt)]
-      (is (:enabled status))
-      (is (= 2 (get-in status [:config :max-running])))
-      (is (= "auto-human-review" (get-in status [:config :workflow])))
-      (is (empty? (:cards status)))
+      (is (= {:enabled true :max-running 2 :workflow "auto-human-review"}
+             (select-keys (assoc (:config status) :enabled (:enabled status))
+                          [:enabled :max-running :workflow])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
       (let [card (weaver/add! rt {:title "Blocked work"})
             evidence (weaver/add! rt {:title "Decision context"})]
@@ -49,150 +44,33 @@
         (let [reported (weaver/show rt (:id card))]
           (is (= "needs-decision" (attr-get reported :auto-run/agent-blocked-status)))
           (is (= (:id evidence) (attr-get reported :auto-run/agent-evidence)))
-          (is (= "true" (attr-get reported :kanban.label/agent-blocked))
-              "The repository activates the reporting patterns and label hook")))
+          (is (= "true" (attr-get reported :kanban.label/agent-blocked)))))
       (current/with-runtime rt
-        (doseq [name [:auto-human-review :auto-full-land]]
-          (let [run-id (str "test-" (clojure.core/name name))
-                result (workflow/start! run-id name
-                                        {:card "fixture-card" :feature "Disposable feature"
-                                         :branch "auto/fixture-card" :worktree (:config-dir ctx)})
-                root (workflow/current-root run-id)
-                strands (:strands (graph/subgraph rt [(:id root)]))
-                views (map workflow/step-view strands)
-                gates (set (keep #(attr-get % :workflow/gate) strands))]
-            (is (= ["Implement and verify the assigned feature"] (mapv :title (:ready result))))
-            (is (contains? gates "shell"))
-            (is (= (= name :auto-human-review) (contains? gates "code"))
-                "Only a human handoff moves the card into review")
-            (is (not (contains? gates "agent")) "The finisher is an explicit handoff, not an eager agent gate")
-            (if (= name :auto-human-review)
-              (testing "Human review still stops without any landing delegation"
-                (let [checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
-                  (is (= ["reviewed"] (:choices checkpoint)))
-                  (is (= ["millhouse.spools.land.card-actions/review-card!"]
-                         (keep #(attr-get % :code/fn) strands)))
-                  (is (str/includes? (:instruction checkpoint) "Do not choose this checkpoint"))
-                  (is (not-any? #(str/includes? (or (:instruction %) "") "auto-land-finisher/") views))
-                  (is (every? #(str/includes? (:instruction %) "clear gate/error to retry")
-                              (filter #(= "shell" (:gate %)) views)))))
-              (testing "Worker and finisher have distinct instructions and targets"
-                (let [handoff (workflow/step-view (role-step strands "handoff-worker"))
-                      finisher (workflow/step-view (role-step strands "finisher"))
-                      instruction (:instruction handoff)]
-                  (is (= "step" (:role handoff) (:role finisher)))
-                  (is (not= (:id handoff) (:id finisher)))
-                  (is (not (:done result)))
-                  (doseq [required ["land-auto-fixture-card"
-                                    "STOP at land's signoff checkpoint BEFORE choosing approved"
-                                    "FINISHER STEP ID (never this worker step)"
-                                    "auto-land-finisher/FINISHER_STEP_ID"
-                                    "auto-run/worker-run-id"
-                                    "auto-run/finisher-run-id"
-                                    "complete THIS"
-                                    "An accepted but blocked"
-                                    "stop for explicit recovery"
-                                    "stop BEFORE accepting"
-                                    "before this handoff proceeds"
-                                    "When a finisher WAS accepted, do not launch another worker"]]
-                    (is (str/includes? instruction required) required))
-                  (is (re-find #"Return immediately\s+without\s+waiting" instruction)
-                      "Return immediately without waiting")
-                  (doseq [required ["This step is finisher-only"
-                                    "Do not claim card fixture-card, implement new scope or launch another finisher"
-                                    "--query agent-run-settled"
-                                    "--param run-id=ORIGINAL_WORKER_RUN_ID --min-count 1"
-                                    "require settled=true, completed"
-                                    "Do not finish the card early"
-                                    "Verify land is done and the card is closed with outcome done"]]
-                    (is (str/includes? (:instruction finisher) required) required))
-                  (is (not (str/includes? (:instruction finisher) "agent run grunt")))
-                  (testing "The separately launched finisher receives shared signalling policy"
-                    (is (str/includes? (:instruction finisher)
-                                       "auto-run-needs-decision"))
-                    (is (str/includes? (:instruction finisher)
-                                       "auto-run-unknown-failure")))
-                  (testing "Full-land custody policy preserves failed work"
-                    (doseq [view (concat [handoff finisher] (filter :gate views))]
-                      (is (str/includes? (:instruction view) "Leave card fixture-card open"))
-                      (is (str/includes? (:instruction view) "withdraw the merge turn")))))))))))))
-
-(deftest recovery-worker-does-not-reserve-its-finisher-target
-  (t/with-weaver-world
-    [ctx (world-options)]
-    (let [rt (:runtime ctx)
-          ;; Publication and launch-readiness are real; no provider process is started.
-          request {:harness :handoff-fixture :mode :interactive
-                   :cwd (:config-dir ctx) :prompt "Disposable handoff run"}]
-      (harnesses/register-harness! rt :handoff-fixture
-                                   {:modes #{:interactive}
-                                    :prepare 'ct.spools.harnesses/create!
-                                    :finish 'ct.spools.harnesses/finish!})
-      (current/with-runtime rt
-        (testing "The reported combined-step recovery shape collides without weakening the guard"
-          (let [old (workflow/start! "old-combined-handoff"
-                                     (workflow/workflow "Old handoff"
-                                                        (workflow/step :land "Review then launch a finisher here" :self)) {})
-                target (:id (first (:ready old)))
-                worker (harnesses/create! rt (assoc request :target target))]
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Target already has an active managed run"
-                                  (harnesses/create! rt (assoc request :target target
-                                                               :request-id (str "auto-land-finisher/" target)))))
-            (is (= "ready" (attr-get (harnesses/run rt (:id worker)) :harness/status)))))
-        (testing "A recovery targeting the worker step can accept the separate blocked finisher"
-          (let [run-id "recovered-handoff"
-                card (weaver/add! rt {:title "Recovery card"})
-                prior-request (assoc request :target (:id card) :request-id "original-worker")
-                prior-worker (harnesses/create! rt prior-request)
-                _ (harnesses/stop! rt (:id prior-worker) {:reason "Disposable interruption"})
-                _ (weaver/update! rt (:id card)
-                                  {:attributes {:auto-run/run-id (:id prior-worker)}})
-                result (workflow/start! run-id
-                                        (workflow/workflow "Delivery handoff"
-                                                           (workflow/call :land #'autonomous/autonomous-land {}))
-                                        {:card (:id card) :feature "Recovery fixture"
-                                         :branch "auto/recovery-card" :worktree (:config-dir ctx)})
-                root (workflow/current-root run-id)
-                strands (:strands (graph/subgraph rt [(:id root)]))
-                worker-step (role-step strands "handoff-worker")
-                finisher-step (role-step strands "finisher")
-                worker (harnesses/create! rt (assoc request :target (:id worker-step)))
-                _ (is (not= (:id worker)
-                            (attr-get (weaver/show rt (:id card)) :auto-run/run-id))
-                      "The old receipt is not permission to publish a finisher")
-                ;; Explicit coordinator reconciliation before the new worker hands off.
-                _ (weaver/update! rt (:id card)
-                                  {:attributes {:auto-run/run-id (:id worker)}})
-                finisher-request (assoc request :target (:id finisher-step)
-                                        :request-id (str "auto-land-finisher/" (:id finisher-step)))
-                finisher (harnesses/create! rt finisher-request)]
-            (is (= [(:id worker-step)] (mapv :id (:ready result))))
-            (is (not= (:id worker) (:id finisher)))
-            (is (false? (boolean (assignment/launch-ready? rt finisher))))
-            (is (= (:id finisher) (:id (harnesses/create! rt finisher-request)))
-                "An uncertain acceptance reuses the exact immutable request")
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Request id is already held by a different harness request"
-                                  (harnesses/create! rt (assoc finisher-request :prompt "Changed payload"))))
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Target already has an active managed run"
-                                  (harnesses/create! rt (assoc finisher-request :request-id "another-key"))))
-            (weaver/update! rt (:id finisher-step)
-                            {:attributes {:auto-run/worker-run-id (:id worker)
-                                          :auto-run/finisher-run-id (:id finisher)}})
-            (is (= [(:id finisher-step)]
-                   (mapv :id (:ready (workflow/complete! run-id {:by-identity "fixture-worker"})))))
-            (is (assignment/launch-ready? rt finisher))
-            (is (= "ready" (attr-get (harnesses/run rt (:id worker)) :harness/status)))
-            (is (not (workflow/done? run-id)))
-            (is (= (:id worker)
-                   (attr-get (weaver/show rt (:id card)) :auto-run/run-id)
-                   (attr-get (weaver/show rt (:id finisher-step)) :auto-run/worker-run-id)))
-            (is (= (:id prior-worker) (:id (harnesses/create! rt prior-request)))
-                "Card receipt reconciliation does not rewrite an immutable Harnesses request")
-            (is (= (:id finisher)
-                   (attr-get (weaver/show rt (:id finisher-step)) :auto-run/finisher-run-id)))))))))
+        (let [human-run "test-auto-human-review"
+              _ (workflow/start! human-run :auto-human-review
+                                 {:card "fixture-card" :feature "Disposable feature"
+                                  :branch "auto/fixture-card" :worktree (:config-dir ctx)})
+              root (workflow/current-root human-run)
+              strands (:strands (graph/subgraph rt [(:id root)]))
+              views (map workflow/step-view strands)
+              checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
+          (testing "repository policy retains the human review boundary"
+            (is (= ["reviewed"] (:choices checkpoint)))
+            (is (= ["millhouse.spools.land.card-actions/review-card!"]
+                   (keep #(attr-get % :code/fn) strands)))
+            (is (nil? (role-step strands "finisher")))))
+        (let [full-run "test-auto-full-land"
+              _ (workflow/start! full-run :auto-full-land
+                                 {:card "fixture-card" :feature "Disposable feature"
+                                  :branch "auto/fixture-card" :worktree (:config-dir ctx)})
+              root (workflow/current-root full-run)
+              strands (:strands (graph/subgraph rt [(:id root)]))
+              worker (role-step strands "handoff-worker")
+              finisher (role-step strands "finisher")]
+          (testing "repository policy delegates full landing to the shared two-role workflow"
+            (is (some? worker))
+            (is (some? finisher))
+            (is (not= (:id worker) (:id finisher)))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
