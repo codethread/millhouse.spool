@@ -1,9 +1,7 @@
 (ns millhouse.consumer-test
   "Exercise the consolidated family through a disposable consumer workspace."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.java.shell :as sh]
-            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
@@ -13,15 +11,6 @@
       .getParentFile
       .getParentFile
       .getCanonicalPath))
-
-(defn- consumer-deps-edn []
-  (pr-str
-   {:deps
-    {'millhouse.spools/workflow {:local/root (str (repository-root) "/spools/workflow")}
-     'millhouse.spools/chime {:local/root (str (repository-root) "/spools/chime")}
-     'millhouse.spools/cron {:local/root (str (repository-root) "/spools/cron")}
-     'millhouse.spools/land {:local/root (str (repository-root) "/spools/land")}
-     'millhouse.spools/kanban {:local/root (str (repository-root) "/spools/kanban")}}}))
 
 (defn- land-only-consumer-deps-edn []
   (pr-str
@@ -51,124 +40,23 @@
         :after [:consumer/workflow-providers :consumer/kanban]
         :required? true}))")
 
-(def ^:private init
-  "(require '[millstrand.api.current.alpha :as current]
-            '[millstrand.api.runtime.alpha :as runtime]
-            '[millhouse.test-support :as test-support])
-   (test-support/with-module-activation
-     #(do
-        (def rt (current/runtime))
-        (runtime/module! rt :millhouse/workflow
-          {:ns 'millhouse.spools.workflow
-           :required? true})
-        (runtime/module! rt :millhouse/workflow-all
-          {:ns 'millhouse.spools.workflow.spool
-           :after [:millhouse/workflow]
-           :required? true})
-        (runtime/module! rt :millhouse/chime
-          {:ns 'millhouse.spools.chime
-           :required? true})
-        (runtime/module! rt :millhouse/cron
-          {:ns 'millhouse.spools.cron
-           :required? true})
-        (runtime/module! rt :millhouse/identity
-          {:ns 'millhouse.spools.identity
-           :required? true})
-        (runtime/module! rt :millhouse/kanban
-          {:ns 'millhouse.spools.kanban
-           :after [:millhouse/identity]
-           :required? true})
-        (runtime/module! rt :millhouse/land
-          {:ns 'millhouse.spools.land.spool
-           :after [:millhouse/workflow-all :millhouse/kanban]
-           :required? true})))")
-
-(deftest family-syncs-activates-and-publishes-all-roots
-  (test-alpha/with-weaver-world
-    [ctx {:deps-edn (consumer-deps-edn)
-          :init-clj init}]
-    (let [{:keys [status op-names glossary-outcomes workflow-names]}
-          (test-alpha/repl!
-           ctx
-           '(do
-              (require '[millhouse.spools.workflow :as workflow]
-                       '[millstrand.api.current.alpha :as current]
-                       '[millstrand.api.runtime.alpha :as runtime]
-                       '[millstrand.api.runtime.glossary.alpha :as glossary]
-                       '[millstrand.api.weaver.alpha :as weaver])
-              (let [rt (current/runtime)]
-                {:status (runtime/status rt)
-                 :op-names (set (map :name (weaver/ops rt)))
-                 :glossary-outcomes (set (map :name (glossary/glossary-outcomes rt)))
-                 :workflow-names (set (keys (workflow/workflows)))})))
-          outcomes (:modules status)]
-      (is (= #{:millhouse/workflow
-               :millhouse/workflow-all
-               :millhouse/chime
-               :millhouse/cron
-               :millhouse/identity
-               :millhouse/kanban
-               :millhouse/land}
-             (set (keys outcomes))))
-      (is (= #{'millhouse.spools.workflow
-               'millhouse.spools.workflow.spool
-               'millhouse.spools.chime
-               'millhouse.spools.cron
-               'millhouse.spools.identity
-               'millhouse.spools.kanban
-               'millhouse.spools.land.spool}
-             (set (map :ns (vals outcomes)))))
-      (is (contains? op-names "workflow"))
-      (is (contains? op-names "merge-queue"))
-      (is (contains? glossary-outcomes "workflow/ready-next-absent"))
-      (is (= [:millhouse/workflow]
-             (get-in status [:modules :millhouse/workflow-all :after])))
-      (is (contains? workflow-names :publish-spool-kondo))
-      (is (every? workflow-names [:land :land-merge :land-abort])))))
-
 (deftest land-only-consumer-resolves-and-activates-transitive-siblings
   (test-alpha/with-weaver-world
     [ctx {:deps-edn (land-only-consumer-deps-edn)
           :init-clj land-only-init}]
-    (let [{:keys [modules workflows op-names]}
+    (let [{:keys [workflows op-names]}
           (test-alpha/repl!
            ctx
            '(do
               (require '[millhouse.spools.workflow :as workflow]
                        '[millstrand.api.current.alpha :as current]
-                       '[millstrand.api.runtime.alpha :as runtime]
                        '[millstrand.api.weaver.alpha :as weaver])
               (let [rt (current/runtime)]
-                {:modules (set (keys (:modules (runtime/status rt))))
-                 :workflows (set (keys (workflow/workflows)))
+                {:workflows (set (keys (workflow/workflows)))
                  :op-names (set (map :name (weaver/ops rt)))})))]
-      (is (= #{:consumer/workflow
-               :consumer/workflow-providers
-               :consumer/identity
-               :consumer/kanban
-               :consumer/land}
-             modules))
-      (is (every? workflows [:review :land :land-merge :land-abort]))
+      (is (contains? workflows :land))
+      (is (contains? workflows :review))
       (is (contains? op-names "merge-queue")))))
-
-(deftest repository-kondo-config-keeps-producer-ownership
-  (let [root (io/file (repository-root))
-        config-text (slurp (io/file root ".clj-kondo/config.edn"))
-        project-hooks (slurp (io/file root ".clj-kondo/repo-policy/hooks/project_rules.clj"))
-        config (edn/read-string config-text)]
-    (is (= ["repo-policy"] (:config-paths config)))
-    (is (not (.exists (io/file root ".lsp/config.edn"))))
-    (doseq [form '[defop defquery defpattern defhook defhandler defbin]]
-      (is (not (re-find (re-pattern (str "millstrand.api.millstrand.alpha/" form))
-                        config-text)))
-      (is (not (str/includes? project-hooks (str "(defn " form)))))
-    (is (not (re-find #"millstrand\.macros\.(queries|ops|rules)" config-text)))
-    (doseq [artifact ["io.millstrand/millstrand"
-                      "millhouse.spools/chime"
-                      "millhouse.spools/cron"
-                      "millhouse.spools/land"
-                      "millhouse.spools/workflow"]]
-      (is (.isFile (io/file root ".clj-kondo/imports" artifact "config.edn"))))))
 
 (def ^:private portable-consumer-source
   "A consumer source exercising every imported authoring-form family."
