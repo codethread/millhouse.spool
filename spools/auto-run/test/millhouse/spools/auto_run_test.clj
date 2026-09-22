@@ -76,7 +76,7 @@
 
 (defn- with-world [f]
   (t/with-weaver-world
-    [ctx {:storage :sqlite-memory
+    [ctx {:storage :sqlite-file
           :deps-edn
           (pr-str
            {:deps
