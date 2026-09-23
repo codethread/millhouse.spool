@@ -353,8 +353,8 @@
   [rt job]
   (let [st (state rt)]
     (locking st
-      (when-not (:executor @st)
-        (throw (ex-info "Review is not configured; activate its lifecycle resource first" {})))
+      (when-not (and (:executor @st) (not (:closing? @st)))
+        (throw (ex-info "Review is not configured or is closing; activate its lifecycle resource first" {})))
       (swap! st update :pending conj job)
       (when-not (:busy @st)
         (swap! st assoc :busy true)
@@ -362,8 +362,8 @@
   {:queued (name job)})
 
 (defn- arm! [rt]
-  (let [{:keys [config executor]} @(state rt)]
-    (when (and executor (:poll? config))
+  (let [{:keys [config executor closing?]} @(state rt)]
+    (when (and executor (not closing?) (:poll? config))
       (scheduler/schedule! rt {:key wake-key
                                :wake-at (.plusSeconds (runtime/now rt) (:interval-seconds config))
                                :handler 'millhouse.spools.auto-review/wake!}))))
@@ -373,7 +373,8 @@
   [{:keys [runtime]}]
   (let [st (state runtime)]
     (locking st
-      (when (and (:executor @st) (get-in @st [:config :poll?]))
+      (when (and (:executor @st) (not (:closing? @st))
+                 (get-in @st [:config :poll?]))
         (arm! runtime)
         (request! runtime :poll)))))
 
@@ -387,7 +388,7 @@
   [{:keys [runtime]}]
   (let [st (state runtime)]
     (locking st
-      (when (:executor @st)
+      (when (and (:executor @st) (not (:closing? @st)))
         (arm-prune! runtime)
         (request! runtime :prune)))))
 
@@ -399,7 +400,7 @@
       (when (:executor @st)
         (throw (ex-info "Only one review resource may be active per workspace" {})))
       (logs/configure! runtime config)
-      (swap! st assoc :config config :pending #{} :busy false
+      (swap! st assoc :config config :pending #{} :busy false :closing? false
              :executor (Executors/newSingleThreadExecutor
                         (reify ThreadFactory
                           (newThread [_ runnable]
@@ -419,12 +420,18 @@
                            :when (some #(= key (:key %)) (scheduler/pending runtime))]
                      (scheduler/cancel! runtime key))
                    (let [executor (:executor @st)]
-                     (swap! st assoc :executor nil :pending #{})
+                     (when executor
+                       ;; Retain ownership until termination succeeds. Lifecycle may retry
+                       ;; open after a failed close, and must not create a second worker.
+                       (swap! st assoc :closing? true :pending #{}))
                      executor))]
     (when executor
       (.shutdownNow ^ExecutorService executor)
       (when-not (.awaitTermination ^ExecutorService executor 10 TimeUnit/SECONDS)
-        (throw (ex-info "Review worker did not stop within 10 seconds" {})))))
+        (throw (ex-info "Review worker did not stop within 10 seconds" {})))
+      (locking st
+        (when (identical? executor (:executor @st))
+          (swap! st assoc :executor nil :closing? false :pending #{} :busy false)))))
   {:closed :mr-review})
 
 (defn- teardown-review!

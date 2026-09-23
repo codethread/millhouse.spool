@@ -12,6 +12,7 @@
             [millhouse.spools.auto-review.internal.views :as views]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.runtime.alpha :as runtime]
+            [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.batch.alpha :as batch]))
 
 (def config (review/validate-config
@@ -41,6 +42,59 @@
         finish-spec (get-in declaration [:entry :arg-spec :subcommands "finish"])]
     (is (= :unbounded (:deadline-class finish-spec)))
     (is (= 240 (:teardown-timeout-seconds config)))))
+
+(defn- controlled-executor [await-termination]
+  (proxy [java.util.concurrent.AbstractExecutorService] []
+    (shutdown [])
+    (shutdownNow [] [])
+    (isShutdown [] true)
+    (isTerminated [] false)
+    (awaitTermination [_ _] (await-termination))
+    (execute [_] (throw (Exception. "Worker must not accept work while closing")))))
+
+(deftest concurrent-close-retains-worker-ownership-and-disarms-wakes
+  (let [awaiting (promise)
+        terminate (promise)
+        executor (controlled-executor #(do (deliver awaiting true) @terminate))
+        st (atom {:config (assoc config :poll? true) :executor executor
+                  :closing? false :pending #{:poll} :busy true})
+        scheduled (atom [])]
+    (with-redefs [runtime/spool-state (fn [& _] {:state st})
+                  scheduler/pending (constantly [])
+                  scheduler/schedule! (fn [& args] (swap! scheduled conj args))]
+      (let [closing (future (review/close! {:runtime :runtime}))]
+        @awaiting
+        (is (:closing? @st))
+        (is (identical? executor (:executor @st)))
+        (is (empty? (:pending @st)))
+        (is (thrown-with-msg? Exception #"Only one review resource"
+                              (review/open! {:runtime :runtime} config)))
+        (is (thrown-with-msg? Exception #"closing"
+                              (review/request! :runtime :poll)))
+        (review/wake! {:runtime :runtime})
+        (review/prune-wake! {:runtime :runtime})
+        (is (empty? @scheduled))
+        (deliver terminate true)
+        (is (= {:closed :mr-review} @closing))
+        (is (nil? (:executor @st)))
+        (is (false? (:closing? @st)))))))
+
+(deftest failed-worker-termination-prevents-reopen-until-close-retry-succeeds
+  (let [terminate? (atom false)
+        executor (controlled-executor #(boolean @terminate?))
+        st (atom {:config config :executor executor :closing? false
+                  :pending #{:recover} :busy true})]
+    (with-redefs [runtime/spool-state (fn [& _] {:state st})
+                  scheduler/pending (constantly [])]
+      (is (thrown-with-msg? Exception #"did not stop"
+                            (review/close! {:runtime :runtime})))
+      (is (:closing? @st))
+      (is (identical? executor (:executor @st)))
+      (is (thrown-with-msg? Exception #"Only one review resource"
+                            (review/open! {:runtime :runtime} config)))
+      (reset! terminate? true)
+      (is (= {:closed :mr-review} (review/close! {:runtime :runtime})))
+      (is (nil? (:executor @st))))))
 
 (deftest gitlab-pagination-and-revision-race
   (let [calls (atom [])]
