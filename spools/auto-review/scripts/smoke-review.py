@@ -401,7 +401,7 @@ assert {c["attributes"]["mr-review/current"] for c in cards} == {"true", "false"
 prepared = next(c for c in cards if c["id"] != card["id"])
 prepared_tree = Path(prepared["attributes"]["worktree"])
 assert (prepared_tree / "dependencies/ready").read_text().strip() == str(prepared_tree)
-repl(f'''(let [plans (millhouse.spools.auto-review.board/data (w/show (c/runtime) "{prepared['id']}") :mr-review/plans)]
+repl(f'''(let [plans (millhouse.spools.auto-review.internal.board/data (w/show (c/runtime) "{prepared['id']}") :mr-review/plans)]
  (assert (every? #(< (count (:prompt %)) 2000) plans))
  (assert (every? #(clojure.string/includes? (:prompt %) "setup completed") plans))
  (assert (not-any? #(clojure.string/includes? (:prompt %) "GENERATED-CONTEXT-SENTINEL") plans))
@@ -441,7 +441,7 @@ print("PASS: two finished reports block new reviews until a human records a loca
 repl('''(review/close! {:runtime (c/runtime)})
  (assert (empty? (filter #(contains? #{"millhouse.spools.auto-review/poll" "millhouse.spools.auto-review/prune-logs"} (:key %)) (scheduler/pending (c/runtime)))))''')
 # Verify durable graph links, bounded reads and strictly scoped age pruning.
-repl('''(require '[millhouse.spools.auto-review.logs :as logs]
+repl('''(require '[millhouse.spools.auto-review.internal.logs :as logs]
                  '[millstrand.api.spool.alpha :refer [attr-get]]
                  '[millstrand.api.batch.alpha :as batch])
  (let [rt (c/runtime) now (runtime/now rt)]

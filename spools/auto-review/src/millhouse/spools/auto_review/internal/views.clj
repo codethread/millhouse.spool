@@ -217,26 +217,28 @@
         (comments-view rt id)))))
 
 (defn decide! [rt id outcome by text before-close]
-  (let [review (require-review rt id)
-        decision (attr-get review :mr-review/decision)]
-    (when-not (contains? #{"done" "dismissed"} outcome)
-      (throw (ex-info "Local outcome must be done or dismissed" {:outcome outcome})))
-    (when-not (contains? #{"reviewed" "failed"} (board/stage review))
-      (throw (ex-info "Review is still executing; inspect review show before deciding" {:id id})))
-    (when (and decision (not= "pending" decision) (not= outcome decision))
-      (throw (ex-info "Review already has a different decision" {:id id :decision decision})))
-    (when (= "active" (:state review))
-      (before-close review)
-      (let [at (str (runtime/now rt))]
-        (batch/apply! rt
-                      {:refs {:review id}
-                       :strands [{:ref :review :state "closed"
-                                  :attributes {:mr-review/decision outcome :mr-review/decided-at at}}
-                                 {:ref :decision :title (str "Local review decision: " outcome) :state "closed"
-                                  :attributes (cond-> {:note/text (or text (str "Marked " outcome " locally. GitLab was not changed."))
-                                                       :note/at at :note/kind "decision"} by (assoc :note/by by))}]
-                       :edges [{:op :upsert :from :decision :to :review :type "notes"}]})))
-    (show-review rt id)))
+  (let [lock (review-lock rt id)]
+    (locking lock
+      (let [review (require-review rt id)
+            decision (attr-get review :mr-review/decision)]
+        (when-not (contains? #{"done" "dismissed"} outcome)
+          (throw (ex-info "Local outcome must be done or dismissed" {:outcome outcome})))
+        (when-not (contains? #{"reviewed" "failed"} (board/stage review))
+          (throw (ex-info "Review is still executing; inspect review show before deciding" {:id id})))
+        (when (and decision (not= "pending" decision) (not= outcome decision))
+          (throw (ex-info "Review already has a different decision" {:id id :decision decision})))
+        (when (= "active" (:state review))
+          (before-close review)
+          (let [at (str (runtime/now rt))]
+            (batch/apply! rt
+                          {:refs {:review id}
+                           :strands [{:ref :review :state "closed"
+                                      :attributes {:mr-review/decision outcome :mr-review/decided-at at}}
+                                     {:ref :decision :title (str "Local review decision: " outcome) :state "closed"
+                                      :attributes (cond-> {:note/text (or text (str "Marked " outcome " locally. GitLab was not changed."))
+                                                           :note/at at :note/kind "decision"} by (assoc :note/by by))}]
+                           :edges [{:op :upsert :from :decision :to :review :type "notes"}]})))
+        (show-review rt id)))))
 
 (defn link! [rt id target-id]
   (require-review rt id)

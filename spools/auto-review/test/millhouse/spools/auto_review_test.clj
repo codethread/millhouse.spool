@@ -296,7 +296,8 @@
           [["running" "pending" "done" #"still executing"]
            ["reviewed" "done" "dismissed" #"different decision"]
            ["reviewed" "pending" "approved" #"done or dismissed"]]]
-    (with-redefs [views/require-review (fn [& _] {:id "review" :state "active"
+    (with-redefs [runtime/spool-state (fn [& _] {:lock (Object.)})
+                  views/require-review (fn [& _] {:id "review" :state "active"
                                                   :attributes {:mr-review/stage stage :mr-review/decision decision}})
                   batch/apply! (fn [& _] (throw (Exception. "Must not mutate")))]
       (is (thrown-with-msg? Exception message
@@ -333,19 +334,36 @@
                             (#'review/teardown-review! :rt config review)))
       (is (= ["running" "failed"] (mapv :mr-review/teardown-status @patches))))
     (let [events (atom [])]
-      (with-redefs [views/require-review (fn [& _] review)
+      (with-redefs [runtime/spool-state (fn [& _] {:lock (Object.)})
+                    views/require-review (fn [& _] review)
                     views/show-review (fn [& _] {:review :closed})
                     runtime/now (fn [_] (java.time.Instant/parse "2026-09-15T00:00:00Z"))
                     batch/apply! (fn [& _] (swap! events conj :closed))]
         (views/decide! :rt "review" "done" nil nil (fn [_] (swap! events conj :teardown)))
         (is (= [:teardown :closed] @events)))
       (reset! events [])
-      (with-redefs [views/require-review (fn [& _] review)
+      (with-redefs [runtime/spool-state (fn [& _] {:lock (Object.)})
+                    views/require-review (fn [& _] review)
                     batch/apply! (fn [& _] (swap! events conj :closed))]
         (is (thrown-with-msg? Exception #"teardown broke"
                               (views/decide! :rt "review" "done" nil nil
                                              (fn [_] (throw (Exception. "teardown broke"))))))
         (is (empty? @events))))))
+
+(deftest local-decision-holds-the-review-mutation-lock-through-teardown
+  (let [lock (Object.)
+        review {:id "review" :state "active"
+                :attributes {:mr-review/review "true" :mr-review/stage "reviewed"
+                             :mr-review/decision "pending"}}
+        held? (atom false)]
+    (with-redefs [runtime/spool-state (fn [& _] {:lock lock})
+                  runtime/now (fn [_] (java.time.Instant/parse "2026-09-15T00:00:00Z"))
+                  views/require-review (fn [& _] review)
+                  views/show-review (fn [& _] {:review :closed})
+                  batch/apply! (fn [& _] nil)]
+      (views/decide! :rt "review" "done" nil nil
+                     (fn [_] (reset! held? (Thread/holdsLock lock))))
+      (is @held?))))
 
 (deftest reference-only-prompt-and-real-dispatch-cwd
   (let [change {:cwd "/tmp/worktree" :head "head-sha" :base "base-sha"
