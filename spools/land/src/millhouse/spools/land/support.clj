@@ -77,7 +77,7 @@
        "  echo \"refusing to update canonical checkout: expected main, found $branch\" >&2\n"
        "  exit 1\n"
        "fi\n"
-       "git -C \"$root\" pull --ff-only origin main\n"))
+       "git -C \"$root\" pull --no-rebase --ff-only origin main\n"))
 
 (def land-cleanup-script
   "Clean up the landed feature branch and worktree."
