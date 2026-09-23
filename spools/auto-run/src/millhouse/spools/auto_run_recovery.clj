@@ -7,7 +7,6 @@
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
-            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
             [millstrand.api.weaver.alpha :as weaver]))
 
@@ -166,9 +165,7 @@
   reason record provenance; callers must obtain real recovery authorization."
   [rt request]
   (require-valid! ::registration request "Invalid recovery-worker registration")
-  ((or (runtime/resolve-var rt 'ct.spools.harnesses/call-with-run-publication-lock)
-       (fail! "Recovery registration requires Harnesses call-with-run-publication-lock"
-              {:required-api 'ct.spools.harnesses/call-with-run-publication-lock}))
+  (harnesses/call-with-run-publication-lock
    rt
    (fn []
      (let [{:keys [card worker expected-current-worker]} request

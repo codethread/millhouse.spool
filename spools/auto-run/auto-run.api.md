@@ -203,7 +203,7 @@ Register an accepted current worker after explicit coordinator authorization.
   Requires Harnesses' public call-with-run-publication-lock boundary. It serializes
   these checks with run publication, not arbitrary raw graph edits. Actor and
   reason record provenance; callers must obtain real recovery authorization.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L155-L199">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L154-L196">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-run-recovery/verify-worker">`verify-worker`</a>
 ``` clojure
@@ -212,7 +212,7 @@ Register an accepted current worker after explicit coordinator authorization.
 Function.
 
 Code-executor callback recording verified settlement evidence.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L150-L153">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L149-L152">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-run-recovery/verify-worker!">`verify-worker!`</a>
 ``` clojure
@@ -224,7 +224,7 @@ Verify successful current-worker settlement and the accepted finisher custody.
 
   Return durable run IDs for the code gate's evidence. A stopped process, stale
   worker receipt, wrong finisher target or changed canonical cwd fails loudly.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L112-L148">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/spools/auto_run_recovery.clj#L111-L147">Source</a></sub></p>
 
 -----
 # <a name="millhouse.spools.auto-run-reporting">millhouse.spools.auto-run-reporting</a>

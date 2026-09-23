@@ -91,10 +91,10 @@ a changed request is not a replay. It does not launch or claim anything, clear
 blockers, or grant recovery authorization. It requires Harnesses' public
 `call-with-run-publication-lock` boundary to serialize validation and registration
 with run acceptance. This is not protection against arbitrary raw graph edits.
-Coordinator dependency ordering must install that API before using registration;
-this change intentionally does not bump consumer pins. The worker must verify the reconciled receipt
-before accepting a finisher; a stale receipt is an actionable stop, not permission
-to await the earlier worker. Harnesses requests and their lineage remain immutable.
+The workspace and Auto-run library pin the published Harnesses revision providing
+that API. Production activation remains a separate coordinator-owned action.
+The worker must verify the reconciled receipt before accepting a finisher; a
+stale receipt is an actionable stop, not permission to await the earlier worker. Harnesses requests and their lineage remain immutable.
 
 After an interrupted handoff, inspect the exact immutable
 `auto-land-finisher/FINISHER_STEP_ID` request before doing anything else. A run may

@@ -6,7 +6,7 @@
   org.clojure/data.json {:mvn/version "2.5.1"}
   ct.spools/harnesses
   {:git/url "https://github.com/codethread/harnesses.spool.git"
-   :git/sha "6b5ad39d8711a033dc7f33fd52c78901393ea44e"}
+   :git/sha "4ac638d679bc238fd8a373d52c3dbf2a7f682be0"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "373238a56fbed90852e9fe8d90635d848c3faeea"
