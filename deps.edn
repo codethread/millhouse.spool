@@ -4,6 +4,7 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "91361ef09eda4d09a24515a6ba3f99aa3090525a"
    :deps/root "."}
+  millhouse.spools/auto-review {:local/root "spools/auto-review"}
   millhouse.spools/auto-run {:local/root "spools/auto-run"}
   millhouse.spools/chime {:local/root "spools/chime"}
   millhouse.spools/cron {:local/root "spools/cron"}
@@ -17,6 +18,7 @@
    :main-opts
    ["-m" "cljfmt.main" "check"
     "scripts" "test"
+    "spools/auto-review/src" "spools/auto-review/test"
     "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
@@ -29,6 +31,7 @@
    :main-opts
    ["-m" "cljfmt.main" "fix"
     "scripts" "test"
+    "spools/auto-review/src" "spools/auto-review/test"
     "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
@@ -44,6 +47,7 @@
   :reflect-check
   {:extra-paths
    ["test"
+    "spools/auto-review/test"
     "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
@@ -55,6 +59,7 @@
   :lint/conventions
   {:extra-paths
    ["test"
+    "spools/auto-review/test"
     "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
@@ -68,6 +73,7 @@
    :main-opts
    ["-m" "noahtheduke.splint" "--output" "clj-kondo"
     "scripts" "test"
+    "spools/auto-review/src" "spools/auto-review/test"
     "spools/auto-run/src" "spools/auto-run/test"
     "spools/chime/src" "spools/chime/test"
     "spools/cron/src" "spools/cron/test"
@@ -78,6 +84,7 @@
   :test
   {:extra-paths
    ["test"
+    "spools/auto-review/test"
     "spools/auto-run/test"
     "spools/chime/test"
     "spools/cron/test"
