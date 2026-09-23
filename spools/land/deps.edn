@@ -6,11 +6,11 @@
    :deps/root "."}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
    :deps/root "spools/kanban"}
   millhouse.spools/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
    :deps/root "spools/workflow"}}
  :aliases
  {:test

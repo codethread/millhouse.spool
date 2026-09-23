@@ -1,6 +1,8 @@
 (ns millhouse.spools.auto-run-test
   "Disposable Weaver tests for card admission and durable assignment receipts."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
             [millhouse.spools.auto-run :as auto-run]
             [millhouse.spools.auto-run-land :as autonomous]
             [millhouse.spools.auto-run-reporting :as reporting]
@@ -78,16 +80,23 @@
    (defn broken-start-params! [_rt _request]
      (throw (ex-info \"No repository workflow parameters\" {})))")
 
+(defn- fixture-deps-edn []
+  (let [repository (-> (t/spool-checkout-root "millhouse/spools/auto_run.clj")
+                       .getParentFile
+                       .getParentFile)
+        workspace (io/file repository ".millstrand")
+        deps (:deps (edn/read-string (slurp (io/file workspace "deps.edn"))))]
+    ;; Keep the workspace's selected Git coordinates and owned local roots.
+    (pr-str {:deps (update-vals deps
+                                #(if-let [root (:local/root %)]
+                                   (assoc % :local/root
+                                          (.getCanonicalPath (io/file workspace root)))
+                                   %))})))
+
 (defn- with-world [f]
   (t/with-weaver-world
     [ctx {:storage :sqlite-file
-          :deps-edn
-          (pr-str
-           {:deps
-            {'millhouse.spools/auto-run
-             {:local/root (.getCanonicalPath
-                           (t/spool-checkout-root
-                            "millhouse/spools/auto_run.clj"))}}})
+          :deps-edn (fixture-deps-edn)
           :init-clj
           "(require '[millstrand.api.current.alpha :as current]
                     '[millstrand.api.runtime.alpha :as runtime])
