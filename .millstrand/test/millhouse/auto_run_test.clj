@@ -56,6 +56,9 @@
               checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
           (testing "repository policy retains the human review boundary"
             (is (= ["reviewed"] (:choices checkpoint)))
+            (is (some #(= ["bash" ".millstrand/land-quality.sh"]
+                           (attr-get % :shell/argv)) strands)
+                "The automatic gate uses the same single lock owner as Land")
             (is (= ["millhouse.spools.land.card-actions/review-card!"]
                    (keep #(attr-get % :code/fn) strands)))
             (is (nil? (role-step strands "finisher")))))

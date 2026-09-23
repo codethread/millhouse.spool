@@ -4,6 +4,7 @@
             [millhouse.spools.auto-run :as auto-run]
             [millhouse.spools.auto-run-land :as autonomous]
             [millhouse.spools.auto-run-reporting :as reporting]
+            [millhouse.spools.auto-run-recovery :as recovery]
             [millhouse.spools.auto-run-worktree :as worktree]
             [ct.spools.harnesses :as harnesses]
             [ct.spools.harnesses.assignment :as assignment]
@@ -162,13 +163,19 @@
               finisher-step (role-step strands "finisher")
               request {:harness :fake :mode :headless :cwd (:repo config)
                        :prompt "Disposable handoff run"}
-              worker (harnesses/create! rt (assoc request :target (:id worker-step)))
+              worker (harnesses/create! rt (assoc request :target (:id card)))
               finisher-request (assoc request
                                       :target (:id finisher-step)
                                       :request-id (str "auto-land-finisher/"
                                                        (:id finisher-step)))
               finisher (harnesses/create! rt finisher-request)]
-          (is (= [(:id worker-step)] (mapv :id (:ready result))))
+          (is (= ["Record the reviewed landing candidate"] (mapv :title (:ready result))))
+          (doseq [title ["Record the reviewed landing candidate"
+                         "Freeze the worker and finisher handoff"
+                         "Accept and record the independent finisher"]]
+            (is (= [title] (mapv :title (workflow/ready run-id))))
+            (is (false? (boolean (assignment/launch-ready? rt finisher))))
+            (workflow/complete! run-id {:by-identity "fixture-worker"}))
           (is (not= (:id worker-step) (:id finisher-step)))
           (is (false? (boolean (assignment/launch-ready? rt finisher))))
           (is (= (:id finisher) (:id (harnesses/create! rt finisher-request))))
@@ -178,11 +185,170 @@
                (harnesses/create! rt (assoc finisher-request :prompt "Changed payload"))))
           (weaver/update! rt (:id finisher-step)
                           {:attributes {:auto-run/worker-run-id (:id worker)
-                                        :auto-run/finisher-run-id (:id finisher)}})
-          (is (= [(:id finisher-step)]
-                 (mapv :id (:ready (workflow/complete! run-id
-                                                       {:by-identity "fixture-worker"})))))
-          (is (assignment/launch-ready? rt finisher)))))))
+                                        :auto-run/finisher-run-id (:id finisher)
+                                        :auto-run/canonical-root (:repo config)}})
+          (weaver/update! rt (:id card)
+                          {:attributes {:auto-run/workflow-run-id run-id
+                                        :auto-run/run-id (:id worker)}})
+          (is (= ["Hold finisher custody until delivery is verified"
+                  "Await the frozen worker's settlement"]
+                 (mapv :title (:ready (workflow/complete! run-id
+                                                          {:by-identity "fixture-worker"})))))
+          (is (assignment/launch-ready? rt finisher))
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (recovery/verify-worker! rt (:id card))))
+          (harnesses/finish! rt (:id worker)
+                             {:status :done :exit-code 0 :result "Worker released custody"})
+          (is (= {:card (:id card) :worker (:id worker)
+                  :finisher (:id finisher) :verified true}
+                 (recovery/verify-worker! rt (:id card))))
+          (doseq [[id attribute value]
+                  [[(:id worker) :harness/settled "false"]
+                   [(:id worker) :harness/substatus "cancelled"]
+                   [(:id worker) :harness/exit-code 1]
+                   [(:id worker) :harness/target (:id finisher-step)]
+                   [(:id card) :auto-run/run-id "stale-worker"]
+                   [(:id finisher) :harness/cwd "/wrong-root"]]]
+            (let [before (attr-get (weaver/show rt id) attribute)]
+              (weaver/update! rt id {:attributes {attribute value}})
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (recovery/verify-worker! rt (:id card))))
+              (weaver/update! rt id {:attributes {attribute before}})))
+          (testing "the same anchor remains open across every finisher phase"
+            (doseq [title ["Await the frozen worker's settlement"
+                           "Verify current worker settlement and finisher custody"
+                           "Authorize the exact reviewed Land run"
+                           "Verify landing, cleanup and the final card outcome"]]
+              (let [ready (workflow/ready run-id)
+                    phase (first (filter #(= title (:title %)) ready))]
+                (is (= [(:id finisher-step) (:id phase)] (mapv :id ready)))
+                (workflow/complete! run-id {:step (:id phase) :by-identity "fixture-finisher"})
+                (is (= "active" (:state (weaver/show rt (:id finisher-step))))))))
+          (testing "two agreeing stale receipts cannot authorize an ancestor"
+            (harnesses/create! rt (assoc request :target (:id card)
+                                         :after (:id worker)
+                                         :logical-id (attr-get worker :harness/logical-id)
+                                         :request-id "accepted-successor"))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (recovery/verify-worker! rt (:id card)))))
+          (is (true? (:done (workflow/complete! run-id {:step (:id finisher-step)
+                                                        :by-identity "fixture-finisher"})))))))))
+
+(defn- continuation-fixture [rt]
+  (let [card (card! rt {})
+        predecessor-id (get-in (auto-run/scan! rt) [:dispatched 0 :run])
+        predecessor (harnesses/finish! rt predecessor-id
+                                       {:status :failed :exit-code 1 :error "Interrupted worker"})
+        worker (assignment/assign! rt {:harness "fake" :target (:id card)
+                                       :cwd (attr-get predecessor :harness/cwd)
+                                       :after predecessor-id :request-id "recovery-worker"})]
+    (current/with-runtime rt
+      (let [run-id (str "recovery-delivery-" (:id card))]
+        (workflow/start! run-id autonomous/autonomous-land
+                         {:card (:id card) :feature "Recovery feature"
+                          :branch (show rt card :auto-run/branch)
+                          :worktree (show rt card :auto-run/worktree)})
+        (weaver/update! rt (:id card) {:attributes {:auto-run/workflow-run-id run-id}})))
+    {:card card :predecessor predecessor :worker worker
+     :request {:card (:id card) :worker (:id worker)
+               :expected-current-worker predecessor-id
+               :reason "Coordinator authorized recovery after interruption"
+               :by-identity "fixture-coordinator"}}))
+
+(deftest registration-validates-accepted-lineage-and-preserves-exact-replay
+  (with-world
+    (fn [rt _]
+      (let [{:keys [card predecessor worker request]} (continuation-fixture rt)
+            target (current/with-runtime rt
+                     (let [root (workflow/current-root (show rt card :auto-run/workflow-run-id))]
+                       (role-step (:strands (graph/subgraph rt [(:id root)])) "finisher")))
+            reject! (fn [candidate]
+                      (is (thrown? clojure.lang.ExceptionInfo
+                                   (recovery/register-worker! rt candidate)))
+                      (is (= (:id predecessor) (show rt card :auto-run/run-id))))]
+        (reject! (assoc request :expected-current-worker "stale"))
+        (reject! (assoc request :worker (:id predecessor)))
+        (doseq [[id attribute value]
+                [[(:id worker) :harness/published "false"]
+                 [(:id worker) :harness/after "foreign"]
+                 [(:id worker) :harness/root-targets ["another-root"]]
+                 [(:id worker) :harness/logical-id "another-logical-worker"]
+                 [(:id worker) :harness/target "foreign"]
+                 [(:id worker) :harness/cwd "/another/worktree"]
+                 [(:id predecessor) :harness/settled "false"]
+                 [(:id target) :auto-run/role nil]
+                 [(:id target) :auto-run/card "foreign-card"]
+                 [(:id target) :auto-run/worker-run-id (:id predecessor)]]]
+          (let [before (attr-get (weaver/show rt id) attribute)]
+            (weaver/update! rt id {:attributes {attribute value}})
+            (reject! request)
+            (weaver/update! rt id {:attributes {attribute before}})))
+        (let [fork (weaver/add! rt {:title "Corrupt accepted fork"
+                                    :attributes (:attributes worker)
+                                    :edges [{:type "continues" :to (:id predecessor)}]})]
+          (reject! request)
+          (weaver/update! rt (:id fork) {:attributes {:harness/published "false"}}))
+        (is (= "registered"
+               (:result (auto-run/auto-run
+                         {:op/runtime rt
+                          :op/args (assoc request :subcommand ["register-worker"])}))))
+        (is (= (:id worker) (show rt card :auto-run/run-id)))
+        (is (= request (show rt card :auto-run/recovery-registration)))
+        (harnesses/create! rt {:harness :fake :mode :headless
+                               :target (:id target) :cwd (attr-get worker :harness/cwd)
+                               :prompt "Accepted after successful registration"
+                               :request-id (str "auto-land-finisher/" (:id target))})
+        (let [before (weaver/show rt (:id card))]
+          (is (= "already-registered" (:result (recovery/register-worker! rt request))))
+          (is (= before (weaver/show rt (:id card))))
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (recovery/register-worker! rt (assoc request :reason "Changed payload"))))
+          (is (= before (weaver/show rt (:id card)))))))))
+
+(deftest registration-follows-multiple-settled-predecessors-to-the-current-head
+  (with-world
+    (fn [rt _]
+      (let [{:keys [card predecessor worker request]} (continuation-fixture rt)
+            _ (harnesses/stop! rt (:id worker) {:reason "Authorized replacement before launch"})
+            head (assignment/assign! rt {:harness "fake" :target (:id card)
+                                         :cwd (attr-get worker :harness/cwd)
+                                         :after (:id worker) :request-id "second-recovery"})
+            request (assoc request :worker (:id head))]
+        (is (= "requested" (attr-get (harnesses/run rt (:id worker)) :harness/substatus))
+            "A cancelled predecessor need not have completed successfully")
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (recovery/register-worker! rt (assoc request :worker (:id worker)))))
+        (weaver/update! rt (:id worker) {:attributes {:harness/settled "false"}})
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"has not settled"
+                              (recovery/register-worker! rt request)))
+        (weaver/update! rt (:id worker) {:attributes {:harness/settled "true"}})
+        (is (= "registered" (:result (recovery/register-worker! rt request))))
+        (is (= (:id head) (show rt card :auto-run/run-id)))
+        (is (= [(:id predecessor) (:id worker) (:id head)]
+               (show rt card :auto-run/recovery-path)))))))
+
+(deftest registration-refuses-accepted-finisher-even-before-receipts-are-stored
+  (with-world
+    (fn [rt config]
+      (let [{:keys [card predecessor request]} (continuation-fixture rt)]
+        (current/with-runtime rt
+          (let [run-id "interrupted-handoff"
+                _ (workflow/start! run-id autonomous/autonomous-land
+                                   {:card (:id card) :feature "Recovery feature"
+                                    :branch "auto/recovery" :worktree (:repo config)})
+                root (workflow/current-root run-id)
+                target (role-step (:strands (graph/subgraph rt [(:id root)])) "finisher")
+                finisher-request {:harness :fake :mode :headless :cwd (:repo config)
+                                  :target (:id target) :prompt "Independent finisher"
+                                  :request-id (str "auto-land-finisher/" (:id target))}
+                finisher (harnesses/create! rt finisher-request)]
+            (weaver/update! rt (:id card) {:attributes {:auto-run/workflow-run-id run-id}})
+            (is (false? (boolean (assignment/launch-ready? rt finisher))))
+            (is (nil? (attr-get (weaver/show rt (:id target)) :auto-run/finisher-run-id)))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"handoff is frozen"
+                                  (recovery/register-worker! rt request)))
+            (is (= (:id predecessor) (show rt card :auto-run/run-id)))
+            (is (= (:id finisher) (:id (harnesses/create! rt finisher-request))))))))))
 
 (deftest eligibility-uses-current-ownership-not-scalar-or-participation-history
   (with-world

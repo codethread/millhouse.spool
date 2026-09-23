@@ -25,6 +25,105 @@ Every recipe has the same four parts, so you can skim to the one that matches yo
 
 Each recipe cites the honest source it was distilled from — a shipped spool, the repo's own config, or the test suite — so you can read the load-bearing version.
 
+## Recipe: A linear evidence handoff
+
+**Situation.** Inspect a topic, persist a finding, then write a summary from that
+finding. The result does not exist when the run starts.
+
+**Composition.** Two ordinary steps with an explicit dependency and a durable
+receipt. The second instruction tells the driver to read current evidence rather
+than interpolating a value that was absent at pour.
+
+```clojure
+(require '[clojure.spec.alpha :as s]
+         '[clojure.string :as str]
+         '[millhouse.spools.workflow :as workflow]
+         '[millstrand.api.format.alpha :as format])
+
+(s/def ::topic (s/and string? (complement str/blank?)))
+(s/def ::evidence-params (s/keys :req-un [::topic]))
+
+(workflow/defworkflow! evidence-summary
+  "Inspect a topic and summarize its recorded finding."
+  {:entrypoints #{:start} :param-spec ::evidence-params}
+  (workflow/workflow
+    "Evidence summary"
+    (workflow/step :inspect "Record a finding" :self
+      (fn [{:keys [topic]}]
+        (format/prose
+         "
+           Inspect {topic}. Complete this step with the observed finding in
+           --context and the evidence reference in --attributes. Do not report
+           success without inspecting the evidence.
+         " {:topic topic})))
+    (workflow/step :summarize "Summarize the recorded evidence" :self
+      :depends-on [:inspect]
+      (format/prose
+       "
+         Read this run's root with strand show ROOT_ID for workflow/context,
+         and its closed inspection step with strand subgraph ROOT_ID for the
+         evidence receipt. Write a summary supported by that finding. Complete
+         only after recording the summary's location; stop if evidence is missing.
+       " {}))))
+```
+
+After module activation, discover and drive it (substitute the returned root and
+step IDs; `worker-id` is your supplied friendly identity):
+
+```nu
+strand workflow list
+strand workflow show evidence-summary
+strand workflow start evidence-demo --workflow evidence-summary --params '{"topic":"queue ordering"}'
+strand workflow ready evidence-demo
+strand workflow complete evidence-demo --step INSPECT_ID --by-identity worker-id --context '{"finding":"FIFO ordering observed"}' --attributes '{"example/evidence":"inspection-log"}'
+strand show ROOT_ID
+strand subgraph ROOT_ID
+```
+
+List returns the short purpose and entrypoints. Show exposes the parameter
+contract and declared shape without evaluating render functions. Start shows
+only `Record a finding`; completing it shows only `Summarize the recorded
+evidence`. The arbitrary `example/evidence` attribute stays on the closed step,
+not in the later ready view. Root context holds the finding. Completion records
+these facts; it does not independently verify their truth. Representative ready
+projections (IDs and instruction excerpts abbreviated):
+
+```json
+{"ready":[{"id":"inspect-id","title":"Record a finding","role":"step","instruction":"Inspect queue ordering. Complete this step with the observed finding..."}],"done":false}
+```
+
+After completing that step:
+
+```json
+{"ready":[{"id":"summary-id","title":"Summarize the recorded evidence","role":"step","instruction":"Read this run's root with strand show ROOT_ID for workflow/context..."}],"done":false}
+```
+
+**Why this shape.** Both instructions were rendered at the initial pour. A
+function reading `:finding` in the second instruction would see the initial
+params, not the value later supplied by `complete --context`. Progressive
+visibility is not lazy rendering. Explicit reads preserve a simple linear graph.
+Without `:depends-on`, both steps would be ready at once.
+
+Use a fixed returning `call` for a known reusable procedure whose inputs are
+available at pour; call inputs are eagerly rendered too. Use a returning `defer`
+for a genuine runtime procedure choice, supplying its parameters explicitly:
+parent context is not inherited. Use a checkpoint `:next` continuation when a
+new stage must be rendered from accumulated context plus choice input. One
+Continue choice can be justified by that data boundary, but no checkpoint is
+needed merely to read a receipt. A human kind or nonblank actor name records
+provenance, not authenticated approval.
+
+For an agent gate, give the delegate the task, input references, allowed scope
+and output destination in `harness/prompt`; keep wait/adjudication guidance in
+the driver instruction. The Harnesses adapter does not automatically pass the
+parent runbook or merge `harness/result` into context. Read the recorded result
+and verify its domain outcome, not only process success.
+
+Honest source: the disposable CLI rendering tests and the returning composition
+recipes below. Test representative start/ready transitions and evidence reads,
+not only instruction substrings. Existing poured runs retain their stored text
+after definitions change.
+
 ## Recipe: Publish clj-kondo support from the macro owner
 
 When a spool exposes a macro, publish its clj-kondo export from that same spool

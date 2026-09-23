@@ -9,6 +9,7 @@
    {:source ["spools/auto-run/src/millhouse/spools/auto_run.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_explain.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_reporting.clj"
+             "spools/auto-run/src/millhouse/spools/auto_run_recovery.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_worktree.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_land.clj"]
     :outfile "spools/auto-run/auto-run.api.md"}

@@ -10,6 +10,7 @@
             [ct.spools.harnesses :as harnesses]
             [ct.spools.harnesses.assignment :as assignment]
             [millhouse.spools.auto-run-explain :as explanation]
+            [millhouse.spools.auto-run-recovery :as recovery]
             [millhouse.spools.kanban :as kanban]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -381,6 +382,15 @@
      "explain" {:doc "Explain one feature's recorded delivery evidence without mutation."
                 :hook-class :read :deadline-class :standard
                 :positionals [{:name :card-id :type :string :required? true}]}
+     "register-worker"
+     {:doc "Register an authorized, accepted recovery worker before handoff freezes."
+      :hook-class :mutating :deadline-class :standard
+      :flags {:card {:type :string :required? true :doc "Delivery feature card."}
+              :worker {:type :string :required? true :doc "Accepted continuation run ID."}
+              :expected-current-worker {:type :string :required? true
+                                        :doc "Expected predecessor receipt (compare before update)."}
+              :reason {:type :string :required? true :doc "Authorized recovery reason."}
+              :by-identity {:type :string :required? true :doc "Coordinator attribution, not authorization."}}}
      "scan" {:doc "Admit eligible cards once, respecting configured capacity."
              :hook-class :mutating :deadline-class :standard
              :flags {:by-identity {:type :string
@@ -394,4 +404,7 @@
   (case (:subcommand args)
     ["status"] (status runtime)
     ["explain"] (explain runtime (:card-id args))
-    ["scan"] (scan! runtime (:by-identity args))))
+    ["scan"] (scan! runtime (:by-identity args))
+    ["register-worker"] (recovery/register-worker!
+                         runtime (select-keys args [:card :worker :expected-current-worker
+                                                    :reason :by-identity]))))

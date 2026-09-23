@@ -46,14 +46,17 @@
              external reviews as a smoke test. Add focused regression tests when
              behavior or ownership boundaries warrant them.
 
-             Run make quality while iterating. When implementation and focused
-             verification are complete, commit your work and complete this step.
+             Run .millstrand/land-quality.sh while iterating; it owns the shared
+             suite lock. Do not wrap it in another flock.
+
+             When implementation and focused verification are complete, commit your
+             work and complete this step.
              Do not start land yet; the following steps own the review handoff.
 
              {failure-policy}
            " {:card card :failure-policy (if autonomous? (autonomous/failure-policy card) "")})))
        (shell-gate :quality "Pass repository quality checks" [:implement]
-                   ["make" "quality"] 5400 failure-instruction)
+                   ["bash" ".millstrand/land-quality.sh"] 5400 failure-instruction)
        (workflow/step
         :prepare-pr "Publish the exact change with its review package" :self
         :depends-on [:quality]
