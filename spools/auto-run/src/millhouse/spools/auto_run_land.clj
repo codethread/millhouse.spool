@@ -1,5 +1,5 @@
 (ns millhouse.spools.auto-run-land
-  "Optional two-role landing handoff for autorun delivery workflows."
+  "Recorded autonomous landing phases with one persistent finisher target."
   (:require [clojure.spec.alpha :as s]
             [millhouse.spools.auto-run :as auto-run]
             [millhouse.spools.land :as land]
@@ -21,148 +21,229 @@
      These rules override shared Land's repair/retry guidance.
      Await executor-owned gates; never manually assert a passing result.
      Normal queue waits and await timeouts are not failures; reissue bounded waits.
+
+     Follow the assigned blocker contract when reporting; preserve its evidence.
    " {:card card}))
 
-(defn- worker-instruction [{:keys [card branch worktree]}]
-  (format/prose
-   "
-     This card has explicit user authorisation for autonomous landing. You own
-     implementation and review, not merge or worktree removal. Start or continue
-     shared land run `land-auto-{card}` with card {card}, feature {card}, branch
-     {branch}, and worktree {worktree}. Inspect `strand workflow show land` and
-     `strand prime merge-queue`. Drive resolve-pr and the mandatory basic review,
-     adjudicate its findings and record actual immutable-range review evidence.
+(defn- instruction [text]
+  (fn [params]
+    (format/prose
+     "
+       {action}
 
-     STOP at land's signoff checkpoint BEFORE choosing approved. Approval starts
-     executor-owned merge AND worktree deletion without another worker checkpoint.
-     Do not approve signoff, merge, remove the worktree or finish the card yourself.
-     A shell cd does not change the persistent working directory of your session.
+       {failure-policy}
+     " {:action (format/prose text (assoc params :auto-run-policy
+                                          (:text auto-run/auto-run-workflow)))
+        :failure-policy (failure-policy (:card params))})))
 
-     Prepare an independent canonical-root grunt:
-
-     1. Resolve the canonical root with `wktree root` from {worktree}; use its
-        .millstrand workspace explicitly for every subsequent strand command.
-        Read card {card} for auto-run/workflow-run-id and auto-run/run-id. Verify
-        the latter is YOUR current Harnesses run; if not, stop BEFORE accepting
-        a finisher and ask the coordinator to reconcile the authorized recovery
-        worker receipt. Do not silently wait on the old run or rewrite it yourself.
-        Inspect that delivery run's ready frontier and its root with `strand
-        subgraph ROOT_ID`. Locate the separate dependent step with
-        auto-run/role=finisher and auto-run/card={card}. It must be unique.
-        THIS worker step and the FINISHER STEP are different targets. Inspect
-        your agent run and require its target is NOT the finisher step. A recovery
-        worker may serve the card or this worker step, never the finisher step.
-        If a previous combined single-step run has no separate finisher step,
-        stop for explicit recovery; do not invent a target or replace the workflow.
-     2. Record a handoff on the card BEFORE launch: card, exact PR/head, review
-        disposition, land run ID, delivery run ID, worker step ID, finisher step ID,
-        original worker run ID, canonical root, branch/worktree and owned resource
-        inventory (exact PIDs/session names/scratch paths, or explicitly none).
-        Stop your owned servers/browser sessions first where practical.
-        Never guess ownership. Record auto-run/worker-run-id on the finisher step.
-     3. Build the grunt prompt from that handoff plus the COMPLETE instruction on
-        the finisher step. Launch via `strand agent run grunt`, not a synchronous
-        subagent, agent assign, or interactive launch. Pass --by-identity with YOUR
-        supplied identity, --cwd with the canonical root, --target with the
-        FINISHER STEP ID (never this worker step), --request-id
-        `auto-land-finisher/FINISHER_STEP_ID`, and --prompt as one argument.
-        Acceptance of this blocked target is intentional: it cannot launch until
-        this worker step closes. Do not change the request ID or payload after an
-        uncertain response. Inspect `agent show --request` with the same key and
-        verify the exact accepted target/cwd/prompt before declaring failure.
-     4. Confirm the accepted run and record its ID on the finisher step as
-        auto-run/finisher-run-id using strand update, and in a card handoff note.
-        Only after both worker and finisher receipts are recorded, complete THIS
-        worker step with `strand workflow complete DELIVERY_RUN_ID --step
-        WORKER_STEP_ID --by-identity YOUR_IDENTITY`. Return immediately without
-        waiting for the grunt or performing further worktree operations. Do not
-        complete the finisher step. The grunt waits for your successful settlement
-        before signoff.
-
-     Recovery requires explicit authorization after any failure. Before launching
-     a recovery worker, inspect the target's auto-run/role: worker recovery serves
-     the card or handoff-worker step; finisher recovery serves ONLY the finisher
-     step from the canonical root and must never launch another finisher. Inspect
-     the original immutable request before any new launch. When NO finisher was
-     accepted, the coordinator may authorize a worker continuation after prior
-     workers settle, record the predecessor and new run IDs with the recovery
-     reason, and update the card's auto-run/run-id to the accepted CURRENT WORKER
-     before this handoff proceeds. The dispatch receipt is not immutable lineage;
-     the recorded Harnesses requests are. The new worker must pass the receipt
-     check above before publishing a finisher. Missing reconciliation is an
-     actionable stop before the finisher target is occupied.
-
-     When a finisher WAS accepted, do not launch another worker or change its
-     frozen worker ID. The coordinator must reconcile that exact request, both
-     receipts and the interrupted worker-step completion. Only successful recorded
-     worker settlement permits completing that handoff; failed or uncertain
-     settlement requires an explicit recovery decision, never invented success.
-     An accepted but blocked finisher is retained, not replaced or given another key.
-
-     {failure-policy}
-   " {:card card :branch branch :worktree worktree
-      :failure-policy (failure-policy card)}))
-
-(defn- finisher-instruction [{:keys [card branch worktree]}]
-  (format/prose
-   "
-     You are the independent landing finisher, running from the canonical root.
-     Keep your session there; use git -C or explicit shell cwd for {worktree}.
-     Do not claim card {card}, implement new scope or launch another finisher.
-     This step is finisher-only, including during authorized recovery. Do not
-     follow worker handoff instructions or create a second run against this target.
-     You serve this supplied delivery step, not a new workflow.
-
-     Read the recorded card handoff and this step's auto-run/worker-run-id and
-     auto-run/finisher-run-id. Require the latter names YOUR current run and the
-     former names a DIFFERENT run. First await that ORIGINAL WORKER RUN, never
-     yourself: `strand --workspace WORKSPACE await --query agent-run-settled
-     --param run-id=ORIGINAL_WORKER_RUN_ID --min-count 1 --timeout-secs 1800`.
-     Reissue on timeout; a stopped/terminal status alone is not proof of settlement.
-     Before signoff, inspect that exact run and require settled=true, completed
-     substatus and exit-code=0. Verify the card's auto-run/run-id still names that
-     worker, this finisher step is ready, and land-auto-{card} is still at signoff
-     for card {card}, the recorded PR/head,
-     branch {branch} and worktree {worktree}, with accepted immutable-range basic
-     review evidence. A mismatch requires explicit recovery; retain the existing
-     receipts and run. Keep signoff pending while auto-run/agent-blocked is set.
-     A finisher is not the delivery worker: do not replace the card's
-     auto-run/run-id with your own run.
-
-     Use the existing authorization: read workflow choices and approve signoff
-     with the exact PR and squash message. Drive THAT land run through its FIFO
-     turn, validation, merge, main update and cleanup. Await executor-owned gates;
-     never assert their success manually. At tidy-resources, clean only recorded
-     owned resources, recording anything retained. Complete tidy-resources only
-     after cleanup is verified; land's finish-card gate then closes the card.
-     Do not finish the card early or advance it by a generic lane edit.
-
-     Verify land is done and the card is closed with outcome done. Only then
-     complete THIS finisher step with `strand workflow complete DELIVERY_RUN_ID
-     --step FINISHER_STEP_ID --by-identity YOUR_IDENTITY` plus landing evidence,
-     and return a concise final handover. If that last bookkeeping action fails AFTER
-     the card is closed, record the failure but do not reopen already-landed
-     work or repeat the merge. Failure before land finishes leaves the card open.
-     Never delete resources outside the shared cleanup contract.
-
-     {failure-policy}
-
-     {auto-run-policy}
-   " {:card card :branch branch :worktree worktree
-      :failure-policy (failure-policy card)
-      :auto-run-policy (:text auto-run/auto-run-workflow)}))
+(defn- role [name]
+  {"auto-run/role" name "auto-run/card" (fn [{:keys [card]}] card)})
 
 (workflow/defworkflow autonomous-land
-  "Review and hand off to a distinct, initially blocked canonical-root finisher."
+  "Review, freeze and release one independent finisher through recorded phases."
   {:entrypoints #{:call} :param-spec ::params}
   (workflow/workflow
    "Autonomous landing handoff"
-   (workflow/step :handoff-worker "Review then prepare the independent landing finisher" :self
-                  :attributes {"auto-run/role" "handoff-worker"
-                               "auto-run/card" (fn [{:keys [card]}] card)}
-                  worker-instruction)
-   (workflow/step :finisher "Finish autonomous landing from the canonical root" :self
-                  :depends-on [:handoff-worker]
-                  :attributes {"auto-run/role" "finisher"
-                               "auto-run/card" (fn [{:keys [card]}] card)}
-                  finisher-instruction)))
+   (workflow/step
+    :review "Record the reviewed landing candidate" :self
+    :attributes (role "worker-review")
+    (instruction
+     "
+       This route requires existing explicit user authorization for autonomous
+       landing. You own review, not merge or worktree removal. Inspect `strand
+       workflow show land` and `strand prime merge-queue`. Start or reuse the
+       exact shared Land run `land-auto-{card}` with card {card}, feature {card},
+       branch {branch} and worktree {worktree}; never replace an existing run.
+
+       Drive resolve-pr and mandatory basic review. Adjudicate findings and record
+       accepted immutable-range review evidence. STOP at signoff BEFORE approved:
+       approval starts executor-owned merge and worktree deletion. Do not approve,
+       merge, remove the worktree or finish the card yourself.
+
+       Record the Land run ID, exact PR/base/head and review disposition in a note
+       on card {card}. Complete this review step only with Land still at signoff.
+       The next step freezes the independent handoff; it does not repeat review.
+
+       {auto-run-policy}
+     "))
+   (workflow/step
+    :prepare-handoff "Freeze the worker and finisher handoff" :self
+    :depends-on [:review]
+    :attributes (role "worker-prepare")
+    (instruction
+     "
+       Read card {card}'s reviewed candidate note and auto-run/workflow-run-id.
+       Resolve the canonical root with `wktree root` from {worktree}; use its
+       .millstrand workspace explicitly for every subsequent strand command.
+       Inspect the delivery root with `strand subgraph ROOT_ID`. Locate its unique
+       auto-run/role=finisher strand for card {card}: this is the persistent
+       FINISHER TARGET, not one of the finisher's phase steps.
+
+       Require auto-run/run-id on the card names YOUR current Harnesses run.
+       Inspect your agent target: it must be the card or a worker target, never the
+       finisher. A stale current-worker receipt is an actionable stop BEFORE
+       freezing or launching. Ask the authorized coordinator to use `strand
+       auto-run register-worker --help` for an accepted continuation; do not edit
+       the receipt yourself. The operation checks settled predecessor, accepted
+       lineage, unchanged task/root ownership and unfrozen handoff. It does not
+       supply recovery authorization. Old poured workflows are not migrated.
+
+       Stop owned servers/browser sessions where practical. Record on card {card}
+       the exact reviewed PR/head, Land and delivery run IDs, worker/release step
+       ID, finisher target ID, current worker run ID, canonical root, branch,
+       worktree and exact owned PIDs/session names/scratch paths (or none).
+       Never guess resource ownership.
+
+       Freeze auto-run/worker-run-id and auto-run/canonical-root on the finisher
+       target. Store auto-run/finisher-request there: the exact grunt alias,
+       canonical cwd, target, request ID auto-land-finisher/FINISHER_TARGET_ID and
+       complete prompt. The prompt includes this handoff and the target's COMPLETE
+       stored workflow/instruction, not this worker instruction. Read the target
+       with strand show; custom attributes are not projected by workflow ready.
+       Complete only after this durable request and handoff can be read back.
+       If any frozen receipt already exists, reconcile it explicitly; never vary
+       a payload after an uncertain acceptance.
+     "))
+   (workflow/step
+    :accept-finisher "Accept and record the independent finisher" :self
+    :depends-on [:prepare-handoff]
+    :attributes (role "worker-accept")
+    (instruction
+     "
+       Read card {card}'s handoff and the finisher target's frozen request. Verify
+       card auto-run/run-id still equals its frozen worker ID and YOUR current run.
+       Launch exactly that request through `strand agent run grunt`, with
+       --by-identity YOUR_IDENTITY, --cwd CANONICAL_ROOT, --target FINISHER_TARGET_ID,
+       --request-id auto-land-finisher/FINISHER_TARGET_ID and the stored --prompt
+       as one argument. Never use a synchronous subagent or agent assign.
+
+       This different target is intentionally blocked until worker release.
+       After uncertain acceptance, inspect `strand agent show --request` with the
+       SAME key and verify exact target/cwd/prompt. Reuse only the same request;
+       never replace it, vary its payload or launch a second finisher.
+
+       Store the accepted run ID as auto-run/finisher-run-id on the finisher
+       target and in the card handoff note. Read back both run receipts and the
+       accepted immutable request before completing this acceptance step. A crash
+       between acceptance and receipt storage requires reconciliation of this
+       exact request, not another worker or another finisher.
+     "))
+   (workflow/step
+    :handoff-worker "Release the accepted handoff and return" :self
+    :depends-on [:accept-finisher]
+    :attributes (role "handoff-worker")
+    (instruction
+     "
+       Read card {card}'s handoff, the finisher target's worker/finisher receipts
+       and its exact accepted request. Require the frozen worker is YOUR current
+       run and still matches card auto-run/run-id; the finisher is a DIFFERENT
+       accepted run at the canonical root, serving the separate finisher target.
+       Both receipts must be durable before release.
+
+       Complete only THIS release step with `strand workflow complete
+       DELIVERY_RUN_ID --step RELEASE_STEP_ID --by-identity YOUR_IDENTITY`.
+       Return immediately: do not await the finisher, approve signoff, complete
+       any finisher phase, finish the card or perform further worktree operations.
+       A shell cd does not change your session's persistent cwd. The finisher
+       waits for your actual successful settlement before allowing signoff.
+
+       Interrupted release is coordinator recovery: keep the accepted request and
+       frozen worker ID. Only successful settlement of that exact worker permits
+       reconciliation of missing receipts/release. Failed or uncertain settlement
+       requires a new explicit decision, never invented success or another launch.
+     "))
+   ;; The anchor is intentionally ready beside the linear finisher phases. It
+   ;; stays open until their verified result, so one assignment owns the entire
+   ;; sequence rather than reserving a succession of ephemeral phase targets.
+   (workflow/step
+    :finisher "Hold finisher custody until delivery is verified" :self
+    :depends-on [:handoff-worker]
+    :attributes (role "finisher")
+    (instruction
+     "
+       You are the independent canonical-root landing finisher for card {card}.
+       Keep your session at the canonical root; use git -C or explicit shell cwd
+       for {worktree}. Do not claim the card, implement new scope, launch another
+       finisher or replace auto-run/run-id with your own run.
+
+       THIS target is a custody anchor, NOT the next phase to complete. Read its
+       worker/finisher run receipts and canonical-root attribute. Require the
+       finisher receipt names YOUR run, assigned to THIS target, and the worker
+       names a DIFFERENT run. Read card {card}'s durable handoff and follow the
+       delivery run's ready finisher phases in order, always using explicit --step:
+       settlement wait, executor verification, signoff, then landing observation.
+       Keep this anchor open throughout; no additional assignment is needed.
+
+       Close this anchor only after the observation step is closed, Land is done
+       and the card is closed with outcome done. Attach the verified landing
+       receipt and return a concise handover. If final bookkeeping fails after
+       landing, record that failure without reopening the card or repeating merge.
+       Recovery against this target is finisher-only: finish, do not delegate.
+
+       {auto-run-policy}
+     "))
+   (workflow/step
+    :await-worker "Await the frozen worker's settlement" :self
+    :depends-on [:handoff-worker]
+    :attributes (role "finisher-wait")
+    (instruction
+     "
+       Finisher only: read card {card}'s handoff and its unique finisher custody
+       target. Require auto-run/finisher-run-id there names YOUR run, and read
+       auto-run/worker-run-id. Await that EXACT worker, never yourself:
+       `strand --workspace WORKSPACE await --query agent-run-settled
+       --param run-id=WORKER_RUN_ID --min-count 1 --timeout-secs 1800`.
+       Reissue bounded waits on timeout. Terminal alone does not mean settled.
+
+       Inspect the actual worker: require settled=true, substatus=completed and
+       exit-code=0, and the card's current worker receipt still matches. Record
+       the observation on the card and complete only this wait step. The following
+       executor gate independently checks those facts; never assert its success.
+     "))
+   (workflow/gate
+    :verify-worker "Verify current worker settlement and finisher custody" :code
+    :depends-on [:await-worker]
+    :attributes {"code/fn" "millhouse.spools.auto-run-recovery/verify-worker"
+                 "code/params" (fn [{:keys [card]}] {:card card})}
+    (instruction "Await executor verification of the recorded runs for card {card}."))
+   (workflow/step
+    :authorize-land "Authorize the exact reviewed Land run" :self
+    :depends-on [:verify-worker]
+    :attributes (role "finisher-signoff")
+    (instruction
+     "
+       Finisher only: read card {card}'s handoff and the closed verification gate's
+       evidence with strand subgraph. Require the current worker receipt still
+       matches the frozen worker, and your run still owns the finisher anchor.
+       Keep signoff pending while auto-run/agent-blocked is set.
+
+       Verify land-auto-{card} is at signoff for the recorded PR/head, card {card},
+       branch {branch} and worktree {worktree}, with accepted immutable-range basic
+       review evidence. Use the EXISTING user authorization, not a human label or
+       actor name as a substitute. Inspect choices and approve that Land signoff
+       with the exact PR and squash message; record the authorization receipt.
+       If signoff already advanced after an interrupted response, inspect its
+       recorded choice and exact revision rather than approving or merging again.
+       A mismatch requires explicit recovery. Complete only this authorization
+       step once the exact approved Land continuation is established.
+     "))
+   (workflow/step
+    :observe-land "Verify landing, cleanup and the final card outcome" :self
+    :depends-on [:authorize-land]
+    :attributes (role "finisher-observe")
+    (instruction
+     "
+       Finisher only: read card {card}'s handoff and continue ONLY land-auto-{card}.
+       Its existing gates own FIFO, final-head validation, merge, main update and
+       cleanup. Await them; never manually assert success. Keep reservations and
+       uncertain resources on failure. At tidy-resources clean only the recorded
+       owned inventory and record anything retained. Verify cleanup before closing
+       tidy-resources; Land's finish-card gate owns card completion.
+
+       Verify Land is done and card {card} is closed with outcome done. Record the
+       merged revision, cleanup result and retained resources on the card and
+       complete THIS observation step with its evidence. Then close the same
+       finisher custody anchor, not a new agent target. Bookkeeping failure after
+       successful landing must not reopen landed work or cause a duplicate merge.
+       Never delete resources outside the shared cleanup contract.
+     "))))

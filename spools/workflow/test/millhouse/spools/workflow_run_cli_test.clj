@@ -272,6 +272,42 @@
       (is (thrown? clojure.lang.ExceptionInfo (started "run-taken" :solo))
           "one active run per run id"))))
 
+(workflow/defworkflow evidence-summary
+  "Record evidence, then read it without re-rendering the next instruction."
+  {:entrypoints #{:start}}
+  (workflow/workflow
+   "Evidence summary"
+   (workflow/step :inspect "Inspect" :self "Record the finding.")
+   (workflow/step :summarize "Summarize" :self
+                  :depends-on [:inspect]
+                  (fn [{:keys [topic finding]}]
+                    (str "Topic=" topic "; initial finding=" finding
+                         ". Read current context and the inspection receipt.")))))
+
+(deftest linear-evidence-is-durable-but-does-not-re-render-ready-instructions
+  (with-runtime
+    (fn [rt _]
+      (activate-cli! rt)
+      (register! :evidence-summary)
+      (let [start (started "evidence-demo" :evidence-summary
+                           :params {"topic" "queue"})
+            inspect-id (first (ready-ids start))
+            result (from-argv rt ["complete" "evidence-demo" "--step" inspect-id
+                                  "--context" "{\"finding\":\"FIFO\"}"
+                                  "--attributes" "{\"example/evidence\":\"inspection-log\"}"])
+            summary (first (:ready result))]
+        (is (= ["Inspect"] (mapv :title (:ready start))))
+        (is (= ["Summarize"] (mapv :title (:ready result))))
+        (is (= "Topic=queue; initial finding=. Read current context and the inspection receipt."
+               (:instruction summary)))
+        (is (= {:topic "queue" :finding "FIFO"}
+               (get-in (weaver/show rt (get-in start [:root :id]))
+                       [:attributes :workflow/context])))
+        (is (= "inspection-log"
+               (get-in (weaver/show rt inspect-id) [:attributes :example/evidence])))
+        (is (not (contains? summary :example/evidence)))
+        (is (true? (:done (verb "complete" "evidence-demo" :step (:id summary)))))))))
+
 ;; --- complete: inference, roles, and gates ----------------------------------
 
 (deftest complete-infers-the-sole-ordinary-step-across-a-mixed-frontier

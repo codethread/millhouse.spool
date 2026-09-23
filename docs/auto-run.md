@@ -13,9 +13,12 @@ eligible, and existing dependencies must close before dispatch.
 - `auto-human-review`: implement, run `make quality`, publish a ready PR, wait
   for CI, move the card to `in_review` for human attention, and stop at an explicit human checkpoint.
 - `auto-full-land`: perform the same preparation, then call shared
-  `millhouse.spools.auto-run-land/autonomous-land`. Its worker step drives
-  `land` through basic review and accepts an independent canonical-root grunt
-  against a **separate dependent finisher step** before sign-off. The grunt owns
+  `millhouse.spools.auto-run-land/autonomous-land`. Its worker phases record
+  review, frozen handoff, accepted finisher and release separately. One independent
+  canonical-root grunt serves a **separate finisher custody target** across its
+  settlement wait, executor verification, signoff and landing-observation phases.
+  The custody target stays open throughout; phases never create new assignments.
+  The grunt owns
   FIFO merge, cleanup, and card completion. The card stays `claimed` (in progress)
   throughout agent review and authorized landing; no human-review lane transition
   is needed. `in_review` indicates a human approval, blocker, or pending decision,
@@ -34,6 +37,15 @@ Inspect admission with `strand auto-run status` and request an immediate scan
 with `strand auto-run scan`. A durable `assigned` receipt is not a live-agent
 status; inspect its exact Harnesses run separately.
 
+## Quality lock ownership
+
+Both automatic delivery and shared Land invoke `.millstrand/land-quality.sh`.
+That script alone acquires `/tmp/millstrand-test.lock` with `flock -w 180` before
+running `make quality`; do not wrap that script in another lock. Direct full
+suite commands still need the shared lock. Focused tests remain exempt. A lock
+acquisition failure fails the gate without starting quality; apply the normal
+explicit recovery policy rather than clearing the gate or retrying implicitly.
+
 ## Ownership and failure policy
 
 The assigned worker claims the supplied card and drives the dispatcher-created
@@ -43,8 +55,12 @@ PR/head, run IDs, branch/worktree, and owned resources, then accept the tracked
 finisher against the step marked `auto-run/role=finisher`, never the worker's own
 step. Record `auto-run/worker-run-id` and `auto-run/finisher-run-id` on that target
 before completing the worker step. The accepted finisher is blocked until that
-completion; it then waits for the original worker to settle successfully. The
-worker returns immediately and never completes the finisher step.
+release; it then waits for the frozen current worker to settle successfully.
+The code gate independently checks actual settled/completed/exit-zero evidence,
+current-worker agreement and the accepted canonical-root finisher target. The
+worker returns immediately and never completes any finisher phase. The finisher
+uses explicit --step selectors because its custody anchor remains ready beside
+its current phase; it closes that anchor last, after verified landing.
 
 Follow Codethread's canonical agent blocker contract. Full-land failures leave
 the delivery open and retain owned resources and merge reservations; do not retry,
@@ -58,12 +74,27 @@ serves the card or `handoff-worker` step, not the finisher step. A run assigned 
 the finisher step must be the independent canonical-root finisher and must never
 launch another finisher. Do not rewrite the delivery-worker receipt to name it.
 
-If no finisher was accepted, an authorized coordinator may start a worker
-continuation after prior workers settle. Record the predecessor, accepted new
-worker ID and recovery reason, then update `auto-run/run-id` to that current
-worker before it reaches handoff. The worker must verify the reconciled receipt
-before accepting a finisher; a stale receipt is an actionable stop, not permission
-to await the earlier worker. Harnesses requests and their lineage remain immutable.
+Before handoff freezes, an authorized coordinator may accept a worker
+continuation after prior workers settle, then register it with the supported
+operation (inspect its live help first):
+
+```nu
+strand auto-run register-worker --card CARD_ID --worker ACCEPTED_RUN_ID --expected-current-worker PREDECESSOR_ID --reason 'Authorized recovery reason' --by-identity COORDINATOR_ID
+```
+
+The operation verifies a unique published continuation path from the recorded
+worker to the accepted head, settlement of every predecessor (including cancelled
+intermediate workers), unchanged task/logical root/worktree ownership, the expected current
+receipt and absence of a frozen or accepted finisher. It records the reason and
+actor with `auto-run/run-id` in one card update. Exact request replay is a no-op;
+a changed request is not a replay. It does not launch or claim anything, clear
+blockers, or grant recovery authorization. It requires Harnesses' public
+`call-with-run-publication-lock` boundary to serialize validation and registration
+with run acceptance. This is not protection against arbitrary raw graph edits.
+The workspace and Auto-run library pin the published Harnesses revision providing
+that API. Production activation remains a separate coordinator-owned action.
+The worker must verify the reconciled receipt before accepting a finisher; a
+stale receipt is an actionable stop, not permission to await the earlier worker. Harnesses requests and their lineage remain immutable.
 
 After an interrupted handoff, inspect the exact immutable
 `auto-land-finisher/FINISHER_STEP_ID` request before doing anything else. A run may
@@ -75,7 +106,8 @@ can reconcile the exact request, missing receipts and worker-step completion.
 Failed or uncertain settlement needs a new explicit recovery decision and must
 not be relabeled as success.
 
-Existing single-step workflow runs keep their poured instructions after refresh.
+Existing single-step and two-step workflow runs keep their poured instructions
+and topology after refresh.
 Do not replace or repour them. For an explicitly authorized recovery already at
 reviewed sign-off, an independent canonical-root finisher may serve that old
 handoff step directly after successful worker settlement and exact review/PR
@@ -89,9 +121,11 @@ Run the disposable workspace test from `.millstrand` with `clojure -M:test` and
 run repository `make quality`. The test activates the real init and policy in an
 in-memory Weaver without labeling a card or launching a paid agent. It reproduces
 the combined-step recovery collision using real Harnesses publication, then
-verifies separate target acceptance, blocked launch readiness, receipt ordering,
-request idempotency, immutable-payload conflicts and the unchanged single-writer
-guard. It does not simulate successful external review or GitHub merging.
+verifies separate target acceptance and the shared quality entry point. Library
+integration tests drive the new ready phases with one persistent target, verify
+actual successful worker settlement, reject stale or foreign recovery lineage,
+and exercise accepted-finisher recovery before receipts exist, exact request
+idempotency and immutable-payload conflicts. It does not simulate successful external review or GitHub merging.
 
 Changing the Codethread dependency basis requires the supported planned Weaver
 restart. Source-only policy edits can use normal module refresh. Restart only

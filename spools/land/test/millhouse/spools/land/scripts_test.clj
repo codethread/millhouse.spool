@@ -120,6 +120,29 @@
   [{:keys [exit output]}]
   (is (zero? exit) output))
 
+(deftest pull-main-fast-forwards-with-rebase-config-and-unrelated-local-edits
+  (let [fixture (fixture)
+        seed (io/file (:root fixture) "seed")
+        config (write-file! (:root fixture) "global.gitconfig"
+                            "[pull]\n\trebase = true\n" false)]
+    (try
+      (write-file! seed "upstream.txt" "landed upstream\n" false)
+      (let [expected (commit! seed "advance remote main")
+            local (write-file! (:canonical fixture) "README" "unrelated local edit\n" false)]
+        (test-support/run-git! seed "push" "origin" "main")
+        (assert-success
+         (run-command! (:worktree fixture)
+                       (support/sh-gate support/land-pull-main-script "pull-main")
+                       {"GIT_CONFIG_GLOBAL" (.getPath config)}))
+        (is (= expected (str/trim (test-support/run-git! (:canonical fixture)
+                                                         "rev-parse" "HEAD"))))
+        (is (= "unrelated local edit\n" (slurp local)))
+        (is (= "landed upstream\n" (slurp (io/file (:canonical fixture) "upstream.txt"))))
+        (is (= " M README\n" (test-support/run-git! (:canonical fixture)
+                                                    "status" "--porcelain"))))
+      (finally
+        (test-support/delete-tree! (:root fixture))))))
+
 (deftest pr-checks-argv-freezes-policy-and-registration-window
   (let [argv (support/pr-checks-argv "required" branch)]
     (is (= ["sh" "-c"] (subvec argv 0 2)))

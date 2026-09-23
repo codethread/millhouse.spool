@@ -88,6 +88,23 @@ For workspaces that want the complete shipped surface, activate the bundled sele
 
 ## Author workflow data
 
+Default to a short linear sequence; branch or loop only for a real decision or
+repetition, and keep a cohesive artifact checklist within one step.
+
+Start with the [linear evidence recipe](workflow.cookbook.md#recipe-a-linear-evidence-handoff).
+`workflow list` introduces purpose; `show` describes parameters and declared
+shape, not rendered instructions. `start` and `ready` expose the current ready
+items. Put the immediate action, evidence references and completion fact in each
+item's instruction, not only in discovery prose or arbitrary attributes.
+
+Declare `:depends-on` for a linear sequence; source order does not serialize.
+Split at meaningful output, owner, wait, authorization or recovery boundaries.
+Ordinary instructions and fixed-call inputs render at pour. Later `complete
+--context` does **not** re-render them: read durable results explicitly, or use a
+justified fresh continuation. Defer parameters must be supplied explicitly.
+Keep delegated-agent prompts separate from driver instructions; neither a human
+label nor actor attribution substitutes for actual user authorization.
+
 `workflow` returns a validated definition map. Compose it with `step`, `gate`,
 `checkpoint`, `call`, and `defer`. Publish consumer definitions with inert
 `defworkflow` plus `use-workflow!` in the owning module; use `defworkflow!` only

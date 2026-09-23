@@ -511,7 +511,17 @@
             |against the spec. Start the run with
             |`strand workflow start <run-id> --workflow intake --params '{...}'`
             |— you choose the run-id positional, and the registered name rides
-            |the --workflow flag. Then work the frontier:
+            |the --workflow flag. List gives purpose; show gives the parameter contract
+            |and declared topology, not rendered instructions. Start and ready show
+            |only the current frontier. Author step-local instructions with explicit
+            |dependencies for a linear chain. Ordinary instructions and fixed-call
+            |inputs render at pour, not when ready: complete --context does not
+            |re-render them. Read runtime receipts explicitly, or pass fresh inputs
+            |through a justified continuation; defer params are explicit. See the
+            |Workflow README and cookbook's linear evidence recipe. Split at output,
+            |owner, wait or authorization boundaries, not at every verb. Human labels
+            |and actor attribution do not authenticate user approval.
+            |Then work the frontier:
             |`strand workflow next <run-id>` advances the one ready ordinary
             |step or checkpoint, complete/choose/defer give role-specific
             |control, and `strand workflow choices <run-id>` projects a ready
