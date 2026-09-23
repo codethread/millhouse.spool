@@ -20,7 +20,7 @@ Own the optional GitLab review runtime and its public Millstrand operations.
 Function.
 
 Cancel this spool's wake and stop its worker; agent custody stays with Harnesses.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L413-L428">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L414-L435">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/dispatch!">`dispatch!`</a>
 ``` clojure
@@ -38,7 +38,7 @@ Replay frozen agent CLI requests safely after a crash or partial dispatch.
 Function.
 
 Reconcile reviewer completion after the Harnesses run mutation commits.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L472-L480">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L479-L487">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/open!">`open!`</a>
 ``` clojure
@@ -47,7 +47,7 @@ Reconcile reviewer completion after the Harnesses run mutation commits.
 Function.
 
 Open from a consumer-owned lifecycle resource. Polling defaults to disabled.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L394-L411">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L395-L412">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/passing-revisions">`passing-revisions`</a>
 ``` clojure
@@ -75,7 +75,7 @@ Poll once on the owned worker; persisted revision keys prevent repeat reviews.
 Function.
 
 Handle the daily review-log pruning scheduler wake.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L385-L392">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L386-L393">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/request!">`request!`</a>
 ``` clojure
@@ -93,7 +93,7 @@ Coalesce work off the shared event lane; never wait for GitLab or agents there.
 Function.
 
 Inspect, curate, and explicitly publish frozen GitLab MR reviews.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L484-L493">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L491-L500">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/review-logs">`review-logs`</a>
 ``` clojure
@@ -102,7 +102,7 @@ Inspect, curate, and explicitly publish frozen GitLab MR reviews.
 Function.
 
 Read recent persisted MR review activity as JSONL, oldest first. See review status for the linked log root.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L558-L566">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L565-L573">Source</a></sub></p>
 
 ## <a name="millhouse.spools.auto-review/settle!">`settle!`</a>
 ``` clojure
@@ -129,4 +129,4 @@ Require an explicit repository, workspace lifecycle hooks, and reviewer roster.
 Function.
 
 Handle the recurring review-poll scheduler wake.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L371-L378">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L371-L379">Source</a></sub></p>
