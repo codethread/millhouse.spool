@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/../../.."
+ws=$(mktemp -d)
+cleanup() {
+  mill weaver stop --workspace "${ws:?}" >/dev/null 2>&1 || true
+  rm -rf "${ws:?}"
+}
+trap cleanup EXIT
+python3 spools/auto-review/scripts/smoke-review.py --workspace "${ws:?}"

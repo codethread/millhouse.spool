@@ -43,6 +43,9 @@ nav:
   - Home: index.md
   - Automatic delivery: docs/auto-run.md
   - Spools:
+      - Auto-review:
+          - Contract: spools/auto-review/README.md
+          - API: spools/auto-review/auto-review.api.md
       - Auto-run:
           - Contract: spools/auto-run/README.md
           - API: spools/auto-run/auto-run.api.md

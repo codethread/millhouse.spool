@@ -7,7 +7,8 @@
 
 (def test-namespaces
   "All test namespaces, in stable reporting order."
-  '[millhouse.spools.auto-run-test
+  '[millhouse.spools.auto-review-test
+    millhouse.spools.auto-run-test
     millhouse.spools.millstrand-workflows-test
     millhouse.authoring-forms-test
     millhouse.consumer-test

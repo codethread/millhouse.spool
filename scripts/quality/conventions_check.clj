@@ -7,7 +7,8 @@
 
 (def source-roots
   "Clojure roots scanned by the conventions gate."
-  ["spools/auto-run/src"
+  ["spools/auto-review/src"
+   "spools/auto-run/src"
    "spools/chime/src"
    "spools/cron/src"
    "spools/workflow/src"
@@ -18,7 +19,8 @@
 
 (def spool-roots
   "Shared-spool production roots subject to public API and tier checks."
-  #{"spools/auto-run/src"
+  #{"spools/auto-review/src"
+    "spools/auto-run/src"
     "spools/chime/src"
     "spools/cron/src"
     "spools/workflow/src"

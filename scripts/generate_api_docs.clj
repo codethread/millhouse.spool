@@ -4,7 +4,9 @@
 (def git-branch "main")
 
 (def spool-docs
-  [{:source ["spools/auto-run/src/millhouse/spools/auto_run.clj"
+  [{:source "spools/auto-review/src/millhouse/spools/auto_review.clj"
+    :outfile "spools/auto-review/auto-review.api.md"}
+   {:source ["spools/auto-run/src/millhouse/spools/auto_run.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_explain.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_reporting.clj"
              "spools/auto-run/src/millhouse/spools/auto_run_worktree.clj"
