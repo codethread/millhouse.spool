@@ -9,15 +9,15 @@
    :git/sha "4ac638d679bc238fd8a373d52c3dbf2a7f682be0"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "373238a56fbed90852e9fe8d90635d848c3faeea"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
    :deps/root "spools/kanban"}
   millhouse.spools/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "373238a56fbed90852e9fe8d90635d848c3faeea"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
    :deps/root "spools/workflow"}
   millhouse.spools/land
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "373238a56fbed90852e9fe8d90635d848c3faeea"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
    :deps/root "spools/land"}}
  :aliases
  {:test
