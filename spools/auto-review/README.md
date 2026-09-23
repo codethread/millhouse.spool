@@ -83,7 +83,7 @@ starts only when `:poll?` is true.
 | `:glab-bin` | `"glab"` | GitLab CLI executable |
 | `:setup-timeout-seconds` | `900` | Setup deadline |
 | `:teardown-timeout-seconds` | `240` | Teardown deadline; this bounds `review finish` while its invocation remains open |
-| `:log-retention-days` | `7` | Live review-log retention |
+| `:log-retention-days` | `7` | Operational-log and completed-review hook-output retention |
 
 ## Workspace hook contract
 
@@ -145,9 +145,11 @@ Teardown receives two additional variables:
 Use `wktree remove --keep-branch` when the review branch should remain after its
 checkout is released. Teardown must be idempotent: after a process succeeds but
 before completion is durably recorded, a retry may run it again. Hook output is
-file-backed and its path is recorded in review activity. A non-zero exit or
-timeout leaves the review open and records a visible failure. After correcting
-the problem, retry `review finish`.
+file-backed and its path is recorded in review activity. Successful setup and
+teardown output remains available through the local decision, then daily cleanup
+deletes its owned temporary files after `:log-retention-days`. Failed hook output
+is removed immediately. A non-zero exit or timeout leaves the review open and
+records a visible failure. After correcting the problem, retry `review finish`.
 
 ```bash
 review_branch="review/mr-${MILLSTRAND_REVIEW_MR_IID}-${MILLSTRAND_REVIEW_ID}"

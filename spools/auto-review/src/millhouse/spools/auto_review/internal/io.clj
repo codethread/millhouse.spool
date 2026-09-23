@@ -102,7 +102,8 @@
             (.putAll extra-env)
             (.put "MILLSTRAND_REVIEW_HOOK" script)
             (.put "GIT_TERMINAL_PROMPT" "0"))
-        process (.start builder)]
+        process (.start builder)
+        succeeded? (atom false)]
     (try
       (.close (.getOutputStream process))
       (when-not (.waitFor process timeout-seconds TimeUnit/SECONDS)
@@ -110,11 +111,14 @@
       (when-not (zero? (.exitValue process))
         (throw (ex-info (str "Review " phase " failed")
                         {:phase phase :exit-code (.exitValue process) :log log :shell shell})))
+      (reset! succeeded? true)
       {:shell shell :log log}
       (finally
         (when (.isAlive process)
           (doseq [child (.toList (.descendants process))] (.destroyForcibly child))
-          (.destroyForcibly process))))))
+          (.destroyForcibly process))
+        (when-not @succeeded?
+          (io/delete-file log true))))))
 
 (defn setup!
   "Acquire and prepare a review workspace through the configured setup hook.
@@ -147,6 +151,10 @@
             (throw (ex-info "Review setup worktree must be outside the source repository"
                             {:worktree worktree :repo (:repo-dir config) :log (:log execution)})))
           (merge execution {:worktree worktree :context (assoc context :worktree_path worktree)})))
+      (catch Exception error
+        (when-let [log (:log (ex-data error))]
+          (io/delete-file log true))
+        (throw error))
       (finally
         (io/delete-file result-file true)))))
 
@@ -327,6 +335,9 @@
     (when-not (= (.getCanonicalPath (io/file directory))
                  (.getCanonicalPath (io/file (str/trim (git directory "rev-parse" "--show-toplevel")))))
       (throw (ex-info "Review setup worktree_path must identify the Git worktree root"
+                      {:directory directory})))
+    (when-not (str/blank? (git directory "status" "--porcelain=v1" "--untracked-files=no"))
+      (throw (ex-info "Review worktree has tracked changes outside the admitted revision"
                       {:directory directory})))
     {:cwd directory :head head :base base
      ;; Tree identity detects empty changes without materializing any patch,

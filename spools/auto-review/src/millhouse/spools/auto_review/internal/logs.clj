@@ -6,6 +6,8 @@
   query functions produce chronological JSONL, and pruning bounds the live
   graph according to the configured retention period."
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.graph.alpha :as graph]
@@ -70,16 +72,47 @@
                                                           [:= [:attr "mr-review/repo"] repo]]]]
                            mr (conj [:= [:attr "mr-review/log-mr"] (str mr)])) {}))))
 
+(defn- expired-at? [strand attribute cutoff]
+  (try (.isBefore (java.time.Instant/parse (attr-get strand attribute)) cutoff)
+       (catch Exception _ false)))
+
+(defn- review-strands [rt]
+  (let [repo (:repo-dir @(settings rt))]
+    (weaver/list rt [:and [:= [:attr "mr-review/review"] "true"]
+                     [:= [:attr "mr-review/repo"] repo]] {})))
+
+(defn- owned-hook-log? [review path]
+  (let [file (io/file path)
+        temp-directory (.getCanonicalPath (io/file (System/getProperty "java.io.tmpdir")))
+        canonical (.getCanonicalPath file)
+        prefix (str "millstrand-review-" (:id review) "-")]
+    (and (string? path)
+         (str/starts-with? canonical (str temp-directory java.io.File/separator))
+         (str/starts-with? (.getName file) prefix)
+         (str/ends-with? (.getName file) ".log"))))
+
+(defn- prune-hook-logs! [rt cutoff]
+  (reduce (fn [deleted review]
+            (if-not (expired-at? review :mr-review/decided-at cutoff)
+              deleted
+              (+ deleted
+                 (count
+                  (filter (fn [path]
+                            (when (owned-hook-log? review path)
+                              (io/delete-file path true)))
+                          (keep #(attr-get review %) [:mr-review/setup-log
+                                                      :mr-review/teardown-log]))))))
+          0 (review-strands rt)))
+
 (defn prune! [rt]
   (let [days (:log-retention-days @(settings rt))
         cutoff (.minusSeconds (runtime/now rt) (* 86400 days))
-        expired (filter #(try (.isBefore (java.time.Instant/parse (attr-get % :mr-review/log-at)) cutoff)
-                              (catch Exception _ false))
-                        (event-strands rt nil))
-        ids (mapv :id expired)]
+        expired (filter #(expired-at? % :mr-review/log-at cutoff) (event-strands rt nil))
+        ids (mapv :id expired)
+        deleted-hook-logs (prune-hook-logs! rt cutoff)]
     (doseq [chunk (partition-all 100 ids)] (graph/burn-by-ids! rt (vec chunk)))
-    (append! rt "logs-pruned" {:burned (count ids) :retention-days days})
-    {:burned (count ids)}))
+    (append! rt "logs-pruned" {:burned (count ids) :hook-logs deleted-hook-logs :retention-days days})
+    {:burned (count ids) :hook-logs deleted-hook-logs}))
 
 (defn status [rt]
   {:command "strand review-logs [--mr IID] [--limit 1..100]"

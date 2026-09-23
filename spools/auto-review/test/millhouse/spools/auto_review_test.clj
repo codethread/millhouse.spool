@@ -266,6 +266,25 @@
       (is (= "operation-failed" (get-in (logs/status :runtime) [:last-error :reason])))
       (is (not (str/includes? (pr-str (logs/status :runtime)) "secret"))))))
 
+(deftest closed-review-hook-logs-are-pruned-at-the-configured-retention-boundary
+  (let [log-file (java.nio.file.Files/createTempFile
+                  "millstrand-review-review-setup-" ".log"
+                  (make-array java.nio.file.attribute.FileAttribute 0))
+        settings (atom config)
+        decided-at "2026-09-01T00:00:00Z"
+        review {:id "review" :attributes {:mr-review/review "true"
+                                          :mr-review/repo (:repo-dir config)
+                                          :mr-review/decided-at decided-at
+                                          :mr-review/setup-log (str log-file)}}]
+    (with-redefs [runtime/spool-state (fn [& _] {:config settings})
+                  runtime/now (fn [_] (java.time.Instant/parse "2026-09-15T00:00:00Z"))
+                  weaver/list (fn [_ query _]
+                                (if (str/includes? (pr-str query) "mr-review/review")
+                                  [review] []))
+                  logs/append! (fn [& _] nil)]
+      (is (= {:burned 0 :hook-logs 1} (logs/prune! :runtime)))
+      (is (not (java.nio.file.Files/exists log-file (make-array java.nio.file.LinkOption 0)))))))
+
 (deftest log-ordering-compares-instants-not-their-text
   (let [settings (atom nil)
         rows (mapv (fn [id at] {:id id :attributes {:mr-review/log-at at
@@ -431,6 +450,24 @@
                                                   review mr)))))
       (finally
         (doseq [file (reverse (file-seq root))] (io/delete-file file))))))
+
+(deftest workspace-inspection-rejects-tracked-changes-outside-the-admitted-revision
+  (let [directory (.toFile (java.nio.file.Files/createTempDirectory
+                            "review-inspection-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        sha (clojure.string/join (repeat 40 "a"))
+        mr {:sha sha :diff_refs {:base_sha sha}}]
+    (try
+      (with-redefs [review-io/command!
+                    (fn [_ argv _ _]
+                      (case (last argv)
+                        "HEAD" sha
+                        "--show-toplevel" (.getCanonicalPath directory)
+                        "--untracked-files=no" " M app.clj\n"
+                        (throw (ex-info "Unexpected Git invocation" {:argv argv}))))]
+        (is (thrown-with-msg? Exception #"tracked changes outside the admitted revision"
+                              (review-io/inspect-workspace! config mr (.getCanonicalPath directory)))))
+      (finally
+        (io/delete-file directory true)))))
 
 (deftest failed-setup-publishes-no-reviewer-requests
   (let [events (atom []) card {:id "card"}]
