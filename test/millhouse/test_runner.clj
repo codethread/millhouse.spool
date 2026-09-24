@@ -34,7 +34,8 @@
   during weaver startup, before the test body can provide an in-process
   activation seam. Keep that namespace out of the parallel pool so its startup
   reloads cannot overlap another fixture's shared JVM namespace reloads."
-  #{'millhouse.spools.auto-run-test
+  #{'millhouse.spools.auto-review-test
+    'millhouse.spools.auto-run-test
     'millhouse.consumer-test
     'millhouse.spools.executors.code-test
     'millhouse.spools.kanban-test
