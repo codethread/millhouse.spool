@@ -216,32 +216,40 @@
   (with-kanban
     (fn [rt]
       (let [entry (weaver/resolve-op rt 'kanban)
+            about (str/replace (:about entry) #"\s+" " ")
+            prime (str/replace (:prime entry) #"\s+" " ")
             subcommands (set (keys (get-in entry [:arg-spec :subcommands])))]
         (testing "cross-verb narrative is op metadata for the built-in meta-verbs"
-          (is (str/includes? (:about entry) "Kanban cards"))
-          (is (str/includes? (:about entry) "p1 is an immediate blocker"))
-          (is (str/includes? (:about entry) "kanban-batch"))
-          (is (str/includes? (:about entry) "Batteries"))
-          (doseq [guidance [(:about entry) (:prime entry)]]
+          (is (str/includes? about "Kanban cards"))
+          (is (str/includes? about "p1 is an immediate blocker"))
+          (is (str/includes? about "kanban-batch"))
+          (is (str/includes? about "Batteries"))
+          (doseq [guidance [about prime]]
             (is (str/includes? guidance "human decision"))
             (is (str/includes? guidance "blocker resolution"))
             (is (str/includes? guidance "not sequential stages"))
             (is (str/includes? guidance "not further along")))
-          (is (str/includes? (:about entry) "Keep agent review and agent decisions in claimed"))
-          (is (str/includes? (:prime entry) "Keep all agent progress in claimed"))
-          (is (str/includes? (:prime entry) "strand help kanban"))
-          (is (str/includes? (:prime entry) "Every agent doing direct user work"))
-          (is (str/includes? (:prime entry) "decompose the feature into tasks"))
+          (is (str/includes? about "Keep agent review and agent decisions in claimed"))
+          (is (str/includes? prime "Keep all agent progress in claimed"))
+          (is (str/includes? prime "strand help kanban"))
+          (is (str/includes? prime "Every agent doing direct user work"))
+          (is (str/includes? prime "decompose the feature into tasks"))
           (doseq [lane ["pending" "in_review" "claimed" "in_production"]]
-            (is (str/includes? (:prime entry)
+            (is (str/includes? prime
                                (str "strand update CARD_ID --attr kanban/lane=" lane))))
-          (is (str/includes? (:prime entry) "strand update TASK_ID --state closed"))
-          (is (str/includes? (:prime entry)
+          (is (str/includes? prime "strand update TASK_ID --state closed"))
+          (is (str/includes? prime
                              "Important user-visible notes must always be on the epic or feature"))
-          (is (str/includes? (:prime entry) "Use task notes as a development log"))
-          (is (str/includes? (:prime entry) "latest note is the resume read"))
-          (is (str/includes? (:prime entry) "exactly one active work root"))
-          (is (str/includes? (:prime entry) "strand weave --pattern kanban-batch")))
+          (is (str/includes? prime "Use task notes as a development log"))
+          (is (str/includes? prime "latest note is the resume read"))
+          (is (str/includes? prime "exactly one active work root"))
+          (is (str/includes? prime
+                             "beyond a single feature with its tasks, always read `strand about kanban`"))
+          (is (not (str/includes? prime "kanban-batch")))
+          (is (str/includes? about "strand weave --pattern kanban-batch"))
+          (is (str/includes? about "--edge parent-of:CHILD_ID"))
+          (is (str/includes? about "--edge depends-on:PREREQUISITE_ID"))
+          (is (str/includes? about "code is landed, not merely that a worker returned")))
         (testing "the built-in meta-verbs project Kanban's metadata"
           (is (= (:about entry) (:about (weaver/op! rt 'about ["kanban"]))))
           (is (= (:prime entry) (:prime (weaver/op! rt 'prime ["kanban"])))))
