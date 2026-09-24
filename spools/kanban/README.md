@@ -42,19 +42,29 @@ claimed or served by `next`.
 The active lanes are:
 
 - `refinement` — an idea that waits for explicit promotion to `pending`;
-- `pending` — actionable work, ordered p1 first and oldest first within a priority;
-- `claimed` — in progress: an agent is working, including implementation, testing, agent-to-agent review, resolving findings, and authorized landing; the card records its owner and branch;
-- `in_review` — human attention is needed: human review, approval, blocker resolution, or a pending human decision. Record the exact request on the feature or epic; return to `claimed` when agent work resumes.
+- `pending` — Ready: scoped work ready for pickup once its dependencies clear. It may be dependency-blocked; priority orders p1 first and oldest first within a priority.
+- `claimed` — In Progress: an agent is actually working now, including implementation, testing, agent-to-agent review, resolving findings, and authorized landing. A historical owner or open PR alone is not active progress.
+- `in_review` — In Review: the user needs to act. Only human review, approval, decisions, or intervention belong here. Record the exact request on the feature or epic; return to `claimed` only when agent work resumes.
 - `in_production` — optional post-merge deployment validation, settling, or coordinated release work; update into it from `claimed` or `in_review`, use `finish` to close it, or update back to `claimed` for rework. Reviewed work merged to main may still finish directly when its outcome is satisfied. Agents choose this lane only when follow-up work remains; no guard requires it.
 
 Lanes show attention status, not sequential progress. `in_review` is not further
 along than `claimed`: a human decision or blocker can need attention at any point.
 Agent review stays in `claimed`; it does not require a visit to `in_review`.
-Agent-resolvable blockers likewise stay in progress; use `depends-on` and notes
-to expose them without implying a human needs to act.
+Agent-resolvable blockers stay in `claimed` only while an agent is working on them.
+When work stops, a handoff has no active successor, or a card only waits on another
+card, return it to `pending` unless the user needs to act. Preserve ownership and
+failure evidence; lane changes do not clear blockers or authorize recovery.
+Reconcile every board at starts, stops and handoffs using current runs, workflow
+gates and latest notes, not stale receipts.
+
+Use `depends-on` for same-board prerequisites. Cross-board edges are not supported:
+record the exact owning workspace and card ID, keeping any local mirror gate until
+the upstream outcome is verified. An explicitly authorized await-only watcher uses
+`strand --workspace PATH await` and reissues bounded waits; it does not implement,
+release gates, or make the dependent card In Progress. A wake is not proof of delivery.
 
 Simple lane changes use `strand update CARD_ID --attr kanban/lane=LANE`,
-with `pending` for promotion, `in_review` for human attention, `claimed` for agent work,
+with `pending` for promotion or idle handoff, `in_review` for human attention, `claimed` for active agent work,
 and `in_production` for optional observation. These are direct attribute patches,
 not guarded transitions; inspect the current card and follow this lane discipline.
 Use `claim`, `finish`, and `reopen` for their structured lifecycle behavior.

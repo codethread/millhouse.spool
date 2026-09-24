@@ -84,9 +84,11 @@ devlog for details and bulk findings; `board` and `card` surface the newest note
 for a cold-start handoff. Important user-visible notes always belong on the epic
 or feature, not only on tasks users will rarely see. Review is a human-attention
 status, not a later progress stage: a blocker or pending human decision can need
-`in_review` even before implementation. Agent-resolvable blockers and agent
-reviews stay in `claimed`. The final card note records the outcome rather than
-pretending that a closed card is self-explanatory.
+`in_review` even before implementation. Agent review and active work on agent-resolvable blockers stay in `claimed`.
+If the worker stops or hands off without an active successor, return the card to
+`pending`; an old claim or failed gate does not make idle work In Progress.
+The final card note records the outcome rather than pretending that a closed card
+is self-explanatory.
 
 Simple lane changes are direct `strand update` patches, not guarded Kanban
 transitions. Inspect the current card and follow the lane discipline. Promote a
@@ -121,9 +123,39 @@ are resolved inside the weave and other dependency values are durable strand
 ids. If the same work needs an initiative lens, create an epic and attach
 features with `--epic`; its children keep independent priority, claims,
 branches, and review paths, while `next --epic` and the parameterized query
-serve only that epic's direct pending features.
+serve only that epic's direct pending features. Ready (`pending`) may include
+blocked cards: `kanban next` orders the pending queue, while
+`strand ready --query kanban-pending` selects dependency-ready work. Do not confuse
+a queue candidate with permission to bypass its prerequisites.
 
-## 3. Resume work and collect review across cards
+## 3. Keep waiting work out of In Progress
+
+**Situation.** Implementation has stopped because another card must deliver first.
+No human decision is needed, and the old owner/PR remains useful history.
+
+**Composition.** Move the dependent card to Ready and record its prerequisite:
+
+```sh
+strand update DEPENDENT_ID --edge depends-on:PREREQUISITE_ID
+strand update DEPENDENT_ID --attr kanban/lane=pending
+strand kanban note DEPENDENT_ID "Waiting for prerequisite delivery; no active implementation."
+```
+
+If the prerequisite is on another board, do not add its ID to the local graph.
+Record its confirmed `.millstrand` workspace path and ID. An explicitly authorized
+waiter inspects the remote `query explain` and `help await`, then calls
+`strand --workspace PATH await` against that exact target. Reissue bounded waits
+while outstanding; do not busy-poll or treat a timeout as completion. Verify the
+source card and declared outcome after a wake before any coordinated gate release.
+An await-only agent does not perform that release or implementation work and does
+not move the dependent card to `claimed`.
+
+**Why this shape.** Ready means ready for pickup once dependencies clear, not
+necessarily unblocked now. In Progress means actual work. Ownership history,
+blocker evidence and local mirror gates survive the lane change. Use `in_review`
+only if the user needs to act, with the exact request in a card note.
+
+## 4. Resume work and collect review across cards
 
 **Situation.** A new agent has no conversation context, while several branches
 may need human attention at once.

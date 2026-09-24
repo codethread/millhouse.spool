@@ -6,10 +6,11 @@
   working directly with a user works under a claimed card. All card state
   lives under `kanban/*` attributes; `kanban/lane` is the active board lane
   (`refinement`, `pending`, `claimed`, `in_review`, or `in_production`) and `kanban/outcome`
-  records a finished card's outcome. Lanes show attention status, not sequential
-  progress: `claimed` means agent work is in progress, including agent review;
-  `in_review` means human attention is needed for review, approval, a blocker,
-  or a pending decision. The
+  records a finished card's outcome. Lanes reflect current work and attention,
+  not historical ownership or sequential stages. `pending` means Ready, including
+  work blocked by dependencies; `claimed` means agent work is actually in progress,
+  including agent review; `in_review` means the user needs to act. Idle work returns
+  to `pending` unless it needs a human decision. The
   `kanban/priority` (p1 immediate blocker .. p4 someday, default p3) orders
   lanes and `kanban next`.
 
@@ -1563,13 +1564,39 @@
 
     ## Lanes and completion
 
-    Active cards use refinement (awaiting promotion), pending (actionable),
-    claimed (agent work), in_review (human review, approval, blocker resolution,
-    or a pending human decision), and optionally in_production after merge.
+    Every board must reflect current work, not historical ownership:
+
+    - Ready (`pending`): scoped work ready for pickup once its dependencies clear.
+      Ready may be dependency-blocked; it does not promise immediate execution.
+    - In Progress (`claimed`): an agent is actually implementing, testing,
+      reviewing, resolving findings, or driving authorized delivery now.
+      Keep agent review and agent decisions in claimed while that work is active.
+    - In Review (`in_review`): the user needs to act. Only human review, approval,
+      a decision, or a blocker requiring human intervention belongs here.
+      Record the exact human question or approval needed on the feature or epic.
+    - Refinement (`refinement`): an idea still awaiting explicit promotion.
+    - In Production (`in_production`): optional post-merge observation or release.
+
     These are attention statuses, not sequential stages: in_review is not further
-    along than claimed. Keep agent review and agent decisions in claimed.
-    Record the exact human question or approval needed on the feature or epic;
-    return to claimed when agent work resumes.
+    along than claimed. When an agent stops, hands off without an active successor,
+    or only waits for another card, return the inactive work to pending unless the
+    user needs to act. A retained claim, open PR, failed gate, running await-only
+    watcher, or intended retry is not proof that implementation is in progress.
+    Preserve ownership history and failure evidence; changing lanes neither clears
+    blockers nor authorizes recovery. Return to claimed only when work resumes.
+
+    Encode same-board prerequisites with depends-on edges. Graph edges are local
+    to one workspace; never use a foreign card ID as a local prerequisite. For a
+    cross-board hold, record the owning workspace and card ID, and keep any local
+    mirror gate until the upstream outcome is verified. An explicitly authorized
+    waiter uses `strand --workspace PATH await` with that workspace's live query
+    contract, reissues bounded waits, and does no implementation or gate release.
+    A watcher does not make the dependent card In Progress. A query wake is not
+    delivery evidence; verify the source card and its declared outcome.
+
+    Reconcile lanes whenever work starts, stops, is handed off, or needs human
+    input. Inspect current runs, workflow gates and latest notes before changing
+    another worker's card; an old receipt alone is not evidence of live work.
 
     Use `strand update CARD_ID --attr kanban/lane=LANE` for lane changes, not
     guarded transitions. Preserve structured `kanban claim`, `finish` and
@@ -1621,14 +1648,28 @@
     claim (and worktree when it exists); tasks inherit feature ownership until directly
     claimed. Children inherit graph context through parent-of.
 
-    Keep all agent progress in claimed, including implementation, testing, agent-to-agent
-    review, resolving agent findings, and authorized landing. Review means human attention,
-    not agent review: use `strand update CARD_ID --attr kanban/lane=in_review` when human
-    review, approval, blocker resolution, or a pending human decision is needed, at any
-    point in the work. Record the exact question, blocker, or approval needed on the
-    feature or epic. Lanes are attention statuses, not sequential stages; in_review is
-    not further along than claimed. When agent work resumes, use
-    `strand update CARD_ID --attr kanban/lane=claimed`.
+    Every board must reflect current work:
+
+    - Ready (`pending`) means scoped work ready for pickup once dependencies clear.
+      Ready may be dependency-blocked; record prerequisites with depends-on edges.
+    - In Progress (`claimed`) means an agent is actually working now. Keep all agent
+      progress in claimed, including implementation, testing, agent-to-agent review,
+      resolving findings, and authorized landing.
+    - In Review (`in_review`) means the user needs to act, not an agent reviewer.
+      Record the exact human question, approval or intervention on the feature or epic.
+
+    When work stops or a handoff has no active successor, use
+    `strand update CARD_ID --attr kanban/lane=pending` unless the user needs to act.
+    A retained claim, open PR, failed gate or await-only watcher is not active work.
+    Preserve ownership and failure evidence; a lane change does not clear blockers
+    or authorize recovery. Keep dependent work pending while another card is worked.
+    Cross-board waits require an explicit owning workspace, not foreign local edges;
+    read `strand about kanban` for workspace-aware waiting and outcome verification.
+    Use `strand update CARD_ID --attr kanban/lane=in_review` only for human attention.
+    Lanes are attention statuses, not sequential stages; in_review is not further
+    along than claimed. When agent work resumes, use
+    `strand update CARD_ID --attr kanban/lane=claimed`. Reconcile lanes at every start,
+    stop and handoff, checking current runs, workflow gates and latest notes first.
     These are direct attribute patches, not guarded transitions: inspect the current
     card and follow the lane discipline. Keep using `strand kanban claim`,
     `strand kanban finish`, and `strand kanban reopen` for their structured behavior.
