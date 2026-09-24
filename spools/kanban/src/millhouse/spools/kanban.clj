@@ -1589,8 +1589,16 @@
     to one workspace; never use a foreign card ID as a local prerequisite. For a
     cross-board hold, record the owning workspace and card ID, and keep any local
     mirror gate until the upstream outcome is verified. An explicitly authorized
-    waiter uses `strand --workspace PATH await` with that workspace's live query
-    contract, reissues bounded waits, and does no implementation or gate release.
+    waiter inspects that workspace's `help await` and `query explain strand-closed`,
+    then uses a bounded, target-specific wait:
+
+    ```sh
+    strand --workspace PATH --timeout 55m await --query strand-closed \\
+      --param id=REMOTE_CARD_ID --min-count 1 --timeout-secs 3000
+    ```
+
+    Reissue timeouts without implementation or gate release. If a source is already
+    closed, sleep between observations rather than busy-looping a matching query.
     A watcher does not make the dependent card In Progress. A query wake is not
     delivery evidence; verify the source card and its declared outcome.
 

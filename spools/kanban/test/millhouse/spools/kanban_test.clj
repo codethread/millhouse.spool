@@ -254,7 +254,8 @@
           (is (str/includes? about "--edge parent-of:CHILD_ID"))
           (is (str/includes? about "--edge depends-on:PREREQUISITE_ID"))
           (is (str/includes? about "code is landed, not merely that a worker returned"))
-          (is (str/includes? about "strand --workspace PATH await"))
+          (is (str/includes? about "strand --workspace PATH --timeout 55m await --query strand-closed"))
+          (is (str/includes? about "--param id=REMOTE_CARD_ID --min-count 1 --timeout-secs 3000"))
           (is (str/includes? about "A watcher does not make the dependent card In Progress")))
         (testing "the built-in meta-verbs project Kanban's metadata"
           (is (= (:about entry) (:about (weaver/op! rt 'about ["kanban"]))))

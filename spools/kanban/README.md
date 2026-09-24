@@ -60,8 +60,9 @@ gates and latest notes, not stale receipts.
 Use `depends-on` for same-board prerequisites. Cross-board edges are not supported:
 record the exact owning workspace and card ID, keeping any local mirror gate until
 the upstream outcome is verified. An explicitly authorized await-only watcher uses
-`strand --workspace PATH await` and reissues bounded waits; it does not implement,
-release gates, or make the dependent card In Progress. A wake is not proof of delivery.
+the complete bounded command in the [waiting recipe](kanban.cookbook.md#3-keep-waiting-work-out-of-in-progress)
+and reissues timeouts; it does not implement, release gates, or make the dependent
+card In Progress. A wake is not proof of delivery.
 
 Simple lane changes use `strand update CARD_ID --attr kanban/lane=LANE`,
 with `pending` for promotion or idle handoff, `in_review` for human attention, `claimed` for active agent work,

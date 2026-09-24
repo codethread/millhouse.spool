@@ -143,10 +143,20 @@ strand kanban note DEPENDENT_ID "Waiting for prerequisite delivery; no active im
 
 If the prerequisite is on another board, do not add its ID to the local graph.
 Record its confirmed `.millstrand` workspace path and ID. An explicitly authorized
-waiter inspects the remote `query explain` and `help await`, then calls
-`strand --workspace PATH await` against that exact target. Reissue bounded waits
-while outstanding; do not busy-poll or treat a timeout as completion. Verify the
-source card and declared outcome after a wake before any coordinated gate release.
+waiter first checks that the remote query and command have this contract:
+
+```sh
+strand --workspace PATH help await
+strand --workspace PATH query explain strand-closed
+strand --workspace PATH --timeout 55m await --query strand-closed \
+  --param id=REMOTE_CARD_ID --min-count 1 --timeout-secs 3000
+```
+
+Replace `PATH` with the owning workspace and `REMOTE_CARD_ID` with its card ID.
+Reissue bounded waits while outstanding; do not treat a timeout as completion.
+After a match, verify the source card and declared outcome before any coordinated
+gate release. If instructed to keep watching a closed card, sleep between
+observations instead of busy-looping the already-satisfied query.
 An await-only agent does not perform that release or implementation work and does
 not move the dependent card to `claimed`.
 
