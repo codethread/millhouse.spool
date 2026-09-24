@@ -136,4 +136,21 @@ kanban-serve:
 		"$$file" "$$port" "$$ip" "$$port" "$(ID)" "$(KANBAN_EXPORT_DIR)"; \
 	python3 -m http.server "$$port" --bind 0.0.0.0 --directory "$(KANBAN_EXPORT_DIR)"
 
-quality: fmt-check lint reflect-check docs-check test kanban-dash-check
+# Keep package classpaths and toolchains independent. These checks deliberately
+# run in separate processes instead of extending the aggregate Millhouse basis.
+.PHONY: packages-check harnesses-check devflow-check config-check workspace-test
+harnesses-check:
+	$(MAKE) -C spools/harnesses check
+
+devflow-check:
+	$(MAKE) -C spools/devflow check
+
+config-check:
+	$(MAKE) -C spools/config check
+
+workspace-test:
+	cd .millstrand && clojure -M:test
+
+packages-check: harnesses-check devflow-check config-check workspace-test
+
+quality: fmt-check lint reflect-check docs-check test kanban-dash-check packages-check

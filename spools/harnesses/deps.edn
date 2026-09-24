@@ -1,0 +1,16 @@
+{:paths ["src" "resources"]
+ :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
+                                  :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
+                                  :deps/root "."}
+        millhouse.spools/kanban {:local/root "../kanban"}
+        millhouse.spools/workflow {:local/root "../workflow"}}
+ :aliases {:test {:extra-paths ["test"]
+                  :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
+                  :main-opts ["-m" "ct.spools.harnesses.test-runner"]}
+           :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
+                    :main-opts ["-m" "cljfmt.main" "check" "src" "test"]}
+           :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
+                        :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
+           :lint/splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.21.0"}}
+                         :main-opts ["-m" "noahtheduke.splint" "--output" "clj-kondo"
+                                     "src" "test"]}}}

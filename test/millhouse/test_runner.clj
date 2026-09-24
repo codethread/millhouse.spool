@@ -12,6 +12,7 @@
     millhouse.spools.millstrand-workflows-test
     millhouse.authoring-forms-test
     millhouse.consumer-test
+    millhouse.package-layout-test
     millhouse.executor-discovery-test
     millhouse.spools.workflow-test
     millhouse.spools.workflow-cli-test

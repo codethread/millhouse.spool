@@ -62,7 +62,7 @@ worker returns immediately and never completes any finisher phase. The finisher
 uses explicit --step selectors because its custody anchor remains ready beside
 its current phase; it closes that anchor last, after verified landing.
 
-Follow Codethread's canonical agent blocker contract. Full-land failures leave
+Follow the shared [agent blocker contract](processes/auto-run.md#agent-blocker-contract). Full-land failures leave
 the delivery open and retain owned resources and merge reservations; do not retry,
 replace workers, clear gate errors, or withdraw a merge turn without explicit
 recovery authorization. Normal bounded queue waits are not failures.
@@ -91,8 +91,8 @@ a changed request is not a replay. It does not launch or claim anything, clear
 blockers, or grant recovery authorization. It requires Harnesses' public
 `call-with-run-publication-lock` boundary to serialize validation and registration
 with run acceptance. This is not protection against arbitrary raw graph edits.
-The workspace and Auto-run library pin the published Harnesses revision providing
-that API. Production activation remains a separate coordinator-owned action.
+The workspace and Auto-run library select the local Harnesses package providing
+that API at the same Millhouse revision. Production activation remains a separate coordinator-owned action.
 The worker must verify the reconciled receipt before accepting a finisher; a
 stale receipt is an actionable stop, not permission to await the earlier worker. Harnesses requests and their lineage remain immutable.
 
@@ -127,8 +127,8 @@ actual successful worker settlement, reject stale or foreign recovery lineage,
 and exercise accepted-finisher recovery before receipts exist, exact request
 idempotency and immutable-payload conflicts. It does not simulate successful external review or GitHub merging.
 
-Changing the Codethread dependency basis requires the supported planned Weaver
-restart. Source-only policy edits can use normal module refresh. Restart only
+Changing the loaded dependency basis requires separate operator-authorized
+activation. Never restart a running Weaver without explicit user sign-off. Source-only policy edits can use normal module refresh. Restart only
 this repository's Weaver, never unrelated Weavers, then verify `strand auto-run
 status`, `strand workflow show auto-human-review`, and `strand workflow show
 auto-full-land` before opting in production work.

@@ -21,7 +21,7 @@ select the operation, reporting patterns, workflows and lifecycle configuration;
 no default seat, cadence, workflow, concurrency or automatic activation is
 introduced by this library.
 
-See the [activation and delivery contract](https://github.com/codethread/codethread.spool/blob/main/docs/processes/auto-run.md)
+See the [activation and delivery contract](https://github.com/codethread/millhouse.spool/blob/main/docs/processes/auto-run.md)
 and the [API](auto-run.api.md).
 
 The extraction preserves persisted `auto-run/*` attributes, the scheduler key

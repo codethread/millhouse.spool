@@ -1,0 +1,244 @@
+[
+	{
+		"basis_fingerprint": "sha256:01e7bf8275d68dc735188d6389841d4faa363c081c50dd58f12c4a63e3b385de",
+		"config_dir": "/Users/ct/dev/projects/agents/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442/data/millstrand.sqlite",
+		"generation_id": "generation-6b6e94f3316478f56ab87a10276419bb",
+		"host_generation_id": "host-generation-ed52ccc81404280d7c816c3d5449dcf0",
+		"host_id": "host-14ec8714477d4f41f5345394580897ac",
+		"jvm_pool": "dev",
+		"live_members": [
+			"/Users/ct/dev/projects/agents/.millstrand",
+			"/Users/ct/dev/projects/notes/.millstrand"
+		],
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442/weaver.log",
+		"member_basis_fingerprint": "sha256:7bf6293f6e0187f2d3249e7d398284dbdd666e7f1f99f8a45ed69f62d20b76d1",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 56974
+		},
+		"old_generation_stopped": false,
+		"pending_members": [],
+		"pid": 163,
+		"pool_restart_path": "/Users/ct/.local/state/millstrand/jvm-pools/hosts/903239f6f3947a716ff638631d9e4539/restart.json",
+		"registered_members": [
+			"/Users/ct/dev/projects/agents/.millstrand",
+			"/Users/ct/dev/projects/notes/.millstrand"
+		],
+		"restart_required": false,
+		"restart_state": "running",
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442/weaver.sock",
+		"started_at": "2026-09-13T07:38:44.763232Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/4d47bd9e112aa4032a5457e696f9e442",
+		"transition_id": "transition-2e305da8c140114fd384ef698e0f4835",
+		"version": "0.5.2",
+		"weaver_id": "weaver-7fa89541c7e462273450aea1c9ebb732"
+	},
+	{
+		"basis_fingerprint": "sha256:01e7bf8275d68dc735188d6389841d4faa363c081c50dd58f12c4a63e3b385de",
+		"config_dir": "/Users/ct/dev/projects/notes/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe/data/millstrand.sqlite",
+		"generation_id": "generation-7c587b4ec85392c541eec19bfcf3f14a",
+		"host_generation_id": "host-generation-ed52ccc81404280d7c816c3d5449dcf0",
+		"host_id": "host-14ec8714477d4f41f5345394580897ac",
+		"jvm_pool": "dev",
+		"live_members": [
+			"/Users/ct/dev/projects/agents/.millstrand",
+			"/Users/ct/dev/projects/notes/.millstrand"
+		],
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe/weaver.log",
+		"member_basis_fingerprint": "sha256:4dacb68987811985695de03edbf9d8fac6afd4380e95d99aa3186df2b35221c0",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 56979
+		},
+		"old_generation_stopped": false,
+		"pending_members": [],
+		"pid": 163,
+		"pool_restart_path": "/Users/ct/.local/state/millstrand/jvm-pools/hosts/903239f6f3947a716ff638631d9e4539/restart.json",
+		"registered_members": [
+			"/Users/ct/dev/projects/agents/.millstrand",
+			"/Users/ct/dev/projects/notes/.millstrand"
+		],
+		"restart_required": false,
+		"restart_state": "running",
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe/weaver.sock",
+		"started_at": "2026-09-13T07:38:48.361052Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/9aed98a8de20caa36402c1db3ef075fe",
+		"transition_id": "transition-2e305da8c140114fd384ef698e0f4835",
+		"version": "0.5.2",
+		"weaver_id": "weaver-47dcbe16c3d76b421aae4277388c3c46"
+	},
+	{
+		"basis_fingerprint": "sha256:4e5327ba978e57aef3d353bfa58c019c3a3bf37c9ff231d44ff83c03386490f1",
+		"config_dir": "/Users/ct/dev/projects/devflow.spool/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f/data/millstrand.sqlite",
+		"generation_id": "bf2b672f-cf5f-4756-bb9e-06511bdd74e5",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f/weaver.log",
+		"name": "devflow-spool",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 58275
+		},
+		"pid": 25900,
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f/weaver.sock",
+		"started_at": "2026-09-13T07:58:40.726739Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/e5ce94d7835c1c7e73243abb88bbb95f",
+		"version": "0.5.2",
+		"weaver_id": "08e2c7e6-343c-4c5a-a082-f9c0f94506a7"
+	},
+	{
+		"basis_fingerprint": "sha256:401fd3c33f6e16ec13e29feed5f3d0724687e42a12b9d41b24547a1a654062e9",
+		"config_dir": "/Users/ct/dev/projects/millhouse.spool/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350/data/millstrand.sqlite",
+		"generation_id": "601588f3-741c-48d4-a822-c5f2bfb6f736",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350/weaver.log",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 58010
+		},
+		"pid": 17779,
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350/weaver.sock",
+		"started_at": "2026-09-13T07:49:42.255286Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/df177c7fb1b323efbc714561bee1e350",
+		"transition_id": "transition-807bb7a827512c67b90ba9cca5b038bb",
+		"version": "0.5.2",
+		"weaver_id": "ee742f5d-2cd7-4335-9397-7bdbd4244a1f"
+	},
+	{
+		"basis_fingerprint": "sha256:f35bf6f4403b3d829dfa4394bd0525b3ab781699555859176a97ce531df9984b",
+		"config_dir": "/Users/ct/dev/projects/skein-src/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab/data/millstrand.sqlite",
+		"generation_id": "7a436b97-8b2b-4c83-a7fe-df6209ffb5cb",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab/weaver.log",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 59697
+		},
+		"pid": 67258,
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab/weaver.sock",
+		"started_at": "2026-09-13T08:32:38.229365Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/439efa9b0cf2bf51bad01d6f970b0bab",
+		"transition_id": "transition-d8806cd5aa7cac98e8b02572396c1e9e",
+		"version": "0.5.2",
+		"weaver_id": "345cbfb2-3afa-4882-861a-ee2ff2e41109"
+	},
+	{
+		"basis_fingerprint": "sha256:97d86dd8d7f071d3626de7868f9e91333e9c053868e74a91879cbd9c5419bfce",
+		"config_dir": "/Users/ct/dev/projects/codethread.spool/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3/data/millstrand.sqlite",
+		"generation_id": "cfdde32b-c4cf-4d1d-ba7c-ad05b90b7828",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3/weaver.log",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 58324
+		},
+		"pid": 27566,
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3/weaver.sock",
+		"started_at": "2026-09-13T08:00:57.278502Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/e298324664995b2c60a9fbd40c635fe3",
+		"transition_id": "transition-c758358a7c56145cf8366ed356a2323f",
+		"version": "0.5.2",
+		"weaver_id": "4797a077-942d-459f-967a-54686b747300"
+	},
+	{
+		"config_dir": "/private/tmp/harnesses-migration-smoke.1EFvJA/repo/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/5e617e68ca6944f43d5719b748956058/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/5e617e68ca6944f43d5719b748956058/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/5e617e68ca6944f43d5719b748956058/data/millstrand.sqlite",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/5e617e68ca6944f43d5719b748956058/weaver.log",
+		"name": ".millstrand",
+		"state": "stopped",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/5e617e68ca6944f43d5719b748956058"
+	},
+	{
+		"basis_fingerprint": "sha256:44d0fd58e8d4f676c8ed06a7d13bdc0e4e3aec2f5b28eb2320f8b8c073a3cc5a",
+		"config_dir": "/Users/ct/dev/projects/harnesses.spool/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d/data/millstrand.sqlite",
+		"generation_id": "61f84d21-41d0-48a9-8403-6b0ef7122ef1",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d/weaver.log",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 56057
+		},
+		"pid": 84016,
+		"restart_failure": {
+			"message": "restart probe failed at probe/failure",
+			"stage": "probe"
+		},
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d/weaver.sock",
+		"started_at": "2026-09-13T07:32:36.420945Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/80003fcd8487b00c87b2b09f6b04361d",
+		"transition_id": "transition-026e72a61b72b31dc23a039791431c26",
+		"version": "0.5.2",
+		"weaver_id": "be9cf6c8-697a-4e61-afb7-dfdee8e87bf1"
+	},
+	{
+		"config_dir": "/private/tmp/millstrand-harnesses-smoke.P7KbTU/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/60727eca76b05c79a71da5a99211da06/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/60727eca76b05c79a71da5a99211da06/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/60727eca76b05c79a71da5a99211da06/data/millstrand.sqlite",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/60727eca76b05c79a71da5a99211da06/weaver.log",
+		"name": ".millstrand",
+		"state": "stopped",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/60727eca76b05c79a71da5a99211da06"
+	},
+	{
+		"basis_fingerprint": "sha256:f7a779e0d0a495c03d114b0ec06022c038152ede607e0ade5e5ee9fe50f54373",
+		"config_dir": "/Users/ct/dev/projects/agent-harness.spool/.millstrand",
+		"data_dir": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752/data",
+		"database_kind": "sqlite-file",
+		"database_label": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752/data/millstrand.sqlite",
+		"database_path": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752/data/millstrand.sqlite",
+		"generation_id": "8890482d-5944-45a2-82ea-52f265e187b1",
+		"log_path": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752/weaver.log",
+		"name": ".millstrand",
+		"nrepl": {
+			"host": "127.0.0.1",
+			"port": 56914
+		},
+		"pid": 98888,
+		"socket_path": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752/weaver.sock",
+		"started_at": "2026-09-13T07:38:06.633034Z",
+		"state": "running",
+		"state_dir": "/Users/ct/.local/state/millstrand/weavers/92ad6dd941f0840553fd7f0fdef15752",
+		"version": "0.5.2",
+		"weaver_id": "c07c8c0e-36f7-4fe8-8c84-8c44df3e5ec2"
+	}
+]

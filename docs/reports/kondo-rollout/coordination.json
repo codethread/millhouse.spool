@@ -1,0 +1,283 @@
+{
+	"epic": "qnmh1",
+	"coordinator": "alri9",
+	"goal": "Five active repositories have passing Kondo exports/import/lint/editor proof, reviewed published main changes and restarted affected workers",
+	"tasks": {
+		"research": "qflyz",
+		"review": "img2u",
+		"landing": "t6guj",
+		"restarts": "lr2mx",
+		"report": "av1ws",
+		"shared_process": "igem6"
+	},
+	"initial_runs": {
+		"millstrand": "ask2p",
+		"millhouse": "2jvqe",
+		"research": "zei0s"
+	},
+	"repositories": [
+		{
+			"repo": "skein-src",
+			"card": "cilg3",
+			"worktree": "/Users/ct/dev/projects/skein-src__kondo-rollout",
+			"branch": "rollout/kondo",
+			"state": "published_and_verified",
+			"runs": ["ask2p", "t8hvl", "4qqz6", "epgc6"],
+			"restart": "running_verified",
+			"validation": {
+				"kondo_roots": 4,
+				"lsp_errors": 0,
+				"lsp_warnings": 0,
+				"tests": 794,
+				"assertions": 4911,
+				"focused_tests": 12,
+				"focused_assertions": 86,
+				"other": "Go tests, E2E, formatting, strict lint, reflection, docs and CI config passed; make -j8 kondo independently passed on main",
+				"final_main_parallel_kondo": "passed",
+				"workspace_lsp_errors": 0,
+				"workspace_lsp_warnings": 0,
+				"actual_init_sentinel": "unresolved-symbol detected in disposable copy",
+				"assignment_import": "present",
+				"tracked_generated_imports": 0,
+				"startup_regression": {
+					"tests": 62,
+					"assertions": 342,
+					"result": "passed; regression red before fix, green after"
+				}
+			},
+			"validated_main_commit": "0ce3725ee09f29e690623a10f1d86640af1d92ad",
+			"worker_after": {
+				"pid": 53498,
+				"generation_id": "fcdb2151-582e-42f4-a80b-79fd65eea54b",
+				"basis_fingerprint": "sha256:1a209170807e08b1d0912c5d4b34d4efb8b4cfc20c46091b8a682fde06b337ee",
+				"started_at": "2026-09-13T10:32:28.578331Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": [
+					"explore",
+					"fix",
+					"intake",
+					"land",
+					"publish-spool-kondo",
+					"release",
+					"review",
+					"story"
+				],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "millhouse.spool",
+			"card": "1bmv4",
+			"worktree": "/Users/ct/dev/projects/millhouse.spool__kondo-rollout",
+			"branch": "rollout/kondo",
+			"state": "published_and_verified",
+			"runs": ["2jvqe"],
+			"restart": "running_verified",
+			"validation": {
+				"kondo_roots": 7,
+				"lsp_errors": 0,
+				"lsp_warnings": 0,
+				"tests": 395,
+				"assertions": 2982,
+				"focused_tests": 3,
+				"focused_assertions": 34,
+				"other": "make quality, make -j8 kondo and per-package LSP passed; workspace LSP source discovery corrected and proved in pin phase.",
+				"final_main_parallel_kondo": "passed",
+				"workspace_lsp_errors": 0,
+				"workspace_lsp_warnings": 0,
+				"actual_init_sentinel": "unresolved-symbol detected in disposable copy",
+				"assignment_import": "present",
+				"tracked_generated_imports": 0
+			},
+			"validated_main_commit": "f3e2b7263140ca6f69f46cb00a76f74296b51099",
+			"worker_after": {
+				"pid": 53316,
+				"generation_id": "24e806d5-0b5d-4729-9173-b0c0064389c9",
+				"basis_fingerprint": "sha256:6c5a519bc4aa6662fd2f6d8ec12ca9fbaef74431c0f95e1e4dbf4a4af52224cb",
+				"started_at": "2026-09-13T10:32:18.082485Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "codethread.spool",
+			"card": "kkoky",
+			"worktree": "/Users/ct/dev/projects/codethread.spool__kondo-consumer",
+			"branch": "rollout/kondo",
+			"state": "published_and_verified",
+			"runs": ["sjjzj", "zjg78"],
+			"restart": "running_verified",
+			"validation": {
+				"kondo_roots": 3,
+				"lsp_errors": 0,
+				"lsp_warnings": 0,
+				"tests": 6,
+				"assertions": 52,
+				"other": "Go format/vet/tests/build, parallel Kondo, controlled resolver and recursive failure checks passed; coordinator reran Kondo on main",
+				"final_main_parallel_kondo": "passed",
+				"workspace_lsp_errors": 0,
+				"workspace_lsp_warnings": 0,
+				"actual_init_sentinel": "unresolved-symbol detected in disposable copy",
+				"assignment_import": "present",
+				"tracked_generated_imports": 0
+			},
+			"validated_main_commit": "8f7d99354fef66b43693fcb2002c6ccdd5001267",
+			"worker_after": {
+				"pid": 53884,
+				"generation_id": "d0218668-de22-4152-a1e8-0f6ecfac2b7a",
+				"basis_fingerprint": "sha256:1b0ce778292567feb5f4fd0648b9e913ceb545548e5234b39136536e4eace58a",
+				"started_at": "2026-09-13T10:32:46.883742Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "harnesses.spool",
+			"card": "i01vo",
+			"worktree": "/Users/ct/dev/projects/harnesses.spool__kondo-rollout",
+			"branch": "rollout/kondo",
+			"state": "published_and_verified",
+			"runs": ["yfrjy"],
+			"restart": "running_verified",
+			"validation": {
+				"kondo_roots": 2,
+				"tests": 77,
+				"assertions": 472,
+				"lsp_errors": 0,
+				"lsp_warnings": 0,
+				"other": "make check and parallel Kondo passed; root corrected LSP source discovery and independently proved actual Make target positive and workspace sentinel-negative cases; main Kondo passed",
+				"final_main_parallel_kondo": "passed",
+				"workspace_lsp_errors": 0,
+				"workspace_lsp_warnings": 0,
+				"actual_init_sentinel": "unresolved-symbol detected in disposable copy",
+				"assignment_import": "present",
+				"tracked_generated_imports": 0
+			},
+			"validated_main_commit": "99d9a304b02aca002e18769327c0f8b233ee4d97",
+			"worker_after": {
+				"pid": 51854,
+				"generation_id": "5ab9be84-5444-45e4-9346-e1c25a50602a",
+				"basis_fingerprint": "sha256:e4ec35d9b40595a6422dafaf6b3c740dfb8fb6303472395bf9dd8ce33c6401e5",
+				"started_at": "2026-09-13T10:31:34.934817Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "devflow.spool",
+			"card": "mzs31",
+			"worktree": "/Users/ct/dev/projects/devflow.spool__kondo-rollout",
+			"branch": "rollout/kondo",
+			"state": "published_and_verified",
+			"runs": ["wv53e", "9v6y9"],
+			"restart": "running_verified",
+			"validation": {
+				"final_main_parallel_kondo": "passed",
+				"workspace_lsp_errors": 0,
+				"workspace_lsp_warnings": 0,
+				"actual_init_sentinel": "unresolved-symbol detected in disposable copy",
+				"assignment_import": "present",
+				"kondo_roots": 3,
+				"tests": 21,
+				"assertions": 243,
+				"adapter_tests": 5,
+				"adapter_assertions": 44,
+				"lsp_errors": 0,
+				"lsp_warnings": 0,
+				"other": "Root and independent adapter suite passed; possible overlapping tests; controlled resolver failure verified.",
+				"tracked_generated_imports": 0
+			},
+			"validated_main_commit": "0c00b9c681de3faa326f64bd0ef966ae2fa0835b",
+			"worker_after": {
+				"pid": 53105,
+				"generation_id": "e4ba313c-607f-493d-b6b5-97c9cec51d3b",
+				"basis_fingerprint": "sha256:266339024bd6249ea55ae7ad4841d777086d59b15eb978a8193bbce5856ca6a8",
+				"started_at": "2026-09-13T10:32:10.691127Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		}
+	],
+	"common_instructions": "This is implementation under ecosystem epic qnmh1, coordinated by feature alri9. Track via strand --workspace /Users/ct/dev/projects/codethread.spool/.millstrand. Read repository AGENTS.md and applicable Clojure/review/test/robustness skills. Claim your assigned feature (your generated identity), create task slices before execution and keep detailed task notes plus lean feature handover. Work ONLY in your supplied worktree and do not edit sibling repositories. No new agents unless coordinator explicitly asks; do your bounded repo work yourself. User authorizes source fixes, commits, dependency updates, all-main landing and restarts, but coordinator sequences main landing and shared restarts: commit on your branch, do not merge/push main or restart any shared worker. Never tag Millstrand V1. Workspace tests must use disposable mktemp dirs with explicit --workspace, never shared .millstrand. Kill only exact owned PIDs. Preserve unrelated changes. Finish by leaving feature in review, return commit(s), concise source changes, exact validation results/limits and required downstream pins; do not close feature until coordinator accepts.\nCommon contract: root Make targets kondo-import (resolved-classpath --copy-configs), kondo-lint (lint relevant source/test/workspace using imports), kondo (ordered import then lint). Only macro-owning package roots need resources/clj-kondo.exports containing their own mappings; pure consumers must not add empty exports or duplicate producer mappings. Cover nested package roots and relevant aliases/workspace bases deliberately; avoid importing from unrelated classpaths or stale user caches. Do not blindly suppress new lint failures. Keep existing quality meaningful and include Kondo where appropriate. Use actual producer APIs in clean consumer proof, including generated handler names. Prior investigation /Users/ct/dev/projects/codethread.spool__kondo-investigation/docs/reports/kondo-investigation/recommendation.md proves packaging already works; erroneous initial hook defect was withdrawn (Chime <name>-rule and executor <name>-stalled?). Research task qflyz will provide headless LSP guidance; read its latest notes later. Prefer clear small scripts and existing tooling over new frameworks. All aggregate loops must stop on any failed root. Classpath assignments must succeed before Kondo runs. Use -Srepro -Spath before the selected -M alias. make -j kondo must complete all imports before lint; kondo-lint is source-only. See editor-verification.md for isolated per-package LSP checks.",
+	"updated_at": "2026-09-13T10:34:23.566646+00:00",
+	"continuations": {
+		"millstrand_review": "t8hvl",
+		"codethread_review": "zjg78",
+		"dresser_review": "rvmi5",
+		"devflow_cleanup": "9v6y9",
+		"millstrand_import_cleanup": "4qqz6",
+		"restart_diagnosis": "icqbg",
+		"restart_cause_correction": "lnr9y",
+		"restart_loader_fix": "epgc6"
+	},
+	"pin_feature": "ytciv",
+	"pin_plan": "Completed publication: Harnesses e8a2647 -> Codethread Config8f7d993 -> four current workspaces. Preserve compatible library pins.",
+	"shared_process": "docs/processes/kondo-and-lsp.md",
+	"excluded": [
+		{
+			"repo": "agent-harness.spool",
+			"card": "pttl5",
+			"state": "excluded_unmerged",
+			"worktree": "/Users/ct/dev/projects/agent-harness.spool__kondo-rollout"
+		},
+		{
+			"repo": "dresser.spool",
+			"card": "xgh7s",
+			"state": "excluded_unmerged",
+			"worktree": "/Users/ct/dev/projects/dresser.spool__kondo-rollout"
+		},
+		{
+			"repo": "notebook.spool",
+			"card": "scr01",
+			"state": "excluded_unmerged",
+			"worktree": "/Users/ct/dev/projects/notebook.spool__kondo-rollout"
+		},
+		{
+			"repo": "standup.spool",
+			"card": "2qqqf",
+			"state": "excluded_unmerged",
+			"worktree": "/Users/ct/dev/projects/standup.spool__kondo-rollout"
+		},
+		{
+			"repo": "tidy.spool",
+			"card": "88k4i",
+			"state": "excluded_unmerged",
+			"worktree": "/Users/ct/dev/projects/tidy.spool__kondo-rollout"
+		}
+	],
+	"scope": "Codethread, Millstrand (skein-src), Millhouse, Harnesses and Devflow only; user clarification supersedes initial broader inventory.",
+	"pin_runs": ["ye4zb", "2t9ea"],
+	"restart_unblock": {
+		"commit": "0ce3725ee09f29e690623a10f1d86640af1d92ad",
+		"cause": "Startup evaluation did not bind Compiler/LOADER to the resolved generation dependency loader; candidate-only bootstrap require failed.",
+		"disposable_real_restart": "Harnesses start and supported restart passed with isolated state; temporary processes cleaned."
+	},
+	"status": "complete",
+	"runtime_evidence": "workers-after.json",
+	"main_check_evidence": "final-main-checks.json",
+	"final_report": "results.md"
+}

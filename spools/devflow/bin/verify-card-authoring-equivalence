@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: bin/verify-card-authoring-equivalence [--core-release FILE]
+
+Verify the fixed merged-proposal fixture through both the strand-native and
+Kanban card-authoring targets. Release inputs are immutable published records;
+local/root dependency overrides are not accepted as release evidence.
+EOF
+  exit 2
+}
+
+core_release=""
+while (($# > 0)); do
+  case "$1" in
+    --core-release) [[ $# -ge 2 ]] || usage; core_release=$2; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "verify-card-authoring-equivalence: unknown argument: $1" >&2; usage ;;
+  esac
+done
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+core_sha=34f940ddb2e69898554bf76251749715b250ae15
+
+if [[ -n "$core_release" ]]; then
+  [[ -f "$core_release" ]] || { echo "missing core release: $core_release" >&2; exit 1; }
+  read -r core_repository core_coordinate core_ref_kind core_sha_from_file < <(
+    python3 - "$core_release" <<'PY'
+import json, re, sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    value = json.load(handle)
+required = {"card", "repository", "coordinate", "ref-kind", "sha",
+            "landed-main-commit", "land-run", "verification"}
+missing = sorted(required - value.keys())
+if missing:
+    raise SystemExit("missing core release fields: " + ", ".join(missing))
+forbidden = sorted({"tag", "peeled-sha"} & value.keys())
+if forbidden:
+    raise SystemExit("core release contains forbidden fields: " + ", ".join(forbidden))
+if value["ref-kind"] != "sha":
+    raise SystemExit("core release ref-kind must be sha")
+if value["coordinate"] != "io.millstrand/millstrand":
+    raise SystemExit("core release coordinate must be io.millstrand/millstrand")
+for field in ("sha", "landed-main-commit"):
+    if not re.fullmatch(r"[0-9a-f]{40}", value[field]):
+        raise SystemExit(f"core release {field} must be lowercase 40-hex")
+if value["sha"] != value["landed-main-commit"]:
+    raise SystemExit("core release SHA must equal landed-main-commit")
+if not isinstance(value["verification"], list) or not value["verification"]:
+    raise SystemExit("core release verification must be a non-empty array")
+print(value["repository"], value["coordinate"], value["ref-kind"], value["sha"])
+PY
+  )
+  [[ "$core_repository" == "codethread/millstrand" ]] || {
+    echo "core release repository must be codethread/millstrand" >&2; exit 1;
+  }
+  [[ "$core_coordinate" == "io.millstrand/millstrand" && "$core_ref_kind" == sha ]] || exit 1
+  core_sha=$core_sha_from_file
+fi
+
+[[ "$core_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid core SHA" >&2; exit 1; }
+command -v clojure >/dev/null 2>&1 || { echo "missing command clojure" >&2; exit 1; }
+
+# The fixture is deliberately a merged-proposal shape rather than a storage
+# id. Both targets author through workflow steps, so storage ids are absent at
+# this boundary; the normalized contract is what downstream card systems must
+# preserve.
+(cd "$repo_root" && MSR04_CORE_SHA="$core_sha" \
+  clojure -M:equivalence-published)

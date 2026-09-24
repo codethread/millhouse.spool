@@ -42,7 +42,15 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Automatic delivery: docs/auto-run.md
+  - Consolidation and handoff: docs/consolidation.md
+  - Shared processes: docs/README.md
   - Spools:
+      - Harnesses: spools/harnesses/README.md
+      - Native identity plugins: spools/harnesses/plugins/millstrand-identity/README.md
+      - Devflow: spools/devflow/README.md
+      - Devflow guide: spools/devflow/devflow.md
+      - Devflow Kanban adapter: spools/devflow/kanban-adapter/README.md
+      - Codethread config: spools/config/README.md
       - Auto-review:
           - Contract: spools/auto-review/README.md
           - API: spools/auto-review/auto-review.api.md

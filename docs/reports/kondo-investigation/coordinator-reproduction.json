@@ -1,0 +1,78 @@
+{
+	"date": "2026-09-13",
+	"deps_edn": "{:paths [\"src\"]\n :deps {io.millstrand/millstrand {:git/url \"https://github.com/codethread/millstrand.git\" :git/sha \"310368dff9174bd889ad21d4ed8196952684eaf9\"}\n        millhouse.spools/chime {:git/url \"https://github.com/codethread/millhouse.spool.git\" :git/sha \"f487eb42ea9523e8bd405e64a7c319013217d988\" :deps/root \"spools/chime\"}\n        millhouse.spools/cron {:git/url \"https://github.com/codethread/millhouse.spool.git\" :git/sha \"f487eb42ea9523e8bd405e64a7c319013217d988\" :deps/root \"spools/cron\"}\n        millhouse.spools/workflow {:git/url \"https://github.com/codethread/millhouse.spool.git\" :git/sha \"f487eb42ea9523e8bd405e64a7c319013217d988\" :deps/root \"spools/workflow\"}}}\n",
+	"corrected_consumer_clj": "(ns consumer\n  (:require [millstrand.api.millstrand.alpha :as mill]\n            [millhouse.spools.chime :as chime]\n            [millhouse.spools.cron :as cron]\n            [millhouse.spools.workflow :as workflow]))\n\n(mill/defop sample-op \"Sample operation.\" {:arg-spec {:op \"sample\" :doc \"Sample.\"}} [_] :ok)\n(mill/defop! sample-op-bang \"Sample operation.\" {:arg-spec {:op \"sample\" :doc \"Sample.\"}} [_] :ok)\n(mill/use-op! sample-op sample-op-bang)\n(chime/defrule sample-rule \"Sample rule.\" [_] true)\n(chime/defrule! sample-rule-bang \"Sample rule.\" [_] true)\n(chime/use-rule! sample-rule-rule sample-rule-bang-rule)\n(cron/defjob sample-job \"Sample job.\" {:schedule \"* * * * *\"})\n(cron/defjob! sample-job-bang \"Sample job.\" {:schedule \"* * * * *\"})\n(cron/use-job! sample-job sample-job-bang)\n(workflow/defexecutor sample-executor \"Sample executor.\" {} [_] nil)\n(workflow/defexecutor! sample-executor-bang \"Sample executor.\" {} [_] nil)\n(workflow/use-executor! sample-executor-stalled? sample-executor-bang-stalled?)\n(workflow/defworkflow sample-workflow \"Sample workflow.\" {:entrypoints #{:start} :defaults {}}\n  (workflow/workflow \"Sample\" (workflow/step :done \"Done\" :self)))\n(workflow/defworkflow! sample-workflow-bang \"Sample workflow.\" {:entrypoints #{:start} :defaults {}}\n  (workflow/workflow \"Sample\" (workflow/step :done \"Done\" :self)))\n(workflow/use-workflow! sample-workflow sample-workflow-bang)\n",
+	"clj_kondo_version": {
+		"command": ["clj-kondo", "--version"],
+		"exit_code": 0,
+		"stdout": "clj-kondo v2026.08.04\n",
+		"stderr": ""
+	},
+	"resolved_owner_resources": [
+		"/Users/ct/.gitlibs/libs/io.millstrand/millstrand/310368dff9174bd889ad21d4ed8196952684eaf9/resources",
+		"/Users/ct/.gitlibs/libs/millhouse.spools/chime/f487eb42ea9523e8bd405e64a7c319013217d988/spools/chime/resources",
+		"/Users/ct/.gitlibs/libs/millhouse.spools/cron/f487eb42ea9523e8bd405e64a7c319013217d988/spools/cron/resources",
+		"/Users/ct/.gitlibs/libs/millhouse.spools/workflow/f487eb42ea9523e8bd405e64a7c319013217d988/spools/workflow/resources"
+	],
+	"before_import": {
+		"command": [
+			"clj-kondo",
+			"--repro",
+			"--lint",
+			"src",
+			"--config",
+			"{:output {:format :json}}"
+		],
+		"exit_code": 3,
+		"stdout": "{\"findings\":[{\"end-row\":7,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":13,\"end-col\":22,\"langs\":[],\"message\":\"Unresolved symbol: sample-op\",\"row\":7},{\"end-row\":7,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":86,\"end-col\":87,\"langs\":[],\"message\":\"Unresolved symbol: _\",\"row\":7},{\"end-row\":8,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":14,\"end-col\":28,\"langs\":[],\"message\":\"Unresolved symbol: sample-op-bang\",\"row\":8},{\"end-row\":10,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":16,\"end-col\":27,\"langs\":[],\"message\":\"Unresolved symbol: sample-rule\",\"row\":10},{\"end-row\":11,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":17,\"end-col\":33,\"langs\":[],\"message\":\"Unresolved symbol: sample-rule-bang\",\"row\":11},{\"end-row\":13,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":14,\"end-col\":24,\"langs\":[],\"message\":\"Unresolved symbol: sample-job\",\"row\":13},{\"end-row\":14,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":15,\"end-col\":30,\"langs\":[],\"message\":\"Unresolved symbol: sample-job-bang\",\"row\":14},{\"end-row\":16,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":23,\"end-col\":38,\"langs\":[],\"message\":\"Unresolved symbol: sample-executor\",\"row\":16},{\"end-row\":17,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":24,\"end-col\":44,\"langs\":[],\"message\":\"Unresolved symbol: sample-executor-bang\",\"row\":17},{\"end-row\":19,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":23,\"end-col\":38,\"langs\":[],\"message\":\"Unresolved symbol: sample-workflow\",\"row\":19},{\"end-row\":21,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":24,\"end-col\":44,\"langs\":[],\"message\":\"Unresolved symbol: sample-workflow-bang\",\"row\":21}],\"summary\":{\"error\":11,\"warning\":0,\"info\":0,\"type\":\"summary\",\"duration\":5,\"files\":1}}\n",
+		"stderr": ""
+	},
+	"single_import": {
+		"command": [
+			"clj-kondo",
+			"--repro",
+			"--lint",
+			"<resolved classpath from clojure -Srepro -Spath>",
+			"--copy-configs",
+			"--skip-lint"
+		],
+		"exit_code": 0,
+		"stdout": "linting took 40ms, errors: 0, warnings: 0\n",
+		"stderr": "Configs copied:\n- .clj-kondo/imports/com.github.seancorfield/next.jdbc\n- .clj-kondo/imports/io.millstrand/millstrand\n- .clj-kondo/imports/millhouse.spools/chime\n- .clj-kondo/imports/millhouse.spools/cron\n- .clj-kondo/imports/millhouse.spools/workflow\n- .clj-kondo/imports/rewrite-clj/rewrite-clj\n"
+	},
+	"original_fixture_after_import": {
+		"command": [
+			"clj-kondo",
+			"--repro",
+			"--lint",
+			"src",
+			"--config",
+			"{:output {:format :json}}"
+		],
+		"exit_code": 3,
+		"stdout": "{\"findings\":[{\"end-row\":12,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":18,\"end-col\":29,\"langs\":[],\"message\":\"Unresolved symbol: sample-rule\",\"row\":12},{\"end-row\":12,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":30,\"end-col\":46,\"langs\":[],\"message\":\"Unresolved symbol: sample-rule-bang\",\"row\":12},{\"end-row\":18,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":25,\"end-col\":40,\"langs\":[],\"message\":\"Unresolved symbol: sample-executor\",\"row\":18},{\"end-row\":18,\"type\":\"unresolved-symbol\",\"level\":\"error\",\"filename\":\"src/consumer.clj\",\"col\":41,\"end-col\":61,\"langs\":[],\"message\":\"Unresolved symbol: sample-executor-bang\",\"row\":18}],\"summary\":{\"error\":4,\"warning\":0,\"info\":0,\"type\":\"summary\",\"duration\":12,\"files\":1}}\n",
+		"stderr": ""
+	},
+	"corrected_fixture_after_import": {
+		"command": [
+			"clj-kondo",
+			"--repro",
+			"--lint",
+			"src",
+			"--config",
+			"{:output {:format :json}}"
+		],
+		"exit_code": 0,
+		"stdout": "{\"findings\":[],\"summary\":{\"error\":0,\"warning\":0,\"info\":0,\"type\":\"summary\",\"duration\":11,\"files\":1}}\n",
+		"stderr": ""
+	},
+	"imported_configs": [
+		".clj-kondo/imports/com.github.seancorfield/next.jdbc/config.edn",
+		".clj-kondo/imports/io.millstrand/millstrand/config.edn",
+		".clj-kondo/imports/millhouse.spools/chime/config.edn",
+		".clj-kondo/imports/millhouse.spools/cron/config.edn",
+		".clj-kondo/imports/millhouse.spools/workflow/config.edn",
+		".clj-kondo/imports/rewrite-clj/rewrite-clj/config.edn"
+	],
+	"scope": "Static lint smoke; no runtime macro evaluation, shared workspace test, or full repository quality run."
+}

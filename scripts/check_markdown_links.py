@@ -4,6 +4,7 @@
 from pathlib import Path
 import re
 import sys
+import subprocess
 from urllib.parse import unquote
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -12,7 +13,16 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 def findings(root: Path) -> list[str]:
     """Return missing local-link findings below root."""
     missing = []
-    for source in sorted(root.glob("**/*.md")):
+    paths = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+    ).decode().split("\0")
+    for path in sorted(set(paths)):
+        if "/guidance/templates/" in path:
+            continue
+        if not path.endswith(".md"):
+            continue
+        source = root / path
         text = source.read_text()
         for match in LINK.finditer(text):
             destination = match.group(1).split("#", 1)[0]

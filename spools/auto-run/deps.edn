@@ -4,21 +4,10 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}
   org.clojure/data.json {:mvn/version "2.5.1"}
-  ct.spools/harnesses
-  {:git/url "https://github.com/codethread/harnesses.spool.git"
-   :git/sha "4ac638d679bc238fd8a373d52c3dbf2a7f682be0"}
-  millhouse.spools/kanban
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
-   :deps/root "spools/kanban"}
-  millhouse.spools/workflow
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
-   :deps/root "spools/workflow"}
-  millhouse.spools/land
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
-   :deps/root "spools/land"}}
+  ct.spools/harnesses {:local/root "../harnesses"}
+  millhouse.spools/kanban {:local/root "../kanban"}
+  millhouse.spools/workflow {:local/root "../workflow"}
+  millhouse.spools/land {:local/root "../land"}}
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]

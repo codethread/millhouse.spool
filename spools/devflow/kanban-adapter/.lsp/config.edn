@@ -1,0 +1,3 @@
+{:copy-kondo-configs? true
+ :project-specs [{:project-path "deps.edn"
+                  :classpath-cmd ["clojure" "-Srepro" "-Spath" "-M:test"]}]}

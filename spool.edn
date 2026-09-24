@@ -6,4 +6,8 @@
          millhouse.spools/cron {:root "spools/cron"}
          millhouse.spools/land {:root "spools/land"}
          millhouse.spools/kanban {:root "spools/kanban"}
-         millhouse.spools/identity {:root "spools/identity"}}}
+         millhouse.spools/identity {:root "spools/identity"}
+         ct.spools/harnesses {:root "spools/harnesses"}
+         codethread/devflow {:root "spools/devflow"}
+         codethread/devflow-kanban-adapter {:root "spools/devflow/kanban-adapter"}
+         codethread/config {:root "spools/config"}}}

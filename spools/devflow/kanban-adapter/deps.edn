@@ -1,0 +1,8 @@
+{:paths ["src"]
+ :deps {millhouse.spools/kanban {:local/root "../../kanban"}}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {codethread/devflow {:local/root ".."}}
+         :main-opts ["-m" "ct.spools.devflow-kanban-adapter-test"]}
+  :lint {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}
+         :main-opts ["-m" "clj-kondo.main"]}}}
