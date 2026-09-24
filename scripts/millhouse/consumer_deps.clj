@@ -1,8 +1,8 @@
-(ns consumer-deps
+(ns millhouse.consumer-deps
   "Generate a coherent published tools.deps closure for selected Millhouse roots."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
+            [clojure.java.shell :as sh]
             [clojure.string :as str]))
 
 (defn dependency-closure
@@ -48,7 +48,7 @@
   [sha & packages]
   (when (empty? packages)
     (throw (ex-info "Select at least one Millhouse package" {})))
-  (let [revision (shell/sh "git" "rev-parse" "HEAD")]
+  (let [revision (sh/sh "git" "rev-parse" "HEAD")]
     (when-not (and (zero? (:exit revision))
                    (= sha (str/trim (:out revision))))
       (throw (ex-info "Generate from the checkout of the requested revision"

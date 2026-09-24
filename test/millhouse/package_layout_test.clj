@@ -3,7 +3,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
-            [consumer-deps :as consumer]
+            [millhouse.consumer-deps :as consumer]
             [millstrand.test.alpha :as t]))
 
 (def ^:private repository
@@ -40,7 +40,7 @@
                     independent {:deps {}}}
         roots '{a {:root "spools/a"} b {:root "spools/b"}
                 c {:root "spools/c"} independent {:root "spools/independent"}}
-        sha (apply str (repeat 40 "a"))
+        sha "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         result (consumer/published-deps roots manifests sha '[a b])]
     (is (= '#{a b c} (set (keys (:deps result)))))
     (is (= '#{independent}
