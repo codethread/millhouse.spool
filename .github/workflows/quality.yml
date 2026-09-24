@@ -74,20 +74,25 @@ jobs:
 
   packages:
     name: Package (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
+          # The imported native-v1 resolver intentionally supports Darwin only.
           - target: harnesses-check
             plugins: 'true'
+            os: macos-latest
           - target: devflow-check
             plugins: 'false'
+            os: ubuntu-latest
           - target: config-check
             plugins: 'false'
+            os: ubuntu-latest
           - target: workspace-test
             plugins: 'false'
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:

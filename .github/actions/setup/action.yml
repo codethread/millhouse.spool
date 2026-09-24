@@ -26,11 +26,18 @@ runs:
       with:
         version: 10.33.0
     - uses: astral-sh/setup-uv@v8.2.0
-    - name: Shell check prerequisites
+    - name: Linux shell check prerequisites
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y ripgrep jq
+    - name: macOS shell check prerequisites
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: '1'
+      run: brew install flock ripgrep jq
     - name: Native plugin tools
       if: inputs.plugins == 'true'
       shell: bash

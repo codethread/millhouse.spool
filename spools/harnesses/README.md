@@ -244,6 +244,12 @@ to start a fresh bounded attempt series.
 
 ## Development
 
+Run the full package check on macOS: the imported `native-v1` guidance resolver
+intentionally supports Darwin only, and its ownership/closure tests exercise
+that contract. Millhouse CI runs this complete package gate on macOS; root,
+other-package, and distribution checks also run on Linux. Consolidation does
+not expand native-v1 platform support or enable it for running consumers.
+
 Follow the shared [Clojure lint and editor configuration](https://github.com/codethread/millhouse.spool/blob/main/docs/processes/kondo-and-lsp.md) when refreshing static-analysis configuration.
 
 ## Providers
