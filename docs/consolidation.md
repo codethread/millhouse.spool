@@ -35,9 +35,8 @@ monorepo. That manifest is a package boundary, not a second workspace.
 
 ## Dependency and activation boundaries
 
-Internal Git pins are replaced by relative checkout-local dependencies. This
-works both in a developer checkout and in tools.deps' published Git-library
-cache. Millstrand remains external, pinned to
+Internal Git pins are replaced by relative checkout-local dependencies. Each selected package resolves inside its developer or published Git checkout.
+For multiple published roots, use the generated direct dependency closure below. Millstrand remains external, pinned to
 `34f940ddb2e69898554bf76251749715b250ae15`, the Millhouse baseline's upstream.
 
 Existing production relationships are preserved:
@@ -91,6 +90,15 @@ revision and select the existing library names using these new roots:
 | `codethread/devflow` | `spools/devflow` |
 | `codethread/devflow-kanban-adapter` | `spools/devflow/kanban-adapter` |
 | `codethread/config` | `spools/config` |
+
+For multiple Git roots, use `scripts/consumer-deps.sh SHA LIBRARY...` from the
+checkout of that revision. The generator traverses only declared production
+edges and emits the selected closure as direct Git dependencies. tools.deps uses
+per-library Git checkouts, so transitive local roots from different checkouts
+cannot be compared even at the same SHA. Direct dependencies win over those
+transitives. This was reproduced by the published smoke; promoting the selected
+closure resolves it without restoring internal Git pins or coupling optional
+packages. See the [tools.deps expansion contract](https://clojure.org/reference/dep_expansion).
 
 Existing Millhouse package roots are unchanged. Do not reuse a pre-consolidation
 tag for an imported coordinate. Published verification starts in a temporary

@@ -44,27 +44,14 @@ engine's existing attribute surface; no unsupported output-validation API is use
 
 Add Devflow, the adapter, and its Kanban dependency to `deps.edn`:
 
-```clojure
-{:deps
- {codethread/devflow
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "MILLHOUSE_SHA"}
-  codethread/devflow-kanban-adapter
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "MILLHOUSE_SHA"
-   :deps/root "spools/devflow/kanban-adapter"}
-  io.millstrand/millstrand
-  {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "MILLHOUSE_SHA"}
-  millhouse.spools/workflow
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "MILLHOUSE_SHA"
-   :deps/root "spools/workflow"}
-  millhouse.spools/kanban
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "MILLHOUSE_SHA"
-   :deps/root "spools/kanban"}}}
+Generate the selected dependency closure from the tested Millhouse checkout:
+
+```text
+scripts/consumer-deps.sh MILLHOUSE_SHA codethread/devflow codethread/devflow-kanban-adapter
 ```
+
+Use the printed `:deps` map in the consumer. See [distribution](../../../README.md#consumption)
+for why multiple Git roots need direct coordinates for their shared closure.
 
 Activate kanban and the adapter after devflow and workflow:
 

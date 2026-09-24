@@ -3,6 +3,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
+            [consumer-deps :as consumer]
             [millstrand.test.alpha :as t]))
 
 (def ^:private repository
@@ -31,6 +32,23 @@
                         millhouse.spools/identity millhouse.spools/kanban
                         millhouse.spools/land ct.spools/harnesses
                         codethread/devflow codethread/devflow-kanban-adapter}})
+
+(deftest published-selection-keeps-only-the-required-closure
+  (let [manifests '{a {:deps {b {} external/core {}}}
+                    b {:deps {c {}}}
+                    c {:deps {}}
+                    independent {:deps {}}}
+        roots '{a {:root "spools/a"} b {:root "spools/b"}
+                c {:root "spools/c"} independent {:root "spools/independent"}}
+        sha (apply str (repeat 40 "a"))
+        result (consumer/published-deps roots manifests sha '[a b])]
+    (is (= '#{a b c} (set (keys (:deps result)))))
+    (is (= '#{independent}
+           (consumer/dependency-closure manifests '[independent])))
+    (is (= #{sha} (set (map :git/sha (vals (:deps result))))))
+    (is (= "spools/c" (get-in result [:deps 'c :deps/root])))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown Millhouse package"
+                          (consumer/dependency-closure manifests '[missing])))))
 
 (deftest package-graph-stays-explicit-and-local
   (is (= (set (keys production-edges)) (set (keys package-roots))))

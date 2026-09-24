@@ -9,21 +9,10 @@ consumers=("$@")
 ws=$(mktemp -d)
 trap 'rm -rf "${ws:?}"' EXIT
 mkdir -p "$ws/consumer" "$ws/pi" "$ws/codex"
-cat > "$ws/consumer/deps.edn" <<EOF
-{:paths []
- :deps {codethread/config
-        {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "$sha" :deps/root "spools/config"}
-        millhouse.spools/chime
-        {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "$sha" :deps/root "spools/chime"}
-        millhouse.spools/cron
-        {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "$sha" :deps/root "spools/cron"}
-        millhouse.spools/auto-review
-        {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "$sha" :deps/root "spools/auto-review"}}}
-EOF
+source_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+"$source_root/scripts/consumer-deps.sh" "$sha" codethread/config \
+  millhouse.spools/chime millhouse.spools/cron millhouse.spools/auto-review \
+  > "$ws/consumer/deps.edn"
 cd "$ws/consumer"
 clojure -Srepro -Spath > "$ws/classpath"
 # No old sibling checkout or independently pinned old package may supply code.

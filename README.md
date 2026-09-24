@@ -45,14 +45,26 @@ the imported packages.
  {ct.spools/harnesses
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "MILLHOUSE_SHA"
-   :deps/root "spools/harnesses"}
-  codethread/devflow
-  {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "MILLHOUSE_SHA"
-   :deps/root "spools/devflow"}}}
+   :deps/root "spools/harnesses"}}}
 ```
 
 The root [spool catalog](spool.edn) lists every coordinate and `:deps/root`.
+When selecting **multiple Git roots**, generate the selected production closure
+from the checkout of that revision:
+
+```text
+scripts/consumer-deps.sh MILLHOUSE_SHA codethread/config millhouse.spools/auto-review
+```
+
+Use its printed `:deps` map in the consumer. It promotes only selected packages
+and their declared internal dependencies to direct Git coordinates at that SHA.
+This is required because tools.deps installs each Git library in a different
+cache directory: two transitive `:local/root` paths to the same shared library
+otherwise conflict. [Top-level dependencies win](https://clojure.org/reference/dep_expansion),
+so the generated closure resolves without internal release pins or old checkouts.
+A single package remains independently consumable as shown above. A local
+monorepo checkout can compose arbitrary selected roots directly.
+
 Internal package dependencies use relative `:local/root` paths within that same
 Git checkout, including when tools.deps installs it in the Git library cache.
 Millstrand remains an independently pinned upstream dependency. Requiring source

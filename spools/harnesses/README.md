@@ -110,7 +110,7 @@ provider catalog.
 
 The Millhouse dogfood workspace selects local roots for Harnesses,
 Codethread config, Devflow, and its optional Kanban adapter in [the Millhouse workspace](../../.millstrand/deps.edn).
-Published consumers should pin the shared Harnesses and config dependencies.
+Published consumers should use the [selected dependency closure](../../README.md#consumption) when composing multiple Git roots.
 They should not copy the provider, alias, reviewer, query, or executor roster
 into their own workspace modules.
 
@@ -120,14 +120,8 @@ activation step. This local checkout example keeps a consumer workflow module
 before the shared executor:
 
 ```clojure
-;; consumer deps.edn; select one tested Millhouse revision
-{:deps {ct.spools/harnesses {:git/url "https://github.com/codethread/millhouse.spool.git"
-                             :git/sha "MILLHOUSE_SHA"
-                             :deps/root "spools/harnesses"}
-        codethread/config
-        {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "MILLHOUSE_SHA"
-         :deps/root "spools/config"}}}
+;; Generate consumer deps.edn from the tested Millhouse checkout:
+;; scripts/consumer-deps.sh MILLHOUSE_SHA codethread/config
 
 ;; consumer .millstrand/init.clj
 (require '[millstrand.api.current.alpha :as current]
