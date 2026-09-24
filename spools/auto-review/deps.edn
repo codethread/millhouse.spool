@@ -3,9 +3,18 @@
  {io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "9e5fd206350dc42c87748ca41052863a512007a9"}
-  org.clojure/data.json {:mvn/version "2.5.1"}}
+  org.clojure/data.json {:mvn/version "2.5.1"}
+  millhouse.spools/workflow
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/sha "c66adcca2cdc05e38c789b802e6d34532af0d6cd"
+   :deps/root "spools/workflow"}}
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]
+   :extra-deps {millhouse.spools/auto-run {:local/root "../auto-run"}
+                millhouse.spools/cron {:local/root "../cron"}
+                millhouse.spools/kanban {:local/root "../kanban"}
+                millhouse.spools/land {:local/root "../land"}
+                millhouse.spools/workflow {:local/root "../workflow"}}
    :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
    :main-opts ["-m" "millhouse.test-runner" "millhouse.spools.auto-review-test"]}}}

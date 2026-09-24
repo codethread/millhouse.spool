@@ -1,344 +1,166 @@
-# GitLab reviews
+# Auto-review admission
 
-`millhouse.spools.auto-review` turns selected GitLab merge-request revisions into local review
-records. Consumer-owned lifecycle hooks acquire and release each review
-worktree, Harnesses reviewers inspect the prepared revision, and their evidence
-is published through `strand review` and the Millstrand Reviews tab.
+Auto-review polls remote review requests into **ordinary Kanban feature cards**.
+It does not run reviewers. Compose it with Cron for cadence, Auto-run for worker
+admission, and Workflow's code/agent executors for frozen review evidence.
 
-Polling, reviewer execution, curation, and finishing are local. Only the explicit
-`review publish` command writes GitLab discussions; it never approves or merges
-the MR. Finishing a local review never writes GitLab.
+The initial provider is `millhouse.spools.auto-review.glab`. The core contract has
+no GitLab fields and accepts other providers without core changes. Requiring any
+Auto-review namespace is inert: no operations, jobs, workers or resources start.
 
-## Prerequisites and activation
+## Public surface
 
-The consumer workspace needs Millstrand 0.5.3, this spool in `deps.edn`, `git`,
-authenticated `glab`, a matching GitLab `origin`, and available headless reviewer
-seats. Add the spool using the repository's [consumption instructions](../../README.md#consumption). Compose the shared modules before activating the coordinator:
+| Namespace / function | Responsibility |
+| --- | --- |
+| `auto-review/poll!` | Read provider revisions and create deduplicated cards |
+| `auto-review/request` | Read a card's frozen normalized request |
+| `auto-review/start-params` | Auto-run callback returning `:review` and `:review-repo` |
+| `auto-review.glab/poll` | Explicit-host/project GitLab GET adapter |
+| `auto-review.workspace/prepare!` | Optional exact-head wktree preparation callback |
+| `auto-review.workspace/inspect!` | Verify isolated clean head/base trees |
+| `auto-review.workflow/review-request` | Inert code gate → agent gate → report → local human decision → cleanup workflow |
+
+Names above abbreviate `millhouse.spools.*`. See the [API](auto-review.api.md),
+[complete consumer module](examples/review.clj) and [migration recipe](migration.md).
+There is deliberately **no `strand review` or `review-logs` operation**.
+Use ordinary Kanban, Auto-run, Workflow, Harnesses and Cron inspection instead.
+
+## Provider contract
+
+`poll!` takes runtime and this explicit configuration (no global configuration):
 
 ```clojure
-(require '[me.config :as config]
-         '[millstrand.api.current.alpha :as current]
-         '[millstrand.api.runtime.alpha :as runtime])
-
-(def runtime (current/runtime))
-(config/register! runtime)
-(config/register-executor! runtime)
-
-(runtime/module! runtime :mr-review
-  {:ns 'millhouse.spools.auto-review
-   :after [:work/config :work/workflow]
-   :required? true})
-
-(runtime/module! runtime :local-mr-review
-  {:file "review.clj"
-   :after [:mr-review :millstrand/spools-agent-executor]
-   :required? true})
+{:repo "/absolute/canonical/repo"
+ :poll 'millhouse.spools.auto-review.glab/poll
+ :provider-config {:host "git.example.com" :project 123 :labels ["review"]}
+ :max-open 2
+ :workflow "review-request"
+ :seat "review-driver"
+ :effort "low"}
 ```
 
-The local module declares the reviewer roster and owns the lifecycle resource.
-Here `review-setup` and `review-teardown` are Vars containing the Bash described
-in the workspace-hook contract below:
+`:workflow` is required and must be in Auto-run's allowed workflows. Optional
+`:seat` and `:effort` are copied as documented `auto-run/*` card overrides; absent
+values use Auto-run defaults. No arbitrary attributes, executable provider
+instructions or reviewer requests are accepted from remote metadata.
+
+The qualified callback receives `[runtime {:repo canonical-path :config map}]`
+and returns a vector of **closed-shape**, provider-neutral revisions:
 
 ```clojure
-(ns local-mr-review
-  (:require [ct.spools.harnesses.reviewers :as reviewers]
-            [millhouse.spools.auto-review :as review]
-            [millstrand.api.lifecycle.alpha :as lifecycle]))
-
-(reviewers/defreviewer! correctness
-  "Find concrete correctness regressions."
-  {:seat ['reviewer 'luna]}
-  "Inspect relevant source, callers, and tests. Report actionable findings.")
-
-(defn open! [ctx]
-  (review/open! ctx
-    {:repo-dir "/absolute/path/to/repo"
-     :reviewers ["correctness"]
-     :setup review-setup
-     :teardown review-teardown
-     :poll? false}))
-
-(lifecycle/defresource! local-review-runtime
-  "Own this repository's review coordinator."
-  {:open 'local-mr-review/open!
-   :close 'millhouse.spools.auto-review/close!})
+[{:provider "example-forge"
+  :repository "urn:stable-remote-repository:123"
+  :request "opaque-request-id"
+  :url "https://forge.example/reviews/42"
+  :title "Request title"
+  :head "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  :base "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  :requested? true
+  :ci {:status "passed"
+       :head "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+       :url "https://forge.example/checks/99"}}]
 ```
 
-Loading `millhouse.spools.auto-review` registers commands but launches no worker. Opening the
-resource starts completion recovery and log retention. Recurring GitLab polling
-starts only when `:poll?` is true.
+Head/base are full lowercase 40- or 64-hex object IDs. CI status is `passed`,
+`pending`, `failed` or `unknown`; CI head/URL are optional, but admission requires
+`passed` **and exact equality with the request head**. Provider callbacks must
+exclude closed, draft and label-ineligible requests. They own remote identity,
+authentication, pagination, lifecycle parsing and current aggregate CI semantics.
+The entire returned batch is validated before any card is created. Exceptions
+propagate; malformed evidence is never treated as passing or an empty result.
 
-## Configuration
+The glab adapter requires an explicit hostname and numeric target project ID;
+`bin` defaults to `glab`, `labels` to `[]`. It uses only `glab api --hostname HOST
+--method GET ...`, reads all listing pages, resolves the authenticated user's
+stable ID, and rereads each request. Changed head, closed/draft state or changed
+labels cannot reuse list evidence. Only `head_pipeline` is considered; historical
+pipelines, successful individual jobs and the deprecated `pipeline` field are
+not substitutes. Fork request identity is the target project, with exact source
+head/base commits. Configure the matching local repository/origin explicitly.
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `:repo-dir` | required | Canonical repository checkout |
-| `:reviewers` | required | Non-empty list of registered reviewer names |
-| `:setup` | required | Trusted Bash that acquires and prepares a worktree |
-| `:teardown` | required | Trusted, idempotent Bash that releases the worktree |
-| `:poll?` | `false` | Enable recurring GitLab polls |
-| `:interval-seconds` | `300` | Poll cadence |
-| `:max-active-reviews` | `2` | Ordinary reviews allowed to await execution or a local decision; reviews explicitly requested from the authenticated GitLab user are additional |
-| `:labels` | `[]` | Labels that an MR must contain; drafts are always excluded |
-| `:glab-bin` | `"glab"` | GitLab CLI executable |
-| `:setup-timeout-seconds` | `900` | Setup deadline |
-| `:teardown-timeout-seconds` | `240` | Teardown deadline; this bounds `review finish` while its invocation remains open |
-| `:log-retention-days` | `7` | Operational-log and completed-review hook-output retention |
+## Persistence, priority and capacity
 
-## Workspace hook contract
+- Identity is `[provider repository request head]`, persisted as
+  `auto-review/key`. The card and receipt are **one atomic graph add**.
+- The complete `auto-review/request` map and observation time freeze on admission;
+  polling never rewrites titles, base, CI, priority, requested status or evidence.
+  Auto-run pours that same snapshot into workflow context. Raw graph mutation is
+  not an authorization interface and must not edit these fields.
+- Polls serialize per Weaver runtime. All active **and closed** receipts rebuild
+  dedup on every poll; no in-memory dedup cache or replay queue exists. A lost
+  add response is safe on the next poll. Keep closed cards as durable tombstones.
+  Separate Weavers are separate boards, not a distributed admission lock.
+- Requested reviews sort first, get Kanban `p1`, and bypass the **ordinary inbox**
+  limit. Ordinary reviews get `p3`. Priority is frozen, not continuously escalated.
+- `max-open` counts ordinary active review cards in the canonical local repo,
+  including pending, failed and human-wait cards. Failed/pending CI creates no
+  card and uses no slot. Closed cards release the slot, not their dedup identity.
+- Auto-run's existing `max-running` remains the sole driver execution limit for
+  all cards, including requested reviews. This is not a separate reviewer-seat
+  pool: the selected workflow determines reviewer fan-out (the supplied workflow
+  runs one reviewer per driver). Do not release a driver while its reviewer runs.
+- New heads are distinct work; older open heads retain capacity and workspaces
+  until explicitly decided. Remote close/merge does **not** auto-close cards or
+  destroy local evidence. Removing a label prevents Auto-run admission but never
+  cancels an accepted assignment. Errors use existing blocker/continuation policy,
+  never deletion of receipts or automatic reviewer replay.
 
-Both hooks run through the user's login shell and then trusted Bash, with
-`:repo-dir` restored as the working directory. They receive these variables:
+Cron owns durable wakes, offloading, job removal and failure visibility. Polling
+has no second scheduler, thread pool, completion event loop, prune job or retry
+policy. Later Cron ticks are fresh observations, not recovery of local delivery.
 
-| Variable | Meaning |
-| --- | --- |
-| `MILLSTRAND_REVIEW_ID` | Durable review strand ID |
-| `MILLSTRAND_REVIEW_REPO` | Canonical `:repo-dir` |
-| `MILLSTRAND_REVIEW_MR_IID` | GitLab MR IID |
-| `MILLSTRAND_REVIEW_HEAD` | Exact admitted head SHA |
-| `MILLSTRAND_REVIEW_BASE` | Exact GitLab diff-base SHA |
+## Workspace and evidence lifecycle
 
-Setup also receives `MILLSTRAND_REVIEW_RESULT`, the path of its result file. It
-must create or acquire an isolated worktree outside `:repo-dir`, prepare the
-exact head and base objects, then write one JSON object containing an absolute
-`worktree_path`. When `kind` is present it must be `"ready"`. Other keys are
-preserved for teardown, so the JSON emitted by `wktree add --json` is accepted
-directly. Write the result only after all setup—including any returned
-`post_create_script_path` and dependency preparation—has succeeded. A setup
-hook must roll back its own partial allocation when it exits unsuccessfully.
+Preparation happens **only when Auto-run admits a card**, not during polling.
+The optional `workspace/prepare!` fetches exact objects from configured `origin`,
+creates `review/CARD` at the frozen head and records `auto-review/branch`, then
+uses `wktree add --branch review/CARD --json` (wktree bases are branch names, not
+raw SHAs). It persists the ready allocation as `auto-review/workspace`, runs its
+bootstrap, and validates an
+external clean worktree root at the head with both comparison trees available.
+No canonical checkout fallback is allowed. Consumers may wrap this callback for
+dependency preparation and must re-run `inspect!` afterward. A partially allocated
+workspace remains owned evidence after error; Auto-run records the failure and
+never retries the allocation. Inspect the card allocation and wktree inventory
+when allocation succeeded but its response was lost.
 
-For example, a setup can create a review branch, allocate it through `wktree`,
-run its generated bootstrap, and publish the unchanged result:
+The supplied workflow rechecks the frozen workspace in a code gate immediately
+before its agent gate. The agent inspects source/callers/tests using exact Git
+references; it receives no whole-patch dump or remote title as instructions.
+The ordinary agent executor owns serving-run identity, settled results, failures
+and gate completion. The driver records the exact run and findings in a card note,
+moves to `in_review`, then stops at the local human checkpoint. Process success
+is **not approval**. The library does not impose the old JSON comment schema or
+maintain a second comment/curation store.
 
-```bash
-review_branch="review/mr-${MILLSTRAND_REVIEW_MR_IID}-${MILLSTRAND_REVIEW_ID}"
-git -C "$MILLSTRAND_REVIEW_REPO" fetch --no-tags --no-write-fetch-head \
-  origin "$MILLSTRAND_REVIEW_HEAD" "$MILLSTRAND_REVIEW_BASE"
-if git -C "$MILLSTRAND_REVIEW_REPO" show-ref --verify --quiet \
-  "refs/heads/$review_branch"; then
-  test "$(git -C "$MILLSTRAND_REVIEW_REPO" rev-parse "$review_branch")" = \
-    "$MILLSTRAND_REVIEW_HEAD"
-else
-  git -C "$MILLSTRAND_REVIEW_REPO" branch \
-    "$review_branch" "$MILLSTRAND_REVIEW_HEAD"
-fi
-wktree_result=$(wktree --cwd "$MILLSTRAND_REVIEW_REPO" add \
-  --branch "$review_branch" --json)
-worktree=$(printf '%s\n' "$wktree_result" |
-  jq -er 'select(.kind == "ready") | .worktree_path')
-post_create=$(printf '%s\n' "$wktree_result" |
-  jq -r '.post_create_script_path // ""')
-if test -n "$post_create"; then bash "$post_create"; fi
-# Run repository-specific preparation in "$worktree" here.
-result_tmp=$(mktemp "${MILLSTRAND_REVIEW_RESULT}.tmp.XXXXXX")
-printf '%s\n' "$wktree_result" > "$result_tmp"
-mv "$result_tmp" "$MILLSTRAND_REVIEW_RESULT"
-```
+After a recorded local decision and process settlement, an operator resumes the
+cleanup step from the canonical checkout, uses unforced `wktree remove
+--keep-branch`, records successful release and the retained evidence branch, then
+finishes the card. Dirty/ambiguous workspaces and cleanup failures remain open
+with visible blockers. The review branch is deliberately retained as frozen
+comparison evidence; later deletion needs explicit repository policy. Polling
+never tears down workspaces or prunes evidence. There are no custom hook logs;
+use Auto-run receipts, workflow executor results, Harnesses logs and card notes.
 
-Teardown receives two additional variables:
+## Remote authorization boundary
 
-| Variable | Meaning |
-| --- | --- |
-| `MILLSTRAND_REVIEW_WORKTREE` | Canonical path reported by setup, or empty when setup never reported one |
-| `MILLSTRAND_REVIEW_WORKSPACE` | Path to a JSON file containing setup's complete result object |
+Polling and the supplied workflow are remote-read-only. A local `assessed`
+decision does **not** authorize comments, approval or merge. The publication API
+was removed rather than adapted implicitly. If a consumer later adds publishing,
+it must be a separately authorized action/workflow, freeze the exact selected
+findings, revalidate the current remote revision/anchors, and record its own
+receipts. Never replay old publication requests through this contract. Repository
+content, request descriptions and reviewer text cannot grant authorization.
 
-Use `wktree remove --keep-branch` when the review branch should remain after its
-checkout is released. Teardown must be idempotent: after a process succeeds but
-before completion is durably recorded, a retry may run it again. Hook output is
-file-backed and its path is recorded in review activity. Successful setup and
-teardown output remains available through the local decision, then daily cleanup
-deletes its owned temporary files after `:log-retention-days`. Failed hook output
-is removed immediately. A non-zero exit or timeout leaves the review open and
-records a visible failure. After correcting the problem, retry `review finish`.
+The supplied human checkpoint is review-product policy, not Millhouse's delivery
+workflow. This library's feature delivery uses the assigned `auto-full-land` run
+and an independent finisher; it does not add a human checkpoint to that run.
 
-```bash
-review_branch="review/mr-${MILLSTRAND_REVIEW_MR_IID}-${MILLSTRAND_REVIEW_ID}"
-current_branch=$(git -C "$MILLSTRAND_REVIEW_WORKTREE" \
-  branch --show-current 2>/dev/null || true)
-if test "$current_branch" = "$review_branch"; then
-  wktree --cwd "$MILLSTRAND_REVIEW_REPO" remove \
-    --branch "$review_branch" --keep-branch --json
-fi
-```
+## Verification
 
-## Reviewer result contract
-
-Every successful reviewer must return one strict JSON object as its complete
-Harness result. Prose, Markdown, and fenced JSON are rejected. The object has a
-summary plus zero or more candidate comments:
-
-```json
-{
-  "summary": "Checked the changed state transition and its callers.",
-  "comments": [
-    {
-      "title": "Preserve the prior state on failure",
-      "text": "This assignment happens before validation and leaks partial state.",
-      "severity": "P1",
-      "position": {
-        "kind": "line",
-        "oldPath": "src/example.clj",
-        "newPath": "src/example.clj",
-        "side": "new",
-        "line": 42
-      }
-    }
-  ]
-}
-```
-
-`severity` is optional. A line position may also carry `startSide` and
-`startLine` for a same-side range. Whole-MR observations use
-`{"kind":"general","reason":"..."}`. A reviewer that cannot express an
-important location uses `{"kind":"unsupported","reason":"..."}`; such a
-candidate remains visible locally but cannot be published.
-
-## Command API
-
-Start with:
-
-```text
-strand prime review
-strand review list
-strand review show <id>
-strand review comments <id>
-```
-
-### Inbox and evidence
-
-| Command | Result |
-| --- | --- |
-| `strand review list` | Reviews awaiting a local decision |
-| `strand review list --all` | Active and decided revisions |
-| `strand review list --mr <iid>` | Revisions for one MR |
-| `strand review list --stage <stage>` | Reviews in `preparing`, `dispatching`, `running`, `reviewed`, or `failed` |
-| `strand review show <id>` | Full report, reviewer evidence, activity, worktree, links, and other MR revisions |
-| `strand review comments <id>` | Canonical structured comments, curation version, and publication receipts |
-
-`list` returns `{reviews, counts}`. `show` returns `{review}`. Review summaries
-identify the review, MR, revision SHA, stage, local decision, teardown status,
-timestamps, reviewers, and report availability. Reviewer details include their
-run status, summary, or error. The report is a derived Markdown view of the
-structured records. Optional comment and publication fields are omitted when
-absent. MR identity uses `headSha`, `baseSha`, and `startSha`.
-
-### Curation and publication
-
-Read `review comments` immediately before each mutation. A new review has
-curation version `0`; every candidate starts at version `1`. Inclusion and
-candidate-text changes are one atomic compare-and-set operation:
-
-```json
-{
-  "revision": "review-comment-revision",
-  "expectedVersion": 0,
-  "by": "user@example.com",
-  "changes": [
-    {"id": "comment-a", "inclusion": "dismissed"},
-    {
-      "id": "comment-b",
-      "candidate": {
-        "expectedVersion": 1,
-        "text": "Accepted publication text"
-      }
-    }
-  ]
-}
-```
-
-Pass the request through a file-backed payload so shell quoting cannot alter it:
-
-```text
-strand --payload request=curate.json review curate <id> --request :payload/request
-```
-
-The request must contain at least one real change. Its review revision, review
-version, comment IDs, and any candidate versions must all still match. A stale
-or invalid request changes nothing. Candidate provenance is either the original
-reviewer `{kind, reviewer, runId}` or an accepted edit `{kind, by, at}`; the
-immutable `candidate.original` always retains the reviewer text and identity.
-
-Publication points to the resulting persisted snapshot:
-
-```json
-{"revision":"review-comment-revision","curationVersion":1}
-```
-
-```text
-strand --payload request=publish.json review publish <id> --request :payload/request
-```
-
-At least one candidate must be included. Before any POST, the coordinator
-rechecks that the MR is open and that its project, IID, head, base, start, latest
-diff anchors, and positioned lines still match the frozen review. It freezes the
-selection, writes a local `reconciling` receipt, searches all GitLab discussions
-for the comment's hidden stable marker, and posts only after a successful absent
-search. If a POST may have succeeded remotely but its response was lost, the
-result remains retryable; rerunning the same publish request finds the marker and
-records the GitLab discussion without posting a duplicate. A batch can therefore
-return `partial` until retry completes it. Once publication begins, curation is
-immutable.
-
-Publication does not decide the review, release its capacity slot, or run
-teardown. Use `review finish` separately after assessing the published result.
-
-### Local decisions and related work
-
-```text
-strand review link <id> <feature-or-task-id>
-strand review finish <id> --outcome done --by <name> --note "Assessed findings"
-strand review finish <id> --outcome dismissed --by <name>
-```
-
-`link` adds a relationship to existing work without creating a Kanban card.
-`finish` runs teardown, records an immutable local decision, and releases the
-review's capacity slot. A review must be `reviewed` or `failed` before it can be
-finished. `done` is the normal “review is good/actioned” path; `dismissed` has
-the same teardown timing.
-
-### Polling, recovery, and logs
-
-| Command | Purpose |
-| --- | --- |
-| `strand review poll` | Queue an intentional GitLab poll; may launch reviewers |
-| `strand review reconcile` | Recover dispatch and collect completed reviewer runs without reading GitLab |
-| `strand review status` | Show worker configuration, health, last poll, and durable revisions |
-| `strand review-logs --mr <iid> --limit <1..100>` | Stream recent persisted activity as chronological JSONL |
-
-## Review lifecycle
-
-A revision is admitted only when the current head pipeline succeeds for the exact
-source SHA. Waiting or failed pipelines consume no review slot. Each repository,
-GitLab project, MR IID, and head SHA combination is reviewed once.
-
-The coordinator resolves the current `glab` user's stable GitLab ID on each poll.
-Eligible MRs that explicitly list that user as a requested reviewer are checked
-first and admitted in addition to `:max-active-reviews`; they neither consume nor
-wait for an ordinary slot. Draft, label, exact-head pipeline, and duplicate-review
-gates still apply. Existing requested reviews likewise do not reduce ordinary
-capacity.
-
-On each poll, the coordinator also reconciles settled local reviews with
-GitLab. When a review is `reviewed` or `failed` and its MR has since been closed
-or merged, the coordinator automatically runs teardown, records a local `done`
-decision, closes the review, and releases its capacity slot before admitting new
-work. A teardown failure leaves the review open and fails the poll visibly so a
-later poll can retry the idempotent hook. Reviews still executing are retained
-until their reviewer runs settle, then reconciled by a later poll.
-
-Reviewers receive the setup-owned worktree path and exact base/head SHAs. Before
-dispatch, the coordinator verifies that `worktree_path` is an external Git
-worktree root at the exact head and that both comparison trees are available.
-Reviewers use Git to select relevant changes and inspect surrounding source,
-callers, and tests. The coordinator does not place a full patch in the request.
-
-Reviewer completion persists first-class attributed comment records and derives
-the readable report from them. `reviewed` means the runs completed successfully;
-it is not approval. Failures remain visible as `failed` reviews for local
-assessment. Both states keep their slot until `review finish` records a decision.
-
-Completing, pausing, or reconciling reviewer passes does not run teardown. The
-review record, branch, worktree, and setup log remain available while the result
-awaits action or is revisited. Only `review finish` runs teardown. Successful
-teardown is durably marked before the review is closed, so a failed decision
-mutation can retry without repeating known-complete cleanup.
+Run focused tests with `clojure -M:test millhouse.spools.auto-review-test` from the
+repository root (or `clojure -M:test` from this spool). They use fake providers,
+disposable SQLite boards/Git repositories, the real Auto-run/Workflow/agent adapter
+and nonexecuting fake seats, plus standalone tools.deps resolution. No remote
+publication or paid agent is used. Run repository `make quality` under the shared
+quality lock before landing.
