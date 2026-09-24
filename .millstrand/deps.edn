@@ -1,7 +1,7 @@
 {:deps
  {io.millstrand/batteries
   {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "91361ef09eda4d09a24515a6ba3f99aa3090525a"
+   :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
    :deps/root "spools/batteries"}
   millhouse.spools/auto-run {:local/root "../spools/auto-run"}
   millhouse.spools/identity {:local/root "../spools/identity"}
@@ -10,25 +10,9 @@
   millhouse.spools/chime {:local/root "../spools/chime"}
   millhouse.spools/cron {:local/root "../spools/cron"}
   millhouse.spools/kanban {:local/root "../spools/kanban"}
-  ct.spools/harnesses
-  {:git/url "https://github.com/codethread/harnesses.spool.git"
-   :git/sha "4ac638d679bc238fd8a373d52c3dbf2a7f682be0"
-   :deps/root "."}
-  codethread/devflow
-  {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "f36b0f8669afcd5c05aa79bf21369c639b8fc3d7"
-   :deps/root "."}
-  codethread/devflow-kanban-adapter
-  {:git/url "https://github.com/codethread/devflow.spool.git"
-   :git/sha "f36b0f8669afcd5c05aa79bf21369c639b8fc3d7"
-   :deps/root "kanban-adapter"}
-  codethread/config
-  {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "252981205d8d8c16dbb6622749f5b35d33847ad3"
-   :deps/root "spools/config"}
-  codethread/ralph
-  {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "252981205d8d8c16dbb6622749f5b35d33847ad3"
-   :deps/root "spools/ralph"}}
+  ct.spools/harnesses {:local/root "../spools/harnesses"}
+  codethread/devflow {:local/root "../spools/devflow"}
+  codethread/devflow-kanban-adapter {:local/root "../spools/devflow/kanban-adapter"}
+  codethread/config {:local/root "../spools/config"}}
  :aliases {:test {:extra-paths ["test"]
                   :main-opts ["-m" "millhouse.auto-run-test"]}}}

@@ -34,20 +34,23 @@ millhouse.spools/auto-review
  :deps/root "spools/auto-review"}
 ```
 
-The root now transitively requires Workflow at a published compatible revision
-(`c66adcca2cdc05e38c789b802e6d34532af0d6cd`). It does not transitively start Auto-run,
-Cron or Harnesses. For the complete recipe also select `millhouse.spools/auto-run`,
-`millhouse.spools/cron`, `millhouse.spools/workflow` and `millhouse.spools/kanban` at
-**the same accepted Millhouse SHA**, each with its matching `spools/NAME` deps root.
-Keep other directly selected Millhouse roots on that same revision. Existing
-Codethread config may supply these transitively; inspect the **elected top-level
-basis**, not every older/use-top entry in the dependency tree. Explicit root
-selection removes ambiguous mixed Git revisions and makes the recipe reproducible.
+In the consolidated distribution, this root requires Workflow through a relative
+local root at the same Millhouse revision. It does not transitively start Auto-run,
+Cron or Harnesses. For the complete recipe, generate the selected production
+closure from the checkout of the accepted revision:
 
-This code uses the repository's Millstrand `91361ef09eda4d09a24515a6ba3f99aa3090525a`
-API generation. Auto-run requires Harnesses
-`4ac638d679bc238fd8a373d52c3dbf2a7f682be0` (including its publication-lock API).
-Keep those compatible selected pins; do not downgrade through a sibling root.
+```text
+scripts/consumer-deps.sh ACCEPTED_SHA millhouse.spools/auto-review millhouse.spools/auto-run millhouse.spools/cron
+```
+
+Use the printed direct `:deps` map. It includes the declared shared dependencies
+at that same SHA, avoiding conflicts between tools.deps' per-library Git cache
+paths. Include any other selected Millhouse roots in the generator arguments.
+Inspect the elected top-level basis; see [consumption](../../README.md#consumption).
+
+Millstrand remains an external dependency pinned by the package manifests.
+Auto-run uses the consolidated Harnesses package, including its publication-lock
+API. There is no separate internal Harnesses release pin to coordinate.
 Millstrand itself is supplied by Mill in a Weaver basis: do **not** add a reserved
 `io.millstrand/millstrand` direct dependency to workspace deps. Ordinary standalone
 tools.deps projects resolve it transitively from the spool.

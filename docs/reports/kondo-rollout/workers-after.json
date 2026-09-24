@@ -1,0 +1,221 @@
+{
+	"checked_at": "2026-09-13T10:33:31.492639+00:00",
+	"runtime_source": "0ce3725ee09f29e690623a10f1d86640af1d92ad",
+	"workers": [
+		{
+			"repo": "codethread.spool",
+			"workspace": "/Users/ct/dev/projects/codethread.spool/.millstrand",
+			"before": {
+				"pid": 27566,
+				"generation_id": "cfdde32b-c4cf-4d1d-ba7c-ad05b90b7828",
+				"basis_fingerprint": "sha256:97d86dd8d7f071d3626de7868f9e91333e9c053868e74a91879cbd9c5419bfce"
+			},
+			"after": {
+				"pid": 53884,
+				"generation_id": "d0218668-de22-4152-a1e8-0f6ecfac2b7a",
+				"basis_fingerprint": "sha256:1b0ce778292567feb5f4fd0648b9e913ceb545548e5234b39136536e4eace58a",
+				"started_at": "2026-09-13T10:32:46.883742Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"restart": {
+				"generation_id": "d0218668-de22-4152-a1e8-0f6ecfac2b7a",
+				"operation": "restart",
+				"state": "running",
+				"transition_id": "transition-64488a626cd31425108e6d28293e4c9a",
+				"workspace": "/Users/ct/dev/projects/codethread.spool/.millstrand"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "skein-src",
+			"workspace": "/Users/ct/dev/projects/skein-src/.millstrand",
+			"before": {
+				"pid": 67258,
+				"generation_id": "7a436b97-8b2b-4c83-a7fe-df6209ffb5cb",
+				"basis_fingerprint": "sha256:f35bf6f4403b3d829dfa4394bd0525b3ab781699555859176a97ce531df9984b"
+			},
+			"after": {
+				"pid": 53498,
+				"generation_id": "fcdb2151-582e-42f4-a80b-79fd65eea54b",
+				"basis_fingerprint": "sha256:1a209170807e08b1d0912c5d4b34d4efb8b4cfc20c46091b8a682fde06b337ee",
+				"started_at": "2026-09-13T10:32:28.578331Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"restart": {
+				"generation_id": "fcdb2151-582e-42f4-a80b-79fd65eea54b",
+				"operation": "restart",
+				"state": "running",
+				"transition_id": "transition-a16af1e6af6ad00e5577db847ac40e4f",
+				"workspace": "/Users/ct/dev/projects/skein-src/.millstrand"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": [
+					"explore",
+					"fix",
+					"intake",
+					"land",
+					"publish-spool-kondo",
+					"release",
+					"review",
+					"story"
+				],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "millhouse.spool",
+			"workspace": "/Users/ct/dev/projects/millhouse.spool/.millstrand",
+			"before": {
+				"pid": 17779,
+				"generation_id": "601588f3-741c-48d4-a822-c5f2bfb6f736",
+				"basis_fingerprint": "sha256:401fd3c33f6e16ec13e29feed5f3d0724687e42a12b9d41b24547a1a654062e9"
+			},
+			"after": {
+				"pid": 53316,
+				"generation_id": "24e806d5-0b5d-4729-9173-b0c0064389c9",
+				"basis_fingerprint": "sha256:6c5a519bc4aa6662fd2f6d8ec12ca9fbaef74431c0f95e1e4dbf4a4af52224cb",
+				"started_at": "2026-09-13T10:32:18.082485Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"restart": {
+				"generation_id": "24e806d5-0b5d-4729-9173-b0c0064389c9",
+				"operation": "restart",
+				"state": "running",
+				"transition_id": "transition-2b464ef685e018b8bc0451b7bbec571f",
+				"workspace": "/Users/ct/dev/projects/millhouse.spool/.millstrand"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "harnesses.spool",
+			"workspace": "/Users/ct/dev/projects/harnesses.spool/.millstrand",
+			"before": {
+				"pid": 84016,
+				"generation_id": "61f84d21-41d0-48a9-8403-6b0ef7122ef1",
+				"basis_fingerprint": "sha256:44d0fd58e8d4f676c8ed06a7d13bdc0e4e3aec2f5b28eb2320f8b8c073a3cc5a"
+			},
+			"after": {
+				"pid": 51854,
+				"generation_id": "5ab9be84-5444-45e4-9346-e1c25a50602a",
+				"basis_fingerprint": "sha256:e4ec35d9b40595a6422dafaf6b3c740dfb8fb6303472395bf9dd8ce33c6401e5",
+				"started_at": "2026-09-13T10:31:34.934817Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"restart": {
+				"generation_id": "5ab9be84-5444-45e4-9346-e1c25a50602a",
+				"operation": "restart",
+				"state": "running",
+				"transition_id": "transition-774acdf4e30f4136e7c310e60a759423",
+				"workspace": "/Users/ct/dev/projects/harnesses.spool/.millstrand"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo"],
+				"agent_catalogue_count": 22
+			}
+		},
+		{
+			"repo": "devflow.spool",
+			"workspace": "/Users/ct/dev/projects/devflow.spool/.millstrand",
+			"before": {
+				"pid": 25900,
+				"generation_id": "bf2b672f-cf5f-4756-bb9e-06511bdd74e5",
+				"basis_fingerprint": "sha256:4e5327ba978e57aef3d353bfa58c019c3a3bf37c9ff231d44ff83c03386490f1"
+			},
+			"after": {
+				"pid": 53105,
+				"generation_id": "e4ba313c-607f-493d-b6b5-97c9cec51d3b",
+				"basis_fingerprint": "sha256:266339024bd6249ea55ae7ad4841d777086d59b15eb978a8193bbce5856ca6a8",
+				"started_at": "2026-09-13T10:32:10.691127Z",
+				"state": "running",
+				"version": "0.5.2"
+			},
+			"restart": {
+				"generation_id": "e4ba313c-607f-493d-b6b5-97c9cec51d3b",
+				"operation": "restart",
+				"state": "running",
+				"transition_id": "transition-a475aacbc7b0b174da516e421452433c",
+				"workspace": "/Users/ct/dev/projects/devflow.spool/.millstrand"
+			},
+			"live_checks": {
+				"help": "passed",
+				"workflows": ["intake", "publish-spool-kondo", "ralph-iterate"],
+				"agent_catalogue_count": 22
+			}
+		}
+	],
+	"native_agents_before": {
+		"at": "2026-09-13T10:32:18.664563+00:00",
+		"runs": [
+			{
+				"id": "dkumi",
+				"target": "il3j5",
+				"status": "running",
+				"session_id": "3ca9a8ed-733d-4213-b4d0-e3ceec2e1aaf",
+				"process_handle": "process-10fd30fcc36ef2e215840ddf12c5def3",
+				"process_key": "dkumi/attempt-1",
+				"attempt": 1
+			},
+			{
+				"id": "rplez",
+				"target": "261sr",
+				"status": "running",
+				"session_id": "55d4596a-15de-477c-b13a-7496fd24a4e6",
+				"process_handle": "process-9e12af543767233e69d31d16fc239e4b",
+				"process_key": "rplez/attempt-1",
+				"attempt": 1
+			},
+			{
+				"id": "3u60w",
+				"target": "n7kvm",
+				"status": "running",
+				"session_id": "2f735159-dd1c-447b-abec-86d6ed5a0c9e",
+				"process_handle": "process-4c29b1c7a9014a045087c29f8650df52",
+				"process_key": "3u60w/attempt-1",
+				"attempt": 1
+			}
+		]
+	},
+	"native_agents_after": [
+		{
+			"id": "dkumi",
+			"target": "il3j5",
+			"status": "running",
+			"session_id": "3ca9a8ed-733d-4213-b4d0-e3ceec2e1aaf",
+			"process_handle": "process-10fd30fcc36ef2e215840ddf12c5def3",
+			"process_key": "dkumi/attempt-1",
+			"attempt": 1
+		},
+		{
+			"id": "rplez",
+			"target": "261sr",
+			"status": "running",
+			"session_id": "55d4596a-15de-477c-b13a-7496fd24a4e6",
+			"process_handle": "process-9e12af543767233e69d31d16fc239e4b",
+			"process_key": "rplez/attempt-1",
+			"attempt": 1
+		},
+		{
+			"id": "3u60w",
+			"target": "n7kvm",
+			"status": "running",
+			"session_id": "2f735159-dd1c-447b-abec-86d6ed5a0c9e",
+			"process_handle": "process-4c29b1c7a9014a045087c29f8650df52",
+			"process_key": "3u60w/attempt-1",
+			"attempt": 1
+		}
+	]
+}

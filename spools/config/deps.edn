@@ -1,0 +1,25 @@
+{:paths ["src"]
+ :deps {millhouse.spools/auto-run {:local/root "../auto-run"}
+        io.millstrand/batteries {:git/url "https://github.com/codethread/millstrand.git"
+                                 :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
+                                 :deps/root "spools/batteries"}
+        millhouse.spools/workflow {:local/root "../workflow"}
+        millhouse.spools/identity {:local/root "../identity"}
+        millhouse.spools/kanban {:local/root "../kanban"}
+        millhouse.spools/land {:local/root "../land"}
+        ct.spools/harnesses {:local/root "../harnesses"}
+        codethread/devflow {:local/root "../devflow"}
+        codethread/devflow-kanban-adapter {:local/root "../devflow/kanban-adapter"}}
+ :aliases {:test {:extra-paths ["test"]
+                  :extra-deps {io.millstrand/millstrand
+                               {:git/url "https://github.com/codethread/millstrand.git"
+                                :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}}
+                  :main-opts ["-m" "ct.spools.codethread.config-test"]}
+           :consumer-smoke
+           {:extra-paths ["test"]
+            :extra-deps {io.millstrand/millstrand
+                         {:git/url "https://github.com/codethread/millstrand.git"
+                          :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}}
+            :main-opts
+            ["-m"
+             "ct.spools.codethread.shared-landing-consumer-smoke"]}}}

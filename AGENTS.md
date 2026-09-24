@@ -1,5 +1,36 @@
 # Agents
 
+## Monorepo purpose and strict spool boundaries
+
+This monorepo exists to aid development, testing, and coordinated delivery. It is
+not permission to couple its spools. **Enforce strict spool boundaries: spools
+may reference or use one another only when explicitly authorized by the user.**
+Preserve the existing declared dependencies and activation contracts; do not add
+cross-spool imports, dependencies, shared internals, or implicit activation just
+because the source is nearby. Ask before introducing a new relationship.
+
+Each spool remains independently consumable, with its own manifest, classpath,
+focused tests, and explicit module activation. Shared development scripts and
+integration tests are not runtime APIs. Codethread configuration is opt-in;
+Devflow's Kanban adapter is independently optional. Ralph is not part of this
+repository: Auto-run supersedes it. Millstrand core and Millstrand UI remain
+separate repositories.
+
+New development for Harnesses, Devflow, Codethread config, and existing Millhouse
+spools belongs on the Millhouse board with component labels. See
+[the consolidation and handoff record](docs/consolidation.md) before moving old
+work; old boards and repositories retain their history and are not merged or
+silently retired.
+
+## Safety
+
+- Never restart a running Weaver without explicit user sign-off.
+- Kill by exact PID only, never process-name patterns.
+- Run workspace-backed tests in disposable worlds, never the shared `.millstrand`
+  world. Creating source does not authorize live activation or plugin installation.
+- Run full suites under `flock -w 180 /tmp/millstrand-test.lock`; focused tests do
+  not need the lock. The landing quality contract owns its lock: do not nest it.
+
 ## Quality checks
 
 - Run `make quality` before completing changes; it covers formatting, linting, conventions, reflection, docs, and the test suite.

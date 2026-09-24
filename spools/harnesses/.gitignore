@@ -1,0 +1,9 @@
+.cpcache/
+.lsp/*
+!.lsp/config.edn
+**/.clj-kondo/.cache/
+**/.clj-kondo/imports/
+**/.lsp/.cache/
+target/
+node_modules/
+*.tgz

@@ -93,7 +93,9 @@ check-clj-kondo:
 clean-kondo:
 	rm -rf .clj-kondo/imports .clj-kondo/.cache \
 		.millstrand/.clj-kondo/imports .millstrand/.clj-kondo/.cache \
-		spools/*/.clj-kondo/imports spools/*/.clj-kondo/.cache
+		spools/*/.clj-kondo/imports spools/*/.clj-kondo/.cache \
+		spools/devflow/kanban-adapter/.clj-kondo/imports \
+		spools/devflow/kanban-adapter/.clj-kondo/.cache
 
 lint-splint:
 	@$(RUN_CHECK) splint clojure -M:lint/splint
@@ -136,4 +138,21 @@ kanban-serve:
 		"$$file" "$$port" "$$ip" "$$port" "$(ID)" "$(KANBAN_EXPORT_DIR)"; \
 	python3 -m http.server "$$port" --bind 0.0.0.0 --directory "$(KANBAN_EXPORT_DIR)"
 
-quality: fmt-check lint reflect-check docs-check test kanban-dash-check
+# Keep package classpaths and toolchains independent. These checks deliberately
+# run in separate processes instead of extending the aggregate Millhouse basis.
+.PHONY: packages-check harnesses-check devflow-check config-check workspace-test
+harnesses-check:
+	$(MAKE) -C spools/harnesses check
+
+devflow-check:
+	$(MAKE) -C spools/devflow check
+
+config-check:
+	$(MAKE) -C spools/config check
+
+workspace-test:
+	cd .millstrand && clojure -M:test
+
+packages-check: harnesses-check devflow-check config-check workspace-test
+
+quality: fmt-check lint reflect-check docs-check test kanban-dash-check packages-check

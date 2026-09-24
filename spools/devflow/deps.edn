@@ -1,0 +1,17 @@
+{:paths ["src" "resources"]
+ :deps {camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.3"}
+        io.millstrand/millstrand
+        {:git/url "https://github.com/codethread/millstrand.git"
+         :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}
+        millhouse.spools/workflow {:local/root "../workflow"}}
+ :aliases
+ {:test {:extra-paths ["test" "scripts" "kanban-adapter/src" "kanban-adapter/test"]
+         :extra-deps {millhouse.spools/kanban {:local/root "../kanban"}}
+         :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
+         :main-opts ["-m" "ct.spools.devflow-test"]}
+  :equivalence-published {:extra-paths ["scripts" "kanban-adapter/src"]
+                          :extra-deps {millhouse.spools/kanban {:local/root "../kanban"}}
+                          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
+                          :main-opts ["-m" "ct.spools.devflow-equivalence"]}
+  :lint {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}
+         :main-opts ["-m" "clj-kondo.main"]}}}

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+allowlist="$repo_root/identity-allowlist.tsv"
+findings=$(mktemp)
+trap 'rm -f "$findings"' EXIT
+
+[[ -f "$allowlist" ]] || { echo "identity-check: missing $allowlist" >&2; exit 1; }
+cd "$repo_root"
+
+scan_paths=(src test kanban-adapter README.md CHANGELOG.md devflow.md deps.edn)
+set +e
+rg -n -i --hidden --max-columns 100000 \
+  --glob '!.git/**' \
+  --glob '!target/**' \
+  --glob '!bin/identity-check' \
+  --glob '!identity-allowlist.tsv' \
+  'skein|io\.skein|codethread/skein|\.skein|:skein|SKEIN_' \
+  "${scan_paths[@]}" >"$findings"
+scan_status=$?
+set -e
+((scan_status <= 1)) || { echo "identity-check: scan failed" >&2; exit "$scan_status"; }
+
+declare -a scopes patterns reasons used
+while IFS=$'\t' read -r scope pattern reason extra; do
+  [[ -z "${scope:-}" || "$scope" == \#* ]] && continue
+  if [[ -z "${pattern:-}" || -z "${reason:-}" || -n "${extra:-}" ]]; then
+    echo "identity-check: malformed allowlist row: $scope" >&2
+    exit 1
+  fi
+  scopes+=("$scope")
+  patterns+=("$pattern")
+  reasons+=("$reason")
+  used+=(0)
+done <"$allowlist"
+
+unclassified=0
+while IFS= read -r finding; do
+  [[ -z "$finding" ]] && continue
+  path=${finding%%:*}
+  matched=0
+  for i in "${!scopes[@]}"; do
+    scope=${scopes[$i]}
+    if [[ "$scope" != "*" && "$path" != "$scope" && "$path" != "$scope"/* ]]; then
+      continue
+    fi
+    if printf '%s\n' "$finding" | grep -Eiq -- "${patterns[$i]}"; then
+      used[$i]=1
+      matched=1
+      break
+    fi
+  done
+  if ((matched == 0)); then
+    echo "identity-check: unclassified active identity: $finding" >&2
+    unclassified=1
+  fi
+done <"$findings"
+
+for i in "${!scopes[@]}"; do
+  if ((used[$i] == 0)); then
+    echo "identity-check: stale allowlist row: ${scopes[$i]}" >&2
+    exit 1
+  fi
+done
+
+((unclassified == 0)) || exit 1
+echo "identity-check: clean"

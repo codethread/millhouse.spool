@@ -21,7 +21,7 @@ select the operation, reporting patterns, workflows and lifecycle configuration;
 no default seat, cadence, workflow, concurrency or automatic activation is
 introduced by this library.
 
-See the [activation and delivery contract](https://github.com/codethread/codethread.spool/blob/main/docs/processes/auto-run.md)
+See the [activation and delivery contract](https://github.com/codethread/millhouse.spool/blob/main/docs/processes/auto-run.md)
 and the [API](auto-run.api.md).
 
 The extraction preserves persisted `auto-run/*` attributes, the scheduler key
@@ -42,9 +42,11 @@ must be ordered before using it. It checks a unique accepted continuation path,
 every predecessor settled, same task/root/worktree, expected current-worker receipt and
 no frozen/accepted finisher. Exact request replay does not mutate anything.
 See [repository recovery examples](../../docs/auto-run.md#authorized-recovery).
-This library and the Millhouse workspace pin Harnesses
-`4ac638d679bc238fd8a373d52c3dbf2a7f682be0`, which provides that API. Other
-repositories' pin updates and production activation remain separately coordinated.
+This library and the Millhouse workspace select the local Harnesses package at
+the same Millhouse revision. External consumers composing multiple Git roots
+use the [generated dependency closure](../../README.md#consumption), not a
+separate Harnesses repository pin. Production activation remains separately
+authorized.
 
 Run the focused library tests with `clojure -M:test` from this directory.
 The repository quality gate includes this root's formatting, lint, reflection,

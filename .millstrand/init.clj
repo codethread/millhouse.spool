@@ -50,10 +50,6 @@
                           :millstrand/spools-batteries
                           :devflow/kanban-adapter]
                   :required? true})
-(runtime/module! runtime :codethread/ralph
-                 {:ns 'ct.spools.codethread.ralph
-                  :after [:millhouse/spools-workflow]
-                  :required? true})
 
 ;; --- Repository automatic delivery policy ---------------------------------
 (runtime/module! runtime :millhouse/auto-run-workflows
@@ -73,5 +69,4 @@
           :devflow
           :devflow/kanban-adapter
           :codethread/config
-          :codethread/ralph
           :millhouse/auto-run])
