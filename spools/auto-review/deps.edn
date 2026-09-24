@@ -2,7 +2,7 @@
  :deps
  {io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "91361ef09eda4d09a24515a6ba3f99aa3090525a"}
+   :git/sha "e0a7fd37071c1d0c52d2197661b2f418dfa2b8fb"}
   org.clojure/data.json {:mvn/version "2.5.1"}}
  :aliases
  {:test
