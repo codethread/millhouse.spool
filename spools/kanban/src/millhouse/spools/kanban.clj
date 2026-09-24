@@ -1487,96 +1487,160 @@
 
 (def ^:private kanban-about
   "Cross-verb narrative projected by `strand about kanban`."
-  (fmt/reflow "
-    |Kanban cards are the user-to-agent work board. Every card is a feature by default;
-    |an epic is a grouping card whose direct feature children use parent-of. Active cards
-    |use refinement (awaiting explicit promotion), pending (the actionable queue),
-    |claimed (in progress: an agent is working, including agent-to-agent review), and
-    |in_review (human review, approval, blocker resolution, or a pending human decision).
-    |These are attention statuses, not sequential stages: in_review is not further along
-    |than claimed and may be needed at any point. Keep agent review and agent decisions
-    |in claimed. Use in_review only when human attention is needed, and record the exact
-    |question or approval needed on the feature or epic. Return to claimed when agent
-    |work resumes. Finish closes cards with an explicit outcome. Epics are
-    |never claimed: finish them from refinement or pending; both done and abandoned
-    |cascade-close open feature children and tasks, but only abandoned is reversible.
-    |Use `strand update ID --attr kanban/lane=LANE` for simple lane changes:
-    |pending for promotion, in_review for human attention, claimed for agent work, and optionally
-    |in_production after merge while deployment validation, observation, or coordinated
-    |release work remains. `finish` closes the card directly from claimed, in_review,
-    |or in_production when its outcome is satisfied: no guard requires human review
-    |or the production lane.
-    |
-    |Priority p1 is an immediate blocker, p2 is high value, p3 is the default, and p4 is
-    |someday work. `kanban next` returns the highest-priority pending feature, oldest
-    |first within its priority. Add may record a creator actor and durable reporter
-    |without owning backlog work. A claim/handoff writes an immutable ownership record;
-    |current owner is the latest claimed-at then record-id projection. Branch/worktree
-    |and optional nonauthoritative run-id are claim context. Card/task state lives in
-    |kanban/card, kanban/type, kanban/lane, kanban/outcome, kanban/priority,
-    |kanban/source, kanban/task, and kanban/abandon-restore-lane.
-    |Labels are open kanban.label/<slug>=true markers rather than a fixed vocabulary.
-    |
-    |Kanban owns board projections and structured card operations: add, board, card, next,
-    |priority, label, claim, task, note, finish, and reopen. Simple lane changes use
-    |Batteries update instead of Kanban transition wrappers.
-    |`kanban-batch` atomically creates pending feature cards from items with key, title,
-    |optional body and priority, and sibling-key or durable-id depends-on references.
-    |Use Batteries add, update, note, list, ready, show, query, and weave for the generic
-    |graph behavior they already name. Run `strand help kanban` for exact invocation,
-    |`strand prime kanban` for working discipline, and `strand pattern explain
-    |kanban-batch` for the live batch contract."))
+  (fmt/prose "
+    Kanban cards are the user-to-agent work board. Read this planning reference
+    before creating work beyond a single feature with its tasks. Use
+    `strand prime kanban` for the worker runbook and `strand help kanban` for
+    exact flags. Discover workspaces with `mill weaver list`; use the confirmed
+    owning `.millstrand` path with `strand --workspace PATH` for cross-workspace
+    operations. Use IDs returned by that workspace, not cross-board assumptions.
+
+    ## Plan features and relationships
+
+    Every direct user request is a feature by default. Give it an outcome,
+    non-goals, acceptance criteria, verification and delivery boundary. Use an
+    epic only for useful grouping; its direct feature children use parent-of.
+    Half-formed ideas belong in refinement, not executable pending work.
+    Promote explicitly with `strand update CARD_ID --attr kanban/lane=pending`.
+
+    Create a feature with `strand kanban add TITLE --body BODY`; add
+    `--lane refinement` for an uncertain idea, `--type epic` for a grouping card,
+    or `--epic EPIC_ID` for a child feature. Before execution, create tasks with
+    `strand kanban task add CARD_ID TITLE --body BODY`.
+
+    Edges point from parent to child and from dependent to prerequisite:
+
+    ```bash
+    strand update PARENT_ID --edge parent-of:CHILD_ID
+    strand update DEPENDENT_ID --edge depends-on:PREREQUISITE_ID
+    ```
+
+    Children inherit graph context through parent-of; depends-on defines the
+    concurrency DAG. Avoid cycles. For code-delivery features, prerequisites
+    mean code is landed, not merely that a worker returned. Do not close a
+    feature early to release dependents.
+
+    For atomic multi-card creation, inspect `strand pattern explain kanban-batch`
+    and `strand help weave`, then use `strand weave --pattern kanban-batch`.
+    The pattern creates pending features with sibling-key or durable-ID
+    dependencies. Follow its live input contract rather than inventing a schema.
+
+    ## Inspect and select work
+
+    Use `strand kanban board` for the board and `strand kanban card CARD_ID` for
+    notes, tasks and dependency edges. `strand kanban board --all true` includes
+    compact all-state cards and direct epic membership. Labels are open
+    kanban.label/<slug>=true markers; repeated --label flags are AND filters.
+
+    Priority p1 is an immediate blocker, p2 is high value, p3 is the default,
+    and p4 is someday work. `kanban next` selects the highest-priority pending
+    feature, oldest first within its priority. Discover readiness queries with
+    `strand query list` and `strand query explain NAME`; consume them through
+    `strand list` or `strand ready`.
+
+    ## Ownership and attribution
+
+    Workers claim their own features; do not preclaim for a delegated worker.
+    A feature claim requires --owner and --branch; --worktree records its path
+    and --run-id is optional nonauthoritative context. --owner names the new
+    owner; --by-identity names the actor and may be the same friendly identity.
+    Tasks inherit feature ownership until directly claimed with
+    `strand kanban claim TASK_ID --owner OWNER`; task claims need no branch.
+    Do not treat a task as a feature work root.
+
+    Attribution is command-specific. `kanban add --by-identity ACTOR` records
+    the creator and default reporter; --reported-by sets a distinct reporter.
+    Notes and claim actors use --by-identity, as do agent commands and workflow
+    transitions where their help declares it. Label operations and Batteries
+    add/update have no universal attribution flag. Inspect command help and
+    record an attributed note when provenance matters; never invent flags.
+
+    Reporter, actor, worker and current owner are distinct. Reporting does not
+    claim work. A claim/handoff writes an immutable ownership record; current
+    owner is the latest claimed-at then record-id projection. Reporter and
+    ordered claim/participation history survive handoff. Branch/worktree and
+    optional run-id are claim context, not proof of worker completion.
+
+    ## Lanes and completion
+
+    Active cards use refinement (awaiting promotion), pending (actionable),
+    claimed (agent work), in_review (human review, approval, blocker resolution,
+    or a pending human decision), and optionally in_production after merge.
+    These are attention statuses, not sequential stages: in_review is not further
+    along than claimed. Keep agent review and agent decisions in claimed.
+    Record the exact human question or approval needed on the feature or epic;
+    return to claimed when agent work resumes.
+
+    Use `strand update CARD_ID --attr kanban/lane=LANE` for lane changes, not
+    guarded transitions. Preserve structured `kanban claim`, `finish` and
+    `reopen`; inspect their help before use. Finish closes a feature from
+    claimed, in_review or in_production when its outcome is satisfied. No guard
+    requires human review or production. Use in_production only while post-merge
+    deployment validation, observation or coordinated release work remains.
+
+    Epics are never claimed: finish them from refinement or pending. Both done
+    and abandoned cascade-close open feature children and tasks as unactioned,
+    not completed work; only abandoned is reversible. Close completed tasks as
+    you go with `strand update TASK_ID --state closed`.
+
+    Kanban owns board projections and structured operations: add, board, card,
+    next, priority, label, claim, task, note, finish and reopen. Use Batteries
+    add, update, note, list, ready, show, query and weave for generic graph work.
+    Card/task state lives in kanban/card, kanban/type, kanban/lane,
+    kanban/outcome, kanban/priority, kanban/source, kanban/task and
+    kanban/abandon-restore-lane.
+    "))
 
 (def ^:private kanban-prime
   "Run-first discipline projected by `strand prime kanban`."
-  (fmt/reflow "
-    |Start with `strand help kanban`, then inspect `strand pattern explain kanban-batch`
-    |and the kanban queries through `strand query list` and `strand query explain <name>`.
-    |Every direct user request is a feature card; group related cards under an epic only
-    |when that grouping is useful. Half-formed ideas belong in refinement and require an
-    |explicit promotion with `strand update CARD_ID --attr kanban/lane=pending`.
-    |Every agent doing direct user work works under a claimed feature
-    |card: claim the pending card with owner and branch before starting.
-    |
-    |Before execution, decompose the feature into tasks. Tasks are the driveable slices;
-    |the card remains the audit root, and depends-on edges define the concurrency DAG.
-    |Put other execution work beneath the card with Batteries add and update, and relate
-    |blockers with depends-on. Complete each task as you go with
-    |`strand update TASK_ID --state closed`; do not leave completed tasks open until
-    |the feature finishes. Finish cascades mark remaining open tasks as unactioned,
-    |not completed work.
-    |
-    |Use task notes as a development log for implementation details, command output,
-    |detailed review findings, and gotchas; the latest note is the resume read.
-    |Important user-visible notes must always be on the epic or feature, not only
-    |on a task users will rarely see. Summarize decisions, milestones, blockers,
-    |review outcomes, and handovers there; keep the detailed devlog on the task.
-    |Every branch has exactly one active work root with an explicit current ownership
-    |claim (and worktree when it exists); tasks inherit feature ownership until directly
-    |claimed. Children inherit graph context through parent-of.
-    |
-    |Use `strand weave --pattern kanban-batch` for atomic backlog creation and `strand
-    |list` or `strand ready` with the registered kanban queries for generic selection.
-    |Keep all agent progress in claimed, including implementation, testing, agent-to-agent
-    |review, resolving agent findings, and authorized landing. Review means human attention,
-    |not agent review: use `strand update CARD_ID --attr kanban/lane=in_review` when human
-    |review, approval, blocker resolution, or a pending human decision is needed, at any
-    |point in the work. Record the exact question, blocker, or approval needed on the
-    |feature or epic. Lanes are attention statuses, not sequential stages; in_review is
-    |not further along than claimed. When agent work resumes, use
-    |`strand update CARD_ID --attr kanban/lane=claimed`.
-    |These are direct attribute patches, not guarded transitions: inspect the current
-    |card and follow the lane discipline. Keep using `strand kanban claim`,
-    |`strand kanban finish`, and `strand kanban reopen` for their structured behavior.
-    |Finish only after the declared outcome is known. Once reviewed work is merged
-    |to main and its outcome is satisfied, finish it directly from claimed or in_review.
-    |From either lane, use
-    |`strand update CARD_ID --attr kanban/lane=in_production` only when post-merge
-    |deployment validation, a settling period, or coordinated release work remains
-    |(including related changes in a wider epic). This optional choice is agent policy,
-    |never a mandatory completion guard. Record what remains and the completion
-    |criterion on the feature or epic, with detailed observations on a task;
-    |finish when satisfied, or update back to claimed if implementation changes are needed."))
+  (fmt/prose "
+    Start with `strand help kanban`. This is the worker runbook for one feature
+    and its tasks. If creating cards beyond a single feature with its tasks,
+    always read `strand about kanban` first for planning and relationships.
+    Every direct user request is a feature card. Every agent doing direct user work
+    works under a claimed feature card: inspect `strand kanban card CARD_ID`, then
+    claim the pending card yourself with --owner and --branch before starting;
+    record --worktree when one exists. Half-formed ideas stay in refinement until
+    explicit promotion with `strand update CARD_ID --attr kanban/lane=pending`.
+
+    Before execution, decompose the feature into tasks. Tasks are the driveable slices;
+    the card remains the audit root, and depends-on edges define the concurrency DAG.
+    Put other execution work beneath the card with Batteries add and update, and relate
+    blockers with depends-on. Complete each task as you go with
+    `strand update TASK_ID --state closed`; do not leave completed tasks open until
+    the feature finishes. Finish cascades mark remaining open tasks as unactioned,
+    not completed work.
+
+    Use `strand kanban note ID TEXT --by-identity ACTOR` to record progress.
+    Use task notes as a development log for implementation details, command output,
+    detailed review findings, and gotchas; the latest note is the resume read.
+    Important user-visible notes must always be on the epic or feature, not only
+    on a task users will rarely see. Summarize decisions, milestones, blockers,
+    review outcomes, and handovers there; keep the detailed devlog on the task.
+    Every branch has exactly one active work root with an explicit current ownership
+    claim (and worktree when it exists); tasks inherit feature ownership until directly
+    claimed. Children inherit graph context through parent-of.
+
+    Keep all agent progress in claimed, including implementation, testing, agent-to-agent
+    review, resolving agent findings, and authorized landing. Review means human attention,
+    not agent review: use `strand update CARD_ID --attr kanban/lane=in_review` when human
+    review, approval, blocker resolution, or a pending human decision is needed, at any
+    point in the work. Record the exact question, blocker, or approval needed on the
+    feature or epic. Lanes are attention statuses, not sequential stages; in_review is
+    not further along than claimed. When agent work resumes, use
+    `strand update CARD_ID --attr kanban/lane=claimed`.
+    These are direct attribute patches, not guarded transitions: inspect the current
+    card and follow the lane discipline. Keep using `strand kanban claim`,
+    `strand kanban finish`, and `strand kanban reopen` for their structured behavior.
+    Finish only after the declared outcome is known. Once reviewed work is merged
+    to main and its outcome is satisfied, finish it directly from claimed or in_review.
+    From either lane, use
+    `strand update CARD_ID --attr kanban/lane=in_production` only when post-merge
+    deployment validation, a settling period, or coordinated release work remains
+    (including related changes in a wider epic). This optional choice is agent policy,
+    never a mandatory completion guard. Record what remains and the completion
+    criterion on the feature or epic, with detailed observations on a task;
+    finish when satisfied, or update back to claimed if implementation changes are needed."))
 
 (def ^:private kanban-arg-spec
   "Declared command surface for the `kanban` op."
