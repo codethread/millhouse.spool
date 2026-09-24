@@ -93,7 +93,9 @@ check-clj-kondo:
 clean-kondo:
 	rm -rf .clj-kondo/imports .clj-kondo/.cache \
 		.millstrand/.clj-kondo/imports .millstrand/.clj-kondo/.cache \
-		spools/*/.clj-kondo/imports spools/*/.clj-kondo/.cache
+		spools/*/.clj-kondo/imports spools/*/.clj-kondo/.cache \
+		spools/devflow/kanban-adapter/.clj-kondo/imports \
+		spools/devflow/kanban-adapter/.clj-kondo/.cache
 
 lint-splint:
 	@$(RUN_CHECK) splint clojure -M:lint/splint

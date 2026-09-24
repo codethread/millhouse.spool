@@ -11,8 +11,9 @@ repository's workspace, not a worktree-local `.millstrand`.
 
 ## Pi
 
-Install this repository as a Pi package. The standalone extension awaits native
-registration at `session_start` and contributes the canonical identity instruction
+Install the Millhouse `spools/harnesses` package, not the monorepo root; see
+[package installation](../../README.md#native-identity-plugins). The standalone
+extension awaits native registration at `session_start` and contributes the canonical identity instruction
 through `before_agent_start`. Ordinary task and ordered alias/user appends remain
 ordinary Pi launch prompts. There is no Pi identity reservation, bootstrap
 selection, or generated identity append flag.
@@ -89,7 +90,8 @@ imports to this checkout; the consumer repository remains read-only.
 
 ## Codex
 
-Enable and trust `millstrand-identity@harnesses` from this checkout. The packaged
+Add the Millhouse `spools/harnesses` directory as the Codex marketplace, then
+enable and trust `millstrand-identity@harnesses`. The packaged
 SessionStart and SubagentStart hooks run only in the launch project's canonical
 Millstrand workspace, including linked Git worktrees. In other projects they do
 nothing; inherited workspace configuration does not bypass the gate.
