@@ -244,6 +244,9 @@ to start a fresh bounded attempt series.
 
 ## Development
 
+Use Bash 4.4 or newer for the shell wrappers; stock macOS Bash 3.2 is not
+supported. CI installs Homebrew Bash and puts it first on `PATH`.
+
 Run the full package check on macOS: the imported `native-v1` guidance resolver
 intentionally supports Darwin only, and its ownership/closure tests exercise
 that contract. Millhouse CI runs this complete package gate on macOS; root,

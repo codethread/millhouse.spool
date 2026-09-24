@@ -37,7 +37,9 @@ runs:
       shell: bash
       env:
         HOMEBREW_NO_AUTO_UPDATE: '1'
-      run: brew install flock ripgrep jq
+      run: |
+        brew install bash flock ripgrep jq
+        echo "$(brew --prefix bash)/bin" >> "$GITHUB_PATH"
     - name: Native plugin tools
       if: inputs.plugins == 'true'
       shell: bash
