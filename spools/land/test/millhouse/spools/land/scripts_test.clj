@@ -59,7 +59,7 @@
         canonical (io/file root "canonical")
         worktree (io/file root "feature")
         log (io/file root "quality.log")]
-    (test-support/run-git! root "init" "--bare" (.getPath remote))
+    (test-support/run-git! root "init" "--bare" "-b" "main" (.getPath remote))
     (test-support/run-git! root "init" "-b" "main" (.getPath seed))
     (test-support/run-git! seed "config" "user.name" "Millstrand Test")
     (test-support/run-git! seed "config" "user.email" "test@millstrand.invalid")
