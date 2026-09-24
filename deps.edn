@@ -2,7 +2,7 @@
  :deps
  {io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "e0a7fd37071c1d0c52d2197661b2f418dfa2b8fb"
+   :git/sha "9e5fd206350dc42c87748ca41052863a512007a9"
    :deps/root "."}
   millhouse.spools/auto-review {:local/root "spools/auto-review"}
   millhouse.spools/auto-run {:local/root "spools/auto-run"}
