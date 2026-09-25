@@ -5,6 +5,9 @@
 # configuration/cache, and it uses exact producer revisions.
 set -euo pipefail
 
+sha=${1:?usage: verify-editor-diagnostics.sh MILLHOUSE_SHA}
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a full immutable SHA' >&2; exit 2; }
+
 for command in clojure clojure-lsp; do
   command -v "$command" >/dev/null || {
     printf 'Required command not found: %s\n' "$command" >&2
@@ -21,14 +24,11 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$workspace/src" "$workspace/.clj-kondo"
-cat > "$workspace/deps.edn" <<'EOF'
+cat > "$workspace/deps.edn" <<EOF
 {:paths ["src"]
- :deps {io.millstrand/millstrand
-        {:git/url "https://github.com/codethread/millstrand.git"
-         :git/sha "8e220eab7de2fabe7880c6a4c71de6cd903c34bb"}
-        millhouse/chime
+ :deps {millhouse/chime
         {:git/url "https://github.com/codethread/millhouse.spool.git"
-         :git/sha "bd96f5357a335bd17cd22042da1be5bd2200f807"
+         :git/sha "$sha"
          :deps/root "spools/chime"}}}
 EOF
 cat > "$workspace/src/consumer.clj" <<'EOF'

@@ -9,7 +9,7 @@
 
 (def ^:private millstrand-sha
   "The Millstrand revision required by the external acceptance world."
-  "8e220eab7de2fabe7880c6a4c71de6cd903c34bb")
+  "34f940ddb2e69898554bf76251749715b250ae15")
 
 (def ^:private fixture-module
   "(ns me.execution-assignment-fixture
@@ -148,14 +148,12 @@
     (spit (io/file workspace "deps.edn")
           (pr-str
            {:deps
-            {'millstrand.spools/batteries
+            {'io.millstrand/batteries
              {:git/url "https://github.com/codethread/millstrand.git"
               :git/sha millstrand-sha
               :deps/root "spools/batteries"}
              'millhouse/identity
-             {:git/url "https://github.com/codethread/millhouse.spool.git"
-              :git/sha "62723b7b1820c7e1723de4a2ff985b069871159e"
-              :deps/root "spools/identity"}
+             {:local/root (.getCanonicalPath (io/file project-root "../identity"))}
              'millhouse/harnesses
              {:local/root project-root}}}))
     (spit (io/file workspace "init.clj")
@@ -166,9 +164,14 @@
              {:ns 'millstrand.spools.batteries :required? true})
            (runtime/module! rt :identity
              {:ns 'millhouse.identity :required? true})
+           (runtime/module! rt :workflow
+             {:ns 'millhouse.workflow :required? true})
+           (runtime/module! rt :kanban
+             {:ns 'millhouse.kanban
+              :after [:identity :workflow] :required? true})
            (runtime/module! rt :fixture
              {:file \"me/execution_assignment_fixture.clj\"
-              :after [:identity] :required? true})")
+              :after [:kanban] :required? true})")
     (spit (io/file workspace "me/execution_assignment_fixture.clj") fixture-module)
     (.getCanonicalPath workspace)))
 

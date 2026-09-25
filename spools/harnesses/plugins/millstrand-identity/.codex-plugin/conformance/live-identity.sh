@@ -5,8 +5,7 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 source_plugin_root="$repo_root/plugins/millstrand-identity"
 plugin_root=
 identity_hook=
-identity_sha="62723b7b1820c7e1723de4a2ff985b069871159e"
-identity_url="https://github.com/codethread/millhouse.spool.git"
+identity_root=$(cd "$repo_root/../identity" && pwd)
 
 tmp_root=$(mktemp -d /tmp/cia.XXXXXX)
 state_root=$(mktemp -d /tmp/cis.XXXXXX)
@@ -75,10 +74,7 @@ mkdir -p "$project/nested/cwd" "$linked_project/nested/cwd"
 cat >"$workspace/deps.edn" <<EOF
 {:deps
  {millhouse/harnesses {:local/root "$repo_root"}
-  millhouse/identity
-  {:git/url "$identity_url"
-   :git/sha "$identity_sha"
-   :deps/root "spools/identity"}}}
+  millhouse/identity {:local/root "$identity_root"}}}
 EOF
 cat >"$workspace/init.clj" <<'EOF'
 (require '[millstrand.api.current.alpha :as current]
@@ -270,7 +266,7 @@ jq -e '
 }
 
 printf '%s\n' \
-	"Codex identity live acceptance passed (production identity.sh; Millhouse $identity_sha)." \
+	"Codex identity live acceptance passed (production identity.sh; Identity $identity_root)." \
 	"  identity=$parent_identity recovered=$recovered_identity" \
 	"  discovered-subdir=$discovered_identity linked-worktree=$linked_identity" \
 	"  child=$child_identity parent-edge=verified" \
