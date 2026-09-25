@@ -24,8 +24,7 @@
             [millstrand.test.alpha :as t]))
 
 (defn- adapter-manifest []
-  (let [source (io/file (io/resource "millhouse/devflow_kanban_adapter.clj"))
-        adapter-root (-> source .getParentFile .getParentFile .getParentFile .getParentFile)]
+  (let [adapter-root (t/spool-checkout-root "millhouse/devflow_kanban_adapter.clj")]
     (edn/read-string (slurp (io/file adapter-root "deps.edn")))))
 
 (deftest adapter-publishes-devflow-as-a-peer-dependency

@@ -56,7 +56,7 @@
           :when (.isDirectory exports)]
     (testing (str library)
       (is (.isFile (io/file exports (namespace library) (name library)
-                           "config.edn"))))))
+                            "config.edn"))))))
 
 (deftest package-graph-stays-explicit-and-local
   (is (= (set (keys production-edges)) (set (keys package-roots))))
