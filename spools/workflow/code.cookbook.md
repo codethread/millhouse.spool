@@ -15,7 +15,7 @@ executor sees the artifact only after the code gate closes, so the two
 authorities remain independently observable in the workflow.
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (defn write-manifest [{:keys [path contents]}]
   (spit path contents)

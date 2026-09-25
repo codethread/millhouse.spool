@@ -4,9 +4,9 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
    :deps/root "."}
-  millhouse.spools/identity {:local/root "../identity"}}
+  millhouse/identity {:local/root "../identity"}}
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]
-   :extra-deps {millhouse.spools/workflow {:local/root "../workflow"}}
-   :main-opts ["-m" "millhouse.test-runner" "millhouse.spools.kanban-test"]}}}
+   :extra-deps {millhouse/workflow {:local/root "../workflow"}}
+   :main-opts ["-m" "millhouse.test-runner" "millhouse.kanban-test"]}}}

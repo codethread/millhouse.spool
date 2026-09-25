@@ -1,13 +1,13 @@
 {:spool/format 1
- :roots {millhouse.spools/auto-review {:root "spools/auto-review"}
-         millhouse.spools/auto-run {:root "spools/auto-run"}
-         millhouse.spools/workflow {:root "spools/workflow"}
-         millhouse.spools/chime {:root "spools/chime"}
-         millhouse.spools/cron {:root "spools/cron"}
-         millhouse.spools/land {:root "spools/land"}
-         millhouse.spools/kanban {:root "spools/kanban"}
-         millhouse.spools/identity {:root "spools/identity"}
-         ct.spools/harnesses {:root "spools/harnesses"}
-         codethread/devflow {:root "spools/devflow"}
-         codethread/devflow-kanban-adapter {:root "spools/devflow/kanban-adapter"}
-         codethread/config {:root "spools/config"}}}
+ :roots {millhouse/auto-review {:root "spools/auto-review"}
+         millhouse/auto-run {:root "spools/auto-run"}
+         millhouse/workflow {:root "spools/workflow"}
+         millhouse/chime {:root "spools/chime"}
+         millhouse/cron {:root "spools/cron"}
+         millhouse/land {:root "spools/land"}
+         millhouse/kanban {:root "spools/kanban"}
+         millhouse/identity {:root "spools/identity"}
+         millhouse/harnesses {:root "spools/harnesses"}
+         millhouse/devflow {:root "spools/devflow"}
+         millhouse/devflow-kanban-adapter {:root "spools/devflow/kanban-adapter"}
+         millhouse/config {:root "spools/config"}}}

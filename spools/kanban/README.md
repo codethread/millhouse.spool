@@ -1,6 +1,6 @@
 # Millhouse Kanban spool
 
-`millhouse.spools.kanban` publishes a user-facing work board over Millstrand
+`millhouse.kanban` publishes a user-facing work board over Millstrand
 strands. A feature card is the durable work root for user↔agent work; execution
 strands, tasks, notes, and review work hang beneath it without becoming a
 second status system.
@@ -11,7 +11,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 ```clojure
 {:deps
- {millhouse.spools/kanban
+ {millhouse/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v4"
    :deps/root "spools/kanban"}}}
@@ -23,10 +23,10 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 (def runtime (current/runtime))
 (runtime/module! runtime :millhouse/identity
-  {:ns 'millhouse.spools.identity
+  {:ns 'millhouse.identity
    :required? true})
 (runtime/module! runtime :millhouse/kanban
-  {:ns 'millhouse.spools.kanban
+  {:ns 'millhouse.kanban
    :required? true})
 ```
 

@@ -10,11 +10,16 @@ Use the installed `clojure-lsp diagnostics` CLI as the headless editor check. It
 
 Run one LSP project per package `deps.edn`, not from an arbitrary repository root. Clojure-lsp detects the `deps.edn` at `--project-root`; it does not turn a multi-root repository into one project automatically. The selected root must also be the same root that owns the corresponding `.clj-kondo/imports`.
 
-The reproducible representative check is:
+The current representative check requires the full commit SHA of a published
+`v5` or later Millhouse revision:
 
-```sh
-./scripts/verify-editor-diagnostics.sh
+```nu
+./scripts/verify-editor-diagnostics.sh MILLHOUSE_SHA
 ```
+
+The reproduction results and repository inventory below are historical evidence
+from 2026-09-13; their pre-v5 names are not current installation instructions.
+See the [v5 migration guide](../../v5.md) for current coordinates.
 
 It is deliberately disposable. It creates a temporary exact-pin consumer with Millstrand and the macro-owning Chime package, sets a temporary `XDG_CONFIG_HOME` and LSP `:cache-path`, and removes all three temporary directories. It does not change human editor configuration or caches.
 

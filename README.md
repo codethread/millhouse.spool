@@ -2,7 +2,7 @@
 
 Millhouse is a development monorepo for independently consumable
 [Millstrand](https://codethread.github.io/millstrand/) spools. It consolidates
-Harnesses, Devflow, and Codethread configuration alongside the existing
+Harnesses, Devflow, and shared configuration alongside the existing
 Millhouse packages. Millstrand core and Millstrand UI remain separate.
 
 **Co-location is not permission to couple spools.** Preserve strict package and
@@ -17,22 +17,24 @@ and [migration, provenance, and board handoff](docs/consolidation.md).
 
 | Package | Coordinate | Purpose |
 | --- | --- | --- |
-| [Harnesses](spools/harnesses/README.md) | `ct.spools/harnesses` | Provider-neutral tracked agents, custody, Codex/Pi providers and independently installable native plugins |
-| [Devflow](spools/devflow/README.md) | `codethread/devflow` | Feature-delivery workflows and authoring guidance; no Kanban dependency |
-| [Devflow Kanban adapter](spools/devflow/kanban-adapter/README.md) | `codethread/devflow-kanban-adapter` | Optional explicit bridge between Devflow and Kanban |
-| [Codethread config](spools/config/README.md) | `codethread/config` | Opt-in opinionated bootstrap, aliases, reviewers, and help |
-| [Auto-review](spools/auto-review/README.md) | `millhouse.spools/auto-review` | Experimental provider-neutral review admission |
-| [Auto-run](spools/auto-run/README.md) | `millhouse.spools/auto-run` | Opt-in feature admission and delivery handoff; supersedes Ralph |
-| [Workflow](spools/workflow/README.md) | `millhouse.spools/workflow` | Workflow engine, CLI, executors, and reusable workflows |
-| [Identity](spools/identity/README.md) | `millhouse.spools/identity` | Native-session identity and provenance |
-| [Kanban](spools/kanban/README.md) | `millhouse.spools/kanban` | Work board, ownership, tasks, and dependency readiness |
-| [Land](spools/land/README.md) | `millhouse.spools/land` | Review, exact-HEAD quality, FIFO merge and cleanup |
-| [Chime](spools/chime/README.md) | `millhouse.spools/chime` | Experimental workspace-owned notification rules |
-| [Cron](spools/cron/README.md) | `millhouse.spools/cron` | Experimental durable interval jobs |
+| [Harnesses](spools/harnesses/README.md) | `millhouse/harnesses` | Provider-neutral tracked agents, custody, Codex/Pi providers and independently installable native plugins |
+| [Devflow](spools/devflow/README.md) | `millhouse/devflow` | Feature-delivery workflows and authoring guidance; no Kanban dependency |
+| [Devflow Kanban adapter](spools/devflow/kanban-adapter/README.md) | `millhouse/devflow-kanban-adapter` | Optional explicit bridge between Devflow and Kanban |
+| [Config](spools/config/README.md) | `millhouse/config` | Opt-in opinionated bootstrap, aliases, reviewers, and help |
+| [Auto-review](spools/auto-review/README.md) | `millhouse/auto-review` | Experimental provider-neutral review admission |
+| [Auto-run](spools/auto-run/README.md) | `millhouse/auto-run` | Opt-in feature admission and delivery handoff; supersedes Ralph |
+| [Workflow](spools/workflow/README.md) | `millhouse/workflow` | Workflow engine, CLI, executors, and reusable workflows |
+| [Identity](spools/identity/README.md) | `millhouse/identity` | Native-session identity and provenance |
+| [Kanban](spools/kanban/README.md) | `millhouse/kanban` | Work board, ownership, tasks, and dependency readiness |
+| [Land](spools/land/README.md) | `millhouse/land` | Review, exact-HEAD quality, FIFO merge and cleanup |
+| [Chime](spools/chime/README.md) | `millhouse/chime` | Experimental workspace-owned notification rules |
+| [Cron](spools/cron/README.md) | `millhouse/cron` | Experimental durable interval jobs |
 
-Experimental packages remain optional and may change independently. Source
-namespaces and library coordinates are unchanged by consolidation. Ralph is not
-imported or activated.
+Experimental packages remain optional and may change independently. **v5 is a
+breaking release:** all coordinates use `millhouse/<package>` and Clojure
+namespaces use `millhouse.*`, without the former `spools` segment. No old-name
+aliases are shipped. See the [v5 migration](docs/v5.md). Ralph is not imported or
+activated.
 
 ## Consumption
 
@@ -42,7 +44,7 @@ the imported packages.
 
 ```clojure
 {:deps
- {ct.spools/harnesses
+ {millhouse/harnesses
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "MILLHOUSE_SHA"
    :deps/root "spools/harnesses"}}}
@@ -53,7 +55,7 @@ When selecting **multiple Git roots**, generate the selected production closure
 from the checkout of that revision:
 
 ```text
-scripts/consumer-deps.sh MILLHOUSE_SHA codethread/config millhouse.spools/auto-review
+scripts/consumer-deps.sh MILLHOUSE_SHA millhouse/config millhouse/auto-review
 ```
 
 Use its printed `:deps` map in the consumer. It promotes only selected packages
@@ -69,7 +71,7 @@ Internal package dependencies use relative `:local/root` paths within that same
 Git checkout, including when tools.deps installs it in the Git library cache.
 Millstrand remains an independently pinned upstream dependency. Requiring source
 or adding a dependency does **not** activate a module. Follow each package's
-explicit activation contract; Codethread config is never a core default.
+explicit activation contract; shared config is never a core default.
 
 Install native plugins from the separately installable
 [Harnesses package](spools/harnesses/README.md#native-identity-plugins), not from

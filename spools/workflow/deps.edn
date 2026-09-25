@@ -11,9 +11,9 @@
    :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
    :main-opts
    ["-m" "millhouse.test-runner"
-    "millhouse.spools.workflow-test"
-    "millhouse.spools.workflow-cli-test"
-    "millhouse.spools.workflow-run-cli-test"
-    "millhouse.spools.executors.code-test"
-    "millhouse.spools.executors.shell-test"
-    "millhouse.spools.millstrand-workflows-test"]}}}
+    "millhouse.workflow-test"
+    "millhouse.workflow-cli-test"
+    "millhouse.workflow-run-cli-test"
+    "millhouse.executors.code-test"
+    "millhouse.executors.shell-test"
+    "millhouse.millstrand-workflows-test"]}}}

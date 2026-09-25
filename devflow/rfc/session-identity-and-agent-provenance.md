@@ -91,7 +91,7 @@ sessions, or recover the execution that authored a note.
 
 ### 3.2 Agent-run and delegation
 
-The external `ct.spools.agent-run` engine models bounded runs. Existing relevant
+The external `millhouse.agent-run` engine models bounded runs. Existing relevant
 facts include:
 
 - every run has a run strand ID;
@@ -639,7 +639,7 @@ handoff.
 ### Millhouse
 
 - `spools/kanban/README.md`
-- `spools/kanban/src/millhouse/spools/kanban.clj`
+- `spools/kanban/src/millhouse/kanban.clj`
 - `spools/kanban/kanban.api.md`
 - `spools/kanban/kanban.cookbook.md`
 

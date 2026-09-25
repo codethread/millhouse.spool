@@ -59,7 +59,7 @@ Keep role semantics separate. In the owning module source, publish an explicit
 attribute/relation contribution:
 
 ```clojure
-(require '[millhouse.spools.identity :as identity])
+(require '[millhouse.identity :as identity])
 
 (identity/contribute-attribution!
   :support/caller

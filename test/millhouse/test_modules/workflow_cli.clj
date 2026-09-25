@@ -1,6 +1,6 @@
 (ns millhouse.test-modules.workflow-cli
   "Test-only selective activation module."
-  (:require [millhouse.spools.workflow.cli :as cli]
+  (:require [millhouse.workflow.cli :as cli]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 

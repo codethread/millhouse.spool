@@ -1,0 +1,13 @@
+{:linters
+ {:unresolved-var
+  {:exclude
+   [millhouse.land/review
+    millhouse.land/land
+    millhouse.land/land-merge
+    millhouse.land/land-abort
+    millhouse.land.merge-queue/merge-queue
+    millhouse.land.merge-queue/merge-turn-stalled?
+    millhouse.land.merge-queue/merge-release-stalled?
+    millhouse.land.merge-queue/queue-handler
+    millhouse.land.queries/merge-lock
+    millhouse.land.queries/merge-queue]}}}

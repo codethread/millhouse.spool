@@ -1,6 +1,6 @@
 # Millhouse Workflow spool
 
-`millhouse.spools/workflow` is a tools.deps library containing the workflow engine, worker CLI, code and shell gate executors, and reusable Millstrand workflows. Its focused cookbooks and API references remain separate:
+`millhouse/workflow` is a tools.deps library containing the workflow engine, worker CLI, code and shell gate executors, and reusable Millstrand workflows. Its focused cookbooks and API references remain separate:
 
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
@@ -21,7 +21,7 @@ before modules that publish workflow definitions or executors:
 
 ```clojure
 (runtime/module! runtime :workflow/engine
-  {:ns 'millhouse.spools.workflow
+  {:ns 'millhouse.workflow
    :required? true})
 ```
 
@@ -29,7 +29,7 @@ before modules that publish workflow definitions or executors:
 
 ```clojure
 (ns app.workflow-cli
-  (:require [millhouse.spools.workflow.cli :as cli]
+  (:require [millhouse.workflow.cli :as cli]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -37,14 +37,14 @@ before modules that publish workflow definitions or executors:
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 ```
 
-Activate `app.workflow-cli` after `:workflow/engine`. Add `millhouse.spools/workflow` to the workspace's `deps.edn`, and use `:after` to declare module ordering.
+Activate `app.workflow-cli` after `:workflow/engine`. Add `millhouse/workflow` to the workspace's `deps.edn`, and use `:after` to declare module ordering.
 
 ### Select an executor
 
 ```clojure
 (ns app.shell-executor
-  (:require [millhouse.spools.executors.shell :as shell]
-            [millhouse.spools.workflow :as workflow]
+  (:require [millhouse.executors.shell :as shell]
+            [millhouse.workflow :as workflow]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -64,8 +64,8 @@ only the definitions required by your workspace:
 
 ```clojure
 (ns app.release-workflows
-  (:require [millhouse.spools.millstrand-workflows :as workflows]
-            [millhouse.spools.workflow :as workflow]))
+  (:require [millhouse.millstrand-workflows :as workflows]
+            [millhouse.workflow :as workflow]))
 
 (workflow/use-workflow! workflows/publish-spool-kondo)
 ```
@@ -80,11 +80,11 @@ For workspaces that want the complete shipped surface, activate the bundled sele
 
 ```clojure
 (runtime/module! runtime :workflow/all
-  {:ns 'millhouse.spools.workflow.spool
+  {:ns 'millhouse.workflow.spool
    :after [:workflow/engine]})
 ```
 
-`millhouse.spools.workflow.spool` selects the CLI, both executors, their queries and lifecycle declarations, and `publish-spool-kondo`. It is a convenience entry point, not a requirement.
+`millhouse.workflow.spool` selects the CLI, both executors, their queries and lifecycle declarations, and `publish-spool-kondo`. It is a convenience entry point, not a requirement.
 
 ## Author workflow data
 

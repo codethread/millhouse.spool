@@ -62,7 +62,7 @@ The default suite requires namespaces serially, then runs them concurrently with
 ```text
 clojure -M:test
 clojure -M:test --serial
-clojure -M:test millhouse.spools.workflow-test
+clojure -M:test millhouse.workflow-test
 clojure -M:test --stress 10
 ```
 

@@ -11,7 +11,7 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
 ```clojure
 ;; report_job.clj
 (ns report-job
-  (:require [millhouse.spools.cron :as cron]))
+  (:require [millhouse.cron :as cron]))
 
 (defn report-tick [runtime]
   ;; Perform one duplicate-tolerant unit of periodic work.
@@ -25,7 +25,7 @@ Compositions for recurring work that needs more than Cron's basic job API: isola
 
 ;; init.clj
 (runtime/module! runtime :millhouse/cron
-  {:ns 'millhouse.spools.cron
+  {:ns 'millhouse.cron
    :required? true})
 
 (runtime/module! runtime :report-job
@@ -72,7 +72,7 @@ An example of this split is Millstrand's [NVD scan job](https://github.com/codet
    {:run-cmd run-command
     :raise-card!
     (fn [{:keys [title body]}]
-      ((requiring-resolve 'millhouse.spools.kanban/add!)
+      ((requiring-resolve 'millhouse.kanban/add!)
        runtime title {"--body" body "--priority" "p1"}))}))
 
 (cron/defjob! shared-scan

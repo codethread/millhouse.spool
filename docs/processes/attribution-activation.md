@@ -49,7 +49,7 @@ Confirm dependency resolution rather than relying on a previously loaded classlo
 (cd .millstrand && clojure -Spath)
 ```
 
-Check that every selected Millhouse root is `bd96f5357a335bd17cd22042da1be5bd2200f807`, Harnesses is `6b5ad39d8711a033dc7f33fd52c78901393ea44e`, and Millstrand is `8e220eab7de2fabe7880c6a4c71de6cd903c34bb`. A `:local/root` is acceptable only inside a disposable test world. Core remains independent: it must not gain a `millhouse.spools/identity` coordinate merely because consumers select the Identity root.
+Check that every selected Millhouse root is `bd96f5357a335bd17cd22042da1be5bd2200f807`, Harnesses is `6b5ad39d8711a033dc7f33fd52c78901393ea44e`, and Millstrand is `8e220eab7de2fabe7880c6a4c71de6cd903c34bb`. A `:local/root` is acceptable only inside a disposable test world. Core remains independent: it must not gain a `millhouse/identity` coordinate merely because consumers select the Identity root.
 
 ## Operator activation order
 

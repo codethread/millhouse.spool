@@ -5,8 +5,7 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 source_plugin_root="$repo_root/plugins/millstrand-identity"
 plugin_root=
 identity_hook=
-identity_sha="62723b7b1820c7e1723de4a2ff985b069871159e"
-identity_url="https://github.com/codethread/millhouse.spool.git"
+identity_root=$(cd "$repo_root/../identity" && pwd)
 
 tmp_root=$(mktemp -d /tmp/cia.XXXXXX)
 state_root=$(mktemp -d /tmp/cis.XXXXXX)
@@ -74,28 +73,25 @@ mkdir -p "$project/nested/cwd" "$linked_project/nested/cwd"
 
 cat >"$workspace/deps.edn" <<EOF
 {:deps
- {ct.spools/harnesses {:local/root "$repo_root"}
-  millhouse.spools/identity
-  {:git/url "$identity_url"
-   :git/sha "$identity_sha"
-   :deps/root "spools/identity"}}}
+ {millhouse/harnesses {:local/root "$repo_root"}
+  millhouse/identity {:local/root "$identity_root"}}}
 EOF
 cat >"$workspace/init.clj" <<'EOF'
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime]
-         '[ct.spools.harnesses.agent-cli])
+         '[millhouse.harnesses.agent-cli])
 (def runtime (current/runtime))
-(runtime/module! runtime :millhouse/spools-identity
-                 {:ns 'millhouse.spools.identity
+(runtime/module! runtime :millhouse/identity
+                 {:ns 'millhouse.identity
                   :required? true})
 (runtime/module! runtime :harnesses-registration
-                 {:file "registration.clj" :after [:millhouse/spools-identity]
+                 {:file "registration.clj" :after [:millhouse/identity]
                   :required? true})
 EOF
 cat >"$workspace/registration.clj" <<'EOF'
 (ns registration
-  (:require [ct.spools.harnesses :as harnesses]
-            [ct.spools.harnesses.agent-cli :as agent-cli]
+  (:require [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.agent-cli :as agent-cli]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 (lifecycle/use-resource! harnesses/harness-core-runtime)
@@ -214,7 +210,7 @@ child_identity=$(identity_from_output <<<"$child_output")
 
 cat >"$tmp_root/parent-probe.clj" <<EOF
 (do
-  (require '[millhouse.spools.identity :as identity]
+  (require '[millhouse.identity :as identity]
            '[millstrand.api.current.alpha :as current]
            '[millstrand.api.graph.alpha :as graph])
   (let [rt (current/runtime)
@@ -270,7 +266,7 @@ jq -e '
 }
 
 printf '%s\n' \
-	"Codex identity live acceptance passed (production identity.sh; Millhouse $identity_sha)." \
+	"Codex identity live acceptance passed (production identity.sh; Identity $identity_root)." \
 	"  identity=$parent_identity recovered=$recovered_identity" \
 	"  discovered-subdir=$discovered_identity linked-worktree=$linked_identity" \
 	"  child=$child_identity parent-edge=verified" \

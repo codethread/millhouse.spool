@@ -3,13 +3,13 @@
    Start disabled. The consumer must already activate Workflow, Kanban, Harnesses
    seats/core/assignment, and code/agent executors. This is the sole Auto-run
    configuration resource, not a second dispatcher alongside an existing one."
-  (:require [millhouse.spools.auto-review :as review]
-            [millhouse.spools.auto-review.workflow :as review-workflow]
-            [millhouse.spools.auto-review.workspace :as workspace]
-            [millhouse.spools.auto-run :as auto-run]
-            [millhouse.spools.auto-run-reporting :as reporting]
-            [millhouse.spools.cron :as cron]
-            [millhouse.spools.workflow :as workflow]
+  (:require [millhouse.auto-review :as review]
+            [millhouse.auto-review.workflow :as review-workflow]
+            [millhouse.auto-review.workspace :as workspace]
+            [millhouse.auto-run :as auto-run]
+            [millhouse.auto-run-reporting :as reporting]
+            [millhouse.cron :as cron]
+            [millhouse.workflow :as workflow]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -23,7 +23,7 @@
 
 (defn poll! [rt]
   (review/poll! rt {:repo repo
-                   :poll 'millhouse.spools.auto-review.glab/poll
+                   :poll 'millhouse.auto-review.glab/poll
                    :provider-config provider
                    :max-open 2 :workflow "review-request"
                    :seat driver :effort "low"}))

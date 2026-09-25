@@ -1,0 +1,37 @@
+{:lint-as
+ {millhouse.workflow/defworkflow clojure.core/def
+  millhouse.workflow/defworkflow! clojure.core/def
+  millhouse.workflow/defexecutor clojure.core/def
+  millhouse.workflow/defexecutor! clojure.core/def}
+ :hooks
+ {:analyze-call
+  {millhouse.workflow/defworkflow
+   hooks.millhouse.workflow/defworkflow
+   millhouse.workflow/defworkflow!
+   hooks.millhouse.workflow/defworkflow
+   millhouse.workflow/defexecutor
+   hooks.millhouse.workflow/defexecutor
+   millhouse.workflow/defexecutor!
+   hooks.millhouse.workflow/defexecutor
+   millhouse.workflow/use-workflow!
+   hooks.millstrand/use-vars
+   millhouse.workflow/use-executor!
+   hooks.millstrand/use-vars}}
+ :linters
+ {:unresolved-var
+  {:exclude
+   [millhouse.workflow/defworkflow
+    millhouse.workflow/defworkflow!
+    millhouse.workflow/defexecutor
+    millhouse.workflow/defexecutor!
+    millhouse.workflow/use-workflow!
+    millhouse.workflow/use-executor!
+    millhouse.executors.code/code-stalled?
+    millhouse.executors.code/stalled-code-gates
+    millhouse.executors.code/code-engine
+    millhouse.executors.shell/shell-stalled?
+    millhouse.executors.shell/stalled-shell-gates
+    millhouse.executors.shell/shell-pool
+    millhouse.executors.shell/shell-handler
+    millhouse.executors.shell/shell-attempts
+    millhouse.millstrand-workflows/publish-spool-kondo]}}}

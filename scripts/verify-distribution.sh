@@ -10,8 +10,8 @@ ws=$(mktemp -d)
 trap 'rm -rf "${ws:?}"' EXIT
 mkdir -p "$ws/consumer" "$ws/pi" "$ws/codex"
 source_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-"$source_root/scripts/consumer-deps.sh" "$sha" codethread/config \
-  millhouse.spools/chime millhouse.spools/cron millhouse.spools/auto-review \
+"$source_root/scripts/consumer-deps.sh" "$sha" millhouse/config \
+  millhouse/chime millhouse/cron millhouse/auto-review \
   > "$ws/consumer/deps.edn"
 cd "$ws/consumer"
 clojure -Srepro -Spath > "$ws/classpath"
@@ -22,7 +22,7 @@ if rg '(harnesses\.spool|devflow\.spool|codethread\.spool|/dev/projects/)' "$ws/
 fi
 published=$(clojure -Srepro -M -e '
 (require (quote [millstrand.test.alpha :as t]))
-(println (-> (t/spool-checkout-root "ct/spools/codethread/bootstrap.clj")
+(println (-> (t/spool-checkout-root "millhouse/config/bootstrap.clj")
              .getParentFile .getParentFile .getCanonicalPath))')
 test "$(git -C "$published" rev-parse HEAD)" = "$sha"
 # The bootstrap closure must resolve the imported packages from this revision,
@@ -42,8 +42,8 @@ print('All package sources resolve from one published revision')
 PY
 cat > "$ws/smoke.clj" <<'EOF'
 (let [[root & consumers] *command-line-args*]
-  (load-file (str root "/spools/config/test/ct/spools/codethread/shared_landing_consumer_smoke.clj"))
-  (apply (resolve 'ct.spools.codethread.shared-landing-consumer-smoke/-main)
+  (load-file (str root "/spools/config/test/millhouse/config/shared_landing_consumer_smoke.clj"))
+  (apply (resolve 'millhouse.config.shared-landing-consumer-smoke/-main)
          root root consumers))
 EOF
 clojure -Srepro -M "$ws/smoke.clj" "$published" "${consumers[@]}"

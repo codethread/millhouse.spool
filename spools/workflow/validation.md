@@ -19,8 +19,8 @@ not a source-code hash.
 ```clojure
 (ns acme.validation
   (:require [clojure.string :as str]
-            [millhouse.spools.workflow :as workflow]
-            [millhouse.spools.workflow.validation :as validation]
+            [millhouse.workflow :as workflow]
+            [millhouse.workflow.validation :as validation]
             [millstrand.api.lifecycle.alpha :as lifecycle]))
 
 ;; Disposable example only. Production recipes must check their own stop rules

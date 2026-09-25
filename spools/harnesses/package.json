@@ -1,5 +1,5 @@
 {
-  "name": "@codethread/harnesses",
+  "name": "@millhouse/harnesses",
   "version": "0.1.0",
   "description": "Harness runtime and Millstrand identity adapters for Codex and Pi",
   "type": "module",

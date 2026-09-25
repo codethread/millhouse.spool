@@ -1,6 +1,6 @@
 # Millhouse Chime spool
 
-`millhouse.spools.chime` turns meaningful Millstrand graph events into local
+`millhouse.chime` turns meaningful Millstrand graph events into local
 notifications. It evaluates workspace-owned rules against the current graph
 and sends matching notices through a notifier command chosen by each user.
 
@@ -15,7 +15,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 ```clojure
 {:deps
- {millhouse.spools/chime
+ {millhouse/chime
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v4"
    :deps/root "spools/chime"}}}
@@ -27,7 +27,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 (def runtime (current/runtime))
 (runtime/module! runtime :chime
-  {:ns 'millhouse.spools.chime
+  {:ns 'millhouse.chime
    :required? true})
 ```
 
@@ -77,8 +77,8 @@ interactive configuration.
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
-| Rule authoring | `use-rule!` → `:millhouse.spools.chime/rules` | Publishes selected owner-partitioned declarations; `defrule` is inert and `defrule!` combines definition and selection. |
+| Rule authoring | `use-rule!` → `:millhouse.chime/rules` | Publishes selected owner-partitioned declarations; `defrule` is inert and `defrule!` combines definition and selection. |
 | Event handler | `:chime/engine` | Scans graph mutations for matching rules. |
 | Registration barrier | `:chime/registration-barrier` | Orders graph commits after an in-progress rule baseline. |
 | Direct runtime seam | `register!` / `unregister!` | Adds or removes a trusted, runtime-local rule without changing module declarations. |
-| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/chime/` | Models `defrule`, `defrule!`, and `use-rule!`; consumers must expose this root's `resources` path. |
+| clj-kondo export | `resources/clj-kondo.exports/millhouse/chime/` | Models `defrule`, `defrule!`, and `use-rule!`; consumers must expose this root's `resources` path. |

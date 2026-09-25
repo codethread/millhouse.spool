@@ -25,7 +25,7 @@
             [millstrand.api.events.alpha :as events]
             [millstrand.api.scheduler.alpha :as scheduler]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.spools.cron :as cron]
+            [millhouse.cron :as cron]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.time Duration Instant]))

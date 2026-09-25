@@ -28,7 +28,7 @@ invent tombstones, migrate partially published comments, or clear old receipts.
 The standalone library remains:
 
 ```clojure
-millhouse.spools/auto-review
+millhouse/auto-review
 {:git/url "https://github.com/codethread/millhouse.spool.git"
  :git/sha "ACCEPTED_X3XKL_SHA"
  :deps/root "spools/auto-review"}
@@ -40,7 +40,7 @@ Cron or Harnesses. For the complete recipe, generate the selected production
 closure from the checkout of the accepted revision:
 
 ```text
-scripts/consumer-deps.sh ACCEPTED_SHA millhouse.spools/auto-review millhouse.spools/auto-run millhouse.spools/cron
+scripts/consumer-deps.sh ACCEPTED_SHA millhouse/auto-review millhouse/auto-run millhouse/cron
 ```
 
 Use the printed direct `:deps` map. It includes the declared shared dependencies
@@ -114,7 +114,7 @@ agent executor are selected. Example ordering in the existing init:
 ;; Existing consumer registration remains responsible for seats and base spools.
 (config/register! runtime)
 (runtime/module! runtime :review/cron
-  {:ns 'millhouse.spools.cron :required? true})
+  {:ns 'millhouse.cron :required? true})
 ;; If code execution is not already selected, activate this consumer-owned file:
 (runtime/module! runtime :review/code
   {:file "review-code.clj" :after [:work/workflow] :required? true})
@@ -130,8 +130,8 @@ Use the actual existing engine/config module keys instead of `:work/workflow` an
 
 ```clojure
 (ns consumer.review-code
-  (:require [millhouse.spools.executors.code :as code]
-            [millhouse.spools.workflow :as workflow]
+  (:require [millhouse.executors.code :as code]
+            [millhouse.workflow :as workflow]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 (workflow/use-executor! code/code-stalled?)

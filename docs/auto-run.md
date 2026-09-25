@@ -13,7 +13,7 @@ eligible, and existing dependencies must close before dispatch.
 - `auto-human-review`: implement, run `make quality`, publish a ready PR, wait
   for CI, move the card to `in_review` for human attention, and stop at an explicit human checkpoint.
 - `auto-full-land`: perform the same preparation, then call shared
-  `millhouse.spools.auto-run-land/autonomous-land`. Its worker phases record
+  `millhouse.auto-run-land/autonomous-land`. Its worker phases record
   review, frozen handoff, accepted finisher and release separately. One independent
   canonical-root grunt serves a **separate finisher custody target** across its
   settlement wait, executor verification, signoff and landing-observation phases.

@@ -28,7 +28,9 @@ issues, and board records. Mechanical copies were byte-checked before integratio
 | [Codethread](https://github.com/codethread/codethread.spool) | `1dfbc9361db70da54961aaa1740133acb802076c` | `spools/config`, shared docs, reusable skills, verification scripts |
 | Millhouse baseline | `114ccb0f870c60eeebfaf60739aabd21f6413f7f` | Existing packages retained |
 
-Integration preserves namespaces and coordinates. The root catalog lists all
+The original consolidation preserved namespaces and coordinates. The subsequent
+[v5 breaking release](v5.md) unifies them under Millhouse; the tables below use
+the v5 names. The root catalog lists all
 packages; Harnesses also retains its package-local `spool.edn`, used to locate
 the maintenance Cursor plugin relative to its own package rather than the
 monorepo. That manifest is a package boundary, not a second workspace.
@@ -86,10 +88,10 @@ revision and select the existing library names using these new roots:
 
 | Coordinate | `:deps/root` |
 | --- | --- |
-| `ct.spools/harnesses` | `spools/harnesses` |
-| `codethread/devflow` | `spools/devflow` |
-| `codethread/devflow-kanban-adapter` | `spools/devflow/kanban-adapter` |
-| `codethread/config` | `spools/config` |
+| `millhouse/harnesses` | `spools/harnesses` |
+| `millhouse/devflow` | `spools/devflow` |
+| `millhouse/devflow-kanban-adapter` | `spools/devflow/kanban-adapter` |
+| `millhouse/config` | `spools/config` |
 
 For multiple Git roots, use `scripts/consumer-deps.sh SHA LIBRARY...` from the
 checkout of that revision. The generator traverses only declared production

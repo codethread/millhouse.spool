@@ -2,11 +2,11 @@
  :deps {io.millstrand/millstrand {:git/url "https://github.com/codethread/millstrand.git"
                                   :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
                                   :deps/root "."}
-        millhouse.spools/kanban {:local/root "../kanban"}
-        millhouse.spools/workflow {:local/root "../workflow"}}
+        millhouse/kanban {:local/root "../kanban"}
+        millhouse/workflow {:local/root "../workflow"}}
  :aliases {:test {:extra-paths ["test"]
                   :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
-                  :main-opts ["-m" "ct.spools.harnesses.test-runner"]}
+                  :main-opts ["-m" "millhouse.harnesses.test-runner"]}
            :format {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
                     :main-opts ["-m" "cljfmt.main" "check" "src" "test"]}
            :format/fix {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}

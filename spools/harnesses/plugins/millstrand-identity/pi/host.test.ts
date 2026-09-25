@@ -210,7 +210,7 @@ it.skipIf(!process.env.PI_PROMPT_OWNER_SOURCE)(
     const adapter = resolve("plugins/millstrand-identity/pi/index.ts");
     const consumer = readFileSync(source, "utf8")
       .replace(
-        /from "@codethread\/harnesses\/pi\/millstrand-identity"/g,
+        /from "@millhouse\/harnesses\/pi\/millstrand-identity"/g,
         `from ${JSON.stringify(adapter)}`,
       )
       .replace(/from "(\.\.?\/[^"\n]+)"/g, (_match, relative: string) => {

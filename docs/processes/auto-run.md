@@ -1,6 +1,6 @@
 # Automatic card pickup
 
-The opt-in dispatcher in `millhouse.spools.auto-run` starts one Harnesses assignment per ready feature. The worker drives a repository-owned Millhouse workflow. There is no coordinator agent, per-lane trigger language, or automatic worker retry. Repository policy decides where delivery stops.
+The opt-in dispatcher in `millhouse.auto-run` starts one Harnesses assignment per ready feature. The worker drives a repository-owned Millhouse workflow. There is no coordinator agent, per-lane trigger language, or automatic worker retry. Repository policy decides where delivery stops.
 
 ## Card contract
 
@@ -20,12 +20,12 @@ The dispatcher writes `auto-run/status` (`preparing`, `assigned`, or `error`), `
 
 ## Repository activation
 
-The implementation is published by `millhouse.spools/auto-run`, independent of Codethread. `codethread/config` includes that dependency for its consumers and continues to supply the shared agent bootstrap. Activate the shared bootstrap as usual, then publish your workflows. A repo-owned module then selects the CLI and owns a lifecycle resource:
+The implementation is published by `millhouse/auto-run`, independent of Codethread. `millhouse/config` includes that dependency for its consumers and continues to supply the shared agent bootstrap. Activate the shared bootstrap as usual, then publish your workflows. A repo-owned module then selects the CLI and owns a lifecycle resource:
 
 ```clojure
 (ns acme.auto-run
-  (:require [millhouse.spools.auto-run :as auto-run]
-            [millhouse.spools.auto-run-worktree]
+  (:require [millhouse.auto-run :as auto-run]
+            [millhouse.auto-run-worktree]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -39,7 +39,7 @@ The implementation is published by `millhouse.spools/auto-run`, independent of C
     :effort "high"
     :workflow "prepare-for-review"
     :workflows #{"prepare-for-review" "deliver-autonomously"}
-    :prepare 'millhouse.spools.auto-run-worktree/prepare!
+    :prepare 'millhouse.auto-run-worktree/prepare!
     :start-params 'acme.auto-run/start-params!
     :enabled? true
     :max-running 2
@@ -154,7 +154,7 @@ Use `strand pattern explain <name>` for the checked input contract and `strand w
 Each repository explicitly selects the shared reporting patterns and label hook in its autorun module. Pattern definitions and the hook are inert until selected:
 
 ```clojure
-;; reporting aliases millhouse.spools.auto-run-reporting
+;; reporting aliases millhouse.auto-run-reporting
 (millstrand/use-pattern! reporting/auto-run-needs-decision
                          reporting/auto-run-unknown-failure
                          reporting/auto-run-unblock)
@@ -208,7 +208,7 @@ These values are diagnostics, not recovery authority. Future recovery episode fi
 strand auto-run explain CARD_ID
 ```
 
-The JSON schema is `codethread.auto-run.explain/v1`. It reports the workspace, card, observation time, admission predicates and receipt-based capacity, accepted agent lineages, exact Workflow frontier/history, optional Land evidence, recorded external references, runtime status, and the next responsible role. `agent-blocker` reports the validated agent union and resolves its evidence strand to an ID and title. `cause.evidence` contains only current failed Harnesses heads; `evidence-status` is `present` when such failures exist and `unknown` otherwise. Workflow gates remain owned by Workflow and are not interpreted as autorun failures. An agent blocker does not change Harnesses status or settlement. Historical run errors remain separate from current accepted-head failures. Recorded PR/head/review/check references are labelled `recorded`; this command does not poll GitHub, inspect processes, run recovery, or scan the dispatcher.
+The JSON schema is `millhouse.auto-run.explain/v1`. It reports the workspace, card, observation time, admission predicates and receipt-based capacity, accepted agent lineages, exact Workflow frontier/history, optional Land evidence, recorded external references, runtime status, and the next responsible role. `agent-blocker` reports the validated agent union and resolves its evidence strand to an ID and title. `cause.evidence` contains only current failed Harnesses heads; `evidence-status` is `present` when such failures exist and `unknown` otherwise. Workflow gates remain owned by Workflow and are not interpreted as autorun failures. An agent blocker does not change Harnesses status or settlement. Historical run errors remain separate from current accepted-head failures. Recorded PR/head/review/check references are labelled `recorded`; this command does not poll GitHub, inspect processes, run recovery, or scan the dispatcher.
 
 Land evidence is `unsupported` when no adapter was selected, `absent` when a successful adapter read proves no link, `unknown` when the adapter cannot read, and `present` only with actual references. Missing adapters never imply pre-merge safety. A consumer selects an adapter with `:evidence-adapters {:land 'qualified.namespace/read-land}` in `configure!`. The function receives `[runtime {:card ... :workflow ... :agents ...}]`; it returns a JSON-safe reference map when linked evidence is present or nil after a successful read proving no link. Throwing preserves the specific unavailable reason as `unknown`. The reusable collector never requires or activates Land.
 
@@ -226,6 +226,6 @@ strand workflow ready WORKFLOW_RUN_ID
 strand workflow history WORKFLOW_RUN_ID
 ```
 
-Consult `strand help auto-run`, the schema/version in the explanation, and `millhouse.spools.auto-run` for the executable contract.
+Consult `strand help auto-run`, the schema/version in the explanation, and `millhouse.auto-run` for the executable contract.
 
 Tests use disposable in-memory Weaver worlds and non-executing fake providers. They cover admission, dependency readiness, seat/effort propagation, optional repository workflow parameters, reserved-field conflicts, capacity, one-shot behavior, failure visibility, interrupted receipt adoption, stale wake/disable behavior, accepted continuation heads, unpublished skeletons, and optional Land evidence without launching paid agents.

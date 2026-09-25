@@ -1,9 +1,9 @@
 (ns millhouse.authoring-forms-test
   "Test copied domain authoring forms through contribution collection."
   (:require [clojure.test :refer [deftest is]]
-            [millhouse.spools.chime :as chime]
-            [millhouse.spools.cron :as cron]
-            [millhouse.spools.workflow :as workflow]
+            [millhouse.chime :as chime]
+            [millhouse.cron :as cron]
+            [millhouse.workflow :as workflow]
             [millstrand.api.authoring.alpha :as authoring]
             [millstrand.test.alpha :as test-alpha]))
 
@@ -14,10 +14,10 @@
 
 (deftest domain-authoring-macroexpansion-keeps-inert-and-bang-semantics-distinct
   (let [inert (macroexpand-1
-               '(millhouse.spools.cron/defjob macro-job "Doc."
+               '(millhouse.cron/defjob macro-job "Doc."
                   {:interval-ms 1 :handler 'millhouse.authoring-forms-test/sample-handler}))
         bang (macroexpand-1
-              '(millhouse.spools.cron/defjob! macro-job! "Doc." {:override? true}
+              '(millhouse.cron/defjob! macro-job! "Doc." {:override? true}
                  {:interval-ms 1 :handler 'millhouse.authoring-forms-test/sample-handler}))]
     (is (not (contains-symbol? inert
                                'millstrand.api.authoring.alpha/select-registry!)))
@@ -25,7 +25,7 @@
                           'millstrand.api.authoring.alpha/select-registry!))
     (is (thrown? Exception
                  (macroexpand-1
-                  '(millhouse.spools.cron/defjob malformed "Doc."))))))
+                  '(millhouse.cron/defjob malformed "Doc."))))))
 
 (deftest copied-domain-forms-define-callables-and-collect-override-intent
   (let [forms '((workflow/defworkflow! sample-workflow "Sample workflow."

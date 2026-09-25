@@ -44,8 +44,9 @@ using a permanent once-per-session sentinel.
 pnpm test:codex-hooks:live
 ```
 
-This CLI-only fixture loads the **current Harnesses checkout** and Millhouse
-`62723b7b1820c7e1723de4a2ff985b069871159e` in an isolated workspace/runtime.
+This CLI-only fixture loads **Harnesses and Identity from the same current
+Millhouse checkout** (`spools/harnesses` and `spools/identity`) in an isolated
+workspace/runtime.
 It proves real fresh/recovered identity, startup/resume/clear/compact,
 subdirectory and linked-worktree routing, native child parentage, and bounded
 conflict/unavailable-runtime failure. It starts and retires only its own

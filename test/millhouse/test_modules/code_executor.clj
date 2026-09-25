@@ -1,7 +1,7 @@
 (ns millhouse.test-modules.code-executor
   "Test-only selective activation module."
-  (:require [millhouse.spools.executors.code :as code]
-            [millhouse.spools.workflow :as workflow]
+  (:require [millhouse.executors.code :as code]
+            [millhouse.workflow :as workflow]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 

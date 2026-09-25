@@ -1,0 +1,11 @@
+{:lint-as
+ {millhouse.chime/defrule clojure.core/defn
+  millhouse.chime/defrule! clojure.core/defn}
+ :hooks
+ {:analyze-call
+  {millhouse.chime/defrule
+   hooks.millhouse.chime/defrule
+   millhouse.chime/defrule!
+   hooks.millhouse.chime/defrule
+   millhouse.chime/use-rule!
+   hooks.millstrand/use-vars}}}

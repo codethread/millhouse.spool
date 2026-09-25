@@ -4,7 +4,7 @@ Auto-review polls remote review requests into **ordinary Kanban feature cards**.
 It does not run reviewers. Compose it with Cron for cadence, Auto-run for worker
 admission, and Workflow's code/agent executors for frozen review evidence.
 
-The initial provider is `millhouse.spools.auto-review.glab`. The core contract has
+The initial provider is `millhouse.auto-review.glab`. The core contract has
 no GitLab fields and accepts other providers without core changes. Requiring any
 Auto-review namespace is inert: no operations, jobs, workers or resources start.
 
@@ -20,7 +20,7 @@ Auto-review namespace is inert: no operations, jobs, workers or resources start.
 | `auto-review.workspace/inspect!` | Verify isolated clean head/base trees |
 | `auto-review.workflow/review-request` | Inert code gate → agent gate → report → local human decision → cleanup workflow |
 
-Names above abbreviate `millhouse.spools.*`. See the [API](auto-review.api.md),
+Names above abbreviate `millhouse.*`. See the [API](auto-review.api.md),
 [complete consumer module](examples/review.clj) and [migration recipe](migration.md).
 There is deliberately **no `strand review` or `review-logs` operation**.
 Use ordinary Kanban, Auto-run, Workflow, Harnesses and Cron inspection instead.
@@ -31,7 +31,7 @@ Use ordinary Kanban, Auto-run, Workflow, Harnesses and Cron inspection instead.
 
 ```clojure
 {:repo "/absolute/canonical/repo"
- :poll 'millhouse.spools.auto-review.glab/poll
+ :poll 'millhouse.auto-review.glab/poll
  :provider-config {:host "git.example.com" :project 123 :labels ["review"]}
  :max-open 2
  :workflow "review-request"
@@ -158,7 +158,7 @@ and an independent finisher; it does not add a human checkpoint to that run.
 
 ## Verification
 
-Run focused tests with `clojure -M:test millhouse.spools.auto-review-test` from the
+Run focused tests with `clojure -M:test millhouse.auto-review-test` from the
 repository root (or `clojure -M:test` from this spool). They use fake providers,
 disposable SQLite boards/Git repositories, the real Auto-run/Workflow/agent adapter
 and nonexecuting fake seats, plus standalone tools.deps resolution. No remote

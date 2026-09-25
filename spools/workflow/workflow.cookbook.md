@@ -1,6 +1,6 @@
 # Millstrand Workflow Spool — Cookbook
 
-Composition recipes for `millhouse.spools.workflow`: how to shape real workflows out of the primitives, and *why* each shape is the right one.
+Composition recipes for `millhouse.workflow`: how to shape real workflows out of the primitives, and *why* each shape is the right one.
 
 This is the **how/why** half of the workflow docs. The other two halves are:
 
@@ -19,7 +19,7 @@ Every recipe has the same four parts, so you can skim to the one that matches yo
 1. **Situation** — the shape of problem you're staring at.
 2. **Composition** — which primitives combine, and how.
 3. **Snippet** — a complete, runnable form (assume
-   `(require '[millhouse.spools.workflow :as workflow])`).
+   `(require '[millhouse.workflow :as workflow])`).
 4. **Why this shape** — the reasoning: why these primitives, what the attribute
    conventions buy you, and what the alternative would cost.
 
@@ -37,7 +37,7 @@ than interpolating a value that was absent at pour.
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow]
+         '[millhouse.workflow :as workflow]
          '[millstrand.api.format.alpha :as format])
 
 (s/def ::topic (s/and string? (complement str/blank?)))
@@ -136,14 +136,14 @@ macro to the intended analysis form and hook namespace.
 For example, this Workflow root owns `defworkflow`, `defworkflow!`, `use-workflow!`, `defexecutor`, `defexecutor!`, and `use-executor!` and publishes:
 
 ```text
-spools/workflow/resources/clj-kondo.exports/millhouse.spools/workflow/
+spools/workflow/resources/clj-kondo.exports/millhouse/workflow/
 ├── config.edn
-└── hooks/millhouse/spools/workflow.clj_kondo
+└── hooks/millhouse/workflow.clj_kondo
 ```
 
 Ownership matters: a spool that merely uses another spool's macro must not
 re-export that macro's clj-kondo contract. Use the explicit
-`millhouse.spools.millstrand-workflows/publish-spool-kondo` workflow to guide a
+`millhouse.millstrand-workflows/publish-spool-kondo` workflow to guide a
 publisher through root ownership, export, hook, test, and documentation checks.
 
 ---
@@ -159,7 +159,7 @@ publisher through root ownership, export, hook, test, and documentation checks.
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 (s/def ::feature (s/and string? (complement str/blank?)))
 (s/def ::revision boolean?)
@@ -236,7 +236,7 @@ publisher through root ownership, export, hook, test, and documentation checks.
   stays in the graph, inspectable via `run-history` and squashable later.
 
 Honest source: adapted from the end-to-end example that formerly lived in the
-contract, and mirrored by `ct.spools.devflow`'s `human-signoff-proposal` revise
+contract, and mirrored by `millhouse.devflow`'s `human-signoff-proposal` revise
 loop.
 
 ---
@@ -252,7 +252,7 @@ Each stage is a `defworkflow` Var: a name, a doc, its declared entrypoints, and 
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 (s/def ::feature (s/and string? (complement str/blank?)))
 (s/def ::revision boolean?)
@@ -316,7 +316,7 @@ Each stage is a `defworkflow` Var: a name, a doc, its declared entrypoints, and 
   routed hand-off is visible in-band: the continuation's ready frontier comes
   straight back from `choose!`.
 
-Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage (proposal → `:spec-plan` forward route, self `:revise` loop, `:abort` with declared reason input).
+Honest source: `millhouse.devflow`'s `stage-workflows` and its `proposal` stage (proposal → `:spec-plan` forward route, self `:revise` loop, `:abort` with declared reason input).
 
 ---
 
@@ -329,7 +329,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 (s/def ::artifact (s/and string? (complement str/blank?)))
 (s/def ::review-params (s/keys :req-un [::artifact]))
@@ -371,7 +371,7 @@ Honest source: `ct.spools.devflow`'s `stage-workflows` and its `proposal` stage 
   bookkeeping strand (contract [`README.md`](./README.md)).
 - **One definition, many call sites.** The same `review` can be `call`-ed by a proposal stage and a spec stage with different `:artifact` params; a CI-round sub-flow can be recomposed by every stage that pushes commits. That is the point of `call` over duplication.
 
-Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `ct.spools.devflow`'s `:agent-review-proposal` call.
+Honest source: the `call` inlining test in `spools/workflow/test/millhouse/workflow_test.clj` (`workflow-spool-inlines-procedure-calls`), the toastie demo's `:quality` call, and `millhouse.devflow`'s `:agent-review-proposal` call.
 
 ---
 
@@ -382,7 +382,7 @@ Honest source: the `call` inlining test in `spools/workflow/test/millhouse/spool
 **Composition.** Put a `defer` between the preparation and record steps. User code that can see both spools binds the defer to registered targets. Each target declares `:call`, because it returns into the tracker's molecule.
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (workflow/defworkflow! spike
   "Run a bounded investigation."
@@ -421,7 +421,7 @@ The target receives only its defaults plus the explicit params passed to `defer!
 
 Use `call` instead when the author already knows the target. Use checkpoint `:next` when choosing a route should abandon the current stage rather than return to it.
 
-Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `spools/workflow/test/millhouse/spools/workflow_test.clj`.
+Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `spools/workflow/test/millhouse/workflow_test.clj`.
 
 ---
 
@@ -452,7 +452,7 @@ The selected routine pours below the existing root. The defer join closes when t
 
 An empty or fully conditioned-out target closes the join in the fill transaction. If that was the last outstanding work, `defer!` returns `{:ready [] :done true}`.
 
-Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `spools/workflow/test/millhouse/spools/workflow_test.clj`.
+Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `spools/workflow/test/millhouse/workflow_test.clj`.
 
 ---
 
@@ -465,7 +465,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 (s/def ::feature (s/and string? (complement str/blank?)))
 (s/def ::ci-round-params (s/keys :req-un [::feature]))
@@ -516,13 +516,13 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   `:agent` and a coordinator's `await!` stays silent while that adapter is
   healthy, waking only on a genuine stall. A waiter with *no* registered
   executor always surfaces immediately — there is no silent default. The shipped
-  `ct.spools.harnesses.executors.agent` does exactly this for `:agent` gates.
+  `millhouse.harnesses.executors.agent` does exactly this for `:agent` gates.
 - **Checkpoints, not conditional edges, carry the branch.** The gate waits; the
   *checkpoint after it* is where the driving agent turns an observation (CI
   verdict) into a route. Parallelism falls out of edge absence; branching lives
   in checkpoint choices.
 
-Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:agent` gate that `ct.spools.harnesses.executors.agent` fulfills.
+Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:agent` gate that `millhouse.harnesses.executors.agent` fulfills.
 
 ---
 
@@ -534,7 +534,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
 
 ```clojure
 (require '[clojure.spec.alpha :as s]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 ;; Reference bindings shipped as the default; a user rebinds any subset.
 (def github-pr-bindings
@@ -603,7 +603,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/spo
   (`"workflow/instruction"`) at build time keeps them faithful across the JSON
   layer (contract [`README.md`](./README.md)).
 
-Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/spools/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
+Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
 
 ---
 
@@ -616,7 +616,7 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
 ```clojure
 (require '[clojure.spec.alpha :as s]
          '[clojure.string :as str]
-         '[millhouse.spools.workflow :as workflow])
+         '[millhouse.workflow :as workflow])
 
 (s/def ::non-blank (s/and string? (complement str/blank?)))
 (s/def ::id ::non-blank)
@@ -666,7 +666,7 @@ Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/work
   expanded task ids — so "wait for the whole batch" is one edge, even when the
   loop is chained.
 - **Gate + attributes hand off cleanly to an adapter.** Because each expansion is
-  an `:agent` gate carrying `harness/*` attributes, `ct.spools.harnesses.executors.agent` can
+  an `:agent` gate carrying `harness/*` attributes, `millhouse.harnesses.executors.agent` can
   fulfill it by spawning a tracked harness run and closing the gate with the result — the
   workflow definition never names the run engine.
 
@@ -677,4 +677,4 @@ Honest source: the `delegate-pipeline` weave pattern in this repo's [`.millstran
 For the contract, read [`README.md`](./README.md). For exact signatures and
 focused function examples, read [`workflow.api.md`](./workflow.api.md). The
 machine-readable builder contracts are available from
-`(millhouse.spools.workflow/explain)` before constructing workflow data.
+`(millhouse.workflow/explain)` before constructing workflow data.

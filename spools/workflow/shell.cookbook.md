@@ -15,7 +15,7 @@ gates. The `:shell` gate depends on the `:agent` gate, so the shell executor
 does not inspect the workspace until the agent executor has closed its gate.
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (def implement-and-verify
   (workflow/workflow
@@ -47,7 +47,7 @@ different operating-system check before a final publish step.
 then join them with a step that depends on all checks.
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (def release
   (workflow/workflow

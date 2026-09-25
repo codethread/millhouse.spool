@@ -1,0 +1,7 @@
+{:lint-as
+ {millhouse.harnesses.assignment/def-assign-policy clojure.core/def}
+ :hooks
+ {:analyze-call
+  {millhouse.harnesses.reviewers/defreviewer hooks.millstrand/defvalue
+   millhouse.harnesses.reviewers/defreviewer! hooks.millstrand/defvalue
+   millhouse.harnesses.reviewers/use-reviewer! hooks.millstrand/use-vars}}}

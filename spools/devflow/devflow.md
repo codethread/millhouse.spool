@@ -16,12 +16,12 @@ strand workflow start search-filters --workflow intake \
 
 Devflow's workflow, query, and operation Vars use Millstrand's three-form authoring convention. The unbanged form defines an inert declaration, the typed `use-<kind>!` form selects an existing declaration for the current module, and the bang form defines and selects in one expression.
 
-The root module uses explicit `use-workflow!`, `use-query!`, and `use-op!` forms to publish its complete catalogue. A consumer that requires `ct.spools.devflow` from its own module can select only the declarations it needs, for example:
+The root module uses explicit `use-workflow!`, `use-query!`, and `use-op!` forms to publish its complete catalogue. A consumer that requires `millhouse.devflow` from its own module can select only the declarations it needs, for example:
 
 ```clojure
-(require '[ct.spools.devflow :as devflow]
-         '[ct.spools.devflow.planning :as planning]
-         '[millhouse.spools.workflow :as workflow]
+(require '[millhouse.devflow :as devflow]
+         '[millhouse.devflow.planning :as planning]
+         '[millhouse.workflow :as workflow]
          '[millstrand.api.millstrand.alpha :as millstrand])
 
 (workflow/use-workflow! planning/intake planning/proposal)
@@ -365,15 +365,15 @@ Devflow binds exactly one target per point, and both author **strands**:
 | `:author-cards` | `decompose` | `author-card-strands` — cards as strands whose bodies carry the cold-card contract (see `strand devflow guidance decompose`) |
 
 Devflow deliberately ships no binding to any external system. This repository
-does ship one worked binding as its own separate root — `codethread/devflow-kanban-adapter`
+does ship one worked binding as its own separate root — `millhouse/devflow-kanban-adapter`
 (see `kanban-adapter/README.md`), which carries the dependency devflow itself
 refuses to take. To decompose into GitHub issues, Jira tickets, or anything
 else, bind the published **unbound templates** (`tasks-open`, `decompose-open`)
 yourself from trusted Clojure that can see both spools:
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow]
-         '[ct.spools.devflow.execution :as execution])
+(require '[millhouse.workflow :as workflow]
+         '[millhouse.devflow.execution :as execution])
 
 ;; 1. Register your own :call-entrypoint authoring workflow.
 (workflow/register-workflow! :jira-tasks 'my.spool/jira-tasks)
@@ -498,7 +498,7 @@ The overview also carries the workspace invariants and the ID convention:
 which document owns what, which are writable when, and how to allocate the next
 id without clashing with the archive.
 
-The guide sources live under `resources/ct/spools/devflow/guidance/` as plain
+The guide sources live under `resources/millhouse/devflow/guidance/` as plain
 markdown — one file per guide plus the document templates — with a small
 placeholder pass (`{{template:...}}`, `{{ownership-table:...}}`, ...) so shared
 rules are stated once.
@@ -508,7 +508,7 @@ rules are stated once.
 From trusted Clojure (the generic worker CLI deliberately has no squash verb):
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (workflow/squash-run! "search-filters")
 ```
@@ -585,11 +585,11 @@ continuations that can also be called. The unbound templates `execution/tasks-op
 `devflow/decompose-open` are published Vars, not registered definitions.
 
 The root module still publishes the same sixteen registered names. Clojure
-callers select declarations from coherent namespaces: `ct.spools.devflow.planning`
-(intake/proposal/landing), `ct.spools.devflow.execution` (spec-plan, route, tasks
-and implementation), and `ct.spools.devflow.cards` (review-cards). The remaining
-declarations and root selection live in `ct.spools.devflow`. Named boundary specs
-live in `ct.spools.devflow.internal.definition`; inspect the registered definition
+callers select declarations from coherent namespaces: `millhouse.devflow.planning`
+(intake/proposal/landing), `millhouse.devflow.execution` (spec-plan, route, tasks
+and implementation), and `millhouse.devflow.cards` (review-cards). The remaining
+declarations and root selection live in `millhouse.devflow`. Named boundary specs
+live in `millhouse.devflow.internal.definition`; inspect the registered definition
 or choice contract instead of assuming a spec keyword from the workflow name.
 Inspect them through the live generic registry:
 
@@ -641,5 +641,5 @@ dependencies resolved.
 
 - [README.md](./README.md) — installation and activation.
 - [Millhouse workflow](https://github.com/codethread/millhouse.spool/tree/f80b80c8697e48a6ce56344372a32136d2bf279c/spools/workflow) — the engine underneath: run lifecycle, checkpoints and routing, gates, molecule ops, and the full `workflow/*` vocabulary.
-- `(millhouse.spools.workflow/explain topic)` — machine-readable builder contracts.
+- `(millhouse.workflow/explain topic)` — machine-readable builder contracts.
 - [Writing shared spools](./docs/spools/writing-shared-spools.md) — the pinned Millstrand contract for publishing and CLI shape.
