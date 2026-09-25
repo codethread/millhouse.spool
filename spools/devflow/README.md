@@ -79,8 +79,8 @@ and how to drive a run.
 ### Dependencies
 
 Select a tested Millhouse revision as described in [consumption](../../README.md#consumption).
-Use `codethread/devflow` with `:deps/root "spools/devflow"`. The optional
-`codethread/devflow-kanban-adapter` uses `:deps/root "spools/devflow/kanban-adapter"`.
+Use `millhouse/devflow` with `:deps/root "spools/devflow"`. The optional
+`millhouse/devflow-kanban-adapter` uses `:deps/root "spools/devflow/kanban-adapter"`.
 Both retain their original namespace and coordinate. Devflow itself has no
 Kanban dependency. Agent gates require an explicitly activated Harnesses
 executor; the opt-in Codethread bootstrap is one way to compose it.
@@ -92,7 +92,7 @@ From trusted `init.clj` or REPL code:
 ```clojure
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime]
-         '[ct.spools.codethread.bootstrap :as codethread])
+         '[millhouse.config.bootstrap :as codethread])
 
 (def runtime (current/runtime))
 
@@ -106,44 +106,44 @@ From trusted `init.clj` or REPL code:
    :required? true})
 
 (runtime/module! runtime
-  :millhouse/spools-workflow-providers
-  {:ns 'millhouse.spools.workflow.spool
-   :after [:millhouse/spools-workflow]
+  :millhouse/workflow-providers
+  {:ns 'millhouse.workflow.spool
+   :after [:millhouse/workflow]
    :required? true})
 
 (runtime/module! runtime
-  :millhouse/spools-kanban
-  {:ns 'millhouse.spools.kanban
+  :millhouse/kanban
+  {:ns 'millhouse.kanban
    :required? true})
 
 (runtime/module! runtime
   :devflow
-  {:ns 'ct.spools.devflow
-   :after [:millhouse/spools-workflow]
+  {:ns 'millhouse.devflow
+   :after [:millhouse/workflow]
    :required? true})
 
 (runtime/module! runtime
   :devflow/kanban-adapter
-  {:ns 'ct.spools.devflow-kanban-adapter
-   :after [:devflow :millhouse/spools-kanban :millhouse/spools-workflow]
+  {:ns 'millhouse.devflow-kanban-adapter
+   :after [:devflow :millhouse/kanban :millhouse/workflow]
    :required? true})
 
 (runtime/module! runtime
-  :codethread/config-help
-  {:ns 'ct.spools.codethread.help
+  :millhouse/config-help
+  {:ns 'millhouse.config.help
    :after [:millstrand/spools-batteries]
    :required? true})
 
 (runtime/module! runtime
-  :codethread/config-devflow
-  {:ns 'ct.spools.codethread.devflow
+  :millhouse/config-devflow
+  {:ns 'millhouse.config.devflow
    :required? true})
 
 (runtime/module! runtime
-  :codethread/config
-  {:ns 'ct.spools.codethread.config
-   :after [:codethread/config-help
-           :codethread/config-devflow
+  :millhouse/config
+  {:ns 'millhouse.config
+   :after [:millhouse/config-help
+           :millhouse/config-devflow
            :millstrand/spools-batteries
            :devflow/kanban-adapter]
    :required? true})
@@ -151,17 +151,17 @@ From trusted `init.clj` or REPL code:
 (runtime/module! runtime
   :devflow/reviewers
   {:file "me/reviewers.clj"
-   :after [:codethread/config]
+   :after [:millhouse/config]
    :required? true})
 
 ;; This is the only :agent executor. Activate it after all consumer modules.
 (codethread/register-executor!
  runtime
- [:millhouse/spools-workflow-providers
-  :millhouse/spools-kanban
+ [:millhouse/workflow-providers
+  :millhouse/kanban
   :devflow
   :devflow/kanban-adapter
-  :codethread/config
+  :millhouse/config
   :devflow/reviewers])
 ```
 

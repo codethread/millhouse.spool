@@ -3,16 +3,16 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
    :deps/root "spools/batteries"}
-  millhouse.spools/auto-run {:local/root "../spools/auto-run"}
-  millhouse.spools/identity {:local/root "../spools/identity"}
-  millhouse.spools/land {:local/root "../spools/land"}
-  millhouse.spools/workflow {:local/root "../spools/workflow"}
-  millhouse.spools/chime {:local/root "../spools/chime"}
-  millhouse.spools/cron {:local/root "../spools/cron"}
-  millhouse.spools/kanban {:local/root "../spools/kanban"}
-  ct.spools/harnesses {:local/root "../spools/harnesses"}
-  codethread/devflow {:local/root "../spools/devflow"}
-  codethread/devflow-kanban-adapter {:local/root "../spools/devflow/kanban-adapter"}
-  codethread/config {:local/root "../spools/config"}}
+  millhouse/auto-run {:local/root "../spools/auto-run"}
+  millhouse/identity {:local/root "../spools/identity"}
+  millhouse/land {:local/root "../spools/land"}
+  millhouse/workflow {:local/root "../spools/workflow"}
+  millhouse/chime {:local/root "../spools/chime"}
+  millhouse/cron {:local/root "../spools/cron"}
+  millhouse/kanban {:local/root "../spools/kanban"}
+  millhouse/harnesses {:local/root "../spools/harnesses"}
+  millhouse/devflow {:local/root "../spools/devflow"}
+  millhouse/devflow-kanban-adapter {:local/root "../spools/devflow/kanban-adapter"}
+  millhouse/config {:local/root "../spools/config"}}
  :aliases {:test {:extra-paths ["test"]
-                  :main-opts ["-m" "millhouse.auto-run-test"]}}}
+                  :main-opts ["-m" "millhouse.workspace.auto-run-test"]}}}

@@ -1,0 +1,264 @@
+(ns millhouse.harnesses.providers.cursor
+  "Cursor CLI definition and provider-specific prepare/finish callbacks."
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
+            [clojure.string :as str]
+            [millhouse.harnesses :as harness]
+            [millhouse.harnesses.providers.internal.outcome :as outcome]
+            [millstrand.api.lifecycle.alpha :as lifecycle]
+            [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]))
+
+(defmacro ^:private current-source-resource []
+  `(io/resource ~*file*))
+
+(s/def ::exit-code int?)
+(s/def ::stdout (s/nilable string?))
+(s/def ::stderr (s/nilable string?))
+(s/def ::process-result
+  (s/and
+   (s/keys :req-un [::exit-code ::stdout ::stderr])
+   #(every? #{:exit-code :stdout :stderr} (keys %))))
+
+(declare ^:private attribute
+         ^:private prepare-options
+         ^:private validate-prepare-options!
+         ^:private spool-root
+         ^:private cursor-plugin-dir
+         ^:private cursor-command
+         ^:private interactive-outcome
+         ^:private headless-outcome)
+
+(defn harness
+  "Return the plain-data Cursor CLI harness definition."
+  ([rt]
+   (harness rt {}))
+  ([_rt attributes]
+   (require-valid! ::harness/runtime _rt "harness requires a Weaver runtime")
+   (require-valid! ::harness/overlay-attributes attributes
+                   "harness requires Cursor overlay attributes")
+   (require-valid! ::harness/harness-definition
+                   {:modes #{:headless :interactive}
+                    :prepare 'millhouse.harnesses.providers.cursor/prepare
+                    :finish 'millhouse.harnesses.providers.cursor/finish
+                    :attributes attributes}
+                   "harness produced an invalid Cursor definition")))
+
+(s/fdef harness
+  :args (s/or :defaults (s/cat :runtime ::harness/runtime)
+              :attributes (s/cat :runtime ::harness/runtime
+                                 :attributes ::harness/overlay-attributes))
+  :ret ::harness/harness-definition)
+
+(defn prepare
+  "Turn the resolved harness and full run strand into a Cursor launch specification."
+  [_rt resolved-harness run]
+  (require-valid! ::harness/runtime _rt "Cursor prepare requires a Weaver runtime")
+  (require-valid! ::harness/harness-definition resolved-harness
+                  "Cursor prepare requires a resolved harness definition")
+  (require-valid! ::harness/strand run "Cursor prepare requires a full run strand")
+  (let [options (prepare-options run)
+        launch-spec (cond->
+                     {:argv (cursor-command options)
+                      :stdin (when (= "headless" (:mode options))
+                               (str (:prompt options) "\n"))}
+                      (not (str/blank? (:system-prompt options)))
+                      (assoc :env
+                             {"MILLSTRAND_HARNESS_CURSOR_SYS_PROMPT"
+                              (:system-prompt options)}))]
+    (validate-prepare-options! options run)
+    (require-valid! ::harness/launch-spec launch-spec
+                    "Cursor prepare produced an invalid launch specification")))
+
+(s/fdef prepare
+  :args (s/cat :runtime ::harness/runtime
+               :resolved-harness ::harness/harness-definition
+               :run ::harness/strand)
+  :ret ::harness/launch-spec)
+
+(defn finish
+  "Normalize Cursor's process result into the core outcome."
+  [_rt resolved-harness run {:keys [exit-code stdout stderr] :as process-result}]
+  (require-valid! ::harness/runtime _rt "Cursor finish requires a Weaver runtime")
+  (require-valid! ::harness/harness-definition resolved-harness
+                  "Cursor finish requires a resolved harness definition")
+  (require-valid! ::harness/strand run "Cursor finish requires a full run strand")
+  (require-valid! ::process-result process-result
+                  "Cursor finish requires an observed process result")
+  (let [mode (attribute run :harness/mode)
+        known-session (attribute run :harness/session-id)
+        resumes? (boolean (attribute run :harness/resumes))
+        result (if (= "interactive" mode)
+                 (interactive-outcome exit-code known-session resumes? run stderr)
+                 (headless-outcome exit-code known-session resumes? stdout stderr))]
+    (require-valid! ::harness/outcome result
+                    "Cursor finish produced an invalid outcome")))
+
+(s/fdef finish
+  :args (s/cat :runtime ::harness/runtime
+               :resolved-harness ::harness/harness-definition
+               :run ::harness/strand
+               :process-result ::process-result)
+  :ret ::harness/outcome)
+
+(defn open-cursor-harness!
+  "Register the concrete Cursor harness."
+  [{:keys [runtime]}]
+  (require-valid! ::harness/runtime runtime "cursor-harness open received an invalid runtime")
+  (harness/register-harness!
+   runtime :cursor
+   (harness runtime {:harness/model "composer-2.5"
+                     :harness.cursor/fast false
+                     :harness/extra-argv ["--yolo" "--trust"]}))
+  {:opened :cursor})
+
+(defn close-cursor-harness!
+  "Remove the concrete Cursor harness registration."
+  [{:keys [runtime]}]
+  (harness/unregister-harness! runtime :cursor)
+  {:closed :cursor})
+
+(defn- attribute [run k]
+  (attr-get run k))
+
+(defn- prepare-options [run]
+  (let [resumes (attribute run :harness/resumes)]
+    {:mode (attribute run :harness/mode)
+     :resumes resumes
+     :session-id (attribute run :harness/session-id)
+     :model (attribute run :harness/model)
+     :effort (attribute run :harness/effort)
+     :fast (attribute run :harness.cursor/fast)
+     :plugin-dir (cursor-plugin-dir)
+     ;; The harness plugin's sessionStart hook fires on every launch, including
+     ;; --resume, and reads this env var fresh, so resumed runs need the pinned
+     ;; identity and policy guidance supplied again.
+     :system-prompt
+     (str/join "\n\n"
+               (remove str/blank?
+                       (cons (attribute run :identity/prompt)
+                             (or (attribute run :harness/appended-system-prompts)
+                                 []))))
+     :prompt (attribute run :harness/prompt)
+     :extra (or (attribute run :harness/extra-argv) [])}))
+
+(defn- validate-prepare-options!
+  [{:keys [mode session-id extra]} run]
+  (when-not (#{"headless" "interactive"} mode)
+    (fail! "Cursor run mode is unsupported" {:mode mode}))
+  (when (str/blank? session-id)
+    (fail! "Cursor run requires a session id" {:run (:id run)}))
+  (when-not (and (vector? extra)
+                 (every? #(and (string? %) (not (str/blank? %))) extra))
+    (fail! "harness/extra-argv must be a vector of non-blank strings"
+           {:extra-argv extra})))
+
+(defn- spool-root [source]
+  (or (some #(when (.isFile (io/file % "spool.edn")) %)
+            (take-while some?
+                        (iterate #(some-> % .getParentFile)
+                                 (io/file source))))
+      (fail! "Cursor provider is not inside a spool"
+             {:resource source})))
+
+(defn- cursor-plugin-dir []
+  (let [source (current-source-resource)]
+    (when-not (= "file" (some-> source .getProtocol))
+      (fail! "Cursor provider source is not a filesystem resource"
+             {:resource source}))
+    (let [plugin (io/file (spool-root source) "plugins" "cursor" "harness")]
+      (when-not (.isDirectory plugin)
+        (fail! "Cursor harness plugin directory is missing"
+               {:plugin-dir (.getPath plugin)}))
+      (.getCanonicalPath plugin))))
+
+(defn- model-variant [model effort fast]
+  (str model
+       (when effort (str "-" effort))
+       (when fast "-fast")))
+
+(defn- option-argv [{:keys [model effort fast plugin-dir extra]}]
+  (vec
+   (concat
+    (when model ["--model" (model-variant model effort fast)])
+    ["--plugin-dir" plugin-dir]
+    extra)))
+
+(defn- cursor-command [{:keys [mode resumes session-id prompt] :as options}]
+  (let [interactive? (= "interactive" mode)]
+    (vec
+     (concat
+      ["agent"]
+      (when-not interactive? ["--print" "--output-format" "json"])
+      (when resumes ["--resume" session-id])
+      (option-argv options)
+      (when (and interactive? (not (str/blank? prompt))) [prompt])))))
+
+;; Cursor mints its own chat id and only ever receives one through --resume, so
+;; a new run's harness/session-id names no native session and must never be
+;; reported as confirmed.
+(defn- session-of [observed-id known-session resumes? exit-code]
+  (outcome/session-evidence {:observed-id observed-id
+                             :known-id known-session
+                             :resumes? resumes?
+                             :pinned? false
+                             :exit-code exit-code}))
+
+(defn- interactive-outcome [exit-code known-session resumes? run stderr]
+  ;; An interactive run prints no envelope, so only a resumed chat id is
+  ;; established; a new one stays provisional however cleanly Cursor exited.
+  (let [session (session-of nil known-session resumes? exit-code)]
+    (if (zero? exit-code)
+      (outcome/done {:exit-code exit-code
+                     :result (attribute run :harness/result)
+                     :session session})
+      (outcome/failed {:exit-code exit-code
+                       :session session
+                       :error (or (outcome/clipped stderr)
+                                  (str "Cursor exited " exit-code))}))))
+
+(defn- parse-stdout [stdout]
+  (try
+    {:parsed (json/read-str stdout :key-fn keyword)}
+    (catch Exception e
+      {:parse-error (ex-message e)})))
+
+(defn- headless-outcome [exit-code known-session resumes? stdout stderr]
+  (let [{:keys [parsed parse-error]} (parse-stdout stdout)
+        {:keys [is_error result session_id]} parsed
+        ;; Cursor prints its envelope before exiting nonzero, so the chat id is
+        ;; recoverable from a failed run as readily as a clean one.
+        session (session-of session_id known-session resumes? exit-code)
+        fail (fn [error]
+               (outcome/failed {:exit-code exit-code
+                                :result (when-not (str/blank? result) result)
+                                :session session
+                                :error error}))]
+    (cond
+      parse-error
+      (fail (str "Cursor JSON parse failed: " parse-error
+                 (when-let [output (outcome/clipped stdout)] (str "\n" output))))
+
+      (not (zero? exit-code))
+      (fail (or (outcome/clipped stderr) (outcome/clipped stdout)
+                (str "Cursor exited " exit-code)))
+
+      is_error
+      (fail (or (outcome/clipped result) "Cursor returned an error result"))
+
+      (str/blank? session_id)
+      (fail (str "Cursor returned no session id: "
+                 (or (outcome/clipped stdout) "<blank>")))
+
+      (str/blank? result)
+      (fail (str "Cursor returned no result: "
+                 (or (outcome/clipped stdout) "<blank>")))
+
+      :else
+      (outcome/done {:exit-code exit-code :result result :session session}))))
+
+(lifecycle/defresource cursor-harness-runtime
+  "Own the Cursor harness registration for the module lifetime."
+  {:open 'millhouse.harnesses.providers.cursor/open-cursor-harness!
+   :close 'millhouse.harnesses.providers.cursor/close-cursor-harness!
+   :after #{:harness-core-runtime}})

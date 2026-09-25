@@ -26,14 +26,14 @@ cat > "$workspace/deps.edn" <<'EOF'
  :deps {io.millstrand/millstrand
         {:git/url "https://github.com/codethread/millstrand.git"
          :git/sha "8e220eab7de2fabe7880c6a4c71de6cd903c34bb"}
-        millhouse.spools/chime
+        millhouse/chime
         {:git/url "https://github.com/codethread/millhouse.spool.git"
          :git/sha "bd96f5357a335bd17cd22042da1be5bd2200f807"
          :deps/root "spools/chime"}}}
 EOF
 cat > "$workspace/src/consumer.clj" <<'EOF'
 (ns consumer
-  (:require [millhouse.spools.chime :as chime]))
+  (:require [millhouse.chime :as chime]))
 
 (chime/defrule sample-rule "Sample rule." [_] true)
 (chime/defrule! sample-rule-bang "Sample rule." [_] true)
@@ -54,7 +54,7 @@ valid_output=$(run_diagnostics)
 printf '%s\n' "$valid_output"
 test "$valid_output" = 'No diagnostics found!'
 test -f "$workspace/.clj-kondo/imports/io.millstrand/millstrand/config.edn"
-test -f "$workspace/.clj-kondo/imports/millhouse.spools/chime/config.edn"
+test -f "$workspace/.clj-kondo/imports/millhouse/chime/config.edn"
 
 printf '\nmissing-editor-sentinel\n' >> "$workspace/src/consumer.clj"
 set +e

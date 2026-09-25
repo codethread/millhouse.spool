@@ -36,14 +36,14 @@ the domain sections needed between them.
 ````markdown
 # Millhouse Cron spool
 
-`millhouse.spools.cron` publishes fixed-interval jobs over Millstrand's durable
+`millhouse.cron` publishes fixed-interval jobs over Millstrand's durable
 scheduler, with optional jitter and reloadable handlers.
 
 ## 1. Activation
 
 ```clojure
 (runtime/module! runtime :millhouse/cron
-  {:ns 'millhouse.spools.cron
+  {:ns 'millhouse.cron
    :required? true})
 ```
 
@@ -56,7 +56,7 @@ needed to author jobs safely.
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
-| Job authoring | `defjob` → `:millhouse.spools.cron/jobs` | Publishes one desired job declaration. |
+| Job authoring | `defjob` → `:millhouse.cron/jobs` | Publishes one desired job declaration. |
 | Durable timing | Scheduler wake `cron/<id>` | Holds the authoritative next-fire time. |
 ````
 

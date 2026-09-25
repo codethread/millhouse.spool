@@ -417,37 +417,37 @@ entry. All source was read without changing the other repositories.
 
 **H1 — Harnesses publication and reservation**
 
-- `src/ct/spools/harnesses/internal/runs.clj:106` — commit-run!, bind before publish,
-  parentage, placeholders; `src/ct/spools/harnesses/internal/runs.clj:251` — retry patch.
-- `src/ct/spools/harnesses/internal/runs.clj:37` — managed writer reservation query.
+- `src/millhouse/harnesses/internal/runs.clj:106` — commit-run!, bind before publish,
+  parentage, placeholders; `src/millhouse/harnesses/internal/runs.clj:251` — retry patch.
+- `src/millhouse/harnesses/internal/runs.clj:37` — managed writer reservation query.
 
 **H2 — Harnesses lifecycle**
 
-- `src/ct/spools/harnesses.clj:37` — create! and provisional UUID.
-- `src/ct/spools/harnesses.clj:143` — finish!; `src/ct/spools/harnesses.clj:241` — late settlement.
-- `src/ct/spools/harnesses.clj:322` — retry!; `src/ct/spools/harnesses.clj:454` — native resume.
+- `src/millhouse/harnesses.clj:37` — create! and provisional UUID.
+- `src/millhouse/harnesses.clj:143` — finish!; `src/millhouse/harnesses.clj:241` — late settlement.
+- `src/millhouse/harnesses.clj:322` — retry!; `src/millhouse/harnesses.clj:454` — native resume.
 
 **H3 — Managed execution environment**
 
-- `src/ct/spools/harnesses/execution.clj:340` — process-spec.
-- `src/ct/spools/harnesses/internal/launcher.clj:23` — workspace; `src/ct/spools/harnesses/internal/launcher.clj:29` — interactive exports.
+- `src/millhouse/harnesses/execution.clj:340` — process-spec.
+- `src/millhouse/harnesses/internal/launcher.clj:23` — workspace; `src/millhouse/harnesses/internal/launcher.clj:29` — interactive exports.
 
 **H4 — Frozen assignment**
 
-- `src/ct/spools/harnesses/internal/assignment.clj:91` — prompt/identity/run guidance;
-  `src/ct/spools/harnesses/internal/assignment.clj:136` — frozen system guidance.
+- `src/millhouse/harnesses/internal/assignment.clj:91` — prompt/identity/run guidance;
+  `src/millhouse/harnesses/internal/assignment.clj:136` — frozen system guidance.
 
 **H5 — Codex/Pi provider transports and native evidence**
 
-- `src/ct/spools/harnesses/providers/codex.clj:144` — developer_instructions;
-  `src/ct/spools/harnesses/providers/codex.clj:180` — provisional evidence;
-  `src/ct/spools/harnesses/providers/codex.clj:204` — thread.started extraction.
-- `src/ct/spools/harnesses/providers/pi.clj:137` — append flags and pinned session.
+- `src/millhouse/harnesses/providers/codex.clj:144` — developer_instructions;
+  `src/millhouse/harnesses/providers/codex.clj:180` — provisional evidence;
+  `src/millhouse/harnesses/providers/codex.clj:204` — thread.started extraction.
+- `src/millhouse/harnesses/providers/pi.clj:137` — append flags and pinned session.
 - `README.md:260` — old resume-injection prose (source behavior takes precedence).
 
 **I1 — Millhouse identity, pinned source**
 
-- `/Users/ct/.gitlibs/libs/millhouse.spools/identity/7cfcb235848c0db6231ba2282430913580d66f2e/spools/identity/src/millhouse/spools/identity.clj:42` — lookup.
+- `/Users/ct/.gitlibs/libs/millhouse/identity/7cfcb235848c0db6231ba2282430913580d66f2e/spools/identity/src/millhouse/identity.clj:42` — lookup.
 - Same file `:72` — bind!, mint-before-expected check; `:113` — current; `:121` — CLI.
 - Byte comparison with f487eb42ea9523e8bd405e64a7c319013217d988 implementation matched.
   Read-only local Millhouse implementation at commit 89e5e32f8a948547c233d5dd183bb73f9c5abe4a matches the relevant behavior.
@@ -471,8 +471,8 @@ entry. All source was read without changing the other repositories.
 
 **M1 — Maintenance transports, unchanged**
 
-- `src/ct/spools/harnesses/providers/claude.clj:140` — existing append flags.
-- `src/ct/spools/harnesses/providers/cursor.clj:53` — existing prompt env;
+- `src/millhouse/harnesses/providers/claude.clj:140` — existing append flags.
+- `src/millhouse/harnesses/providers/cursor.clj:53` — existing prompt env;
   `plugins/cursor/harness/scripts/session-start-sys-prompt.sh:1` — existing context hook.
 
 **D1–D4 — Official/current references**

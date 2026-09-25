@@ -74,8 +74,8 @@ mkdir -p "$project/nested/cwd" "$linked_project/nested/cwd"
 
 cat >"$workspace/deps.edn" <<EOF
 {:deps
- {ct.spools/harnesses {:local/root "$repo_root"}
-  millhouse.spools/identity
+ {millhouse/harnesses {:local/root "$repo_root"}
+  millhouse/identity
   {:git/url "$identity_url"
    :git/sha "$identity_sha"
    :deps/root "spools/identity"}}}
@@ -83,19 +83,19 @@ EOF
 cat >"$workspace/init.clj" <<'EOF'
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime]
-         '[ct.spools.harnesses.agent-cli])
+         '[millhouse.harnesses.agent-cli])
 (def runtime (current/runtime))
-(runtime/module! runtime :millhouse/spools-identity
-                 {:ns 'millhouse.spools.identity
+(runtime/module! runtime :millhouse/identity
+                 {:ns 'millhouse.identity
                   :required? true})
 (runtime/module! runtime :harnesses-registration
-                 {:file "registration.clj" :after [:millhouse/spools-identity]
+                 {:file "registration.clj" :after [:millhouse/identity]
                   :required? true})
 EOF
 cat >"$workspace/registration.clj" <<'EOF'
 (ns registration
-  (:require [ct.spools.harnesses :as harnesses]
-            [ct.spools.harnesses.agent-cli :as agent-cli]
+  (:require [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.agent-cli :as agent-cli]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 (lifecycle/use-resource! harnesses/harness-core-runtime)
@@ -214,7 +214,7 @@ child_identity=$(identity_from_output <<<"$child_output")
 
 cat >"$tmp_root/parent-probe.clj" <<EOF
 (do
-  (require '[millhouse.spools.identity :as identity]
+  (require '[millhouse.identity :as identity]
            '[millstrand.api.current.alpha :as current]
            '[millstrand.api.graph.alpha :as graph])
   (let [rt (current/runtime)

@@ -1,6 +1,6 @@
 
 -----
-# <a name="millhouse.spools.executors.code">millhouse.spools.executors.code</a>
+# <a name="millhouse.executors.code">millhouse.executors.code</a>
 
 
 Fulfil workflow `:code` gates by invoking trusted Clojure functions.
@@ -20,7 +20,7 @@ Fulfil workflow `:code` gates by invoking trusted Clojure functions.
 
 
 
-## <a name="millhouse.spools.executors.code/close-code-engine!">`close-code-engine!`</a>
+## <a name="millhouse.executors.code/close-code-engine!">`close-code-engine!`</a>
 ``` clojure
 (close-code-engine! ctx)
 ```
@@ -31,9 +31,9 @@ Close code executor resources and unregister its event handler.
   This lifecycle callback removes `:code/engine` and shuts down the worker and
   timeout pools owned by the matching open operation. `::close-context` and
   `::close-result` validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L151-L162">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L151-L162">Source</a></sub></p>
 
-## <a name="millhouse.spools.executors.code/code-engine">`code-engine`</a>
+## <a name="millhouse.executors.code/code-engine">`code-engine`</a>
 
 
 
@@ -42,9 +42,9 @@ Own the code executor's event handler and worker resources.
 
   Opening this module resource registers the `:code` workflow executor; closing
   it unregisters graph scanning and stops both executor pools.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L164-L170">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L164-L170">Source</a></sub></p>
 
-## <a name="millhouse.spools.executors.code/code-stalled?">`code-stalled?`</a>
+## <a name="millhouse.executors.code/code-stalled?">`code-stalled?`</a>
 ``` clojure
 (code-stalled? gate-view)
 ```
@@ -57,9 +57,9 @@ Return durable stall detail for a ready `:code` gate view, or nil.
   `gate/error`; otherwise the result is nil. This predicate is the executor's
   coordinator-facing attention surface. `::gate-view` and `::stall-detail`
   validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L97-L111">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L97-L111">Source</a></sub></p>
 
-## <a name="millhouse.spools.executors.code/on-event">`on-event`</a>
+## <a name="millhouse.executors.code/on-event">`on-event`</a>
 ``` clojure
 (on-event _event)
 ```
@@ -74,9 +74,9 @@ Scan for ready `:code` gates after a graph mutation.
   This function is registered as the `:code/engine` event handler by the
   `code-engine` lifecycle resource. The scan is also performed during resource
   opening, so durable gates that were already ready are reconciled immediately.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L84-L95">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L84-L95">Source</a></sub></p>
 
-## <a name="millhouse.spools.executors.code/open-code-engine!">`open-code-engine!`</a>
+## <a name="millhouse.executors.code/open-code-engine!">`open-code-engine!`</a>
 ``` clojure
 (open-code-engine! ctx)
 ```
@@ -88,9 +88,9 @@ Open the code executor handler and worker resources.
   the bounded worker and timeout pools, scans existing ready gates, and returns
   the engine handle owned by `code-engine`. `::open-context` and
   `::engine-handle` validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L133-L149">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L133-L149">Source</a></sub></p>
 
-## <a name="millhouse.spools.executors.code/stalled-code-gates">`stalled-code-gates`</a>
+## <a name="millhouse.executors.code/stalled-code-gates">`stalled-code-gates`</a>
 
 
 
@@ -100,4 +100,4 @@ Return active code gates carrying a durable `gate/error` stamp.
   Use this named query to find code gates that a coordinator can inspect and
   deliberately re-arm by removing `gate/error` after fixing the request or
   resolved function.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/executors/code.clj#L113-L122">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L113-L122">Source</a></sub></p>

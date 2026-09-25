@@ -1,6 +1,6 @@
 
 -----
-# <a name="millhouse.spools.auto-review">millhouse.spools.auto-review</a>
+# <a name="millhouse.auto-review">millhouse.auto-review</a>
 
 
 Provider-neutral, read-only remote polling into ordinary Auto-run feature cards.
@@ -11,7 +11,7 @@ Provider-neutral, read-only remote polling into ordinary Auto-run feature cards.
 
 
 
-## <a name="millhouse.spools.auto-review/poll!">`poll!`</a>
+## <a name="millhouse.auto-review/poll!">`poll!`</a>
 ``` clojure
 (poll! rt config)
 ```
@@ -37,9 +37,9 @@ Poll a provider and atomically publish each unseen passing revision as a card.
   graph add; a lost response is reconciled by the next scan's durable query, not
   by retrying a side effect. The Weaver is the single writer. Exceptions propagate
   to the caller (Cron records failures); there is no automatic local recovery.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L94-L149">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review.clj#L94-L149">Source</a></sub></p>
 
-## <a name="millhouse.spools.auto-review/request">`request`</a>
+## <a name="millhouse.auto-review/request">`request`</a>
 ``` clojure
 (request card)
 ```
@@ -51,9 +51,9 @@ Read a card's frozen provider-neutral revision, rejecting non-review cards.
   provider request ID), :url, :title, :head, :base, :requested? and :ci. CI holds
   :status (passed/pending/failed/unknown), optional exact :head and :url.
   No provider-specific fields or executable instructions are accepted.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L50-L62">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review.clj#L50-L62">Source</a></sub></p>
 
-## <a name="millhouse.spools.auto-review/start-params">`start-params`</a>
+## <a name="millhouse.auto-review/start-params">`start-params`</a>
 ``` clojure
 (start-params _rt {:keys [card]})
 ```
@@ -63,10 +63,10 @@ Auto-run :start-params callback: copy :review and :review-repo from the card.
 
   Compose this with consumer-owned reviewer selection. The workflow context is
   poured once; subsequent provider observations never rewrite it.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review.clj#L64-L70">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review.clj#L64-L70">Source</a></sub></p>
 
 -----
-# <a name="millhouse.spools.auto-review.glab">millhouse.spools.auto-review.glab</a>
+# <a name="millhouse.auto-review.glab">millhouse.auto-review.glab</a>
 
 
 GitLab's read-only adapter for the provider-neutral Auto-review contract.
@@ -77,7 +77,7 @@ GitLab's read-only adapter for the provider-neutral Auto-review contract.
 
 
 
-## <a name="millhouse.spools.auto-review.glab/poll">`poll`</a>
+## <a name="millhouse.auto-review.glab/poll">`poll`</a>
 ``` clojure
 (poll _rt {:keys [repo config]})
 ```
@@ -92,10 +92,10 @@ Auto-review :poll callback, returning normalized open eligible revisions.
   and detail is rechecked against the listed head before normalization. Only the
   current head_pipeline aggregate is used, never job success or pipeline history.
   Core requires its passed evidence to name the exact admitted head.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review/glab.clj#L67-L90">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review/glab.clj#L67-L90">Source</a></sub></p>
 
 -----
-# <a name="millhouse.spools.auto-review.workflow">millhouse.spools.auto-review.workflow</a>
+# <a name="millhouse.auto-review.workflow">millhouse.auto-review.workflow</a>
 
 
 An inert review workflow: executor evidence, local decision, then owned cleanup.
@@ -108,25 +108,25 @@ An inert review workflow: executor evidence, local decision, then owned cleanup.
 
 
 
-## <a name="millhouse.spools.auto-review.workflow/inspect-workspace!">`inspect-workspace!`</a>
+## <a name="millhouse.auto-review.workflow/inspect-workspace!">`inspect-workspace!`</a>
 ``` clojure
 (inspect-workspace! {:keys [repo head base cwd]})
 ```
 Function.
 
 Code-executor callback to verify frozen trees immediately before review.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review/workflow.clj#L21-L24">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review/workflow.clj#L21-L24">Source</a></sub></p>
 
-## <a name="millhouse.spools.auto-review.workflow/review-request">`review-request`</a>
+## <a name="millhouse.auto-review.workflow/review-request">`review-request`</a>
 
 
 
 
 Review a frozen request using one agent gate, then await an explicit local decision.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review/workflow.clj#L36-L80">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review/workflow.clj#L36-L80">Source</a></sub></p>
 
 -----
-# <a name="millhouse.spools.auto-review.workspace">millhouse.spools.auto-review.workspace</a>
+# <a name="millhouse.auto-review.workspace">millhouse.auto-review.workspace</a>
 
 
 Optional exact-revision preparation for Auto-run's existing callback seam.
@@ -134,7 +134,7 @@ Optional exact-revision preparation for Auto-run's existing callback seam.
 
 
 
-## <a name="millhouse.spools.auto-review.workspace/inspect!">`inspect!`</a>
+## <a name="millhouse.auto-review.workspace/inspect!">`inspect!`</a>
 ``` clojure
 (inspect! repo revision directory)
 ```
@@ -145,9 +145,9 @@ Require an external, clean Git worktree root at the frozen head and base.
   Used after consumer preparation and again before reviewer execution. Tracked
   changes are rejected; untracked dependency/build artifacts are allowed. Both
   comparison trees must exist. Returns {:cwd canonical-path :head sha :base sha}.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review/workspace.clj#L14-L38">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review/workspace.clj#L14-L38">Source</a></sub></p>
 
-## <a name="millhouse.spools.auto-review.workspace/prepare!">`prepare!`</a>
+## <a name="millhouse.auto-review.workspace/prepare!">`prepare!`</a>
 ``` clojure
 (prepare! rt {:keys [repo card]})
 ```
@@ -163,4 +163,4 @@ Auto-run :prepare callback for an isolated exact-head review workspace.
   Existing/blocked allocation, bootstrap or inspection failure stays visible in
   Auto-run's error receipt. No retries, fallback checkout or rollback is invented.
   Retain any allocated workspace/branch for explicit inspection and cleanup.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/spools/auto_review/workspace.clj#L40-L79">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review/workspace.clj#L40-L79">Source</a></sub></p>

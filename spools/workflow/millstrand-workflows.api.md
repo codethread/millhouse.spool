@@ -1,6 +1,6 @@
 
 -----
-# <a name="millhouse.spools.millstrand-workflows">millhouse.spools.millstrand-workflows</a>
+# <a name="millhouse.millstrand-workflows">millhouse.millstrand-workflows</a>
 
 
 Publisher-side workflows for reusable Millstrand and clj-kondo spool support.
@@ -14,7 +14,7 @@ Publisher-side workflows for reusable Millstrand and clj-kondo spool support.
 
 
 
-## <a name="millhouse.spools.millstrand-workflows/publish-spool-kondo">`publish-spool-kondo`</a>
+## <a name="millhouse.millstrand-workflows/publish-spool-kondo">`publish-spool-kondo`</a>
 
 
 
@@ -24,7 +24,7 @@ Publish clj-kondo support for a macro-owning spool root.
   Start the registered workflow with a complete publisher contract:
 
   ```clojure
-  (require '[millhouse.spools.workflow :as workflow])
+  (require '[millhouse.workflow :as workflow])
 
   (workflow/start! "publish-example" :publish-spool-kondo
     {:spool-root "spools/example-macros"
@@ -40,4 +40,4 @@ Publish clj-kondo support for a macro-owning spool root.
   explicit clj-kondo export and hooks, test the exported contract, and document
   the public surface. It does not discover macros automatically or perform
   filesystem edits itself; each step is an agent-facing instruction.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/spools/millstrand_workflows.clj#L111-L196">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/millstrand_workflows.clj#L111-L196">Source</a></sub></p>

@@ -7,26 +7,26 @@
 
 (def test-namespaces
   "All test namespaces, in stable reporting order."
-  '[millhouse.spools.auto-review-test
-    millhouse.spools.auto-run-test
-    millhouse.spools.millstrand-workflows-test
+  '[millhouse.auto-review-test
+    millhouse.auto-run-test
+    millhouse.millstrand-workflows-test
     millhouse.authoring-forms-test
     millhouse.consumer-test
     millhouse.package-layout-test
     millhouse.executor-discovery-test
-    millhouse.spools.workflow-test
-    millhouse.spools.workflow-cli-test
-    millhouse.spools.workflow-run-cli-test
+    millhouse.workflow-test
+    millhouse.workflow-cli-test
+    millhouse.workflow-run-cli-test
     millhouse.chime-test
-    millhouse.spools.cron.runtime-test
+    millhouse.cron.runtime-test
     millhouse.e2e.cron.lifecycle-test
-    millhouse.spools.executors.code-test
-    millhouse.spools.executors.shell-test
-    millhouse.spools.kanban-test
-    millhouse.spools.identity-test
-    millhouse.spools.land.merge-queue-test
-    millhouse.spools.land.scripts-test
-    millhouse.spools.land.workflow-test])
+    millhouse.executors.code-test
+    millhouse.executors.shell-test
+    millhouse.kanban-test
+    millhouse.identity-test
+    millhouse.land.merge-queue-test
+    millhouse.land.scripts-test
+    millhouse.land.workflow-test])
 
 (def serial-namespaces
   "Namespaces proven to require a JVM-global serial island.
@@ -35,14 +35,14 @@
   during weaver startup, before the test body can provide an in-process
   activation seam. Keep that namespace out of the parallel pool so its startup
   reloads cannot overlap another fixture's shared JVM namespace reloads."
-  #{'millhouse.spools.auto-review-test
-    'millhouse.spools.auto-run-test
+  #{'millhouse.auto-review-test
+    'millhouse.auto-run-test
     'millhouse.consumer-test
-    'millhouse.spools.executors.code-test
-    'millhouse.spools.kanban-test
-    'millhouse.spools.land.merge-queue-test
-    'millhouse.spools.land.workflow-test
-    'millhouse.spools.millstrand-workflows-test})
+    'millhouse.executors.code-test
+    'millhouse.kanban-test
+    'millhouse.land.merge-queue-test
+    'millhouse.land.workflow-test
+    'millhouse.millstrand-workflows-test})
 
 (defn- initial-summary [] test/*initial-report-counters*)
 

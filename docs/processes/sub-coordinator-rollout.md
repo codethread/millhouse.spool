@@ -8,12 +8,12 @@ Both alias prompt values are provider-neutral Strand coordination guidance. Use 
 
 ## Additive registration in a running world
 
-`ct.spools.harnesses/register-alias!` changes one runtime-local registry entry immediately. It does not refresh modules, alter flags, mutate existing runs, or restart the Weaver. The checked-in startup module registers the alias durably on a later ordinary activation. Until consumers update their Codethread pin, the candidate namespace can be loaded from a reviewed checkout and one narrow registration function called through the supported live Weaver nREPL:
+`millhouse.harnesses/register-alias!` changes one runtime-local registry entry immediately. It does not refresh modules, alter flags, mutate existing runs, or restart the Weaver. The checked-in startup module registers the alias durably on a later ordinary activation. Until consumers update their Codethread pin, the candidate namespace can be loaded from a reviewed checkout and one narrow registration function called through the supported live Weaver nREPL:
 
 | Alias                 | Function                                             |
 | --------------------- | ---------------------------------------------------- |
-| `sub-coordinator`     | `ct.spools.codethread.sub-coordinator/register!`     |
-| `sub-coordinator-sol` | `ct.spools.codethread.sub-coordinator/register-sol!` |
+| `sub-coordinator`     | `millhouse.config.sub-coordinator/register!`     |
+| `sub-coordinator-sol` | `millhouse.config.sub-coordinator/register-sol!` |
 
 Register `sub-coordinator-sol` only after its exact source commit passes required quality and review. The parent owns any staged runtime adoption; source workers must not perform registration, refresh a runtime, restart a process, change a flag, update a source pin, or start a pilot.
 
@@ -21,7 +21,7 @@ The original pilot used parent `x4y0z` / task `irfb7`; that historical approval 
 
 ```nu
 let coord_ws = "/absolute/path/to/canonical/.millstrand"
-let candidate = "/absolute/path/to/reviewed/millhouse.spool/spools/config/src/ct/spools/codethread/sub_coordinator.clj"
+let candidate = "/absolute/path/to/reviewed/millhouse.spool/spools/config/src/millhouse/config/sub_coordinator.clj"
 
 let registry_before = (^strand --workspace $coord_ws agent list --full | from json)
 if (($registry_before | where name == "sub-coordinator" | length) != 0) {
@@ -44,7 +44,7 @@ let registration_template = r#'
   (load-file __SOURCE__)
   (let [runtime ((requiring-resolve 'millstrand.api.current.alpha/runtime))
         register! (requiring-resolve
-                   'ct.spools.codethread.sub-coordinator/register!)]
+                   'millhouse.config.sub-coordinator/register!)]
     (register! runtime)))
 '#
 let registration = (
@@ -134,7 +134,7 @@ The pre-registration guard fails before `register!` when `sub-coordinator` alrea
 For reviewed `sub-coordinator-sol` adoption, use the same guarded proof with exactly these substitutions:
 
 - guard and postcheck the alias name `sub-coordinator-sol`;
-- resolve and call `ct.spools.codethread.sub-coordinator/register-sol!`;
+- resolve and call `millhouse.config.sub-coordinator/register-sol!`;
 - require every pre-existing alias, flag, module status, and captured run's frozen launch settings to remain unchanged; and
 - verify the new alias resolves to Codex, `gpt-5.6-sol`, and `high`.
 

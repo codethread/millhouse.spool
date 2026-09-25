@@ -61,7 +61,7 @@ run reference is registered separately, not attached to the parent's invocation.
 ### Consumer-owned prompt rendering
 
 Import `createMillstrandIdentityLifecycle` from
-`@codethread/harnesses/pi/millstrand-identity` instead of loading the standalone
+`@millhouse/harnesses/pi/millstrand-identity` instead of loading the standalone
 extension alongside a prompt owner. Await `sessionStart(ctx)`, then render the
 bound `identityState.instruction` exactly once in the reconstructed system prompt.
 The lifecycle itself emits data and installs no prompt renderer.

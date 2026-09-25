@@ -1,6 +1,6 @@
 # Millhouse Land spool
 
-`millhouse.spools/land` provides a reusable, conservative landing workflow for repositories that use GitHub, `origin/main`, Millhouse Workflow, and Millhouse Kanban. It publishes the workflow names `review`, `land`, `land-merge`, and `land-abort`, the `merge-queue` operation, and the `merge-lock` and `merge-queue` named queries.
+`millhouse/land` provides a reusable, conservative landing workflow for repositories that use GitHub, `origin/main`, Millhouse Workflow, and Millhouse Kanban. It publishes the workflow names `review`, `land`, `land-merge`, and `land-abort`, the `merge-queue` operation, and the `merge-lock` and `merge-queue` named queries.
 
 - [cookbook](./land.cookbook.md)
 - [API](./land.api.md)
@@ -27,7 +27,7 @@ A repository may retain a richer local review as a separate workflow. The shared
 Landing scripts are loaded from classpath resources when the namespace loads, then embedded into shell-gate requests. A changed branch cannot swap the script after the workflow is poured. Preparation rebases onto `origin/main`, validates the final pushed HEAD through the repository contract, and records that exact SHA in Git metadata. Merge requires the local, remote, pull-request, and validated-marker SHAs to match and uses `gh pr merge --match-head-commit`.
 
 Automatic delivery workflows should build their CI shell gate with
-`millhouse.spools.land.support/pr-checks-argv`, passing an explicit policy and
+`millhouse.land.support/pr-checks-argv`, passing an explicit policy and
 the expected feature branch. `"required"` waits up to 120 seconds for GitHub's
 initial check registration, then fails specifically if the rollup is still
 empty. `"allow-empty"` accepts an empty rollup immediately, but only after
@@ -55,7 +55,7 @@ Add the Land coordinate. Its root depends on the sibling Workflow and Kanban roo
 ```clojure
 ;; deps.edn
 {:deps
- {millhouse.spools/land
+ {millhouse/land
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "<immutable-sha>"
    :deps/root "spools/land"}}}
@@ -69,14 +69,14 @@ Activate the Workflow engine, its code/shell providers, and one consumer-chosen 
 
 (let [rt (current/runtime)]
   (runtime/module! rt :workflow/engine
-    {:ns 'millhouse.spools.workflow :required? true})
+    {:ns 'millhouse.workflow :required? true})
   (runtime/module! rt :workflow/providers
-    {:ns 'millhouse.spools.workflow.spool
+    {:ns 'millhouse.workflow.spool
      :after [:workflow/engine]
      :required? true})
   ;; Activate the workspace's compatible :agent provider as :app/agent-provider.
   (runtime/module! rt :land
-    {:ns 'millhouse.spools.land.spool
+    {:ns 'millhouse.land.spool
      :after [:workflow/engine :workflow/providers :app/agent-provider]
      :required? true}))
 ```

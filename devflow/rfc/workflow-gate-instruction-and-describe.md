@@ -186,7 +186,7 @@ copies.
 ### 4.2 Resolved shape: Clojure `describe`
 
 ```clojure
-(require '[millhouse.spools.workflow :as workflow])
+(require '[millhouse.workflow :as workflow])
 
 (workflow/describe :pr-ci-round {:feature "pr-42"})
 ```
@@ -330,8 +330,8 @@ Questions to resolve before designing it:
 - Workflow gate semantics and lifecycle: [`spools/workflow/README.md`](../../spools/workflow/README.md)
 - Gate builder and `describe` API: [`spools/workflow/workflow.api.md`](../../spools/workflow/workflow.api.md)
 - Gate composition and forge bindings: [`spools/workflow/workflow.cookbook.md`](../../spools/workflow/workflow.cookbook.md)
-- Ready-view projection, including `:instruction`: [`internal/query.clj`](../../spools/workflow/src/millhouse/spools/workflow/internal/query.clj)
-- Explicit gate-selection and actor rules: [`internal/runs.clj`](../../spools/workflow/src/millhouse/spools/workflow/internal/runs.clj)
+- Ready-view projection, including `:instruction`: [`internal/query.clj`](../../spools/workflow/src/millhouse/workflow/internal/query.clj)
+- Explicit gate-selection and actor rules: [`internal/runs.clj`](../../spools/workflow/src/millhouse/workflow/internal/runs.clj)
 - Shell request contract and lifecycle: [`spools/workflow/README.md`](../../spools/workflow/README.md)
 - Shell-gate examples: [`spools/workflow/shell.cookbook.md`](../../spools/workflow/shell.cookbook.md)
 - Conversation record (local, non-versioned): Pi dialogue session `019ffb5b-55d8-7750-bf24-a73b690a754f`.

@@ -1,10 +1,10 @@
-(ns millhouse.auto-run-workflows
+(ns millhouse.workspace.auto-run-workflows
   "Repository-owned delivery contracts for automatically assigned Millhouse features."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [millhouse.spools.auto-run-land :as autonomous]
-            [millhouse.spools.land.support :as land-support]
-            [millhouse.spools.workflow :as workflow]
+            [millhouse.auto-run-land :as autonomous]
+            [millhouse.land.support :as land-support]
+            [millhouse.workflow :as workflow]
             [millstrand.api.format.alpha :as format]))
 
 (s/def ::text (s/and string? (complement str/blank?)))
@@ -90,7 +90,7 @@
         [(workflow/gate
           :review-card "Request human review of the verified feature" :code
           :depends-on [:ci]
-          :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
+          :attributes {"code/fn" "millhouse.land.card-actions/review-card!"
                        "code/params" (fn [{:keys [card]}] {:card card})}
           "This is an automatic card transition at the human-attention boundary.")
          (workflow/checkpoint

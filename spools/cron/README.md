@@ -1,6 +1,6 @@
 # Millhouse Cron spool
 
-`millhouse.spools.cron` publishes fixed-interval jobs over Millstrand's durable scheduler, with optional jitter and reloadable handlers.
+`millhouse.cron` publishes fixed-interval jobs over Millstrand's durable scheduler, with optional jitter and reloadable handlers.
 
 ## 1. Activation
 
@@ -8,7 +8,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 ```clojure
 {:deps
- {millhouse.spools/cron
+ {millhouse/cron
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/tag "v4"
    :deps/root "spools/cron"}}}
@@ -20,7 +20,7 @@ Add this root to the workspace's `deps.edn`, then activate it from trusted start
 
 (def runtime (current/runtime))
 (runtime/module! runtime :millhouse/cron
-  {:ns 'millhouse.spools.cron
+  {:ns 'millhouse.cron
    :required? true})
 ```
 
@@ -44,6 +44,6 @@ Handlers receive the active runtime and must tolerate at-least-once delivery. `r
 
 | Surface | Identity | Consumer contract |
 | --- | --- | --- |
-| Job authoring | `use-job!` → `:millhouse.spools.cron/jobs` | Publishes selected owner-partitioned desired job declarations; `defjob!` combines definition and selection. |
-| Durable timing | Scheduler wake `cron/<id>` | Holds the authoritative next-fire time and dispatches `millhouse.spools.cron/fire-wake`. |
-| clj-kondo export | `resources/clj-kondo.exports/millhouse.spools/cron/config.edn` | Models `defjob`, `defjob!`, and `use-job!`; the Cron root must expose its `resources` path. |
+| Job authoring | `use-job!` → `:millhouse.cron/jobs` | Publishes selected owner-partitioned desired job declarations; `defjob!` combines definition and selection. |
+| Durable timing | Scheduler wake `cron/<id>` | Holds the authoritative next-fire time and dispatches `millhouse.cron/fire-wake`. |
+| clj-kondo export | `resources/clj-kondo.exports/millhouse/cron/config.edn` | Models `defjob`, `defjob!`, and `use-job!`; the Cron root must expose its `resources` path. |

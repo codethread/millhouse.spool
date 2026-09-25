@@ -1,7 +1,7 @@
 (ns millhouse.test-modules.shell-executor
   "Test-only selective activation module."
-  (:require [millhouse.spools.executors.shell :as shell]
-            [millhouse.spools.workflow :as workflow]
+  (:require [millhouse.executors.shell :as shell]
+            [millhouse.workflow :as workflow]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 

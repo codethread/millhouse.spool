@@ -7,7 +7,7 @@
             [millstrand.test.alpha :as t]))
 
 (def ^:private repository
-  (-> (t/spool-checkout-root "millhouse/spools/workflow.clj")
+  (-> (t/spool-checkout-root "millhouse/workflow.clj")
       .getParentFile .getParentFile))
 
 (def ^:private package-roots
@@ -16,22 +16,22 @@
 ;; This is the existing production dependency graph, not permission to expand
 ;; it. New cross-spool relationships require explicit user authorization.
 (def ^:private production-edges
-  '{millhouse.spools/auto-review #{millhouse.spools/workflow}
-    millhouse.spools/auto-run #{ct.spools/harnesses millhouse.spools/kanban
-                                millhouse.spools/workflow millhouse.spools/land}
-    millhouse.spools/chime #{}
-    millhouse.spools/cron #{}
-    millhouse.spools/identity #{}
-    millhouse.spools/kanban #{millhouse.spools/identity}
-    millhouse.spools/land #{millhouse.spools/kanban millhouse.spools/workflow}
-    millhouse.spools/workflow #{}
-    ct.spools/harnesses #{millhouse.spools/kanban millhouse.spools/workflow}
-    codethread/devflow #{millhouse.spools/workflow}
-    codethread/devflow-kanban-adapter #{millhouse.spools/kanban}
-    codethread/config #{millhouse.spools/auto-run millhouse.spools/workflow
-                        millhouse.spools/identity millhouse.spools/kanban
-                        millhouse.spools/land ct.spools/harnesses
-                        codethread/devflow codethread/devflow-kanban-adapter}})
+  '{millhouse/auto-review #{millhouse/workflow}
+    millhouse/auto-run #{millhouse/harnesses millhouse/kanban
+                         millhouse/workflow millhouse/land}
+    millhouse/chime #{}
+    millhouse/cron #{}
+    millhouse/identity #{}
+    millhouse/kanban #{millhouse/identity}
+    millhouse/land #{millhouse/kanban millhouse/workflow}
+    millhouse/workflow #{}
+    millhouse/harnesses #{millhouse/kanban millhouse/workflow}
+    millhouse/devflow #{millhouse/workflow}
+    millhouse/devflow-kanban-adapter #{millhouse/kanban}
+    millhouse/config #{millhouse/auto-run millhouse/workflow
+                       millhouse/identity millhouse/kanban
+                       millhouse/land millhouse/harnesses
+                       millhouse/devflow millhouse/devflow-kanban-adapter}})
 
 (deftest published-selection-keeps-only-the-required-closure
   (let [manifests '{a {:deps {b {} external/core {}}}

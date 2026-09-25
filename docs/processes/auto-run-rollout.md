@@ -19,7 +19,7 @@ The Millstrand weave update and Codethread reporting contract are published. The
 | Millstrand UI | Update pins and module activation; include `agent-blocked` and `needs-decision` in autorun attention filtering. Preserve unrelated inspection findings and human-attention uses. |
 | Devflow, Agents, Notes | Align existing dependency pins and restart; keep autorun inactive where it is not configured. Agents and Notes share one Weaver pool. |
 
-Each consumer selects `millhouse.spools.auto-run-reporting` patterns and its `derive-labels` hook. Repositories using the optional autonomous landing helper import `millhouse.spools.auto-run-land`. Standalone Land has no reporting requirement. Use the published revisions recorded on the epic and feature cards.
+Each consumer selects `millhouse.auto-run-reporting` patterns and its `derive-labels` hook. Repositories using the optional autonomous landing helper import `millhouse.auto-run-land`. Standalone Land has no reporting requirement. Use the published revisions recorded on the epic and feature cards.
 
 ## Runtime activation
 

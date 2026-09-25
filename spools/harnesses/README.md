@@ -1,6 +1,6 @@
 # Harnesses spool
 
-`ct.spools/harnesses` is one spool root containing the provider-neutral harness
+`millhouse/harnesses` is one spool root containing the provider-neutral harness
 runtime, the tracked-agent CLI, process custody, and the Claude, Codex, Cursor,
 and Pi providers.
 
@@ -21,11 +21,11 @@ pi install /absolute/path/to/millhouse.spool/spools/harnesses
 
 Check out the tested Millhouse revision first; install the package subdirectory,
 not the monorepo root. For distribution, `pnpm pack` from this directory retains
-the separately consumable `@codethread/harnesses` package.
+the separately consumable `@millhouse/harnesses` package.
 
-A larger Pi package may instead depend on `@codethread/harnesses` and compose
+A larger Pi package may instead depend on `@millhouse/harnesses` and compose
 `createMillstrandIdentityLifecycle` into its own entrypoint. Public imports are
-available from `@codethread/harnesses/pi/millstrand-identity`.
+available from `@millhouse/harnesses/pi/millstrand-identity`.
 
 Add this checkout as a local Codex marketplace to install the native startup
 hooks:
@@ -52,12 +52,12 @@ the matching `use-*!` form in its own module.
 Activate the complete surface with the bundled selector:
 
 ```clojure
-(runtime/module! runtime :millhouse/spools-identity
-  {:ns 'millhouse.spools.identity
+(runtime/module! runtime :millhouse/identity
+  {:ns 'millhouse.identity
    :required? true})
 (runtime/module! runtime :harnesses
-  {:ns 'ct.spools.harnesses.spool
-   :after [:millhouse/spools-identity]
+  {:ns 'millhouse.harnesses.spool
+   :after [:millhouse/identity]
    :required? true})
 ```
 
@@ -71,7 +71,7 @@ This publishes:
 - process-custody reconciliation;
 - durable hourly interactive-orphan reconciliation.
 
-Loading `ct.spools.harnesses`, a provider namespace, or one of the execution
+Loading `millhouse.harnesses`, a provider namespace, or one of the execution
 namespaces alone does not publish those declarations.
 
 ### Repository automatic delivery
@@ -88,7 +88,7 @@ The bootstrap deliberately leaves the asynchronous Workflow `:agent` executor
 for the consumer's final registration step, after any consumer workflows:
 
 ```clojure
-(require '[ct.spools.codethread.bootstrap :as codethread])
+(require '[millhouse.config.bootstrap :as codethread])
 (codethread/register! runtime)
 
 ;; Register consumer aliases and workflow modules here.
@@ -105,7 +105,7 @@ process-local agent configuration command when needed.
 `register-executor!` owns the sole `:agent` executor. Pass the consumer module
 ids whose resources or workflows must reconcile before its initial ready-gate
 scan. Consumers must not activate
-`ct.spools.harnesses.executors.agent.spool` directly or register a second
+`millhouse.harnesses.executors.agent.spool` directly or register a second
 provider catalog.
 
 The Millhouse dogfood workspace selects local roots for Harnesses,
@@ -121,18 +121,18 @@ before the shared executor:
 
 ```clojure
 ;; Generate consumer deps.edn from the tested Millhouse checkout:
-;; scripts/consumer-deps.sh MILLHOUSE_SHA codethread/config
+;; scripts/consumer-deps.sh MILLHOUSE_SHA millhouse/config
 
 ;; consumer .millstrand/init.clj
 (require '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime]
-         '[ct.spools.codethread.bootstrap :as codethread])
+         '[millhouse.config.bootstrap :as codethread])
 
 (let [runtime (current/runtime)]
   (codethread/register! runtime)
   (runtime/module! runtime :consumer/workflows
                    {:ns 'consumer.workflows
-                    :after [:millhouse/spools-workflow]
+                    :after [:millhouse/workflow]
                     :required? true})
   (codethread/register-executor! runtime [:consumer/workflows]))
 ```
@@ -143,16 +143,16 @@ Consumers can import any declaration and select it explicitly:
 
 ```clojure
 (ns app.harnesses
-  (:require [ct.spools.harnesses :as harnesses]
-            [ct.spools.harnesses.agent-bin :as agent-bin]
-            [ct.spools.harnesses.agent-cli :as agent-cli]
-            [ct.spools.harnesses.execution :as execution]
-            [ct.spools.harnesses.process-custody :as process-custody]
-            [ct.spools.harnesses.reconciliation :as reconciliation]
-            [ct.spools.harnesses.providers.claude :as claude]
-            [ct.spools.harnesses.providers.codex :as codex]
-            [ct.spools.harnesses.providers.cursor :as cursor]
-            [ct.spools.harnesses.providers.pi :as pi]
+  (:require [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.agent-bin :as agent-bin]
+            [millhouse.harnesses.agent-cli :as agent-cli]
+            [millhouse.harnesses.execution :as execution]
+            [millhouse.harnesses.process-custody :as process-custody]
+            [millhouse.harnesses.reconciliation :as reconciliation]
+            [millhouse.harnesses.providers.claude :as claude]
+            [millhouse.harnesses.providers.codex :as codex]
+            [millhouse.harnesses.providers.cursor :as cursor]
+            [millhouse.harnesses.providers.pi :as pi]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
@@ -182,17 +182,17 @@ Clojure API are required.
 
 Workflow support is optional and separately activated. The shared Codethread
 bootstrap owns the Workflow engine and Harnesses surface. Consumers that need
-the workflow CLI/providers activate `millhouse.spools.workflow.spool` after the
+the workflow CLI/providers activate `millhouse.workflow.spool` after the
 shared bootstrap, then register the shared executor last:
 
 ```clojure
-(require '[ct.spools.codethread.bootstrap :as codethread])
+(require '[millhouse.config.bootstrap :as codethread])
 (codethread/register! runtime)
-(runtime/module! runtime :millhouse/spools-workflow-all
-  {:ns 'millhouse.spools.workflow.spool
-   :after [:millhouse/spools-workflow]
+(runtime/module! runtime :millhouse/workflow-all
+  {:ns 'millhouse.workflow.spool
+   :after [:millhouse/workflow]
    :required? true})
-(codethread/register-executor! runtime [:millhouse/spools-workflow-all])
+(codethread/register-executor! runtime [:millhouse/workflow-all])
 ```
 
 Place modules that register harness aliases and workflows before
@@ -426,13 +426,13 @@ strand --workspace PROJECT_WORKSPACE --cwd SESSION_CWD \
   [--parent-identity FRIENDLY] [--parent-native-session-id HOST_HEADER_ID]
 ```
 
-`ct.spools.harnesses/register-native-session!` dispatches on the provider and
+`millhouse.harnesses/register-native-session!` dispatches on the provider and
 composes Millhouse Identity startup. Codex uses
-`ct.spools.harnesses.native-session/register!`, which fences the exact managed
+`millhouse.harnesses.native-session/register!`, which fences the exact managed
 invocation through `--run-reference RUN_ID:INVOCATION`; the hook awaits the
 result, validates the canonical instruction, and returns developer
 `additionalContext` before model work. Pi uses
-`ct.spools.harnesses.internal.native-registration/register!`, where `--run-id`
+`millhouse.harnesses.internal.native-registration/register!`, where `--run-id`
 must match the pinned native session, current running attempt/invocation,
 provider and cwd, and a native fork header supplies `--parent-native-session-id`
 with parent attribution. Startup, resume, clear, and compact each reconstruct one
@@ -544,7 +544,7 @@ Authoring and activation are separate. `defreviewer` defines an inert declaratio
 
 ```clojure
 (ns me.reviewers
-  (:require [ct.spools.harnesses.reviewers :as reviewers]
+  (:require [millhouse.harnesses.reviewers :as reviewers]
             [millstrand.api.format.alpha :as format-alpha]))
 
 (reviewers/defreviewer
@@ -664,7 +664,7 @@ was lost. Readback and execution startup recognize retained incomplete rows;
 possible execution custody never acquires invented settlement evidence.
 
 Consumers that must check accepted lineage and record a related receipt can use
-`ct.spools.harnesses/call-with-run-publication-lock` with `[runtime thunk]`.
+`millhouse.harnesses/call-with-run-publication-lock` with `[runtime thunk]`.
 It calls the zero-argument thunk synchronously under the same runtime-local
 monitor as run creation and continuation publication. Same-thread calls are
 reentrant, including calls to Harnesses publication APIs. The return value or

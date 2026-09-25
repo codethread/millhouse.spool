@@ -2,7 +2,7 @@
 
 - **Status:** Simplification implemented for review on 2026-09-11; live activation pending
 - **Captured:** 2026-08-15
-- **Scope:** `millhouse.spools.workflow`, `millhouse.spools.millstrand-workflows`, and Skein's local landing workflows/policy
+- **Scope:** `millhouse.workflow`, `millhouse.millstrand-workflows`, and Skein's local landing workflows/policy
 - **Follow-up strand:** [`wef3s` — Revisit action-ref and landing decomposition](strand://wef3s)
 - **Conversation provenance:** Pi session `01a003e2-b9e2-7048-b71b-4472a2afa90a`
 
@@ -126,7 +126,7 @@ gates own card changes. Queue executors admit and release turns without occupyin
 a worker while waiting. The old `land` operation and its action-ref dispatch are
 removed. The workflow's own instructions describe driving and repairing a run.
 
-Millhouse adds `millhouse.spools.executors.shell/quiesce-run!`. It serializes
+Millhouse adds `millhouse.executors.shell/quiesce-run!`. It serializes
 withdrawal with process launch, freezes future shell gates, and waits for owned
 process cancellation before the queue can release a turn. Uncertain cancellation
 retains the custody fact and reservation for explicit reconciliation. A merge
@@ -213,11 +213,11 @@ The workflow query projection contains the complete engine behavior of interest:
 (assoc :action-ref (attr step :workflow/action-ref))
 ```
 
-Source: `spools/workflow/src/millhouse/spools/workflow/internal/query.clj`.
+Source: `spools/workflow/src/millhouse/workflow/internal/query.clj`.
 
 The attribute is also declared in the workflow vocabulary in:
 
-- `spools/workflow/src/millhouse/spools/workflow.clj`
+- `spools/workflow/src/millhouse/workflow.clj`
 
 It does **not** affect:
 
@@ -764,13 +764,13 @@ Potentially simplest, but premature until repository-wide consumers and publishe
 
 ### Millhouse
 
-- `spools/workflow/src/millhouse/spools/workflow.clj`
-- `spools/workflow/src/millhouse/spools/workflow/internal/query.clj`
-- `spools/workflow/src/millhouse/spools/workflow/internal/routing.clj`
+- `spools/workflow/src/millhouse/workflow.clj`
+- `spools/workflow/src/millhouse/workflow/internal/query.clj`
+- `spools/workflow/src/millhouse/workflow/internal/routing.clj`
 - `spools/workflow/workflow.cookbook.md`
-- `spools/workflow/test/millhouse/spools/workflow_test.clj`
+- `spools/workflow/test/millhouse/workflow_test.clj`
 - `spools/workflow/README.md`
-- `spools/workflow/src/millhouse/spools/`
+- `spools/workflow/src/millhouse/`
 
 ### Skein
 

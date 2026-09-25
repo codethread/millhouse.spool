@@ -7,5 +7,5 @@
  :aliases
  {:test
   {:extra-paths ["test" "../../test"]
-   :extra-deps {millhouse.spools/workflow {:local/root "../workflow"}}
-   :main-opts ["-m" "millhouse.test-runner" "millhouse.spools.identity-test"]}}}
+   :extra-deps {millhouse/workflow {:local/root "../workflow"}}
+   :main-opts ["-m" "millhouse.test-runner" "millhouse.identity-test"]}}}

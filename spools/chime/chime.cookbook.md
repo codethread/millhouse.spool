@@ -1,6 +1,6 @@
 # Millstrand Chime spool — Cookbook
 
-Composition recipes for `millhouse.spools.chime`: combine graph rules,
+Composition recipes for `millhouse.chime`: combine graph rules,
 readiness, and local notification delivery into a useful attention surface.
 
 The [contract](./README.md) describes guarantees. The [generated API](./chime.api.md)
@@ -19,7 +19,7 @@ startup configuration, and let Chime handle scanning and deduplication.
 ```clojure
 (ns my.rules
   "Workspace attention rules."
-  (:require [millhouse.spools.chime :as chime]))
+  (:require [millhouse.chime :as chime]))
 
 (defn agent-failed
   "Notify when a tracked harness run has failed."
@@ -57,7 +57,7 @@ notifier remains a personal binding; the rule is shared workspace policy.
 ```clojure
 (ns my.rules
   "Workspace attention rules."
-  (:require [millhouse.spools.chime :as chime]))
+  (:require [millhouse.chime :as chime]))
 
 (defn interactive-session-running
   "Notify when an interactive harness session is ready for its human."

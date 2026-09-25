@@ -1,4 +1,4 @@
-(require '[ct.spools.codethread.bootstrap :as codethread]
+(require '[millhouse.config.bootstrap :as config]
          '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
 
@@ -15,58 +15,58 @@
 ;; Register shared identity, Workflow, Harnesses, Kanban, Land, aliases, and
 ;; reviewers before repository-specific policy. Executor activation remains
 ;; deliberately last.
-(codethread/register! runtime)
+(config/register! runtime)
 
 ;; --- Workflow and shell provider surfaces ----------------------------------
-(runtime/module! runtime :millhouse/spools-workflow-all
-                 {:ns 'millhouse.spools.workflow.spool
-                  :after [:millhouse/spools-workflow]
+(runtime/module! runtime :millhouse/workflow-all
+                 {:ns 'millhouse.workflow.spool
+                  :after [:millhouse/workflow]
                   :required? true})
 
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
 (runtime/module! runtime :devflow
-                 {:ns 'ct.spools.devflow
-                  :after [:millhouse/spools-workflow]
+                 {:ns 'millhouse.devflow
+                  :after [:millhouse/workflow]
                   :required? true})
 (runtime/module! runtime :devflow/kanban-adapter
-                 {:ns 'ct.spools.devflow-kanban-adapter
+                 {:ns 'millhouse.devflow-kanban-adapter
                   :after [:devflow
-                          :millhouse/spools-kanban
-                          :millhouse/spools-workflow]
+                          :millhouse/kanban
+                          :millhouse/workflow]
                   :required? true})
 
-;; --- Codethread consumer roots, in dependency order ------------------------
-(runtime/module! runtime :codethread/config-help
-                 {:ns 'ct.spools.codethread.help
+;; --- Millhouse consumer roots, in dependency order ------------------------
+(runtime/module! runtime :millhouse/config-help
+                 {:ns 'millhouse.config.help
                   :after [:millstrand/spools-batteries]
                   :required? true})
-(runtime/module! runtime :codethread/config-devflow
-                 {:ns 'ct.spools.codethread.devflow
+(runtime/module! runtime :millhouse/config-devflow
+                 {:ns 'millhouse.config.devflow
                   :required? true})
-(runtime/module! runtime :codethread/config
-                 {:ns 'ct.spools.codethread.config
-                  :after [:codethread/config-help
-                          :codethread/config-devflow
+(runtime/module! runtime :millhouse/config
+                 {:ns 'millhouse.config
+                  :after [:millhouse/config-help
+                          :millhouse/config-devflow
                           :millstrand/spools-batteries
                           :devflow/kanban-adapter]
                   :required? true})
 
 ;; --- Repository automatic delivery policy ---------------------------------
-(runtime/module! runtime :millhouse/auto-run-workflows
+(runtime/module! runtime :millhouse/workspace-auto-run-workflows
                  {:file "me/auto_run_workflows.clj"
-                  :after [:millhouse/spools-workflow-all]
+                  :after [:millhouse/workflow-all]
                   :required? true})
-(runtime/module! runtime :millhouse/auto-run
+(runtime/module! runtime :millhouse/workspace-auto-run
                  {:file "me/auto_run.clj"
-                  :after [:millhouse/auto-run-workflows
-                          :millstrand/spools-harnesses]
+                  :after [:millhouse/workspace-auto-run-workflows
+                          :millhouse/harnesses]
                   :required? true})
 
 ;; Activate the sole shared :agent executor only after every consumer workflow,
 ;; alias election, and reviewer declaration is reconciled.
-(codethread/register-executor!
- runtime [:millhouse/spools-workflow-all
+(config/register-executor!
+ runtime [:millhouse/workflow-all
           :devflow
           :devflow/kanban-adapter
-          :codethread/config
-          :millhouse/auto-run])
+          :millhouse/config
+          :millhouse/workspace-auto-run])

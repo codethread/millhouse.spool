@@ -13,12 +13,12 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.spools.chime :as chime]
+            [millhouse.chime :as chime]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- chime-root []
-  (test-alpha/spool-checkout-root "millhouse/spools/chime.clj"))
+  (test-alpha/spool-checkout-root "millhouse/chime.clj"))
 
 (deftest chime-exported-kondo-contract-is-published-by-owner
   (testing "the Chime root publishes resources"
@@ -26,30 +26,30 @@
               (:paths (edn/read-string (slurp (io/file (chime-root) "deps.edn")))))))
   (testing "the owner export names the handler hook"
     (let [config-file (io/file
-                       (chime-root) "resources/clj-kondo.exports/millhouse.spools/chime/config.edn")
+                       (chime-root) "resources/clj-kondo.exports/millhouse/chime/config.edn")
           hook-file (io/file
-                     (chime-root) "resources/clj-kondo.exports/millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo")
+                     (chime-root) "resources/clj-kondo.exports/millhouse/chime/hooks/millhouse/chime.clj_kondo")
           config-data (edn/read-string (slurp config-file))]
       (is (.isFile config-file))
       (is (.isFile hook-file))
       (is (= 'clojure.core/defn
-             (get-in config-data [:lint-as 'millhouse.spools.chime/defrule])))
+             (get-in config-data [:lint-as 'millhouse.chime/defrule])))
       (is (= 'clojure.core/defn
-             (get-in config-data [:lint-as 'millhouse.spools.chime/defrule!])))
-      (is (= 'hooks.millhouse.spools.chime/defrule
+             (get-in config-data [:lint-as 'millhouse.chime/defrule!])))
+      (is (= 'hooks.millhouse.chime/defrule
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.chime/defrule])))
+                      'millhouse.chime/defrule])))
       (is (= 'hooks.millstrand/use-vars
              (get-in config-data
                      [:hooks :analyze-call
-                      'millhouse.spools.chime/use-rule!]))))))
+                      'millhouse.chime/use-rule!]))))))
 
 (defn- with-chime [f]
   (test-support/with-runtime
     {:prefix "millstrand-chime-config"}
     (fn [rt config-dir]
-      (test-support/activate-spool! rt :millhouse/spools-chime 'millhouse.spools.chime)
+      (test-support/activate-spool! rt :millhouse/chime 'millhouse.chime)
       (f rt config-dir))))
 
 (defn- write-notifier! [dir out-file]
@@ -169,9 +169,9 @@
   (with-chime
     (fn [_ config-dir]
       (testing "binding validation fails loudly"
-        (is (= :millhouse.spools.chime/notifier
+        (is (= :millhouse.chime/notifier
                (rejected-spec #(chime/set-notifier! {:argv ["x"] :extra true}))))
-        (is (= :millhouse.spools.chime/notifier
+        (is (= :millhouse.chime/notifier
                (rejected-spec #(chime/set-notifier! {:argv []}))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-blank"
                               (chime/notify! {:body "no title"}))))
@@ -202,7 +202,7 @@
 (deftest rule-registration-validation
   (with-chime
     (fn [_ _]
-      (is (= :millhouse.spools.chime/rule-entry
+      (is (= :millhouse.chime/rule-entry
              (rejected-spec #(chime/register! :bad 'not-qualified))))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cannot be resolved"
                             (chime/register! :bad 'missing.ns/fn)))
@@ -263,7 +263,7 @@
        (fn [{second-rt :runtime config-dir :config-dir}]
          (current/with-runtime
            second-rt
-           (test-support/activate-spool! second-rt :millhouse/spools-chime 'millhouse.spools.chime)
+           (test-support/activate-spool! second-rt :millhouse/chime 'millhouse.chime)
            (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
            (let [out-file (bind-file-notifier! (io/file config-dir))]
              (weaver/add! second-rt {:title "unrelated mutation"})
@@ -531,7 +531,7 @@
       (is (= :applied
              (:status (test-support/with-module-activation
                         #(runtime/module! rt :chime
-                                          {:ns 'millhouse.spools.chime})))))
+                                          {:ns 'millhouse.chime})))))
       (is (= 1 (count (engine-handler-entries rt))))
       (is (= 1 (count (barrier-hook-entries rt))))
       (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
@@ -553,9 +553,9 @@
   (is (= {:kind :resource
           :after #{}
           :scope :module
-          :open 'millhouse.spools.chime/open-engine!
-          :close 'millhouse.spools.chime/close-engine!}
-         (deref (ns-resolve 'millhouse.spools.chime 'engine))))
+          :open 'millhouse.chime/open-engine!
+          :close 'millhouse.chime/close-engine!}
+         (deref (ns-resolve 'millhouse.chime 'engine))))
   (is (= {:key :sample :fn 'millhouse.chime-test/phase-failed-rule}
          (chime/rule-declaration
           :sample {} 'millhouse.chime-test/phase-failed-rule)))

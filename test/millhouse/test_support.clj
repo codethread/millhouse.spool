@@ -55,7 +55,7 @@
 (def ^:private module-activation-lock (Object.))
 
 (defn- repository-root []
-  (-> (test-alpha/spool-checkout-root "millhouse/spools/workflow.clj")
+  (-> (test-alpha/spool-checkout-root "millhouse/workflow.clj")
       .getParentFile
       .getParentFile
       .getCanonicalPath))
@@ -64,9 +64,9 @@
   (let [root (repository-root)]
     (pr-str {:paths [(str root "/test")
                      (str root "/spools/workflow/test")]
-             :deps {'millhouse.spools/workflow
+             :deps {'millhouse/workflow
                     {:local/root (str root "/spools/workflow")}
-                    'millhouse.spools/land
+                    'millhouse/land
                     {:local/root (str root "/spools/land")}}})))
 
 (defn with-module-activation

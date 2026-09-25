@@ -4,12 +4,12 @@
             [clojure.string :as str]))
 
 (def ^:private roots
-  {"spools/auto-run/src" "millhouse/spools"
-   "spools/chime/src" "millhouse/spools"
-   "spools/cron/src" "millhouse/spools"
-   "spools/workflow/src" "millhouse/spools"
-   "spools/kanban/src" "millhouse/spools"
-   "spools/land/src" "millhouse/spools"})
+  {"spools/auto-run/src" "millhouse"
+   "spools/chime/src" "millhouse"
+   "spools/cron/src" "millhouse"
+   "spools/workflow/src" "millhouse"
+   "spools/kanban/src" "millhouse"
+   "spools/land/src" "millhouse"})
 
 (defn- clj-file->ns
   [root file]

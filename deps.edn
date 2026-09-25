@@ -4,14 +4,14 @@
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
    :deps/root "."}
-  millhouse.spools/auto-review {:local/root "spools/auto-review"}
-  millhouse.spools/auto-run {:local/root "spools/auto-run"}
-  millhouse.spools/chime {:local/root "spools/chime"}
-  millhouse.spools/cron {:local/root "spools/cron"}
-  millhouse.spools/identity {:local/root "spools/identity"}
-  millhouse.spools/land {:local/root "spools/land"}
-  millhouse.spools/kanban {:local/root "spools/kanban"}
-  millhouse.spools/workflow {:local/root "spools/workflow"}}
+  millhouse/auto-review {:local/root "spools/auto-review"}
+  millhouse/auto-run {:local/root "spools/auto-run"}
+  millhouse/chime {:local/root "spools/chime"}
+  millhouse/cron {:local/root "spools/cron"}
+  millhouse/identity {:local/root "spools/identity"}
+  millhouse/land {:local/root "spools/land"}
+  millhouse/kanban {:local/root "spools/kanban"}
+  millhouse/workflow {:local/root "spools/workflow"}}
  :aliases
  {:format
   {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}

@@ -7,7 +7,7 @@
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- repository-root []
-  (-> (test-alpha/spool-checkout-root "millhouse/spools/workflow.clj")
+  (-> (test-alpha/spool-checkout-root "millhouse/workflow.clj")
       .getParentFile
       .getParentFile
       .getCanonicalPath))
@@ -15,28 +15,28 @@
 (defn- land-only-consumer-deps-edn []
   (pr-str
    {:deps
-    {'millhouse.spools/land {:local/root (str (repository-root) "/spools/land")}}}))
+    {'millhouse/land {:local/root (str (repository-root) "/spools/land")}}}))
 
 (def ^:private land-only-init
   "(require '[millstrand.api.current.alpha :as current]
             '[millstrand.api.runtime.alpha :as runtime])
    (let [rt (current/runtime)]
      (runtime/module! rt :consumer/workflow
-       {:ns 'millhouse.spools.workflow
+       {:ns 'millhouse.workflow
         :required? true})
      (runtime/module! rt :consumer/workflow-providers
-       {:ns 'millhouse.spools.workflow.spool
+       {:ns 'millhouse.workflow.spool
         :after [:consumer/workflow]
         :required? true})
      (runtime/module! rt :consumer/identity
-       {:ns 'millhouse.spools.identity
+       {:ns 'millhouse.identity
         :required? true})
      (runtime/module! rt :consumer/kanban
-       {:ns 'millhouse.spools.kanban
+       {:ns 'millhouse.kanban
         :after [:consumer/identity]
         :required? true})
      (runtime/module! rt :consumer/land
-       {:ns 'millhouse.spools.land.spool
+       {:ns 'millhouse.land.spool
         :after [:consumer/workflow-providers :consumer/kanban]
         :required? true}))")
 
@@ -48,7 +48,7 @@
           (test-alpha/repl!
            ctx
            '(do
-              (require '[millhouse.spools.workflow :as workflow]
+              (require '[millhouse.workflow :as workflow]
                        '[millstrand.api.current.alpha :as current]
                        '[millstrand.api.weaver.alpha :as weaver])
               (let [rt (current/runtime)]
@@ -65,9 +65,9 @@
      (:require [millstrand.api.lifecycle.alpha :as lifecycle]
                [millstrand.api.millstrand.alpha :as millstrand]
                [millstrand.test.alpha :as test-alpha]
-               [millhouse.spools.workflow :as workflow]
-               [millhouse.spools.chime :as chime]
-               [millhouse.spools.cron :as cron]))
+               [millhouse.workflow :as workflow]
+               [millhouse.chime :as chime]
+               [millhouse.cron :as cron]))
 
    (defn sample-job-handler [_] nil)
 
@@ -185,13 +185,13 @@
 (defn- portable-consumer-deps-edn [root]
   {:paths ["src"]
    :deps
-   {'millhouse.spools/workflow
+   {'millhouse/workflow
     {:local/root (.getCanonicalPath (io/file root "spools/workflow"))}
-    'millhouse.spools/chime
+    'millhouse/chime
     {:local/root (.getCanonicalPath (io/file root "spools/chime"))}
-    'millhouse.spools/cron
+    'millhouse/cron
     {:local/root (.getCanonicalPath (io/file root "spools/cron"))}
-    'millhouse.spools/land
+    'millhouse/land
     {:local/root (.getCanonicalPath (io/file root "spools/land"))}}})
 
 (defn- run-consumer-command [dir command]
@@ -221,12 +221,12 @@
               expected-imports
               ["io.millstrand/millstrand/config.edn"
                "io.millstrand/millstrand/hooks/millstrand.clj"
-               "millhouse.spools/workflow/config.edn"
-               "millhouse.spools/workflow/hooks/millhouse/spools/workflow.clj_kondo"
-               "millhouse.spools/chime/config.edn"
-               "millhouse.spools/chime/hooks/millhouse/spools/chime.clj_kondo"
-               "millhouse.spools/cron/config.edn"
-               "millhouse.spools/land/config.edn"]
+               "millhouse/workflow/config.edn"
+               "millhouse/workflow/hooks/millhouse/workflow.clj_kondo"
+               "millhouse/chime/config.edn"
+               "millhouse/chime/hooks/millhouse/chime.clj_kondo"
+               "millhouse/cron/config.edn"
+               "millhouse/land/config.edn"]
               lint-result (run-consumer-command
                            consumer "clj-kondo --repro --parallel --lint src")]
           (is (zero? (:exit import-result))
