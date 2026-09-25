@@ -50,6 +50,14 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown Millhouse package"
                           (consumer/dependency-closure manifests '[missing])))))
 
+(deftest exported-linter-configs-follow-package-coordinates
+  (doseq [[library {:keys [root]}] package-roots
+          :let [exports (io/file repository root "resources/clj-kondo.exports")]
+          :when (.isDirectory exports)]
+    (testing (str library)
+      (is (.isFile (io/file exports (namespace library) (name library)
+                           "config.edn"))))))
+
 (deftest package-graph-stays-explicit-and-local
   (is (= (set (keys production-edges)) (set (keys package-roots))))
   (doseq [[library {:keys [root]}] package-roots]
