@@ -46,7 +46,9 @@
 
 (deftest trailing-container-commas-are-rejected
   (doseq [source ["{\"a\":1,}"
+                  "{\"a\":1,  \n }"
                   "{\"a\":[1,]}"
+                  "{\"a\":[1, \n ]}"
                   "{\"a\":{\"b\":2,}}"
                   "{\"a\":[{\"b\":2,}]}"]]
     (testing source

@@ -62,7 +62,18 @@
                    "provisional" "Do the work"]
             :stdin nil}
            (codex/prepare runtime definition
-                          (run "interactive" {:harness/resumes "prior"}))))))
+                          (run "interactive" {:harness/resumes "prior"})))))
+  (testing "new interactive runs separate developer identity from user prompt"
+    (is (= {:argv ["codex"
+                   "--model" "gpt-test"
+                   "--config" "model_reasoning_effort=light"
+                   "--config"
+                   (str "developer_instructions=\"Review changes only."
+                        "\\n\\nDo not edit files.\"")
+                   "--skip-git-repo-check"
+                   "--provider-option" "value with spaces" "" "Do the work"]
+            :stdin nil}
+           (codex/prepare runtime definition (run "interactive"))))))
 
 (deftest finish-normalizes-final-message-and-provider-session
   (let [stdout (str "{\"type\":\"thread.started\",\"thread_id\":\"thread-1\"}\n"
