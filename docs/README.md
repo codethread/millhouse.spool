@@ -3,15 +3,14 @@
 Millhouse is the coordination home for processes shared by Millstrand and its sibling repositories. Keep the procedure here; each repository implements it for its own layout and links back to this documentation.
 
 See [consolidation and handoff](consolidation.md) for package boundaries, source
-provenance, and the cutover policy. Historical multi-repository rollout guides
-record prior operational work; they do not require restoring separate source
-repositories or their pin choreography.
+provenance, and the cutover policy. Completed rollout plans and temporary handoff
+manifests belong in Git history and their tracking cards, not alongside current
+operating procedures.
 
 ## Processes
 
 - [Clojure lint and editor configuration](processes/kondo-and-lsp.md): macro exports, dependency imports, Make commands, and clojure-lsp verification.
 - [Shared review and landing](processes/shared-landing.md): Kanban/worktree discipline, review evidence, FIFO landing, consumer activation, and rollout verification.
-- [Attribution dependency activation](processes/attribution-activation.md): compatible pins, durable-history smoke, operator restart boundary, and consumer follow-ups.
 - [Planner/coordinator protocol](processes/millstrand-sub-coordinator-runbook.md): Sol preparation, Luna ready-work execution, Kanban acceptance and cold starts.
 - [Working handoff briefs](processes/coordinator-handoff.md): acknowledged headed launch, canonical CWD, harness-specific wait policies and bounded repair examples.
 - [Sub-coordinator alias rollout](processes/sub-coordinator-rollout.md): bounded role guidance, Codex handoff and fallback, additive live registration, frozen-setting proof, and runtime-owner safety.

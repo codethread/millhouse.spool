@@ -1,12 +1,10 @@
-# Mechanical consumer migration (x3xkl)
+# Migrate a legacy review consumer
 
-This is a **clean break**, not an as-is pin bump. The accepted extraction baseline
-is Millhouse `8a66ab98030460ec7c41f35c418971a17a4cec71`; work.spool consumed it in
-`3a4a3691c5fa183109fb479429dd3bb7154a72b7`. Do not deploy the new shared pin with
-that old consumer module. The exact accepted new SHA/PR and quality evidence are
-recorded on x3xkl by its independent landing finisher. Use that **accepted SHA**,
-not a moving branch or the baseline migration's pin. hfogs owns work.spool edits;
-fkat9 owns the final Deals/workfiles bump. This feature changes neither consumer.
+Replacing the former review coordinator with Auto-review admission is a **clean
+break**, not an as-is pin bump. Select a reviewed, published Millhouse revision
+and update the consumer module with it. Do not deploy the new dependency with
+an old coordinator or treat a moving branch as an accepted release. Record the
+selected revision, checks, and rollout ownership on the consumer's work card.
 
 ## 1. Drain the old generation before switching
 
@@ -30,7 +28,7 @@ The standalone library remains:
 ```clojure
 millhouse/auto-review
 {:git/url "https://github.com/codethread/millhouse.spool.git"
- :git/sha "ACCEPTED_X3XKL_SHA"
+ :git/sha "MILLHOUSE_SHA"
  :deps/root "spools/auto-review"}
 ```
 
@@ -40,7 +38,7 @@ Cron or Harnesses. For the complete recipe, generate the selected production
 closure from the checkout of the accepted revision:
 
 ```text
-scripts/consumer-deps.sh ACCEPTED_SHA millhouse/auto-review millhouse/auto-run millhouse/cron
+scripts/consumer-deps.sh MILLHOUSE_SHA millhouse/auto-review millhouse/auto-run millhouse/cron
 ```
 
 Use the printed direct `:deps` map. It includes the declared shared dependencies
@@ -55,11 +53,12 @@ Millstrand itself is supplied by Mill in a Weaver basis: do **not** add a reserv
 `io.millstrand/millstrand` direct dependency to workspace deps. Ordinary standalone
 tools.deps projects resolve it transitively from the spool.
 
-For Deals, preserve existing `me/config` local/root semantics and inspect owning
-symlinks first. The tracked workfiles `deps.ref.edn` and real active `deps.edn` need
-the same intended bytes. A source copy alone does not prove selected basis or live
-activation. Dependency changes require a **separately authorized new Weaver
-generation**. This migration does not authorize restart; never stop Mill.
+Preserve any consumer-owned local configuration roots and inspect owning symlinks
+before editing them. Where a tracked dependency template supplies a separate
+active file, verify both select the intended dependency map. A source copy alone
+does not prove selected basis or live activation. Dependency changes require a
+**separately authorized new Weaver generation**. This migration does not authorize
+restart; never stop Mill.
 
 ## 3. Remove the old surface
 
@@ -175,8 +174,8 @@ poured workflow.
    CI rejection, and Auto-run capacity/workflow context. Exercise the agent adapter
    with fake settled evidence; never publish externally or invoke paid seats.
 3. Run native repository quality under the shared lock and mandatory review/land.
-   Record native accepted commit, exact upstream pin, basis and owned cleanup on
-   hfogs, then pass them to fkat9. Do not close cross-repo cards before native land.
+   Record the consumer's accepted commit, exact upstream pin, basis, and owned
+   cleanup on its work card. Do not close cross-repo cards before native land.
 4. Leave production polling disabled and activation/restart explicitly outstanding
    unless separately authorized. When authorized, inspect the new generation's
    `workflow show review-request`, Auto-run status and selected Cron jobs before

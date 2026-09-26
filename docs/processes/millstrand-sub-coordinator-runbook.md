@@ -1,6 +1,6 @@
 # Sol preparation → Luna coordination
 
-The parent owns the conversation, shared decisions and mentoring. Sol prepares bounded work; one headed Luna coordinator executes the prepared Kanban DAG. The [launch briefs](coordinator-handoff.md) apply this provider-neutral contract. [Field notes](coordinator-field-notes.md) are dated evidence, not shared defaults.
+The parent owns the conversation, shared decisions and mentoring. Sol prepares bounded work; one headed Luna coordinator executes the prepared Kanban DAG. The [launch briefs](coordinator-handoff.md) apply this provider-neutral contract.
 
 ## Prepare before handing off
 
