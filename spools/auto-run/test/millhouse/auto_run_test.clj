@@ -82,8 +82,9 @@
 
 (defn- with-world [f]
   (t/with-weaver-world
-    ;; Serialized publication proofs do not require database reopen or contention.
-    [ctx {:storage :sqlite-memory
+    ;; Runtime event work can overlap test-thread mutations even in serial tests.
+    ;; File storage gives those operations separate connections.
+    [ctx {:storage :sqlite-file
           :deps-edn (fixture-deps-edn)
           :init-clj
           "(require '[millstrand.api.current.alpha :as current]
