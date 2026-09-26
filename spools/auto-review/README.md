@@ -20,8 +20,8 @@ Auto-review namespace is inert: no operations, jobs, workers or resources start.
 | `auto-review.workspace/inspect!` | Verify isolated clean head/base trees |
 | `auto-review.workflow/review-request` | Inert code gate → agent gate → report → local human decision → cleanup workflow |
 
-Names above abbreviate `millhouse.*`. See the [API](auto-review.api.md),
-[complete consumer module](examples/review.clj) and [migration recipe](migration.md).
+Names above abbreviate `millhouse.*`. See the [API](auto-review.api.md) and
+[complete consumer module](examples/review.clj).
 There is deliberately **no `strand review` or `review-logs` operation**.
 Use ordinary Kanban, Auto-run, Workflow, Harnesses and Cron inspection instead.
 
