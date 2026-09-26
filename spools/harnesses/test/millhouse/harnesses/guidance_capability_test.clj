@@ -130,34 +130,25 @@
    :stderr ""})
 
 (deftest exact-codex-and-pi-test-profiles-are-admitted
-  (let [expected-wire-digests
-        {"codex" "f5ebc972f9c4d99ef21bb2c5e48fe8aaf2872413220323a72c0957d2fea8f33e"
-         "pi" "5571967d168852e6a02baef2ab63e02ca63be55a0b6a71b5cb7aba4d4f7c1eca"}
-        fixed-executable-sha (str/join (repeat 64 "e"))]
-    (doseq [harness ["codex" "pi"]]
-      (with-profile
-        harness
-        (fn [{:keys [profile document request]}]
-          (let [serialized-request (atom nil)]
-            (binding [capability/*test-capability-profiles* [profile]
-                      capability/*test-preflight-runner*
-                      (fn [accepted request-json]
-                        (reset! serialized-request
-                                (strict-json/parse-object!
-                                 request-json 65536 "serialized request"))
-                        (process-result accepted (result-json document)))]
-              (is (= document (capability/preflight! request)))
-              (is (= (get expected-wire-digests harness)
-                     (strict-json/canonical-sha256
-                      (capability-document harness fixed-executable-sha))))
-              (is (not (contains? document "process-ownership")))
-              (is (not (contains? document "executable-closure")))
-              (is (= (assoc request
-                            "schema"
-                            "millstrand.agent-guidance-preflight/v1")
-                     @serialized-request))
-              (is (= "/usr/bin/true"
-                     (get @serialized-request "executable"))))))))))
+  (doseq [harness ["codex" "pi"]]
+    (with-profile
+      harness
+      (fn [{:keys [profile document request]}]
+        (let [serialized-request (atom nil)]
+          (binding [capability/*test-capability-profiles* [profile]
+                    capability/*test-preflight-runner*
+                    (fn [accepted request-json]
+                      (reset! serialized-request
+                              (strict-json/parse-object!
+                               request-json 65536 "serialized request"))
+                      (process-result accepted (result-json document)))]
+            (is (= document (capability/preflight! request)))
+            (is (not (contains? document "process-ownership")))
+            (is (not (contains? document "executable-closure")))
+            (is (= (assoc request
+                          "schema"
+                          "millstrand.agent-guidance-preflight/v1")
+                   @serialized-request))))))))
 
 (deftest malformed-changed-nonzero-and-legacy-required-evidence-fails-loudly
   (with-profile

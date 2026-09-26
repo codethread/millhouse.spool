@@ -1,13 +1,11 @@
 (ns millhouse.harnesses.guidance-provider-transport-test
   "Pure provider routing checks over complete durable guidance rows."
   (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is]]
             [millhouse.harnesses.guidance-representation-fixture :as fixture]
             [millhouse.harnesses.internal.guidance :as guidance]
             [millhouse.harnesses.internal.guidance-capability :as capability]
-            [millhouse.harnesses.providers.claude :as claude]
             [millhouse.harnesses.providers.codex :as codex]
-            [millhouse.harnesses.providers.cursor :as cursor]
             [millhouse.harnesses.providers.pi :as pi])
   (:import [java.time Instant]))
 
@@ -65,10 +63,4 @@
     (doseq [launch [native-codex native-pi]]
       (is (= "Main task\n" (:stdin launch)))
       (is (some #{"model"} (:argv launch)))
-      (is (some #{"--unrelated"} (:argv launch)))))
-  (testing "maintenance providers retain their exact launch preparation"
-    (let [run (fixture/run "maintenance" "legacy")]
-      (is (= (claude/prepare runtime (claude/harness runtime) run)
-             (claude/prepare runtime (claude/harness runtime) run)))
-      (is (= (cursor/prepare runtime (cursor/harness runtime) run)
-             (cursor/prepare runtime (cursor/harness runtime) run))))))
+      (is (some #{"--unrelated"} (:argv launch))))))
