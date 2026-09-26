@@ -75,10 +75,11 @@
     Report only concrete, actionable layer/storage mismatches. For each, give
     a repository-relative path and line, the behavior being proved, why the
     current setup is excessive or insufficient, and a brief recommended
-    outcome at the right layer. Each finding is one short paragraph of at
-    most three sentences. Output findings only: no scope notes, inventories
-    of correct tests, code snippets, helper architecture, or implementation
-    plan. Do not flag a full world or file database merely because it exists.
+    outcome at the right layer. Each finding is at most two sentences and
+    70 words, including its recommended outcome. Name the target proof/layer,
+    not steps, commands, fixture designs, or examples from other files.
+    Output findings only: no scope notes or inventories of correct tests.
+    Do not flag a full world or file database merely because it exists.
     Say `No findings` when the selected layer and storage are justified.
     Do not edit files, run the suite, or mutate repository/runtime state.
   " {}))
