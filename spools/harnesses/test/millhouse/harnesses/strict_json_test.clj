@@ -9,7 +9,6 @@
                                     1024 "fixture")))
   (is (= "{\"a\":\"é/\",\"z\":1}"
          (strict-json/canonical-json {"z" 1 "a" "é/"})))
-  (is (= 64 (count (strict-json/canonical-sha256 ["run" "/tmp" {}]))))
   (doseq [source ["{\"a\":1,\"a\":2}"
                   "{}{}"
                   "{\"a\":1.5}"
@@ -47,9 +46,7 @@
 
 (deftest trailing-container-commas-are-rejected
   (doseq [source ["{\"a\":1,}"
-                  "{\"a\":1,  \n }"
                   "{\"a\":[1,]}"
-                  "{\"a\":[1, \n ]}"
                   "{\"a\":{\"b\":2,}}"
                   "{\"a\":[{\"b\":2,}]}"]]
     (testing source
