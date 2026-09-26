@@ -100,6 +100,7 @@ Install native `clj-kondo` v2026.08.04 and the Harnesses toolchain recorded in i
 - Explicit full run (for example after a Millstrand update): `make quality-full`
   or tests/package gates only with `make test-full`.
 - Focus one root-suite namespace: `make test TEST_NAMESPACES=millhouse.workflow-test`.
+- Choose [root-suite fixture layers and storage](test/README.md) before adding tests.
 - Focused imported gates: `make harnesses-check`, `make devflow-check`,
   `make config-check`.
 - Repository activation in a disposable world: `make workspace-test`.

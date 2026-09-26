@@ -79,7 +79,8 @@
                       'millhouse.executor-discovery-test '#{millhouse/workflow}
                       'millhouse.e2e.cron.lifecycle-test '#{millhouse/cron}
                       'millhouse.package-layout-test (disj (set (keys roots)) 'workspace)
-                      'millhouse.affected-test #{}}
+                      'millhouse.affected-test #{}
+                      'millhouse.test-support-test '#{millhouse/workflow millhouse/land}}
         tests (into {} (for [ns-sym runner/test-namespaces]
                          (let [path (test-path ns-sym)
                                owners (or (get integrations ns-sym)

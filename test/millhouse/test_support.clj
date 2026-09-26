@@ -79,19 +79,37 @@
   (locking module-activation-lock
     (f)))
 
-(defn with-runtime
-  "Call f with a disposable runtime and its config directory File."
-  ([f] (with-runtime {} f))
+(defn with-embedded-runtime
+  "Call f with a fresh embedded Weaver runtime and its config directory File.
+
+  Bind the runtime for runtime-implied APIs. Each call owns a disposable
+  workspace, database, registries, generation basis and shutdown/cleanup.
+  This is a full world, not a cheap bare-runtime constructor.
+
+  Options are :prefix (Weaver name) and :storage (:sqlite-file by default,
+  or :sqlite-memory for serialized, non-durable contracts). Memory storage
+  still starts a world and basis; use file storage for durability or connection
+  topology. No modules are activated implicitly. For startup files, explicit
+  roots or durable reopen, use millstrand.test.alpha/with-weaver-world directly."
+  ([f] (with-embedded-runtime {} f))
   ([opts f]
-   (when-let [unknown (seq (remove #{:prefix} (keys opts)))]
+   (when-let [unknown (seq (remove #{:prefix :storage} (keys opts)))]
      (throw (ex-info "Unknown Millhouse runtime fixture options"
                      {:keys (vec unknown)})))
    (test-alpha/run-with-weaver-world
-    (cond-> {:deps-edn (fixture-deps-edn)}
+    (cond-> (merge {:deps-edn (fixture-deps-edn)} (select-keys opts [:storage]))
       (:prefix opts) (assoc :name (:prefix opts)))
     (fn [{:keys [runtime config-dir]}]
       (current/with-runtime runtime
         (f runtime (io/file config-dir)))))))
+
+(defn with-runtime
+  "Call f using with-embedded-runtime; this existing name starts a full world.
+
+  Accept the same :prefix and :storage options. Omitted storage remains
+  file-backed; existing callers are not switched to memory implicitly."
+  ([f] (with-embedded-runtime f))
+  ([opts f] (with-embedded-runtime opts f)))
 
 (defn activate-spool!
   "Activate a namespace-backed module and fail on any refused outcome."
