@@ -56,6 +56,9 @@
                                       (:replace-deps test-alias))))
                  (keep #(owner roots (str % "/")) paths)))))
 
+(defn- test-path [ns-sym]
+  (str "test/" (-> (str ns-sym) (str/replace "." "/") (str/replace "-" "_")) ".clj"))
+
 (defn repository
   "Read package ownership and test dependencies from this checkout's manifests.
 
@@ -78,9 +81,7 @@
                       'millhouse.package-layout-test (disj (set (keys roots)) 'workspace)
                       'millhouse.affected-test #{}}
         tests (into {} (for [ns-sym runner/test-namespaces]
-                         (let [path (str "test/" (-> (str ns-sym)
-                                                     (str/replace "." "/")
-                                                     (str/replace "-" "_")) ".clj")
+                         (let [path (test-path ns-sym)
                                owners (or (get integrations ns-sym)
                                           (some (fn [[library root]]
                                                   (when (.isFile (io/file directory root path))
@@ -117,12 +118,15 @@
   files belong to their longest matching root, including nested packages."
   [{:keys [roots graph tests]} paths full?]
   (let [code-paths (remove documentation? paths)
+        root-tests (zipmap (map test-path runner/test-namespaces) runner/test-namespaces)
+        changed-tests (set (keep root-tests code-paths))
         global-paths (filterv #(or (= % ".millstrand/land-quality.sh")
-                                   (not (owner roots %))) code-paths)
+                                   (and (not (root-tests %)) (not (owner roots %)))) code-paths)
         full? (or full? (seq global-paths))
         changed (set (keep #(owner roots %) code-paths))
         affected (if full? (set (keys roots)) (dependents graph changed))
-        namespaces (filterv #(or full? (seq (set/intersection affected (get tests %))))
+        namespaces (filterv #(or full? (changed-tests %)
+                                 (seq (set/intersection affected (get tests %))))
                             runner/test-namespaces)
         targets (cond-> (set (keep package-targets affected))
                   (contains? affected 'millhouse/kanban) (conj "kanban-dash-check"))]

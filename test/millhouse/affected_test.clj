@@ -25,6 +25,11 @@
     (testing "shipped Markdown can be runtime input, not just documentation"
       (is (contains? (set (:affected (select "spools/harnesses/plugins/skill/SKILL.md")))
                      "millhouse/harnesses")))
+    (testing "a changed integration test does not fan out to every spool"
+      (let [plan (select "test/millhouse/e2e/cron/lifecycle_test.clj")]
+        (is (= ["millhouse.e2e.cron.lifecycle-test"] (:namespaces plan)))
+        (is (empty? (:targets plan)))
+        (is (false? (:full plan)))))
     (testing "test-only dependencies select their owning suites"
       (let [plan (select "spools/cron/resources/jobs.edn")]
         (is (contains? (set (:affected plan)) "millhouse/auto-review"))

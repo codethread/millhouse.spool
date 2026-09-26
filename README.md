@@ -113,7 +113,8 @@ delete paths retain their original owners. `TEST_BASE` accepts a branch or SHA.
 
 The selector reads `spool.edn` and package `deps.edn` files, including test-alias
 libraries and nested test paths, then follows reverse dependencies. Integration
-tests declare their inputs in `scripts/quality/affected.clj`. Package processes
+tests declare their inputs in `scripts/quality/affected.clj`; edits to an
+individual root integration test select that namespace alone. Package processes
 and activation boundaries stay independent. Shared build/test infrastructure or
 unknown non-documentation paths select all suites. Root documentation-only and
 empty diffs select no tests; files within a spool conservatively select its
@@ -121,6 +122,8 @@ suite, including shipped Markdown. Full mode does not require a Git base.
 
 CI uses the same plan: PRs compare with their target base, main pushes compare
 with the previous tip, and manual dispatch accepts a base and full-run switch.
+Dispatch resolves branch names from the fetched `origin/` refs in its detached
+checkout; SHAs and tags also work.
 Only selected test/package jobs run; distribution smoke runs when components
 are affected. Static/docs checks remain repository-wide. Shared Land and
 auto-run use `.millstrand/land-quality.sh`, which calls `make quality` and owns

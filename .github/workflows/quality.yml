@@ -64,6 +64,11 @@ jobs:
             workflow_dispatch)
               base="$DISPATCH_BASE"
               full="$DISPATCH_FULL"
+              # Exact-SHA checkout is detached: fetched branches live under
+              # origin/, not local branch names. Also accept SHAs and tags.
+              if git show-ref --verify --quiet "refs/remotes/origin/$base"; then
+                base="origin/$base"
+              fi
               ;;
             *)
               echo "::error::Unsupported event: $EVENT_NAME" >&2
