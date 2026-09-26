@@ -14,6 +14,7 @@
     millhouse.authoring-forms-test
     millhouse.consumer-test
     millhouse.package-layout-test
+    millhouse.test-support-test
     millhouse.executor-discovery-test
     millhouse.workflow-test
     millhouse.workflow-cli-test

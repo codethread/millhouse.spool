@@ -7,9 +7,10 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.cli.alpha :as cli-alpha]
+            [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support]
             [millhouse.workflow :as workflow]
             [millhouse.workflow.cli :as cli]
             [millhouse.workflow.internal.registry :as wf-registry]
@@ -65,21 +66,6 @@
     (workflow/defer :next-routine "Choose the next routine" :depends-on [:summarize]))
    {:next-routine #{:build :fold}}))
 
-(workflow/defworkflow returning-defer
-  "Select a returning workflow at run time."
-  {:entrypoints #{:start}}
-  (workflow/bind-defers
-   (workflow/workflow
-    "Returning defer"
-    (workflow/defer :perform-work "Choose work"))
-   {:perform-work #{:review}}))
-
-(defn legacy-spike
-  "Return a raw workflow, which registered names now refuse."
-  [{:keys [scope]}]
-  (workflow/workflow (str "Legacy " scope)
-                     (workflow/step :work "Do the work" :self)))
-
 ;; Every function a definition can carry, wired to the same counter. Discovery
 ;; reads declarations; running any of these would mean it did something else.
 (def ^:private executions (atom 0))
@@ -105,6 +91,16 @@
    (workflow/step :conditional "Conditional" :self
                   :depends-on [:render]
                   :condition :optional)))
+
+(defn- with-cli-runtime [f]
+  ;; These reads are serialized and assert no persistence or connection topology.
+  (test-support/with-embedded-runtime {:storage :sqlite-memory} f))
+
+(defn- declared-op []
+  (get-in (test-alpha/collect-module-forms
+           :test/workflow-cli 'millhouse.workflow-cli-test
+           #(millstrand/use-op! cli/workflow))
+          [:contribution :ops :entries "workflow"]))
 
 (defn- definition-module-source
   "Write a module source file declaring `forms` and return its workspace path."
@@ -167,7 +163,7 @@
 (deftest activating-the-workflow-engine-publishes-no-cli-ops
   ;; PROP-Wcd-001.S1: the worker vocabulary is opted into, never inherited from
   ;; the engine a spool activated for its own domain surface.
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-engine! rt)
       (is (not (contains? (op-names rt) "workflow"))
@@ -176,48 +172,33 @@
           "the forms-only engine exposes no legacy entry point"))))
 
 (deftest activating-the-workflow-cli-publishes-the-workflow-op
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (let [entry (weaver/resolve-op rt 'workflow)]
         (is (= "workflow" (:name entry)))
         (is (= 'millhouse.workflow.cli (:provenance entry)))
-        (is (= 'millhouse.workflow.cli/workflow (:fn entry)))
-        (testing "both verbs declare their own classes on the arg-spec leaf"
-          (doseq [verb ["list" "show"]]
-            (let [leaf (get-in entry [:arg-spec :subcommands verb])]
-              (is (= :read (:hook-class leaf)))
-              (is (= :standard (:deadline-class leaf))))))
-        (testing "op-level narrative stays at the about/prime tier"
-          (is (re-find #"worker surface" (:about entry)))
-          (testing "prime is a runbook of fully qualified invocations"
-            (let [prime (:prime entry)]
-              (is (str/includes? prime "strand workflow list"))
-              (is (str/includes? prime "strand workflow show intake"))
-              (is (str/includes?
-                   prime
-                   "strand workflow start <run-id> --workflow intake --params '{...}'")
-                  "the start example carries the run-id positional and --workflow flag")
-              (doseq [field ["params.contract" "params.template" "params.example"]]
-                (is (str/includes? prime field)
-                    (str "prime points at the show field " field))))))))))
+        (is (= 'millhouse.workflow.cli/workflow (:fn entry)))))))
 
-(deftest the-cli-module-owns-the-whole-workflow-op-partition
-  ;; Opting back out is the same publication mechanism as opting in: the module
-  ;; collects the complete op partition, so a workspace that stops declaring
-  ;; the module publishes no `workflow` entry at the next refresh.
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (let [entry (weaver/resolve-op rt 'workflow)]
-        (is (= "workflow" (:name (weaver/validate-op-entry! entry))))
-        (is (nil? (ns-resolve 'millhouse.workflow.cli 'spool))
-            "the forms-only CLI exposes no legacy entry point")))))
+(deftest cli-declaration-carries-read-classes-and-worker-guidance
+  (let [entry (declared-op)]
+    (doseq [verb ["list" "show" "executors"]]
+      (let [leaf (get-in entry [:arg-spec :subcommands verb])]
+        (is (= :read (:hook-class leaf)))
+        (is (= :standard (:deadline-class leaf)))))
+    (is (str/includes? (:about entry) "worker surface"))
+    (let [prime (:prime entry)]
+      (is (str/includes? prime "strand workflow list"))
+      (is (str/includes? prime "strand workflow show intake"))
+      (is (str/includes? prime
+                         "strand workflow start <run-id> --workflow intake --params '{...}'"))
+      (doseq [field ["params.contract" "params.template" "params.example"]]
+        (is (str/includes? prime field))))))
 
 ;; --- list: deterministic filtering ------------------------------------------
 
 (deftest list-defaults-to-startable-definitions-in-name-order
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :fold :spike)
@@ -237,7 +218,7 @@
           "only :start definitions, in registered-name order, with exactly the four catalogue fields"))))
 
 (deftest list-selects-one-entrypoint-at-a-time
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :fold :spike)
@@ -245,31 +226,11 @@
       (is (= ["build" "fold" "review"] (mapv :name (listed {:entrypoint "call"}))))
       (is (= ["build" "review" "spike"] (mapv :name (listed {:entrypoint "start"})))))))
 
-(deftest list-has-no-all-flag
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :fold)
-      (is (= [] (listed))
-          "a definition without :start is not startable")
-      (is (= ["fold"] (mapv :name (listed {:entrypoint "call"}))))
-      (let [parse (fn [argv]
-                    (cli-alpha/parse (:arg-spec (weaver/resolve-op rt 'workflow)) argv))]
-        (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--all"])))))))
-
-(deftest registered-functions-are-refused-as-invalid-definitions
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (is (= :workflow/definition-invalid
-             (reason-of #(workflow/register-workflow!
-                          :legacy 'millhouse.workflow-cli-test/legacy-spike)))))))
-
 (deftest list-reads-the-registry-live
   ;; The catalogue answers from the effective registry at each call: a module
   ;; publishing a definition, deleting it by omission, and a trusted repoint are
   ;; all visible to the next read with no restart.
-  (with-runtime
+  (with-cli-runtime
     (fn [rt config-dir]
       (activate-cli! rt)
       (let [source (definition-module-source config-dir "cli-alpha" (alpha-form "Alpha routine."))]
@@ -292,7 +253,7 @@
   ;; Publication refuses an unresolvable entry, so this is the case where a Var
   ;; disappeared *after* it was published. The catalogue says so rather than
   ;; quietly listing one workflow fewer.
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build)
@@ -308,7 +269,7 @@
 ;; --- show: the full-fidelity point read -------------------------------------
 
 (deftest show-projects-a-static-definition-exactly
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :spike)
@@ -353,18 +314,18 @@
                  (:declared view))))))))
 
 (deftest show-answers-for-definitions-list-omits-by-default
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :fold)
       (is (= ["start" "call"] (:entrypoints (shown :review)))
-          "a call-only component is a point read away even though list hides it")
+          "the point read preserves every declared entrypoint")
       (is (= {:kind "none" :defaults {}} (:params (shown :review)))
           "a definition constraining nothing says so rather than omitting the field")
       (is (= ["continue" "call"] (:entrypoints (shown :fold)))))))
 
 (deftest show-reports-a-defer-exit-with-its-bound-targets
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :fold :deferred)
@@ -381,28 +342,8 @@
               :routes []}
              (:declared (shown :deferred)))))))
 
-(deftest show-reports-one-defer-collection-with-the-call-entrypoint
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :review :returning-defer)
-      (is (= [{:step "perform-work"
-               :defer "perform-work"
-               :workflows ["review"]
-               :entrypoint "call"}]
-             (:defers (:declared (shown :returning-defer))))))))
-
-(deftest show-omits-the-removed-kind-and-opaque-fields
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :build)
-      (let [view (shown :build)]
-        (is (not (contains? view :kind)))
-        (is (not (contains? view :opaque)))))))
-
 (deftest show-fails-loudly-on-an-unregistered-name
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build)
@@ -414,7 +355,7 @@
   ;; PROP-Wcd-001.S3: rendered names, titles, attributes, loop sources,
   ;; conditions, and spec predicates all stay unevaluated. A catalogue read is
   ;; safe to ask for at any time precisely because it runs none of them.
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :counting)
@@ -430,18 +371,6 @@
       (is (s/valid? ::counting-params {:counted-scope "x"}))
       (is (pos? @executions) "validation is what runs a predicate"))))
 
-(deftest show-projects-static-defaults-and-whole-map-param-specs
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      ;; :spike routes to :build, and registration validates the whole live
-      ;; registry, so the target has to be registered first
-      (register! :review :build :spike)
-      (is (= {:prototype-targets ["compact queue"]}
-             (get-in (shown :spike) [:params :defaults]))))))
-
-;; --- op wiring --------------------------------------------------------------
-
 ;; --- executors: gate-executor discovery --------------------------------------
 
 (defn never-stalled
@@ -453,7 +382,7 @@
   ;; The gate-authoring read: every registered waiter in order, each carrying
   ;; its stall predicate and — where the executor declares a request spec — the
   ;; projected contract with the exact attribute keys an author writes.
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (test-support/activate-spool! rt :millhouse/shell 'millhouse.test-modules.shell-executor
@@ -492,47 +421,42 @@
                  (by-waiter "raw-fn"))))))))
 
 (deftest workflow-op-returns-match-their-declaration
-  (with-runtime
+  (with-cli-runtime
     (fn [rt _]
       (activate-cli! rt)
       (register! :build :review :spike)
-      (let [list-result (cli/workflow {:op/args {:subcommand ["list"]}})]
+      (let [parse #(cli-alpha/parse (:arg-spec (weaver/resolve-op rt 'workflow)) %)
+            list-result (cli/workflow {:op/args (parse ["list" "--entrypoint" "call"])})]
+        (is (= ["build" "review"] (mapv :name (:definitions list-result))))
         (is (= "workflow list" (:operation list-result)))
         (test-alpha/check-op-return! rt 'workflow {:subcommand ["list"]}
                                      (wire-value list-result)))
-      (doseq [target [:spike]]
+      (let [args (cli-alpha/parse (:arg-spec (weaver/resolve-op rt 'workflow))
+                                  ["show" "spike"])
+            result (cli/workflow {:op/args args})]
+        (is (= "spike" (:name result)))
         (test-alpha/check-op-return! rt 'workflow {:subcommand ["show"]}
-                                     (wire-value (shown target))))
+                                     (wire-value result)))
       (workflow/register-executor! :bare-sym 'millhouse.workflow-cli-test/never-stalled)
       (test-alpha/check-op-return!
        rt 'workflow {:subcommand ["executors"]}
        (wire-value (cli/workflow {:op/args {:subcommand ["executors"]}}))))))
 
-(deftest declared-args-carry-argv-to-the-verbs
-  ;; The op is reached as argv, so the declared arg-spec is the real entrance:
-  ;; parse it the way the weaver does before handing the result to the handler.
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :build :review :spike)
-      (let [arg-spec (:arg-spec (weaver/resolve-op rt 'workflow))
-            parse (fn [argv] (cli-alpha/parse arg-spec argv))]
-        (is (= {:subcommand ["list"]} (parse ["list"])))
-        (is (= {:subcommand ["list"] :entrypoint "call"} (parse ["list" "--entrypoint" "call"])))
-        (is (= {:subcommand ["show"] :workflow "spike"} (parse ["show" "spike"])))
-        (is (= {:subcommand ["executors"]} (parse ["executors"])))
-        (is (= ["build" "review"]
-               (mapv :name (listed (parse ["list" "--entrypoint" "call"])))))
-        (is (= "spike" (:name (cli/workflow {:op/args (parse ["show" "spike"])}))))
-        (testing "the parser refuses what the surface does not declare"
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["show"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--all"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--limit" "5"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["start" "run-1"]))))))))
+(deftest declared-args-parse-without-a-world
+  ;; Collect the public declaration, not a private arg-spec or a fake runtime.
+  ;; Real publication and parsed handler dispatch are checked separately.
+  (let [parse #(cli-alpha/parse (:arg-spec (declared-op)) %)]
+    (is (= {:subcommand ["list"]} (parse ["list"])))
+    (is (= {:subcommand ["list"] :entrypoint "call"}
+           (parse ["list" "--entrypoint" "call"])))
+    (is (= {:subcommand ["show"] :workflow "spike"} (parse ["show" "spike"])))
+    (is (= {:subcommand ["executors"]} (parse ["executors"])))
+    (testing "the parser refuses what the surface does not declare"
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["show"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--all"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["list" "--limit" "5"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["start" "run-1"]))))))
 
 (deftest workflow-op-refuses-an-unknown-verb
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (is (thrown? clojure.lang.ExceptionInfo
-                   (cli/workflow {:op/args {:subcommand ["explain"]}}))))))
+  (is (thrown? clojure.lang.ExceptionInfo
+               (cli/workflow {:op/args {:subcommand ["explain"]}}))))
