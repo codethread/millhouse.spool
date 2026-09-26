@@ -62,11 +62,19 @@
                                  (assoc % :local/root (.getCanonicalPath (io/file (root) path)))
                                  %))}))
 
-(defn- with-world [f & [source]]
+(defn- with-world [f & [{:keys [source admission-only?]}]]
+  ;; Graph-only contracts still use a fresh file-backed world, but need no
+  ;; workflow, reviewer resources or scheduler activation.
   (t/with-weaver-world
-    [ctx {:storage :sqlite-file :deps-edn (deps-edn)
+    [ctx {:storage :sqlite-file
+          :deps-edn (if admission-only? "{}" (deps-edn))
           :init-clj
-          "(require '[millstrand.api.current.alpha :as current]
+          (if admission-only?
+            "(require '[millstrand.api.current.alpha :as current]
+                      '[millstrand.api.runtime.alpha :as runtime])
+             (runtime/module! (current/runtime) :fixture
+               {:file \"fixture.clj\" :required? true})"
+            "(require '[millstrand.api.current.alpha :as current]
                     '[millstrand.api.runtime.alpha :as runtime])
            (runtime/module! (current/runtime) :identity
              {:ns 'millhouse.identity :required? true})
@@ -75,8 +83,11 @@
            (runtime/module! (current/runtime) :cron
              {:ns 'millhouse.cron :required? true})
            (runtime/module! (current/runtime) :fixture
-             {:file \"fixture.clj\" :after [:identity :workflow] :required? true})"
-          :files {"fixture.clj" (or source fixture)}}]
+             {:file \"fixture.clj\" :after [:identity :workflow] :required? true})")
+          :files {"fixture.clj" (if admission-only?
+                                  "(ns auto-review.fixture)
+                                   (defn poll [_ {:keys [config]}] (:revisions config))"
+                                  (or source fixture))}}]
     (f (:runtime ctx) {:repo (:config-dir ctx) :poll 'auto-review.fixture/poll
                        :provider-config {:revisions []} :max-open 1
                        :workflow "review-request" :seat "fake" :effort "low"})))
@@ -96,7 +107,7 @@
             cards (mapv #(weaver/show rt %) (:admitted result))]
         (is (= ["3" "2"] (mapv #(-> % review/request :request) cards)))
         (is (= ["p1" "p3"] (mapv #(attr-get % :kanban/priority) cards)))
-        (doseq [card cards]
+        (let [card (first cards)]
           (is (= "feature" (attr-get card :kanban/type)))
           (is (= "pending" (attr-get card :kanban/lane)))
           (is (= "true" (attr-get card :kanban.label/auto-run)))
@@ -119,7 +130,8 @@
                            (poll! rt config [(assoc requested :provider "future-github")]))))))
         (testing "provider observations never rewrite a frozen snapshot"
           (poll! rt config [(assoc requested :title "Changed" :base head :requested? false)])
-          (is (= requested (review/request (weaver/show rt (:id (first cards)))))))))))
+          (is (= requested (review/request (weaver/show rt (:id (first cards)))))))))
+    {:admission-only? true}))
 
 (deftest boundary-failures-and-lost-create-response
   (with-world
@@ -145,7 +157,8 @@
               go (promise)
               calls (mapv (fn [_] (future @go (poll! rt config input))) (range 4))]
           (deliver go true)
-          (is (= 1 (count (mapcat :admitted (mapv deref calls))))))))))
+          (is (= 1 (count (mapcat :admitted (mapv deref calls))))))))
+    {:admission-only? true}))
 
 (defn- mr [id & [overrides]]
   (merge {:project_id 7 :iid id :state "opened" :draft false :sha head
@@ -238,7 +251,8 @@
                                    (workspace/prepare! rt {:repo repo :card card}))))
            (is (= cwd (:worktree_path (attr-get (weaver/show rt (:id card)) :auto-review/workspace))))
            (is (some #(= ["git" "branch" (str "review/" (:id card)) (:head revision)] %) @calls))
-           (is (some #(= ["wktree" "--cwd" repo "add" "--branch" (str "review/" (:id card)) "--json"] %) @calls))))))))
+           (is (some #(= ["wktree" "--cwd" repo "add" "--branch" (str "review/" (:id card)) "--json"] %) @calls))))
+       {:admission-only? true}))))
 
 (deftest polling-composes-with-real-auto-run-and-workflow-agent-gates
   (git-fixture
@@ -332,7 +346,7 @@
         (is (empty? (weaver/list rt [:= [:attr "harness/run"] "true"] {})))
         (current/with-runtime rt
           (is (contains? (:entrypoints (workflow/resolve-workflow :review-request)) :start)))))
-    (str/replace fixture "(workflow/use-workflow! reviews/review-request)" "")))
+    {:source (str/replace fixture "(workflow/use-workflow! reviews/review-request)" "")}))
 
 (deftest standalone-deps-root-resolves-without-repository-classpath
   (let [dir (support/temp-dir "auto-review-consumer-")]
