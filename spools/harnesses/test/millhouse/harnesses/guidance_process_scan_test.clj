@@ -64,8 +64,7 @@
          :stderr-overflow
          (str "exec /usr/bin/awk 'BEGIN { for (i=0; i<80000; i++) "
               "print \"scanner\" > \"/dev/stderr\" }'\n")
-         :stalled "while :; do :; done\n"
-         :exited "printf '1 1\\n'; exit 0\n")))
+         :stalled "while :; do :; done\n")))
 
 (defn- finalize-profile [profile]
   (assoc-in profile [:process-ownership :reviewed-closure-sha256]
@@ -178,36 +177,27 @@
   (.waitFor process 5 TimeUnit/SECONDS))
 
 (deftest completed-direct-scanner-does-not-require-a-live-birth-observation
-  (with-scanner-profile
-    :exited
-    (fn [{:keys [root profile]}]
-      (let [original-direct identity/retain-direct
-            completed (atom nil)
-            sentinel (start-sleep!)
-            deadline (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 3))]
-        (try
-          (let [rows
-                (with-redefs
-                 [identity/retain-direct
-                  (fn [handle role destroy!]
-                    (let [retained (original-direct handle role destroy!)]
-                      ;; Force the legal fast-exit interleaving without a sleep.
-                      (while (.isAlive ^ProcessHandle handle)
-                        (when-not (< (System/nanoTime) deadline)
-                          (throw (ex-info "Fixture scanner did not exit" {})))
-                        (Thread/yield))
-                      (reset! completed retained)
-                      retained))]
-                  (scan/scan! (dissoc profile :effective-environment)
-                              (:effective-environment profile) root
-                              (str (io/file root "scanner.sh")) deadline
-                              #(- % (System/nanoTime))))]
-            (is (= [{:pid 1 :pgid 1}] rows))
-            (is (:direct? @completed))
-            (is (not (identity/live? @completed)))
-            (is (.isAlive sentinel)))
-          (finally
-            (stop! sentinel)))))))
+  ;; Prove the completed-child decision without racing scanner startup or
+  ;; closure hashing against its independent production deadline.
+  (let [process (.start (ProcessBuilder. ^java.util.List ["/usr/bin/true"]))
+        handle (.toHandle process)
+        direct (identity/retain-direct handle "direct-ownership-scanner"
+                                       (fn [] (.destroyForcibly process)))
+        observed? (atom false)]
+    (try
+      (is (.waitFor process 3 TimeUnit/SECONDS))
+      (is (not (.isAlive process)))
+      (with-redefs [identity/retain
+                    (fn [observed role]
+                      (reset! observed? true)
+                      (is (= handle observed))
+                      (is (= "ownership-scanner" role))
+                      (throw (ex-info "Fixture scanner birth unavailable" {})))]
+        (is (identical? direct (scan/retain-scanner! process direct))))
+      (is @observed?)
+      (is (not (identity/live? direct)))
+      (finally
+        (stop! process)))))
 
 (deftest live-scanner-with-unavailable-birth-still-fails-and-is-cleaned
   (with-scanner-profile

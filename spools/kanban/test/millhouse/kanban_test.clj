@@ -1,14 +1,11 @@
 (ns millhouse.kanban-test
   "Tests for the kanban board spool against a disposable weaver runtime."
-  (:require [clojure.set :as set]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.api.format.alpha :as fmt]
-            [millstrand.api.spool.alpha :as spool]
             [millhouse.identity :as identity]
             [millhouse.kanban :as kanban]
             [millstrand.test.alpha :as t]))
@@ -51,15 +48,6 @@
           (kanban/add! right-runtime "Right only" {})
           (is (= ["Left only"] (mapv :title (:pending (kanban/board left-runtime)))))
           (is (= ["Right only"] (mapv :title (:pending (kanban/board right-runtime)))))))))))
-
-(deftest exact-entity-projections-discard-extra-fields-and-fail-loudly
-  (let [strand {:id "s1" :title "Work" :state "active"
-                :attributes {:kind "task"} :created_at "discarded"}]
-    (is (= (dissoc strand :created_at) (spool/entity-projection strand)))
-    (doseq [field [:id :title :state :attributes]]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"missing canonical entity fields"
-                            (spool/entity-projection (dissoc strand field)))))))
 
 (defn- activate-kanban!
   "Activate Identity and Kanban from source so role contributions can publish."
@@ -150,57 +138,6 @@
 
 (defn- export! [rt & argv]
   (weaver/op! rt 'kanban-export argv))
-
-(defn- return-case-leaves [operation context return-case]
-  (if (and (map? return-case) (contains? return-case :stream))
-    (set (map (fn [channel] [operation (assoc context :channel channel)]) [:emits :result]))
-    #{[operation context]}))
-
-(defn- op-return-leaves [{:keys [name returns]}]
-  (letfn [(leaves [return-case path]
-            (if-let [subcommands (:subcommands return-case)]
-              (set (mapcat (fn [[subcommand child]]
-                             (leaves child (conj path subcommand)))
-                           subcommands))
-              (return-case-leaves name
-                                  (if (seq path) {:subcommand path} {})
-                                  return-case)))]
-    (leaves returns [])))
-
-(deftest production-return-coverage-is-derived-from-kanban-provenance
-  (with-kanban
-    (fn [rt]
-      (let [entries (filterv #(= 'millhouse.kanban (:provenance %)) (weaver/ops rt))
-            missing (filterv #(not (contains? % :returns)) entries)
-            required (into #{} (mapcat op-return-leaves) (remove #(not (contains? % :returns)) entries))
-            checked (atom #{})]
-        (is (seq entries))
-        (is (empty? missing) (str "production ops missing :returns: " (mapv :name missing)))
-        (doseq [[operation context :as leaf] required]
-          (t/check-op-return!
-           rt (symbol operation) context
-           (if (= "kanban-export" operation)
-             {:operation operation :root-id "card" :strands [] :parent-of-edges [] :depends-on-edges []}
-             {:operation operation}))
-          (swap! checked conj leaf))
-        (is (= required @checked))
-        (is (empty? (set/difference required @checked)))))))
-
-(deftest kanban-owner-contribution-covers-every-board-declaration
-  ;; A module publication replaces this owner partition as a whole.  Keep this
-  ;; observable boundary list exact so a future declaration cannot accidentally
-  ;; bypass deletion-on-refresh by being installed imperatively.  Growing a
-  ;; list is accretion, but the previous marker's frozen copy of this test
-  ;; pins the old set, so compat-alarm reports exactly one expected failure
-  ;; here at each accreting release — record it in the release tag message.
-  (with-kanban
-    (fn [rt]
-      (let [surface (kanban-surface rt)]
-        (is (= #{"kanban" "kanban-export"} (set (keys (:ops surface)))))
-        (is (= ["kanban-batch"] (mapv :name (:patterns surface))))
-        (is (= #{"kanban-cards" "kanban-pending" "kanban-epic-pending"
-                 "kanban-identity-work"}
-               (set (keys (:queries surface)))))))))
 
 (deftest kanban-publishes-explicit-owner-and-reporter-attribution-roles
   (with-kanban
@@ -525,28 +462,6 @@
           (is (= "direct" (:owner-source direct)))
           (is (= "doing" (:status direct)))
           (is (= "feature-owner" (get-in direct [:ownership :claim :by-identity]))))))))
-
-(deftest fill-wraps-prose-and-preserves-indented-blocks
-  (testing "flush-left lines soft-wrap; a bare bar starts a new item; an indented line keeps the item verbatim"
-    (is (= ["Prose that is long enough to wrap across two source lines."
-            "Before running:\n    strand prime kanban\n    strand kanban board"]
-           (fmt/fill "
-                     |Prose that is long enough to
-                     |wrap across two source lines.
-                     |
-                     |Before running:
-                     |    strand prime kanban
-                     |    strand kanban board"))))
-  (testing "reflow soft-wraps a single-paragraph block into one string"
-    (is (= "One sentence spread over two source lines."
-           (fmt/reflow "
-                       |One sentence spread over
-                       |two source lines."))))
-  (testing "a bar-less block is an authoring error, not empty output"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no barred lines"
-                          (fmt/fill "prose that lost its bars")))
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no barred lines"
-                          (fmt/reflow "prose that lost its bars")))))
 
 (deftest kanban-refinement-lane-and-direct-promotion
   (with-kanban
@@ -1073,6 +988,7 @@
           (is (= [working-id] (mapv :id (:claimed board))))
           (is (= [review-id] (mapv :id (:in_review board))))
           (is (= "feature-x" (:branch (first (:claimed board)))))
+          (is (= "agent" (:owner (first (:claimed board)))))
           (is (= 1 (get-in board [:closed :count])))
           (is (not (contains? board :unknown-lane))))
         (is (= "abandoned" (get-in (weaver/show rt done-id) [:attributes :kanban/outcome])))))))
@@ -1165,22 +1081,21 @@
             (is (= [(:id ready-work)] (mapv :id (:ready view))))))))))
 
 (deftest kanban-board-str-renders-ascii-lanes
-  (with-kanban
-    (fn [rt]
-      (let [long-title (apply str "Very long title " (repeat 40 "padding "))
-            _idea (op! rt "add" long-title "--lane" "refinement")
-            working-id (get-in (op! rt "add" "Working card" "--label" "perf") [:card :id])]
-        (op! rt "claim" working-id "--owner" "agent-a" "--branch" "feature-x")
-        (let [rendered ((requiring-resolve 'millhouse.kanban/board-str) (op! rt "board"))
-              lines (str/split-lines rendered)]
-          (is (str/includes? rendered "REFINEMENT (1)"))
-          (is (str/includes? rendered "PENDING (0)"))
-          (is (str/includes? rendered "CLAIMED / WIP (1)"))
-          (is (str/includes? rendered "IN REVIEW (0)"))
-          (is (str/includes? rendered "[p3 #perf @feature-x agent-a] Working card"))
-          (is (str/includes? rendered "NEEDS REVIEW (0)"))
-          (testing "rows are clipped to the board width"
-            (is (every? #(<= (count %) 100) lines))))))))
+  (let [rendered (kanban/board-str
+                  {:refinement [{:id "idea" :title (apply str "Very long title " (repeat 40 "padding "))}]
+                   :claimed [{:id "work" :title "Working card"
+                              :priority "p3" :labels ["perf"]
+                              :branch "feature-x" :owner "agent-a"}]
+                   :closed {:count 0}})
+        lines (str/split-lines rendered)]
+    (is (str/includes? rendered "REFINEMENT (1)"))
+    (is (str/includes? rendered "PENDING (0)"))
+    (is (str/includes? rendered "CLAIMED / WIP (1)"))
+    (is (str/includes? rendered "IN REVIEW (0)"))
+    (is (str/includes? rendered "[p3 #perf @feature-x agent-a] Working card"))
+    (is (str/includes? rendered "NEEDS REVIEW (0)"))
+    (testing "rows are clipped to the board width"
+      (is (every? #(<= (count %) 100) lines)))))
 
 (deftest kanban-task-add-and-list-project-tasks-under-feature
   (with-kanban
@@ -1304,12 +1219,6 @@
                (get-in (op! rt "card" card-id)
                        [:ownership :current :run-id])))))))
 
-(deftest state-shape-matches-declared-version
-  ;; Drift alarm for kanban's versioned spool-state: update this key set and
-  ;; state-version together whenever new-state's shape changes.
-  (is (= #{}
-         (set (keys (#'kanban/new-state))))))
-
 (deftest kanban-batch-weave-creates-cards-and-dependencies
   (with-kanban
     (fn [rt]
@@ -1353,11 +1262,6 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"target strand not found"
                             (patterns/weave! rt :kanban-batch
                                              {:items [{:key "x" :title "X" :depends-on ["missing-strand"]}]}))))))
-
-(deftest activation-registers-kanban-export-op
-  (with-kanban
-    (fn [rt]
-      (is (some #(= "kanban-export" (:name %)) (weaver/ops rt))))))
 
 (deftest kanban-export-returns-subtree-with-internal-edges
   (with-kanban

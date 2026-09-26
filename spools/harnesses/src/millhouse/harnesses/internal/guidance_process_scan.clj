@@ -214,6 +214,20 @@
       (timed-out! "budget"))
     (min latest bounded)))
 
+(defn retain-scanner!
+  "Retain a scanner birth, accepting direct custody only after process exit.
+
+  A fast scanner may exit before its birth can be observed. Its directly
+  created handle still owns that completed process; never reacquire a PID
+  or excuse an unavailable birth while the scanner remains live."
+  [^Process process direct-scanner]
+  (try
+    (identity/retain (.toHandle process) "ownership-scanner")
+    (catch clojure.lang.ExceptionInfo error
+      (if (.isAlive process)
+        (throw error)
+        direct-scanner))))
+
 (defn scan!
   "Run one reviewed cleanup scanner with independent bounded drains."
   [profile process-environment root scanner deadline remaining-nanos]
@@ -259,19 +273,10 @@
                     (reset! direct-scanner direct)
                     (reset! scanner-identity direct)
                     started))))
-             handle (.toHandle scanner-process)
              retained
              (admission-deadline/bounded!
               budget "ownership-scanner-identity"
-              #(try
-                 (identity/retain handle "ownership-scanner")
-                 (catch clojure.lang.ExceptionInfo error
-                   ;; A fast scanner may exit before its birth can be observed.
-                   ;; Its directly created handle still owns this completed
-                   ;; process; never reacquire a PID or excuse a live scanner.
-                   (if (.isAlive scanner-process)
-                     (throw error)
-                     @direct-scanner))))
+              #(retain-scanner! scanner-process @direct-scanner))
              _ (reset! scanner-identity retained)
              io-executor (Executors/newFixedThreadPool 2 (thread-factory))
              _ (reset! executor io-executor)
