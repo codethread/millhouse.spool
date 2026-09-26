@@ -25,7 +25,7 @@
 (defn- delivery [autonomous?]
   (let [failure-instruction
         (if autonomous?
-          (fn [{:keys [card]}] (autonomous/failure-policy card))
+          (fn [{:keys [card]}] (autonomous/validation-failure-policy card))
           "Await this executor-owned gate. Inspect failures, repair the cause, then explicitly clear gate/error to retry. Never manually assert a passing result.")]
     (apply
      workflow/workflow
@@ -54,7 +54,7 @@
              Do not start land yet; the following steps own the review handoff.
 
              {failure-policy}
-           " {:card card :failure-policy (if autonomous? (autonomous/failure-policy card) "")})))
+           " {:card card :failure-policy (if autonomous? (autonomous/validation-failure-policy card) "")})))
        (shell-gate :quality "Pass repository quality checks" [:implement]
                    ["bash" ".millstrand/land-quality.sh"] 5400 failure-instruction)
        (workflow/step

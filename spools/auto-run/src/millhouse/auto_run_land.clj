@@ -10,11 +10,11 @@
   (s/keys :req-un [::land/card ::land/feature ::land/branch ::land/worktree]))
 
 (defn failure-policy
-  "Render the full-land workflow's stop and custody rules."
+  "Render the handoff and landing stop rules, after delivery validation."
   [card]
   (format/prose
    "
-     Delivery-gate, handoff or landing failures require explicit recovery.
+     Handoff, custody or landing failures require explicit recovery.
      Leave card {card} open unless landing has already completed. Retain and
      record owned resources and any held merge reservation. Do not clear gate
      errors, retry failed gates, spawn replacements or withdraw the merge turn.
@@ -23,6 +23,49 @@
      Normal queue waits and await timeouts are not failures; reissue bounded waits.
 
      Follow the assigned blocker contract when reporting; preserve its evidence.
+   " {:card card}))
+
+(defn validation-failure-policy
+  "Render agent repair authority for implementation and pre-review validation.
+
+  Diagnosis belongs to the assigned agent. This guidance grants scoped repair,
+  not permission to bypass executor results or handoff and landing custody."
+  [card]
+  (format/prose
+   "
+     You own defects in your work. Before review or finisher acceptance, diagnose
+     failed quality or CI checks and repair failures caused by your changes or
+     covered by card {card}'s assigned scope. This includes flaky tests introduced
+     by your changes or explicitly assigned for repair. Continue without asking
+     for human approval; keep the card claimed while actively repairing it.
+
+     Inspect the failing logs and exact commit. Record the cause, supporting
+     evidence and proposed repair on the card. An unrelated existing flaky test,
+     CI infrastructure outage, unavailable credentials or an uncertain cause is
+     a systemic/unknown blocker: preserve the failure and report it through the
+     assigned blocker contract. Do not rerun unchanged checks hoping for green,
+     widen scope, weaken assertions or raise production limits to hide failure.
+
+     For a scoped repair, retain the failed gate ID, commit, exit code and output
+     in a durable note before retrying. Fix the cause, verify the regression,
+     commit and push the repaired revision, and update the PR when one exists.
+     After any source change, run .millstrand/land-quality.sh on that committed
+     revision and record its successful result before retrying CI. Earlier
+     quality or review evidence does not validate a changed revision.
+
+     Re-read the existing workflow frontier and failed gate. Require pre-review
+     validation, no accepted review or finisher, a terminal failed shell attempt,
+     and no shell/running, shell/attempt-id or shell/custody-handle. Never clear
+     live or uncertain custody. For a validation/recipe gate, inspect and use
+     workflow retry-validation; never bypass its refusal. For an ordinary shell
+     validation gate, remove only gate/error with a JSON null attribute patch
+     after recording the evidence. The executor must run the check again; never
+     complete a gate manually, reopen passed steps or replace the workflow.
+
+     Continue review and autonomous landing only after quality and CI pass for
+     the repaired exact HEAD. This authority does not cover handoff, custody,
+     queue or landing failures; those retain the explicit recovery boundary.
+     Normal queue waits and await timeouts are not failures; reissue bounded waits.
    " {:card card}))
 
 (defn- instruction [text]

@@ -6,7 +6,7 @@
             [millhouse.harnesses.internal.guidance-process-cleanup :as cleanup]
             [millhouse.harnesses.internal.guidance-process-identity :as identity]
             [millhouse.harnesses.internal.guidance-process-scan :as scan])
-  (:import [java.io BufferedReader InputStreamReader]
+  (:import [java.io BufferedReader ByteArrayInputStream InputStreamReader]
            [java.lang ProcessHandle]
            [java.util.concurrent Executors TimeUnit]))
 
@@ -151,45 +151,56 @@
               (stop-handle! process))
             (stop! sentinel)))))))
 
-(deftest confirming-scanner-failure-keeps-only-earlier-proven-authority
-  (let [anchor-process (start-sleep!)
-        sibling-process (start-sleep!)
-        unconfirmed-process (start-sleep!)
-        sentinel (start-sleep!)
-        executor (Executors/newSingleThreadExecutor)
-        anchor (identity/retain (.toHandle anchor-process) "anchor")
-        sibling (identity/retain (.toHandle sibling-process) "proven-sibling")
-        pgid (:pid anchor)
-        rows [{:pid pgid :pgid pgid}
-              {:pid (.pid unconfirmed-process) :pgid pgid}]
-        scan-count (atom 0)
-        error
+(deftest first-and-confirming-scanner-failures-preserve-proven-custody
+  ;; Cleanup starts with real, retained births. Scanner timing and classification
+  ;; are separate contracts; neither may prevent this failure path being tested.
+  (doseq [[phase fail-at] [[:first 1] [:confirming 2]]]
+    (testing (name phase)
+      (let [anchor-process (start-sleep!)
+            helper-process (start-sleep!)
+            unconfirmed-process (start-sleep!)
+            sentinel (start-sleep!)
+            executor (Executors/newSingleThreadExecutor)
+            closed? (atom false)
+            stream (proxy [ByteArrayInputStream] [(byte-array 0)]
+                     (close [] (reset! closed? true)))
+            anchor (identity/retain (.toHandle anchor-process) "anchor")
+            helper (identity/retain (.toHandle helper-process) "helper")
+            pgid (:pid anchor)
+            rows [{:pid pgid :pgid pgid}
+                  {:pid (.pid unconfirmed-process) :pgid pgid}]
+            scan-count (atom 0)
+            scan-failure (ex-info "Fixture cleanup scanner failed" {:phase phase})]
         (try
-          (with-redefs [scan/scan!
-                        (fn [& _]
-                          (if (= 1 (swap! scan-count inc))
-                            rows
-                            (throw (ex-info "confirming scanner failed" {}))))]
-            (failure
-             #(cleanup/cleanup-owned!
-               (atom {:anchor anchor
-                      :pgid pgid
-                      :proven-children [sibling]})
-               executor [] nil nil nil nil
-               (+ (System/nanoTime) 400000000) remaining)))
+          (let [error
+                (with-redefs [scan/scan!
+                              (fn [& _]
+                                (if (= fail-at (swap! scan-count inc))
+                                  (do
+                                    (is (identity/live? anchor))
+                                    (is (identity/live? helper))
+                                    (throw scan-failure))
+                                  rows))]
+                  (failure
+                   #(cleanup/cleanup-owned!
+                     (atom {:anchor anchor :helper helper :pgid pgid})
+                     executor [stream] nil nil nil nil
+                     (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 3))
+                     remaining)))]
+            (is (identical? scan-failure error))
+            (is (empty? (.getSuppressed error)))
+            (is (= fail-at @scan-count))
+            (is (not (.isAlive anchor-process)))
+            (is (not (.isAlive helper-process)))
+            (is (.isAlive unconfirmed-process))
+            (is (.isAlive sentinel))
+            (is @closed?)
+            (is (.isTerminated executor)))
           (finally
-            (.shutdownNow executor)))]
-    (try
-      (is (= "confirming scanner failed" (ex-message error)))
-      (is (= 2 @scan-count))
-      (is (not (.isAlive anchor-process)))
-      (is (not (.isAlive sibling-process)))
-      (is (.isAlive unconfirmed-process))
-      (is (.isAlive sentinel))
-      (finally
-        (doseq [process [anchor-process sibling-process unconfirmed-process
-                         sentinel]]
-          (stop! process))))))
+            (.shutdownNow executor)
+            (doseq [process [anchor-process helper-process unconfirmed-process
+                             sentinel]]
+              (stop! process))))))))
 
 (deftest anchor-loss-before-promotion-never-adopts-a-group-replacement
   (let [{anchor-process :anchor output :output

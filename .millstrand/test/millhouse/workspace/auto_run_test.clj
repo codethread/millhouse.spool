@@ -5,6 +5,7 @@
             [clojure.data.json :as json]
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.auto-run :as auto-run]
+            [millhouse.auto-run-land :as autonomous]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -73,7 +74,17 @@
           (testing "repository policy delegates full landing to the shared two-role workflow"
             (is (some? worker))
             (is (some? finisher))
-            (is (not= (:id worker) (:id finisher)))))))))
+            (is (not= (:id worker) (:id finisher))))
+          (testing "only pre-review validation grants scoped repair authority"
+            (let [validation-gates (filter #(= "shell" (attr-get % :workflow/gate)) strands)
+                  repair (autonomous/validation-failure-policy "fixture-card")
+                  handoff (attr-get worker :workflow/instruction)]
+              (is (= 2 (count validation-gates)))
+              (is (every? #(= repair (attr-get % :workflow/instruction)) validation-gates))
+              (is (re-find #"repair failures caused by your changes" repair))
+              (is (re-find #"systemic/unknown blocker" repair))
+              (is (re-find #"Handoff, custody or landing failures require explicit recovery" handoff))
+              (is (not (re-find #"repair failures caused by your changes" handoff))))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
