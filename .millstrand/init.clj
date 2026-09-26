@@ -17,6 +17,11 @@
 ;; deliberately last.
 (config/register! runtime)
 
+(runtime/module! runtime :millhouse/workspace-reviewers
+                 {:file "me/agents/reviewers.clj"
+                  :after [:millhouse/config-reviewers]
+                  :required? true})
+
 ;; --- Workflow and shell provider surfaces ----------------------------------
 (runtime/module! runtime :millhouse/workflow-all
                  {:ns 'millhouse.workflow.spool
@@ -65,7 +70,8 @@
 ;; Activate the sole shared :agent executor only after every consumer workflow,
 ;; alias election, and reviewer declaration is reconciled.
 (config/register-executor!
- runtime [:millhouse/workflow-all
+ runtime [:millhouse/workspace-reviewers
+          :millhouse/workflow-all
           :devflow
           :devflow/kanban-adapter
           :millhouse/config

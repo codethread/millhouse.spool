@@ -44,7 +44,8 @@
   (slurp (io/file workspace-root "init.clj")))
 (def ^:private workspace-files
   (into {}
-        (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"]]
+        (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"
+                    "me/agents/reviewers.clj"]]
           [path (slurp (io/file workspace-root path))])))
 
 (deftest bootstrap-registers-catalog-and-reviewers-without-an-executor
@@ -317,7 +318,7 @@
                                      (weaver/op! rt 'workflow ["list"]))))
           op-names (set (map :name (weaver/ops rt)))]
       (is (contains? aliases "sol"))
-      (is (= ["docs-and-tests" "runtime-correctness" "source-form"]
+      (is (= ["docs-and-tests" "runtime-correctness" "source-form" "test-layering"]
              (mapv :name (:reviewers reviewer-result))))
       (is (every? workflows ["auto-full-land" "auto-human-review" "land"]))
       (is (contains? op-names "auto-run"))

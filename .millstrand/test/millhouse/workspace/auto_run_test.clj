@@ -6,6 +6,8 @@
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-land :as autonomous]
+            [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.reviewers :as reviewers]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -22,7 +24,8 @@
                                        (assoc % :local/root (.getCanonicalPath (io/file root)))
                                        %))})
      :init-clj (slurp "init.clj")
-     :files (into {} (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"]]
+     :files (into {} (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"
+                                 "me/agents/reviewers.clj"]]
                        [path (slurp path)]))}))
 
 (defn- role-step [strands role]
@@ -37,6 +40,23 @@
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "workspace policy adds its lens without replacing shared reviewers"
+        (let [catalog (into {} (map (juxt :name identity)) (reviewers/reviewers rt))
+              lens (get catalog "test-layering")]
+          (is (every? #(contains? catalog %)
+                      ["source-form" "docs-and-tests" "runtime-correctness"]))
+          (is (= ["test-layer-reviewer"] (:seats lens)))
+          (is (= {:harness/model "deepseek/deepseek-flash"
+                  :harness/effort "max"}
+                 (select-keys (:generated (harnesses/resolve-harness rt :test-layer-reviewer))
+                              [:harness/model :harness/effort])))
+          (harnesses/set-flag! rt :seat/allow-china false)
+          (is (false? (:available (harnesses/availability rt :test-layer-reviewer))))
+          (harnesses/set-flag! rt :seat/allow-china true)
+          (is (= ["PR" "Tests" "Test-layering"] (:labels lens)))
+          (is (= ["test/**" "spools/*/test/**" "spools/*/*/test/**"
+                  ".millstrand/test/**"]
+                 (:glob lens)))))
       (let [card (weaver/add! rt {:title "Blocked work"})
             evidence (weaver/add! rt {:title "Decision context"})]
         (weaver/op! rt 'weave
@@ -58,7 +78,7 @@
           (testing "repository policy retains the human review boundary"
             (is (= ["reviewed"] (:choices checkpoint)))
             (is (some #(= ["bash" ".millstrand/land-quality.sh"]
-                           (attr-get % :shell/argv)) strands)
+                          (attr-get % :shell/argv)) strands)
                 "The automatic gate uses the same single lock owner as Land")
             (is (= ["millhouse.land.card-actions/review-card!"]
                    (keep #(attr-get % :code/fn) strands)))
