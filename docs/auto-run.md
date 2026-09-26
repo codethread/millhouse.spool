@@ -67,10 +67,31 @@ worker returns immediately and never completes any finisher phase. The finisher
 uses explicit --step selectors because its custody anchor remains ready beside
 its current phase; it closes that anchor last, after verified landing.
 
-Follow the shared [agent blocker contract](processes/auto-run.md#agent-blocker-contract). Full-land failures leave
-the delivery open and retain owned resources and merge reservations; do not retry,
-replace workers, clear gate errors, or withdraw a merge turn without explicit
-recovery authorization. Normal bounded queue waits are not failures.
+Before review or finisher acceptance, workers diagnose failed quality and CI
+checks and repair defects caused by their changes or covered by the assigned
+scope without human approval. This includes flaky tests introduced by the change
+or explicitly assigned for repair. Keep the card `claimed` during active repair.
+Record the failing commit, gate, exit/output and cause evidence before retrying.
+Commit and push the repair, update the PR, and rerun `.millstrand/land-quality.sh`
+on the repaired revision before retrying CI; previous quality evidence does not
+cover a changed HEAD. The executor must verify the new check result.
+
+Unrelated existing flakes, infrastructure outages, unavailable credentials and
+uncertain causes remain blockers. Follow the shared
+[agent blocker contract](processes/auto-run.md#agent-blocker-contract), preserving
+the diagnosis and exact requested intervention. Do not rerun unchanged failures
+hoping for green, weaken assertions or raise production limits to hide failure.
+
+Only retry the existing pre-review validation gate after its failed shell attempt
+is terminal and its running/attempt/custody attributes are absent. An opted-in
+`validation/recipe` gate uses `workflow retry-validation`; never bypass a refusal.
+For an ordinary shell gate, a JSON null patch removes only `gate/error` after
+recording the failure. Never complete executor gates manually or repour the run.
+
+Handoff, custody, queue and landing failures still leave delivery open and retain
+owned resources and merge reservations. Do not replace workers, clear those gate
+errors, or withdraw a merge turn without explicit recovery authorization. Normal
+bounded queue waits are not failures.
 
 ## Authorized recovery
 

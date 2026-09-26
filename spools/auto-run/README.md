@@ -35,6 +35,15 @@ verification, signoff and landing observation. A separate `auto-run/role=finishe
 custody anchor remains open across that entire finisher sequence; the same run
 serves it until verified delivery. Existing stored runs are not migrated.
 
+Repository delivery workflows can use `validation-failure-policy` for implementation
+and pre-review quality/CI gates: agents diagnose and repair their own scoped work,
+including assigned flaky-test repairs, while unrelated flakes, infrastructure and
+unknown failures require intervention. This is agent guidance, not an automated
+log classifier. It requires durable failure evidence, settled shell custody and
+fresh quality/CI at the repaired revision. `failure-policy` retains the separate
+explicit recovery boundary for handoff and landing; repair authority cannot bypass
+executor results, recipe refusals, finisher custody or queue ownership.
+
 `auto-run register-worker` is coordinator-only policy for explicitly authorized
 recovery, not another launch or an authorization mechanism. It requires the
 supported Harnesses `call-with-run-publication-lock` API; dependency activation
