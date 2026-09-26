@@ -5,112 +5,141 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      base:
+        description: Git revision to compare against
+        required: false
+        default: main
+        type: string
+      full:
+        description: Plan the full selection instead of the affected selection
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      has-tests: ${{ steps.select.outputs.has-tests }}
+      distribution: ${{ steps.select.outputs.distribution }}
+    steps:
+      - name: Checkout exact head with full history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Select affected quality gates
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          DISPATCH_BASE: ${{ inputs.base }}
+          DISPATCH_FULL: ${{ inputs.full }}
+        run: |
+          set -euo pipefail
+          base=""
+          full="false"
+          case "$EVENT_NAME" in
+            pull_request)
+              base="$PR_BASE"
+              ;;
+            push)
+              # Use the previous tip of the branch, never main itself, so a
+              # push to main selects the commits it introduced.
+              base="$PUSH_BEFORE"
+              if [ "$base" = "0000000000000000000000000000000000000000" ]; then
+                echo "::warning::Push event has no previous commit; planning the explicit full selection."
+                full="true"
+              fi
+              ;;
+            workflow_dispatch)
+              base="$DISPATCH_BASE"
+              full="$DISPATCH_FULL"
+              # Exact-SHA checkout is detached: fetched branches live under
+              # origin/, not local branch names. Also accept SHAs and tags.
+              if git show-ref --verify --quiet "refs/remotes/origin/$base"; then
+                base="origin/$base"
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
+          test -n "$base" \
+            || { echo "::error::No base revision for $EVENT_NAME event" >&2; exit 1; }
+
+          args=(--base "$base")
+          if [ "$full" = "true" ]; then
+            args+=(--full)
+          fi
+          plan_json="$(clojure -M:affected "${args[@]}" --json)"
+          printf '%s\n' "$plan_json" | jq .
+          {
+            echo "matrix=$(printf '%s' "$plan_json" | jq -c '.matrix')"
+            echo "has-tests=$(printf '%s' "$plan_json" | jq -r '(.matrix.include | length) > 0')"
+            echo "distribution=$(printf '%s' "$plan_json" | jq -r '.distribution')"
+          } >> "$GITHUB_OUTPUT"
+
   checks:
+    name: Static checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact head
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
-      - name: Repository static analysis, documentation and Go checks
-        run: flock -w 180 /tmp/millstrand-test.lock make fmt-check lint reflect-check docs-check kanban-dash-check
+      - name: Static analysis and documentation checks
+        run: flock -w 180 /tmp/millstrand-test.lock make fmt-check lint reflect-check docs-check
 
   tests:
-    name: Tests (${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    name: Suite (${{ matrix.name }})
+    needs: plan
+    if: ${{ needs.plan.outputs.has-tests == 'true' }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - shard: workflow
-            namespaces: >-
-              millhouse.workflow-test
-              millhouse.millstrand-workflows-test
-          - shard: cli
-            namespaces: >-
-              millhouse.workflow-cli-test
-              millhouse.workflow-run-cli-test
-              millhouse.executor-discovery-test
-          - shard: executors
-            namespaces: >-
-              millhouse.executors.shell-test
-              millhouse.executors.code-test
-              millhouse.identity-test
-          - shard: runtime
-            namespaces: >-
-              millhouse.auto-review-test
-              millhouse.auto-run-test
-              millhouse.kanban-test
-              millhouse.cron.runtime-test
-              millhouse.chime-test
-              millhouse.consumer-test
-              millhouse.e2e.cron.lifecycle-test
-              millhouse.authoring-forms-test
-              millhouse.package-layout-test
-          - shard: land
-            namespaces: >-
-              millhouse.land.merge-queue-test
-              millhouse.land.scripts-test
-              millhouse.land.workflow-test
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact head with full history
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: ./.github/actions/setup
-      - name: Package-local linter configuration
-        run: flock -w 180 /tmp/millstrand-test.lock make kondo-import
-      - name: Focused test shard
-        run: flock -w 180 /tmp/millstrand-test.lock make test TEST_NAMESPACES="$NAMESPACES"
-        env:
-          NAMESPACES: ${{ matrix.namespaces }}
-          MILLSTRAND_TEST_AWAIT_SCALE: '3'
-
-  packages:
-    name: Package (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # The imported native-v1 resolver intentionally supports Darwin only.
-          - target: harnesses-check
-            plugins: 'true'
-            os: macos-latest
-          - target: devflow-check
-            plugins: 'false'
-            os: ubuntu-latest
-          - target: config-check
-            plugins: 'false'
-            os: ubuntu-latest
-          - target: workspace-test
-            plugins: 'false'
-            os: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: ./.github/actions/setup
         with:
           plugins: ${{ matrix.plugins }}
-      - name: Independent package gate
-        run: flock -w 180 /tmp/millstrand-test.lock make "$TARGET"
+      - name: Package-local linter configuration
+        if: ${{ matrix.target == 'test-root' }}
+        run: flock -w 180 /tmp/millstrand-test.lock make kondo-import
+      - name: Planned gate
+        run: flock -w 180 /tmp/millstrand-test.lock make "$TARGET" TEST_NAMESPACES="$NAMESPACES"
         env:
           TARGET: ${{ matrix.target }}
+          NAMESPACES: ${{ matrix.namespaces }}
           MILLSTRAND_TEST_AWAIT_SCALE: '3'
 
   distribution:
+    name: Distribution smoke
+    needs: plan
+    if: ${{ needs.plan.outputs.distribution == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact head
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
@@ -123,17 +152,46 @@ jobs:
 
   quality:
     if: ${{ always() }}
-    needs: [checks, tests, packages, distribution]
+    needs: [plan, checks, tests, distribution]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Require every package and integration gate
+      - name: Require every planned gate
         env:
+          PLAN_RESULT: ${{ needs.plan.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           TESTS_RESULT: ${{ needs.tests.result }}
-          PACKAGES_RESULT: ${{ needs.packages.result }}
           DISTRIBUTION_RESULT: ${{ needs.distribution.result }}
+          HAS_TESTS: ${{ needs.plan.outputs.has-tests }}
+          DISTRIBUTION: ${{ needs.plan.outputs.distribution }}
         run: |
-          test "$CHECKS_RESULT" = success
-          test "$TESTS_RESULT" = success
-          test "$PACKAGES_RESULT" = success
-          test "$DISTRIBUTION_RESULT" = success
+          test "$PLAN_RESULT" = success \
+            || { echo "Plan did not succeed ($PLAN_RESULT)" >&2; exit 1; }
+          test "$CHECKS_RESULT" = success \
+            || { echo "Static checks did not succeed ($CHECKS_RESULT)" >&2; exit 1; }
+
+          case "$TESTS_RESULT" in
+            success)
+              ;;
+            skipped)
+              test "$HAS_TESTS" = false \
+                || { echo "Suites were skipped although the plan selected gates" >&2; exit 1; }
+              ;;
+            *)
+              echo "Suites did not succeed ($TESTS_RESULT)" >&2
+              exit 1
+              ;;
+          esac
+
+          case "$DISTRIBUTION_RESULT" in
+            success)
+              ;;
+            skipped)
+              test "$DISTRIBUTION" = false \
+                || { echo "Distribution was skipped although the plan requested it" >&2; exit 1; }
+              ;;
+            *)
+              echo "Distribution did not succeed ($DISTRIBUTION_RESULT)" >&2
+              exit 1
+              ;;
+          esac

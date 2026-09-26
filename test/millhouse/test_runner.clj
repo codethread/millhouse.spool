@@ -7,7 +7,8 @@
 
 (def test-namespaces
   "All test namespaces, in stable reporting order."
-  '[millhouse.auto-review-test
+  '[millhouse.affected-test
+    millhouse.auto-review-test
     millhouse.auto-run-test
     millhouse.millstrand-workflows-test
     millhouse.authoring-forms-test
@@ -133,6 +134,11 @@
 
     (= ["--parallel-once"] args)
     {:mode :parallel :iterations 1 :namespaces test-namespaces}
+
+    (= "--parallel" (first args))
+    (if (or (empty? (rest args)) (some #(str/starts-with? % "--") (rest args)))
+      (throw (ex-info "--parallel requires explicit test namespaces" {:args args}))
+      (assoc (parse-args (rest args)) :mode :parallel))
 
     (some #(str/starts-with? % "--") args)
     (throw (ex-info "Unknown test-runner arguments" {:args args}))

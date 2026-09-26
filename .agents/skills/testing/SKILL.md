@@ -17,9 +17,10 @@ Ordinary cold/warm suite runs do not take `--workspace`. Use disposable `--works
 
 | When | What |
 | --- | --- |
-| Iterate a slice | `make test-warm NS="…"` — never Done-when |
-| Slice Done-when | `clojure -M:test <ns…>` |
-| Queue acceptance | `flock -w 3600 /tmp/millstrand-test.lock clojure -M:test`; `make test-go`; `make test-e2e`; `make fmt-check lint reflect-check docs-check` |
+| Iterate / slice Done-when | `clojure -M:test <ns…>` |
+| Inspect affected selection | `make test-plan` (default merge-base with `main`; override with `TEST_BASE=feature/parent`) |
+| Queue acceptance | `.millstrand/land-quality.sh` (owns the lock; runs static/docs checks and affected tests/package gates) |
+| Explicit full validation | `flock -w 180 /tmp/millstrand-test.lock make quality-full` |
 
 Notes:
 
