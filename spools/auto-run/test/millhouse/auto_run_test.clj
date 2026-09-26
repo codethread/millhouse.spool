@@ -1,8 +1,6 @@
 (ns millhouse.auto-run-test
-  "Disposable Weaver tests for card admission and durable assignment receipts."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.test :refer [deftest is testing]]
+  "Admission decisions and disposable publication, wake and receipt proofs."
+  (:require [clojure.test :refer [deftest is testing]]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-land :as autonomous]
             [millhouse.auto-run-reporting :as reporting]
@@ -57,16 +55,14 @@
    (defn no-land! [_rt _request] nil)
    (defn unreadable-land! [_rt _request]
      (throw (ex-info \"Land evidence store is offline\" {})))
-   (defn start-params! [_rt {:keys [card settings prepared]}]
+   (defn start-params! [rt {:keys [card settings prepared]}]
+     (weaver/update! rt (:id card) {:title \"Retitled feature\"})
      {:repository-param (str (:id card) \"/\" (:workflow settings) \"/\"
                              (:branch prepared))
       :review-scope (attr-get card :acme/review-scope)})
    (defn withdraw-start-params! [rt {:keys [card]}]
      (weaver/update! rt (:id card) {:attributes {:kanban/lane \"refinement\"}})
      {:repository-param \"withdrawn\"})
-   (defn retitle-start-params! [rt {:keys [card]}]
-     (weaver/update! rt (:id card) {:title \"Retitled feature\"})
-     {:repository-param \"retitled\"})
    (defn corrupt-start-params! [rt {:keys [card]}]
      (weaver/update! rt (:id card)
                      {:attributes
@@ -81,21 +77,13 @@
      (throw (ex-info \"No repository workflow parameters\" {})))")
 
 (defn- fixture-deps-edn []
-  (let [repository (-> (t/spool-checkout-root "millhouse/auto_run.clj")
-                       .getParentFile
-                       .getParentFile)
-        workspace (io/file repository ".millstrand")
-        deps (:deps (edn/read-string (slurp (io/file workspace "deps.edn"))))]
-    ;; Keep the workspace's selected Git coordinates and owned local roots.
-    (pr-str {:deps (update-vals deps
-                                #(if-let [root (:local/root %)]
-                                   (assoc % :local/root
-                                          (.getCanonicalPath (io/file workspace root)))
-                                   %))})))
+  (pr-str {:deps {'millhouse/auto-run
+                  {:local/root (str (t/spool-checkout-root "millhouse/auto_run.clj"))}}}))
 
 (defn- with-world [f]
   (t/with-weaver-world
-    [ctx {:storage :sqlite-file
+    ;; Serialized publication proofs do not require database reopen or contention.
+    [ctx {:storage :sqlite-memory
           :deps-edn (fixture-deps-edn)
           :init-clj
           "(require '[millstrand.api.current.alpha :as current]
@@ -374,18 +362,15 @@
                              [:kanban.label/auto-run "false"]
                              [:auto-run/status "assigned"] [:auto-run/status "error"]
                              [:auto-run/request-id "previous"]]]
-          (let [card (card! rt {key value})]
-            (is (not (auto-run/eligible? rt (weaver/show rt (:id card)))))))
-        (weaver/update! rt (:id unowned) {:state "closed"})
-        (is (not (auto-run/eligible? rt (weaver/show rt (:id unowned)))))))))
+          (is (not (auto-run/eligible?
+                    rt (assoc-in unowned [:attributes key] value)))))
+        (is (not (auto-run/eligible? rt (assoc unowned :state "closed"))))))))
 
 (deftest admission-respects-dependencies-overrides-capacity-and-replay
   (with-world
     (fn [rt _config]
       (let [blocker (weaver/add! rt {:title "Prerequisite"})
             blocked (card! rt {} [{:type "depends-on" :to (:id blocker)}])
-            unlabelled (card! rt {:kanban.label/auto-run nil})
-            refinement (card! rt {:kanban/lane "refinement"})
             owner (claim-card! rt (card! rt {}) "unresolved-manual-worker")
             selected (card! rt {:kanban/priority "p1" :auto-run/effort "low"})
             later (card! rt {:kanban/priority "p3"})
@@ -406,7 +391,7 @@
                    (set (keys (attr-get root :workflow/context)))))
             (is (= (:id selected)
                    (get (attr-get root :workflow/context) :card)))))
-        (doseq [untouched [blocked unlabelled refinement owner later]]
+        (doseq [untouched [blocked owner later]]
           (is (nil? (show rt untouched :auto-run/status))))
         (is (empty? (:dispatched (auto-run/scan! rt))))
         (testing "a terminal assignment does not automatically rearm its card"
@@ -431,24 +416,15 @@
             (is (= (str (:id card) "/deliver/auto/" (:id card))
                    (get (attr-get root :workflow/context) :repository-param)))
             (is (= "prepared"
-                   (get (attr-get root :workflow/context) :review-scope)))))
+                   (get (attr-get root :workflow/context) :review-scope)))
+            (is (= "Retitled feature"
+                   (get (attr-get root :workflow/context) :feature)))))
         (weaver/update! rt (:id card)
                         {:attributes {:auto-run/status "preparing" :auto-run/run-id nil}})
         (auto-run/scan! rt)
         (is (= run-id (show rt card :auto-run/run-id)))
+        (is (= "assigned" (show rt card :auto-run/status)))
         (is (= 1 (count (weaver/list rt [:= [:attr "harness/run"] "true"] {}))))))))
-
-(deftest callback-title-edits-reach-workflow-context
-  (with-world
-    (fn [rt config]
-      (auto-run/configure! rt (assoc config
-                                     :start-params 'auto-run.fixture/retitle-start-params!))
-      (let [card (card! rt {})]
-        (auto-run/scan! rt)
-        (current/with-runtime rt
-          (let [root (workflow/current-root (show rt card :auto-run/workflow-run-id))]
-            (is (= "Retitled feature" (get (attr-get root :workflow/context) :feature)))
-            (is (= (:id card) (get (attr-get root :workflow/context) :card)))))))))
 
 (deftest card-edits-during-workflow-parameter-callback-cancel-admission
   (with-world
@@ -523,17 +499,9 @@
         (current/with-runtime rt
           (is (nil? (workflow/current-root (show rt card :auto-run/workflow-run-id)))))))))
 
-(deftest interrupted-publication-adopts-but-incomplete-preparation-needs-intervention
+(deftest incomplete-preparation-needs-intervention
   (with-world
     (fn [rt _config]
-      (let [card (card! rt {})
-            run-id (get-in (auto-run/scan! rt) [:dispatched 0 :run])]
-        (weaver/update! rt (:id card)
-                        {:attributes {:auto-run/status "preparing" :auto-run/run-id nil}})
-        (auto-run/scan! rt)
-        (is (= run-id (show rt card :auto-run/run-id)))
-        (is (= "assigned" (show rt card :auto-run/status)))
-        (is (= 1 (count (weaver/list rt [:= [:attr "harness/run"] "true"] {})))))
       (let [card (card! rt {:auto-run/status "preparing" :auto-run/request-id "interrupted"})]
         (auto-run/scan! rt)
         (is (= "error" (show rt card :auto-run/status)))
