@@ -19,7 +19,8 @@ The current representative check requires the full commit SHA of a published
 
 The reproduction results and repository inventory below are historical evidence
 from 2026-09-13; their pre-v5 names are not current installation instructions.
-See the [v5 migration guide](../../v5.md) for current coordinates.
+See the [current consumption instructions](../../../README.md#consumption) for
+package coordinates and dependency selection.
 
 It is deliberately disposable. It creates a temporary exact-pin consumer with Millstrand and the macro-owning Chime package, sets a temporary `XDG_CONFIG_HOME` and LSP `:cache-path`, and removes all three temporary directories. It does not change human editor configuration or caches.
 

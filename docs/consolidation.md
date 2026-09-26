@@ -28,10 +28,10 @@ issues, and board records. Mechanical copies were byte-checked before integratio
 | [Codethread](https://github.com/codethread/codethread.spool) | `1dfbc9361db70da54961aaa1740133acb802076c` | `spools/config`, shared docs, reusable skills, verification scripts |
 | Millhouse baseline | `114ccb0f870c60eeebfaf60739aabd21f6413f7f` | Existing packages retained |
 
-The original consolidation preserved namespaces and coordinates. The subsequent
-[v5 breaking release](v5.md) unifies them under Millhouse; the tables below use
-the v5 names. The root catalog lists all
-packages; Harnesses also retains its package-local `spool.edn`, used to locate
+The original consolidation preserved namespaces and coordinates. The v5 breaking
+release unified them under Millhouse; the tables below use the current names.
+The root catalog lists all packages; Harnesses also retains its package-local
+`spool.edn`, used to locate
 the maintenance Cursor plugin relative to its own package rather than the
 monorepo. That manifest is a package boundary, not a second workspace.
 

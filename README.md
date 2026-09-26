@@ -33,8 +33,7 @@ and [migration, provenance, and board handoff](docs/consolidation.md).
 Experimental packages remain optional and may change independently. **v5 is a
 breaking release:** all coordinates use `millhouse/<package>` and Clojure
 namespaces use `millhouse.*`, without the former `spools` segment. No old-name
-aliases are shipped. See the [v5 migration](docs/v5.md). Ralph is not imported or
-activated.
+aliases are shipped. Ralph is not imported or activated.
 
 ## Consumption
 
