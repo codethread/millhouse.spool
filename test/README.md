@@ -4,6 +4,9 @@ Choose the cheapest sufficient proof by assertions, not the nearest fixture.
 Independent packages keep their own fixtures and classpaths; this directory is
 root-suite development infrastructure, not a dependency to add to a spool.
 
+See the [Workflow proof ownership map](../spools/workflow/test/README.md) for the
+compiler, authoring, spec, runtime, composition and publication partitions.
+
 ## Supported choices
 
 - **Pure/declaration:** ordinary `clojure.test`; use
