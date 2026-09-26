@@ -988,6 +988,7 @@
           (is (= [working-id] (mapv :id (:claimed board))))
           (is (= [review-id] (mapv :id (:in_review board))))
           (is (= "feature-x" (:branch (first (:claimed board)))))
+          (is (= "agent" (:owner (first (:claimed board)))))
           (is (= 1 (get-in board [:closed :count])))
           (is (not (contains? board :unknown-lane))))
         (is (= "abandoned" (get-in (weaver/show rt done-id) [:attributes :kanban/outcome])))))))
