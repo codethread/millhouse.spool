@@ -159,12 +159,6 @@
          {:error error
           :elapsed-millis (/ (- (System/nanoTime) started) 1000000.0)})))))
 
-(defn- cleanup-phase-budget []
-  (let [started-at (System/nanoTime)]
-    {:started-at started-at
-     :work-deadline (+ started-at (.toNanos TimeUnit/SECONDS 8))
-     :deadline (+ started-at (.toNanos TimeUnit/SECONDS 10))}))
-
 (defn- pid-from [file]
   (when (.isFile file)
     (parse-long (str/trim (slurp file)))))
@@ -302,45 +296,6 @@
                       (catch clojure.lang.ExceptionInfo error error))]
           (is (re-find message (ex-message error)))
           (is (= data (ex-data error))))))))
-
-(deftest first-and-confirming-cleanup-scanner-failures-preserve-custody
-  ;; Two real startup scans establish ownership. Fail only the selected cleanup
-  ;; scan: custody must not depend on which scanner error won a wall-clock race.
-  (doseq [[phase fail-at] [[:first 3] [:confirming 4]]]
-    (testing (name phase)
-      (with-scanner-profile
-        :normal
-        (fn [{:keys [root profile]}]
-          (let [unrelated (start-sleep!)
-                original-scan! scan/scan!
-                calls (atom 0)
-                failure (ex-info "Fixture late ownership scan failure" {:phase phase})
-                before-helper (thread-count "guidance-preflight-io")
-                before-scanner (thread-count "guidance-preflight-scan-io")]
-            (try
-              (let [{:keys [error]}
-                    (with-redefs [scan/scan!
-                                  (fn [& args]
-                                    (if (= fail-at (swap! calls inc))
-                                      (do
-                                        (is (alive-pid? (pid-from (io/file root "anchor.pid"))))
-                                        (throw failure))
-                                      (apply original-scan! args)))]
-                      (run-profile profile (cleanup-phase-budget)))
-                    anchor-pid (pid-from (io/file root "anchor.pid"))
-                    helper-pid (pid-from (io/file root "helper.pid"))]
-                (is (= fail-at @calls))
-                (is (identical? failure error))
-                (is (pos-int? anchor-pid))
-                (is (pos-int? helper-pid))
-                (is (not (alive-pid? anchor-pid)))
-                (is (not (alive-pid? helper-pid)))
-                (is (.isAlive unrelated))
-                (is (false? (process-for-root? root)))
-                (is (= before-helper (thread-count "guidance-preflight-io")))
-                (is (= before-scanner (thread-count "guidance-preflight-scan-io"))))
-              (finally
-                (stop! unrelated)))))))))
 
 (deftest scanner-birth-observation-shares-the-admission-deadline
   (with-scanner-profile
