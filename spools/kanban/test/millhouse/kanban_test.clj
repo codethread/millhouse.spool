@@ -6,7 +6,6 @@
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
-            [millstrand.api.spool.alpha :as spool]
             [millhouse.identity :as identity]
             [millhouse.kanban :as kanban]
             [millstrand.test.alpha :as t]))
