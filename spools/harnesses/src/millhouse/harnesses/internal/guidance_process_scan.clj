@@ -37,7 +37,11 @@
         (fail! "Guidance process ownership scan was interrupted"
                {:phase phase})))))
 
-(defn- capture! [input stream-name]
+(defn capture!
+  "Capture one scanner stream, rejecting bytes beyond the fixed capture limit.
+
+  The caller owns stream closure and any deadline around blocking reads."
+  [input stream-name]
   (let [output (ByteArrayOutputStream.)
         buffer (byte-array 4096)]
     (loop [total 0]
@@ -103,6 +107,15 @@
       (when-not (= (count pids) (count (distinct pids)))
         (fail! "Guidance process ownership scan contains duplicate PIDs" {}))
       rows)))
+
+(defn interpret-output!
+  "Validate a completed scanner's exit status and captured UTF-8 process rows."
+  [exit-code stdout-bytes stderr-bytes]
+  (let [stderr-text (decode-utf8 stderr-bytes "stderr")]
+    (when-not (zero? exit-code)
+      (fail! "Guidance preflight process ownership scan failed"
+             {:exit-code exit-code :diagnostic stderr-text}))
+    (parse-output! (decode-utf8 stdout-bytes "stdout"))))
 
 (defn- attempt-cleanup! [errors operation]
   (try
@@ -278,13 +291,9 @@
                               remaining-nanos "stdout")
                stderr-bytes
                (await-future! stderr-future scan-deadline
-                              remaining-nanos "stderr")
-               stderr-text (decode-utf8 stderr-bytes "stderr")]
-           (when-not (zero? (.exitValue scanner-process))
-             (fail! "Guidance preflight process ownership scan failed"
-                    {:exit-code (.exitValue scanner-process)
-                     :diagnostic stderr-text}))
-           (parse-output! (decode-utf8 stdout-bytes "stdout")))))
+                              remaining-nanos "stderr")]
+           (interpret-output! (.exitValue scanner-process)
+                              stdout-bytes stderr-bytes))))
      (fn []
        (when @process
          (cleanup-scanner! @process signal-scanner! scanner-identity

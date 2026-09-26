@@ -9,7 +9,10 @@
             [millhouse.harnesses.internal.guidance-process-identity :as identity]
             [millhouse.harnesses.internal.guidance-process-scan :as scan]
             [millhouse.harnesses.internal.strict-json :as strict-json])
-  (:import [java.lang ProcessHandle]
+  (:import [java.io ByteArrayInputStream]
+           [java.lang ProcessHandle]
+           [java.nio.charset StandardCharsets]
+           [java.util Arrays]
            [java.util.concurrent CountDownLatch TimeUnit]))
 
 (defn- capability-document []
@@ -45,47 +48,24 @@
        "});\n"))
 
 (defn- scanner-source [root mode]
-  (let [failure-mode (if (map? mode) (:mode mode) mode)
-        fail-at (when (map? mode) (:fail-at mode))
-        anchor (str (io/file root "anchor.pid"))
-        counter (str (io/file root "scanner.count"))
-        flood-count (if (contains? #{:stdout-overflow :stderr-overflow}
-                                   failure-mode)
-                      80000
-                      20000)]
-    (str "#!/bin/sh\n"
-         "if [ \"$1\" = \"-o\" ]; then\n"
-         "  printf '%s' \"$4\" > " (pr-str anchor) "\n"
-         "  exec /bin/ps \"$@\"\n"
-         "fi\n"
-         (when fail-at
-           (str "count=0\n"
-                "if [ -f " (pr-str counter) " ]; then "
-                "read -r count < " (pr-str counter) "; fi\n"
-                "count=$((count + 1))\n"
-                "printf '%s' \"$count\" > " (pr-str counter) "\n"
-                "if [ \"$count\" -ne \"" fail-at "\" ]; then\n"
-                "  exec /bin/ps \"$@\"\n"
-                "fi\n"))
-         (case failure-mode
-           :finite-flood
-           (str "/usr/bin/awk 'BEGIN { for (i=0; i<" flood-count
-                "; i++) print \"scanner\" > \"/dev/stderr\" }'\n"
-                "exec /bin/ps \"$@\"\n")
-           :stdout-overflow
-           (str "/usr/bin/awk 'BEGIN { for (i=0; i<" flood-count
-                "; i++) print \"1 1\" }'\n"
-                "exec /bin/ps \"$@\"\n")
-           :stderr-overflow
-           (str "/usr/bin/awk 'BEGIN { for (i=0; i<" flood-count
-                "; i++) print \"scanner\" > \"/dev/stderr\" }'\n"
-                "exec /bin/ps \"$@\"\n")
-           :stalled "while :; do :; done\n"
-           :exited "printf '1 1\\n'; exit 0\n"
-           :nonzero "printf 'scanner failed\\n' >&2; exit 7\n"
-           :malformed "printf 'not-a-process-row\\n'; exit 0\n"
-           :invalid-utf8 "printf '\\377'; exit 0\n"
-           :duplicate "printf '1 1\\n1 1\\n'; exit 0\n"))))
+  (str "#!/bin/sh\n"
+       "if [ \"$1\" = \"-o\" ]; then\n"
+       "  printf '%s' \"$4\" > " (pr-str (str (io/file root "anchor.pid"))) "\n"
+       "  exec /bin/ps \"$@\"\n"
+       "fi\n"
+       (case mode
+         :normal "exec /bin/ps \"$@\"\n"
+         :finite-flood
+         (str "/usr/bin/awk 'BEGIN { for (i=0; i<20000; i++) "
+              "print \"scanner\" > \"/dev/stderr\" }'\n"
+              "exec /bin/ps \"$@\"\n")
+         :stdout-overflow
+         "exec /usr/bin/awk 'BEGIN { for (i=0; i<80000; i++) print \"1 1\" }'\n"
+         :stderr-overflow
+         (str "exec /usr/bin/awk 'BEGIN { for (i=0; i<80000; i++) "
+              "print \"scanner\" > \"/dev/stderr\" }'\n")
+         :stalled "while :; do :; done\n"
+         :exited "printf '1 1\\n'; exit 0\n")))
 
 (defn- finalize-profile [profile]
   (assoc-in profile [:process-ownership :reviewed-closure-sha256]
@@ -280,29 +260,85 @@
         (is (= before-helper (thread-count "guidance-preflight-io")))
         (is (= before-scanner (thread-count "guidance-preflight-scan-io")))))))
 
+(deftest scanner-capture-enforces-the-byte-boundary-without-a-deadline-race
+  ;; Capture owns the byte boundary; subprocess tests own deadlines and retirement.
+  (doseq [stream-name ["stdout" "stderr"]]
+    (testing stream-name
+      (let [limit (* 256 1024)
+            bytes (byte-array limit (byte 97))]
+        (with-open [input (ByteArrayInputStream. bytes)]
+          (is (Arrays/equals bytes ^bytes (scan/capture! input stream-name))))
+        (with-open [input (ByteArrayInputStream. (byte-array (inc limit)))]
+          (let [error (try
+                        (scan/capture! input stream-name)
+                        nil
+                        (catch clojure.lang.ExceptionInfo error error))]
+            (is (re-find #"exceeded its byte limit" (ex-message error)))
+            (is (= stream-name (:stream (ex-data error))))
+            (is (= limit (:max-bytes (ex-data error))))))))))
+
+(deftest scanner-output-validation-does-not-race-process-deadlines
+  (let [utf8 #(.getBytes ^String % StandardCharsets/UTF_8)
+        valid (utf8 "1 1\n")
+        empty-bytes (byte-array 0)
+        invalid (byte-array [(unchecked-byte 255)])]
+    (is (= [{:pid 1 :pgid 1}]
+           (scan/interpret-output! 0 valid empty-bytes)))
+    (doseq [[label exit-code stdout stderr message data]
+            [["nonzero exit" 7 valid (utf8 "scanner failed\n")
+              #"ownership scan failed" {:exit-code 7 :diagnostic "scanner failed\n"}]
+             ["malformed row" 0 (utf8 "not-a-process-row\n") empty-bytes
+              #"scan output is malformed" {:line "not-a-process-row"}]
+             ["invalid stdout UTF-8" 0 invalid empty-bytes
+              #"not valid UTF-8" {:stream "stdout"}]
+             ["invalid stderr UTF-8" 0 valid invalid
+              #"not valid UTF-8" {:stream "stderr"}]
+             ["duplicate PID" 0 (utf8 "1 1\n1 1\n") empty-bytes
+              #"duplicate PIDs" {}]]]
+      (testing label
+        (let [error (try
+                      (scan/interpret-output! exit-code stdout stderr)
+                      nil
+                      (catch clojure.lang.ExceptionInfo error error))]
+          (is (re-find message (ex-message error)))
+          (is (= data (ex-data error))))))))
+
 (deftest first-and-confirming-cleanup-scanner-failures-preserve-custody
-  (doseq [[mode message]
-          [[:stdout-overflow #"exceeded its byte limit"]
-           [:stderr-overflow #"exceeded its byte limit"]
-           [:stalled #"scan timed out"]
-           [:nonzero #"ownership scan failed"]
-           [:malformed #"scan output is malformed"]]
-          [phase fail-at] [[:first 3] [:confirming 4]]]
-    (testing (str (name phase) " " (name mode))
+  ;; Two real startup scans establish ownership. Fail only the selected cleanup
+  ;; scan: custody must not depend on which scanner error won a wall-clock race.
+  (doseq [[phase fail-at] [[:first 3] [:confirming 4]]]
+    (testing (name phase)
       (with-scanner-profile
-        {:mode mode :fail-at fail-at}
+        :normal
         (fn [{:keys [root profile]}]
-          (let [unrelated (start-sleep!)]
+          (let [unrelated (start-sleep!)
+                original-scan! scan/scan!
+                calls (atom 0)
+                failure (ex-info "Fixture late ownership scan failure" {:phase phase})
+                before-helper (thread-count "guidance-preflight-io")
+                before-scanner (thread-count "guidance-preflight-scan-io")]
             (try
-              (let [{:keys [error]} (run-profile profile
-                                                 (cleanup-phase-budget))
+              (let [{:keys [error]}
+                    (with-redefs [scan/scan!
+                                  (fn [& args]
+                                    (if (= fail-at (swap! calls inc))
+                                      (do
+                                        (is (alive-pid? (pid-from (io/file root "anchor.pid"))))
+                                        (throw failure))
+                                      (apply original-scan! args)))]
+                      (run-profile profile (cleanup-phase-budget)))
                     anchor-pid (pid-from (io/file root "anchor.pid"))
                     helper-pid (pid-from (io/file root "helper.pid"))]
-                (is (re-find message (ex-message error)))
+                (is (= fail-at @calls))
+                (is (identical? failure error))
+                (is (pos-int? anchor-pid))
+                (is (pos-int? helper-pid))
                 (is (not (alive-pid? anchor-pid)))
                 (is (not (alive-pid? helper-pid)))
                 (is (.isAlive unrelated))
-                (is (false? (process-for-root? root))))
+                (is (false? (process-for-root? root)))
+                (is (= before-helper (thread-count "guidance-preflight-io")))
+                (is (= before-scanner (thread-count "guidance-preflight-scan-io"))))
               (finally
                 (stop! unrelated)))))))))
 
@@ -375,37 +411,44 @@
         (is (zero? (thread-count "guidance-admission-worker")))))))
 
 (deftest scanner-failures-remain-bounded-and-clean-retained-identities
+  ;; Exercise scanner failures directly, without racing the outer preflight
+  ;; admission deadline. Floods may hit either independent bound; capture! above
+  ;; proves the exact byte boundary without asserting which bound wins here.
   (doseq [[mode message]
-          [[:stdout-overflow #"exceeded its byte limit"]
-           [:stderr-overflow #"exceeded its byte limit"]
-           [:stalled #"scan timed out"]
-           [:nonzero #"ownership scan failed"]
-           [:malformed #"scan output is malformed"]
-           [:invalid-utf8 #"not valid UTF-8"]
-           [:duplicate #"duplicate PIDs"]]]
+          [[:stdout-overflow #"exceeded its byte limit|scan timed out"]
+           [:stderr-overflow #"exceeded its byte limit|scan timed out"]
+           [:stalled #"scan timed out"]]]
     (testing (name mode)
       (with-scanner-profile
         mode
         (fn [{:keys [root profile]}]
-          (let [unrelated (.start (ProcessBuilder.
-                                   ^java.util.List ["/bin/sleep" "30"]))]
+          (let [unrelated (start-sleep!)
+                original-direct identity/retain-direct
+                scanners (atom [])
+                before-scanner (thread-count "guidance-preflight-scan-io")
+                started (System/nanoTime)
+                deadline (+ started (.toNanos TimeUnit/SECONDS 3))]
             (try
-              (let [before-helper (thread-count "guidance-preflight-io")
-                    before-scanner
-                    (thread-count "guidance-preflight-scan-io")
-                    {:keys [error elapsed-millis]} (run-profile profile)
-                    anchor-pid (pid-from (io/file root "anchor.pid"))
-                    helper-pid (pid-from (io/file root "helper.pid"))]
+              (let [error
+                    (with-redefs [identity/retain-direct
+                                  (fn [& args]
+                                    (let [retained (apply original-direct args)]
+                                      (swap! scanners conj retained)
+                                      retained))]
+                      (try
+                        (scan/scan! (dissoc profile :effective-environment)
+                                    (:effective-environment profile) root
+                                    (str (io/file root "scanner.sh")) deadline
+                                    #(- % (System/nanoTime)))
+                        nil
+                        (catch Throwable error error)))]
                 (is (re-find message (ex-message error)))
-                (is (< elapsed-millis 3000.0))
-                (is (not (alive-pid? anchor-pid)))
-                (is (not (alive-pid? helper-pid)))
+                (is (< (/ (- (System/nanoTime) started) 1000000.0) 3000.0))
+                (is (= 1 (count @scanners)))
+                (is (every? (complement identity/live?) @scanners))
                 (is (.isAlive unrelated))
                 (is (false? (process-for-root? root)))
-                (is (= before-helper
-                       (thread-count "guidance-preflight-io")))
                 (is (= before-scanner
                        (thread-count "guidance-preflight-scan-io"))))
               (finally
-                (when (.isAlive unrelated) (.destroyForcibly unrelated))
-                (.waitFor unrelated 5 TimeUnit/SECONDS)))))))))
+                (stop! unrelated)))))))))
