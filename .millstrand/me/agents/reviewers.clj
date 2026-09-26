@@ -41,6 +41,10 @@
     Read `.agents/skills/testing/SKILL.md` in the reviewed checkout. Use the
     standard testing pyramid: choose the cheapest layer that still proves the
     behavior asserted, not the cheapest fixture regardless of evidence.
+    Use only the frozen diff, reviewed checkout, and its pinned dependencies
+    as evidence. Do not consult other worktrees, temporary artifacts, prior
+    reviews, or session logs. If a diff-only path is absent, use the supplied
+    diff; do not search the filesystem for another copy.
 
     Review the complete changed tests and changed fixtures, including existing
     setup or assertions within those tests. Do not excuse a mismatch because
