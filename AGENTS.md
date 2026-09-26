@@ -33,7 +33,14 @@ silently retired.
 
 ## Quality checks
 
-- Run `make quality` before completing changes; it covers formatting, linting, conventions, reflection, docs, and the test suite.
+- Run `make quality` before completing changes; it covers formatting, linting,
+  conventions, reflection, docs, and affected tests/package gates. Selection uses
+  the worktree diff against the merge-base with `main`, including dirty and
+  untracked files. Use `TEST_BASE=feature/parent` for stacked branches and
+  `make test-plan` to inspect the selection.
+- Use `make quality-full` (or `make test-full` for tests/package gates only) for
+  an explicit full run, such as after a Millstrand update. CI and the shared
+  landing contract use the same affected-test selector.
 - Use the focused `make` targets while iterating (`fmt-check`, `lint`, `reflect-check`, `docs-check`, `test`); `clojure -M:test --serial` is the diagnostic fallback for parallel test failures.
 
 ## Working here
@@ -57,7 +64,10 @@ silently retired.
 
 ## Testing
 
-The default suite requires namespaces serially, then runs them concurrently with isolated output and summaries:
+`make test` runs affected namespaces and independent package gates. The direct
+root-suite runner remains available for explicit full, diagnostic and focused
+runs. Its full mode requires namespaces serially, then runs them concurrently
+with isolated output and summaries:
 
 ```text
 clojure -M:test

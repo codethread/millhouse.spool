@@ -93,13 +93,39 @@ Install native `clj-kondo` v2026.08.04 and the Harnesses toolchain recorded in i
 `package.json`. Install its locked JS dependencies with
 `pnpm --dir spools/harnesses install --frozen-lockfile`.
 
-- Full gate: `make quality` (under the shared test lock).
-- Existing Millhouse suite: `make test`.
+- Default gate: `make quality` (under the shared test lock): repository-wide
+  static/docs checks, then affected tests and independent package gates.
+- Affected tests: `make test`; inspect selection first with `make test-plan`.
+- Override the comparison base for stacked branches: `make quality TEST_BASE=feature/parent`.
+- Explicit full run (for example after a Millstrand update): `make quality-full`
+  or tests/package gates only with `make test-full`.
+- Focus one root-suite namespace: `make test TEST_NAMESPACES=millhouse.workflow-test`.
 - Focused imported gates: `make harnesses-check`, `make devflow-check`,
   `make config-check`.
 - Repository activation in a disposable world: `make workspace-test`.
 - Published revision and native install smoke:
   `scripts/verify-distribution.sh SHA [CONSUMER_CHECKOUT...]`.
+
+Selection compares the worktree with `git merge-base main HEAD` by default,
+including committed, staged, unstaged and untracked changes. Fetch the base first
+when needed; missing bases fail rather than silently skipping tests. Rename and
+delete paths retain their original owners. `TEST_BASE` accepts a branch or SHA.
+
+The selector reads `spool.edn` and package `deps.edn` files, including test-alias
+libraries and nested test paths, then follows reverse dependencies. Integration
+tests declare their inputs in `scripts/quality/affected.clj`. Package processes
+and activation boundaries stay independent. Shared build/test infrastructure or
+unknown non-documentation paths select all suites. Root documentation-only and
+empty diffs select no tests; files within a spool conservatively select its
+suite, including shipped Markdown. Full mode does not require a Git base.
+
+CI uses the same plan: PRs compare with their target base, main pushes compare
+with the previous tip, and manual dispatch accepts a base and full-run switch.
+Only selected test/package jobs run; distribution smoke runs when components
+are affected. Static/docs checks remain repository-wide. Shared Land and
+auto-run use `.millstrand/land-quality.sh`, which calls `make quality` and owns
+the test lock. It accepts Make overrides such as `TEST_BASE=feature/parent` or
+`TEST_FULL=1`; do not wrap that script in another lock.
 
 The distribution smoke starts outside this checkout, resolves the remote Git
 revision, checks package provenance and native installation in temporary homes,

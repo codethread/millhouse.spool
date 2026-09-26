@@ -2,7 +2,7 @@ CLJ_KONDO := clj-kondo
 CLJ_KONDO_VERSION := 2026.08.04
 KONDO_ROOTS := root millstrand auto-review auto-run chime cron identity kanban land workflow
 
-.PHONY: test test-local api-docs docs-prepare docs-site docs-serve docs-check \
+.PHONY: test test-root test-full test-plan quality-full test-local api-docs docs-prepare docs-site docs-serve docs-check \
 	fmt-check lint lint-clj lint-splint lint-conventions reflect-check \
 	kondo kondo-import kondo-lint \
 	$(addprefix kondo-import-,$(KONDO_ROOTS)) \
@@ -14,9 +14,28 @@ MILLSTRAND_OVERRIDE = -Sdeps '{:aliases {:millstrand-root {:extra-deps {io.mills
 # finalized dependency pins.
 RUN_CHECK = python3 scripts/run_quality_check.py
 TEST_NAMESPACES ?=
+TEST_BASE ?= main
+TEST_FULL ?= 0
+AFFECTED_ARGS = --base "$(TEST_BASE)" $(if $(filter 1,$(TEST_FULL)),--full)
 
 test:
+ifneq ($(strip $(TEST_NAMESPACES)),)
+	@$(MAKE) --no-print-directory test-root TEST_NAMESPACES="$(TEST_NAMESPACES)"
+else
+	@$(RUN_CHECK) affected-tests clojure -M:affected $(AFFECTED_ARGS) --run
+endif
+
+# Internal exact namespace entrypoint, also used by CI matrix jobs. Never turn
+# an empty affected selection into an accidental full suite.
+test-root:
+	@test -n "$(strip $(TEST_NAMESPACES))" || { echo "TEST_NAMESPACES is required" >&2; exit 2; }
 	@$(RUN_CHECK) test clojure -M:test $(TEST_NAMESPACES)
+
+test-plan:
+	@clojure -M:affected $(AFFECTED_ARGS)
+
+test-full:
+	@$(MAKE) test TEST_FULL=1 TEST_NAMESPACES=
 
 test-local:
 	@test -n "$(strip $(MILLSTRAND_ROOT))" || { \
@@ -155,4 +174,7 @@ workspace-test:
 
 packages-check: harnesses-check devflow-check config-check workspace-test
 
-quality: fmt-check lint reflect-check docs-check test kanban-dash-check packages-check
+quality: fmt-check lint reflect-check docs-check test
+
+quality-full:
+	@$(MAKE) quality TEST_FULL=1 TEST_NAMESPACES=

@@ -41,8 +41,13 @@ status; inspect its exact Harnesses run separately.
 
 Both automatic delivery and shared Land invoke `.millstrand/land-quality.sh`.
 That script alone acquires `/tmp/millstrand-test.lock` with `flock -w 180` before
-running `make quality`; do not wrap that script in another lock. Direct full
-suite commands still need the shared lock. Focused tests remain exempt. A lock
+running `make quality`; do not wrap that script in another lock. The gate uses
+Git changes against the merge-base with `main` to select affected tests and
+independent package gates; static/docs checks remain repository-wide. Inspect
+with `make test-plan`, override with `TEST_BASE=feature/parent`, or request all
+suites with `TEST_FULL=1` (`make quality-full` outside the contract). These Make
+overrides can also be passed to the contract script. CI uses the same selector.
+Direct full suite commands still need the shared lock. Focused tests remain exempt. A lock
 acquisition failure fails the gate without starting quality; apply the normal
 explicit recovery policy rather than clearing the gate or retrying implicitly.
 
