@@ -4,6 +4,27 @@ The packaged adapter is pinned to **codex-cli 0.154.0**. Tests use disposable
 homes, plugin copies, projects and workspaces; never installed caches, desktop
 sessions, credentials or real model services.
 
+## Proof boundaries
+
+`pnpm check:plugins` keeps the package independently testable:
+
+- Pi context, lifecycle and native-registration boundary tests use direct calls
+  and controlled Strand responses. Repeated callbacks prove prompt reconstruction
+  and stale correlation removal, not persisted identity recovery.
+- Pi host tests load the actual candidate extension once per host scenario and
+  retain real fork headers and canonical Git/worktree discovery. They make no
+  model requests; their Strand fixture does not prove persistence.
+- The preflight tests retain packed-package execution, closed input and profile
+  refusal, and exact-child shutdown. Strict JSON checks are parser proofs, even
+  when run by the Codex conformance entrypoint.
+- Codex payload replay proves the packaged shell protocol. Actual CLI discovery
+  and fresh/resumed local-provider requests separately prove host transport.
+  The two duplicate-source topologies must both stop before Strand/model work.
+
+Diagnostic label permutations, repeated no-model host launches, and CLI
+list-only duplicate checks are not additional lifecycle evidence. Keep the real
+process failure, interruption and outliving-writer regressions instead.
+
 ## No-model host conformance
 
 ```text

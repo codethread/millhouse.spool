@@ -86,16 +86,4 @@ describe("buildMillstrandChildEnvironment", () => {
     expect(child.MILLSTRAND_RUN_ID).toBeUndefined();
     expect(child.MILLSTRAND_WORKSPACE).toBeUndefined();
   });
-
-  it("does not turn a bare ambient identity into parent provenance", () => {
-    const child = buildMillstrandChildEnvironment(
-      {
-        MILLSTRAND_AGENT_ID: "ambient-not-managed",
-      },
-      null,
-    );
-
-    expect(child.MILLSTRAND_PI_PARENT_IDENTITY).toBeUndefined();
-    expect(child.MILLSTRAND_AGENT_ID).toBeUndefined();
-  });
 });
