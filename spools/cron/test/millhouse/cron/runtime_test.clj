@@ -285,12 +285,12 @@
 (deftest register-validates-inputs-before-runtime-access
   ;; Invalid declarations must fail before touching runtime state or storage.
   (doseq [job [{:id :bad :interval-ms 0
-               :handler 'millhouse.cron.runtime-test/fire-ok}
-              {:id :bad :interval-ms 1000 :jitter-ms -1
-               :handler 'millhouse.cron.runtime-test/fire-ok}
-              {:id :bad :interval-ms 1000 :handler 'not-qualified}
-              {:id :bad :interva-ms 1000
-               :handler 'millhouse.cron.runtime-test/fire-ok}]]
+                :handler 'millhouse.cron.runtime-test/fire-ok}
+               {:id :bad :interval-ms 1000 :jitter-ms -1
+                :handler 'millhouse.cron.runtime-test/fire-ok}
+               {:id :bad :interval-ms 1000 :handler 'not-qualified}
+               {:id :bad :interva-ms 1000
+                :handler 'millhouse.cron.runtime-test/fire-ok}]]
     (is (thrown? clojure.lang.ExceptionInfo (cron/register! nil job)))))
 
 (deftest state-shape-matches-declared-version
