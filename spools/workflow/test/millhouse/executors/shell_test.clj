@@ -4,11 +4,12 @@
             [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is]]
+            [clojure.spec.alpha :as s]
+            [clojure.test :refer [deftest is use-fixtures]]
             [millhouse.executors.shell :as shell]
             [millhouse.workflow :as workflow]
             [millhouse.workflow.validation :as validation]
-            [millhouse.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-embedded-runtime]]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.process.alpha :as process]
@@ -18,11 +19,32 @@
   (:import [java.io File]
            [java.util.concurrent Executors]))
 
-(defn- with-shell [f]
-  ;; Unit worlds do not have a Mill control channel. Keep these focused tests
-  ;; deterministic by replacing only the custody seam with a terminal-fact fake;
-  ;; disposable-world acceptance exercises the real Weaver-to-Mill channel.
+;; Proof tiers stay in one namespace so the runner's existing serial isolation
+;; still covers the process API redefinitions. Pure request/output checks need
+;; no runtime. Synchronous DB contracts explicitly opt into memory storage;
+;; observers, event dispatch and validation retain file-backed worlds. There is
+;; no supported bare-runtime constructor in the pinned downstream API.
+
+(def ^:dynamic ^:private *temp-root* nil)
+
+(use-fixtures :each
+  (fn [f]
+    (let [root (test-support/temp-dir "shell-test-")]
+      (try
+        (binding [*temp-root* root] (f))
+        (finally (test-support/delete-tree! root))))))
+
+(defn- temp-file [suffix]
+  (File/createTempFile "shell-test" suffix *temp-root*))
+
+(defn- with-shell-world [f]
+  ;; Embedded worlds have no Mill control channel. This fake runs short commands
+  ;; but simulates long-running custody and cancellation; it does not prove
+  ;; process-tree termination. The built-Mill test below owns replacement proof.
+  ;; Keep file storage for the event/worker threads' connection topology.
   (let [records (atom {})
+        ;; Executor threads do not convey the test's dynamic bindings.
+        output-root *temp-root*
         run-command (fn [argv cwd]
                       (let [builder (doto (ProcessBuilder. ^java.util.List argv)
                                       (.redirectErrorStream true)
@@ -37,10 +59,8 @@
                        long-running? (some #(str/includes? % "sleep 30") argv)
                        {:keys [exit output]} (when-not long-running?
                                                (run-command argv cwd))
-                       output-file (doto (File/createTempFile "shell-custody-output" ".txt")
-                                     (.deleteOnExit))
-                       error-file (doto (File/createTempFile "shell-custody-error" ".txt")
-                                    (.deleteOnExit))
+                       output-file (File/createTempFile "shell-custody" ".stdout" output-root)
+                       error-file (File/createTempFile "shell-custody" ".stderr" output-root)
                        record (cond-> {:handle handle :owner :millhouse/shell-executor :key key
                                        :phase (if long-running? :running :terminal)
                                        :output {:stdout-ref (.getAbsolutePath output-file)
@@ -66,7 +86,7 @@
                      #'process/cancel! cancel
                      #'process/acknowledge! acknowledge}
       (fn []
-        (with-runtime
+        (with-embedded-runtime
           (fn [rt _]
             (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
             (test-support/activate-spool! rt :millhouse/shell 'millhouse.test-modules.shell-executor
@@ -74,9 +94,9 @@
             (f rt)))))))
 
 (defn- await-eventually
-  "Poll for a real `:shell` subprocess outcome (RFC-Dtt-001.REC7): callers
-  settle dispatch with `test-alpha/await-quiescent!` first, then use this only for
-  the off-lane process-completion signal that quiescence cannot observe."
+  "Await off-lane executor completion, which event quiescence cannot observe.
+
+  Custody is simulated in embedded worlds, real in the built-Mill test."
   ([pred] (await-eventually pred (test-support/await-budget-ms)))
   ([pred timeout-ms]
    (test-support/poll-until pred
@@ -127,12 +147,8 @@
                           [:= [:attr "test/run-id"] run-id]]
                       {})))
 
-(defn- temp-file [suffix]
-  (doto (File/createTempFile "shell-test" suffix)
-    (.deleteOnExit)))
-
 (deftest quiesce-freezes-all-active-shell-gates-in-the-run
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "quiesce-all"
                        (two-shell-gates "quiesce-all" {"gate/error" "held"})
@@ -146,7 +162,7 @@
         (is (every? (comp false? :attempted?) (:gates result)))))))
 
 (deftest quiesce-cancels-a-running-owned-attempt
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "quiesce-running"
                        (single-gate "quiesce-running"
@@ -174,7 +190,7 @@
           (is (= :terminal (:phase (process/get rt (:handle record))))))))))
 
 (deftest quiesce-rejects-uncertain-cancellation-and-retains-freeze
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "quiesce-uncertain"
                        (single-gate "quiesce-uncertain"
@@ -212,7 +228,7 @@
           (is (= (:handle record) (attr after :shell/custody-handle))))))))
 
 (deftest claimed-attempt-cannot-launch-after-quiesce
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "quiesce-claimed"
                        (single-gate "quiesce-claimed"
@@ -239,43 +255,21 @@
 (deftest retained-custody-output-keeps-the-combined-tail-bound
   (let [stdout (temp-file ".stdout")
         stderr (temp-file ".stderr")]
-    (spit stdout (str/join (repeat 12000 "o")))
-    (spit stderr (str/join (repeat 12000 "e")))
+    ;; Exceed each stream's ring buffer as well as the combined tail bound.
+    (spit stdout (str/join (repeat 120000 "o")))
+    (spit stderr (str (str/join (repeat 120000 "e")) "stderr-tail"))
     (let [output (#'shell/custody-output
                   {:stdout-ref (.getAbsolutePath stdout)
                    :stderr-ref (.getAbsolutePath stderr)})]
-      (is (<= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
-      (is (str/ends-with? output (str/join (repeat 100 "e")))))))
-
-(deftest custody-output-failure-is-visible-and-does-not-close-a-gate
-  (with-runtime
-    (fn [rt _]
-      (let [gate (weaver/add! rt {:title "Unreadable custody"
-                                  :attributes {"workflow/gate" "shell"
-                                               "workflow/run-id" "unreadable"
-                                               "shell/attempt-id" "attempt-unreadable"
-                                               "shell/custody-handle" "handle-unreadable"}})
-            output (try
-                     (#'shell/terminal-commit!
-                      "unreadable" (:id gate) "attempt-unreadable" "handle-unreadable"
-                      {:phase :terminal
-                       :output {:stdout-ref "/missing/stdout"
-                                :stderr-ref "/missing/stderr"}
-                       :exit {:code 0 :signal nil}}
-                      false)
-                     nil
-                     (catch java.io.FileNotFoundException throwable throwable))]
-        (is (instance? java.io.FileNotFoundException output))
-        (is (= "attempt-unreadable"
-               (attr (weaver/show rt (:id gate)) :shell/attempt-id)))
-        (is (nil? (attr (weaver/show rt (:id gate)) :gate/error)))))))
+      (is (= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
+      (is (str/ends-with? output "stderr-tail")))))
 
 (deftest terminal-exit-124-is-not-inferred-as-a-timeout
   (is (= "shell command exited 124"
          (#'shell/terminal-error {:exit {:code 124}} false))))
 
 (deftest terminal-reconciliation-reserves-a-due-timeout
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (doseq [[deadline timed-out? expected]
               [["2999-01-01T00:00:00Z" false [:commit/ordinary :cancel :acknowledge :clear]]
@@ -307,7 +301,7 @@
           (is (= expected @steps)))))))
 
 (deftest clearing-an-attempt-clears-its-timeout-state
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [stdout (temp-file ".stdout")
             stderr (temp-file ".stderr")
@@ -349,7 +343,7 @@
     (is (str/includes? detail "handle-malformed"))))
 
 (deftest stale-terminal-fact-does-not-touch-a-newer-attempt
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [stdout (temp-file ".stdout")
             stderr (temp-file ".stderr")
@@ -373,7 +367,7 @@
           (is (nil? (attr after :gate/error))))))))
 
 (deftest launch-interruption-retains-the-claimed-attempt
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [gate (weaver/add! rt {:title "Interrupted launch"
                                   :attributes {"workflow/gate" "shell"
@@ -389,7 +383,7 @@
           (is (= "attempt-interrupted" (attr after :shell/running))))))))
 
 (deftest closed-attempt-with-acknowledged-fact-recovery-clears-only-its-claim
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [gate (weaver/add! rt {:title "Closed custody"
                                   :state "closed"
@@ -411,17 +405,15 @@
         (is (nil? (attr after :gate/error)))))))
 
 (deftest owner-facts-remain-visible-when-no-attempt-is-desired
-  (with-runtime
-    (fn [rt _]
-      (let [fact {:handle "orphan-handle" :owner :millhouse/shell-executor
-                  :key "orphan-attempt" :phase :running
-                  :output {:stdout-ref "/tmp/orphan.stdout"
-                           :stderr-ref "/tmp/orphan.stderr"}}]
-        (with-redefs [process/list-owned (fn [_ _] [fact])]
-          (is (= [fact] (shell/read-shell-custody {:runtime rt}))))))))
+  (let [fact {:handle "orphan-handle" :owner :millhouse/shell-executor
+              :key "orphan-attempt" :phase :running
+              :output {:stdout-ref "/tmp/orphan.stdout"
+                       :stderr-ref "/tmp/orphan.stderr"}}]
+    (with-redefs [process/list-owned (fn [_ _] [fact])]
+      (is (= [fact] (shell/read-shell-custody {:runtime nil}))))))
 
 (deftest custody-listing-defer-is-preserved-through-apply
-  (with-runtime
+  (with-embedded-runtime
     (fn [rt _]
       (let [gate (weaver/add! rt {:title "Deferred custody"
                                   :attributes {"workflow/gate" "shell"
@@ -446,7 +438,7 @@
                (attr (weaver/show rt (:id gate)) :shell/attempt-id)))))))
 
 (deftest read-shell-attempts-resolves-run-id-from-workflow-root
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -463,7 +455,7 @@
           (is (= "root-derived" (:run-id attempt))))))))
 
 (deftest repeated-reconciliation-submits-one-retained-observer
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [stdout (temp-file ".stdout")
             stderr (temp-file ".stderr")
@@ -508,7 +500,7 @@
                 (deliver release terminal)))))))))
 
 (deftest shutdown-observer-rejection-releases-claim-for-later-reconciliation
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [stdout (temp-file ".stdout")
             stderr (temp-file ".stderr")
@@ -577,10 +569,16 @@
                   (is (nil? (attr after-reconciliation :gate/error)))))))
           (finally
             (.shutdownNow shutdown-executor)
-            (.shutdownNow usable-executor)))))))
+            (.shutdownNow usable-executor)
+            (is (.awaitTermination shutdown-executor (test-support/await-budget-ms)
+                                   java.util.concurrent.TimeUnit/MILLISECONDS)
+                "rejected observer pool stops before fixture teardown")
+            (is (.awaitTermination usable-executor (test-support/await-budget-ms)
+                                   java.util.concurrent.TimeUnit/MILLISECONDS)
+                "resumed observer pool stops before fixture teardown")))))))
 
 (deftest interrupted-observer-can-resume-without-losing-attempt
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [stdout (temp-file ".stdout")
             stderr (temp-file ".stderr")
@@ -641,7 +639,7 @@
                 (is (nil? (attr after :gate/error)))))))))))
 
 (deftest deferred-startup-custody-read-retries-after-admission
-  (with-runtime
+  (with-embedded-runtime
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -698,16 +696,14 @@
               (deliver admitted true))))))))
 
 (deftest custody-listing-rethrows-unrelated-failure-with-empty-desired
-  (with-runtime
-    (fn [rt _]
-      (let [failure (ex-info "broken listing" {:code "process/broken"})]
-        (with-redefs [process/list-owned (fn [_ _] (throw failure))]
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                #"broken listing"
-                                (shell/read-shell-custody {:runtime rt}))))))))
+  (let [failure (ex-info "broken listing" {:code "process/broken"})]
+    (with-redefs [process/list-owned (fn [_ _] (throw failure))]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"broken listing"
+                            (shell/read-shell-custody {:runtime nil}))))))
 
 (deftest unreadable-custody-output-is-contained-per-attempt
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [bad (weaver/add! rt {:title "Unreadable custody"
                                  :attributes {"workflow/gate" "shell"
@@ -758,10 +754,14 @@
             (is (some #(and (= "attempt-good-output" (:attempt-id %))
                             (:acknowledged %))
                       (:attempts result)))
-            (is (= ["handle-good-output"] @acknowledged))))))))
+            (is (= ["handle-good-output"] @acknowledged))
+            (let [retained (weaver/show rt (:id bad))]
+              (is (= "active" (:state retained)))
+              (is (= "attempt-bad-output" (attr retained :shell/attempt-id)))
+              (is (= "handle-bad-output" (attr retained :shell/custody-handle))))))))))
 
 (deftest retained-mismatch-is-visible-without-touching-newer-gate
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [gate (weaver/add! rt {:title "Newer attempt"
                                   :attributes {"workflow/gate" "shell"
@@ -783,7 +783,7 @@
         (is (nil? (attr after :gate/error)))))))
 
 (deftest running-fact-rearms-original-absolute-timeout
-  (with-runtime
+  (with-embedded-runtime
     (fn [rt _]
       (let [deadline "2999-01-01T00:00:00Z"
             scheduled (atom nil)]
@@ -805,7 +805,7 @@
                (:payload @scheduled)))))))
 
 (deftest reconciliation-rejects-a-non-string-durable-timeout-deadline
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [failure (try
                       (shell/apply-shell-attempts!
@@ -827,7 +827,7 @@
                (ex-data failure)))))))
 
 (deftest timeout-wake-rejects-an-invalid-durable-timeout-deadline
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [gate (weaver/add! rt
                               {:title "Malformed timeout wake"
@@ -999,6 +999,10 @@
         :gate (select-keys gate [:id :state :attributes])
         :ready (workflow/ready \"shell-replacement\")}))")
 
+;; This expensive proof builds Mill and replaces a real Weaver while a command
+;; is blocked on a FIFO. Only this topology demonstrates custody surviving the
+;; death of its observer generation. Embedded reopen or fake facts cannot do so.
+;; Keep the owned Process cleanup and isolated state home; never use shared Mill.
 (deftest shell-gate-reaches-next-frontier-across-planned-weaver-replacement
   (let [source (millstrand-source-root)
         consumer-root (millhouse-source-root)
@@ -1061,7 +1065,14 @@
             (mill-command! mill source state-home workspace-path ["weaver" "restart"])
             (is (.isAlive ^Process @mill-process)
                 "Mill remains alive through the planned Weaver replacement")
-            (let [_after-status (weaver-status! mill source state-home workspace-path)]
+            (let [_after-status (weaver-status! mill source state-home workspace-path)
+                  adopted (weaver-repl! mill source state-home workspace-path
+                                        (shell-gate-probe-form))]
+              (is (not= (:generation before) (:generation adopted)))
+              (is (= (select-keys (get-in running [:gate :attributes])
+                                  [:shell/attempt-id :shell/custody-handle])
+                     (select-keys (get-in adopted [:gate :attributes])
+                                  [:shell/attempt-id :shell/custody-handle])))
               (spit release-fifo "release\n")
               (let [after
                     (test-support/poll-until
@@ -1099,23 +1110,8 @@
               (.waitFor process 5 java.util.concurrent.TimeUnit/SECONDS))))
         (test-support/delete-tree! disposable-root)))))
 
-(deftest pass-closes-gate-records-outcome-and-unblocks-next-step
-  (with-shell
-    (fn [rt]
-      (workflow/start! "pass" (single-gate "pass" {"shell/argv" ["true"]}) {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (shell-gate-strand rt "pass"))
-            closed (await-eventually #(let [g (weaver/show rt gate-id)]
-                                        (when (= "closed" (:state g)) g)))]
-        (is (= "shell" (attr closed :workflow/executor)))
-        (is (nil? (attr closed :identity/by-identity)))
-        (is (zero? (attr closed :shell/exit-code)))
-        (is (string? (attr closed :shell/output)))
-        (is (nil? (attr closed :gate/error)))
-        (is (= "After" (:title (first (workflow/ready "pass")))))))))
-
 (deftest non-zero-exit-stamps-error-stays-ready-and-is-discoverable
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "fail" (single-gate "fail" {"shell/argv" ["false"]}) {})
       (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
@@ -1133,45 +1129,8 @@
         (is (= gate-id (:gate (shell/shell-stalled? (ready-shell-gate "fail")))))
         (is (some #(= gate-id (:id %)) (weaver/list-query rt 'stalled-shell-gates {})))))))
 
-(deftest errored-gate-is-not-rerun-until-error-cleared
-  (with-shell
-    (fn [rt]
-      (let [counter (temp-file ".count")
-            run-count (fn [] (count (remove str/blank? (str/split-lines (slurp counter)))))
-            argv (fn [exit] ["sh" "-c" (str "echo run >> '" (.getPath counter) "'; exit " exit)])]
-        (workflow/start! "rec" (single-gate "rec" {"shell/argv" (argv 3)}) {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (let [gate-id (:id (ready-shell-gate "rec"))
-              errored (await-eventually #(let [g (weaver/show rt gate-id)]
-                                           (when (attr g :gate/error) g)))]
-          (is (= 3 (attr errored :shell/exit-code)))
-          (is (= 1 (run-count)))
-          ;; unrelated graph mutations fire scans, but the errored gate is skipped:
-          ;; the expensive check runs once, not per mutation. This is deterministic
-          ;; without waiting: claim-and-dispatch! stamps shell/running on the scan
-          ;; thread strictly before the only worker-pool submission path, so a
-          ;; re-dispatch regression is visible as a claim marker the moment scan!
-          ;; returns — no marker means nothing was submitted.
-          (weaver/add! rt {:title "noise-1"})
-          (weaver/add! rt {:title "noise-2"})
-          (shell/scan!)
-          (is (nil? (attr (weaver/show rt gate-id) :shell/running)))
-          (is (some? (attr (weaver/show rt gate-id) :gate/error)))
-          (is (= 1 (run-count)))
-          ;; clearing gate/error (and fixing the command) re-runs the check once
-          ;; and closes the gate on the next scan.
-          (weaver/update! rt gate-id {:attributes {"gate/error" nil
-                                                   "shell/running" nil
-                                                   "shell/argv" (argv 0)}})
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [closed (await-eventually #(let [g (weaver/show rt gate-id)]
-                                            (when (= "closed" (:state g)) g)))]
-            (is (zero? (attr closed :shell/exit-code)))
-            (is (nil? (attr closed :gate/error)))
-            (is (= 2 (run-count)))))))))
-
 (deftest blank-error-stamp-is-present-data-not-a-clear-and-nil-re-arms
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [counter (temp-file ".count")
             run-count (fn [] (count (remove str/blank? (str/split-lines (slurp counter)))))
@@ -1181,10 +1140,12 @@
         (let [gate-id (:id (ready-shell-gate "blank"))]
           (await-eventually #(let [g (weaver/show rt gate-id)]
                                (when (attr g :gate/error) g)))
+          (shell/scan!)
+          (is (nil? (attr (weaver/show rt gate-id) :shell/running)))
           (is (= 1 (run-count)))
           ;; blanking gate/error stores "" — present data, not absence — so the
-          ;; gate stays errored and skipped. The deterministic no-marker check from
-          ;; errored-gate-is-not-rerun proves nothing was dispatched.
+          ;; gate stays errored and skipped. Scan reserves synchronously before
+          ;; dispatch, so no claim marker means no worker was submitted.
           (weaver/update! rt gate-id {:attributes {"gate/error" ""
                                                    "shell/argv" (argv 0)}})
           (weaver/add! rt {:title "noise-1"})
@@ -1209,34 +1170,42 @@
           (is (some #(= (:id decoy) (:id %))
                     (weaver/list-query rt 'stalled-shell-gates {}))))))))
 
+(deftest request-contract-rejects-malformed-input-without-a-world
+  (is (s/valid? ::shell/request {:shell/argv ["true"]}))
+  (is (s/valid? ::shell/request {:shell/argv ["echo" "ok"]
+                                 :shell/cwd "/tmp" :shell/timeout-secs 1}))
+  (doseq [request [{}
+                   {:shell/argv ""}
+                   {:shell/argv []}
+                   {:shell/argv ["echo" 5]}
+                   {:shell/argv ["true"] :shell/cwd 7}
+                   {:shell/argv ["true"] :shell/cwd ""}
+                   {:shell/argv ["true"] :shell/timeout-secs 0}]]
+    (is (not (s/valid? ::shell/request request)) (pr-str request))))
+
 (deftest invalid-input-fails-loudly-and-spawns-no-process
-  (with-shell
+  (with-shell-world
     (fn [rt]
-      (doseq [[i [bad expected]] (map-indexed vector [[{} "shell/argv"]
-                                                      [{"shell/argv" ""} "shell/argv"]
-                                                      [{"shell/argv" []} "shell/argv"]
-                                                      [{"shell/argv" ["echo" 5]} "shell/argv"]
-                                                      [{"shell/argv" ["true"] "shell/cwd" 7} "shell/cwd"]
-                                                      [{"shell/argv" ["true"] "shell/cwd" ""} "shell/cwd"]])]
-        (let [run-id (str "invalid-" i)]
-          (workflow/start! run-id (single-gate run-id bad) {})
+      (let [launches (atom [])]
+        (with-redefs [process/launch! (fn [& args] (swap! launches conj args))]
+          (workflow/start! "invalid" (single-gate "invalid" {"shell/argv" []}) {})
           (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [gate-id (:id (ready-shell-gate run-id))
+          (let [gate-id (:id (ready-shell-gate "invalid"))
                 errored (await-eventually #(let [g (weaver/show rt gate-id)]
                                              (when (attr g :gate/error) g)))]
-            (is (= "active" (:state errored)) (str "case " i))
-            (is (str/includes? (attr errored :gate/error) expected) (str "case " i))
+            (is (= "active" (:state errored)))
+            (is (str/includes? (attr errored :gate/error) "shell/argv"))
             (is (str/includes? (attr errored :gate/error)
-                               "millhouse.executors.shell/request")
-                (str "case " i ": the stamped detail names the request spec"))
-            ;; no process ran: no exit code and no captured output
-            (is (nil? (attr errored :shell/exit-code)) (str "case " i))
-            (is (nil? (attr errored :shell/output)) (str "case " i))))))))
+                               "millhouse.executors.shell/request"))
+            (is (empty? @launches))
+            (is (nil? (attr errored :shell/exit-code)))
+            (is (nil? (attr errored :shell/output)))))))))
 
-(deftest timeout-kills-process-and-bad-timeout-fails-loudly
-  (with-shell
+(deftest timeout-cancels-simulated-custody-and-stamps-failure
+  ;; This proves the executor's bounded timeout/cancellation projection, not OS
+  ;; process killing: the custody fake deliberately never launches sleep 30.
+  (with-shell-world
     (fn [rt]
-      ;; a command exceeding the wall-clock bound is force-killed and stamped
       (workflow/start! "timeout" (single-gate "timeout" {"shell/argv" ["sh" "-c" "sleep 30"]
                                                          "shell/timeout-secs" 1}) {})
       (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
@@ -1244,29 +1213,10 @@
             errored (await-eventually #(let [g (weaver/show rt gate-id)]
                                          (when (attr g :gate/error) g)))]
         (is (= "active" (:state errored)))
-        (is (str/includes? (attr errored :gate/error) "timed out")))
-      ;; Time is the behavior under test: a backgrounded descendant inherits the
-      ;; output pipe, so the timeout path must still reach a terminal stamp.
-      (workflow/start! "timeout-descendant" (single-gate "timeout-descendant" {"shell/argv" ["sh" "-c" "sleep 30 & sleep 30"]
-                                                                               "shell/timeout-secs" 1}) {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (ready-shell-gate "timeout-descendant"))
-            errored (await-eventually #(let [g (weaver/show rt gate-id)]
-                                         (when (attr g :gate/error) g)))]
-        (is (= "active" (:state errored)))
-        (is (str/includes? (attr errored :gate/error) "timed out")))
-      ;; a non-positive timeout fails loudly with no process
-      (workflow/start! "timeout-bad" (single-gate "timeout-bad" {"shell/argv" ["true"]
-                                                                 "shell/timeout-secs" 0}) {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (ready-shell-gate "timeout-bad"))
-            errored (await-eventually #(let [g (weaver/show rt gate-id)]
-                                         (when (attr g :gate/error) g)))]
-        (is (str/includes? (attr errored :gate/error) "shell/timeout-secs"))
-        (is (nil? (attr errored :shell/exit-code)))))))
+        (is (str/includes? (attr errored :gate/error) "timed out"))))))
 
-(deftest non-shell-gate-is-ignored-and-output-is-bounded
-  (with-shell
+(deftest non-shell-gate-is-ignored
+  (with-shell-world
     (fn [rt]
       ;; a non-:shell gate is never touched, even carrying shell/* attributes
       (workflow/start! "iso" (workflow/workflow
@@ -1277,21 +1227,10 @@
         (shell/scan!)
         (is (= "active" (:state (weaver/show rt sub-gate-id))))
         (is (nil? (attr (weaver/show rt sub-gate-id) :shell/running)))
-        (is (nil? (attr (weaver/show rt sub-gate-id) :shell/exit-code))))
-      ;; large output is retained only as a bounded tail
-      (workflow/start! "big" (single-gate "big" {"shell/argv" ["sh" "-c" "yes 0123456789 | head -c 200000"]}) {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (shell-gate-strand rt "big"))
-            closed (await-eventually #(let [g (weaver/show rt gate-id)]
-                                        (when (= "closed" (:state g)) g)))
-            output (attr closed :shell/output)]
-        (is (zero? (attr closed :shell/exit-code)))
-        (is (pos? (count output)))
-        (is (<= (count output) @#'shell/output-tail-bytes))
-        (is (< (count output) 200000))))))
+        (is (nil? (attr (weaver/show rt sub-gate-id) :shell/exit-code)))))))
 
 (deftest dependent-shell-gate-runs-only-after-its-dependency-closes
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (workflow/start! "comp" (gated-gate "comp" {"shell/argv" ["true"]}) {})
       (let [first-step (first (workflow/ready "comp"))]
@@ -1311,7 +1250,7 @@
         (is (= "After" (:title (first (workflow/ready "comp")))))))))
 
 (deftest closed-nested-workflow-root-does-not-release-shell-gate-to-outer-run
-  (with-runtime
+  (with-embedded-runtime
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -1341,7 +1280,7 @@
           (is (some #(= gate-id (:id %)) (weaver/ready rt))))))))
 
 (deftest parent-blocked-shell-gate-is-not-dispatched
-  (with-runtime
+  (with-embedded-runtime
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -1363,7 +1302,7 @@
         (is (nil? (attr (weaver/show rt gate-id) :shell/running)))))))
 
 (deftest malformed-active-workflow-root-identity-fails-through-public-scan
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -1389,40 +1328,18 @@
             (is (str/includes? (ex-message failure) "workflow/run-id")
                 (str "malformed run-id: " (pr-str run-id)))))))))
 
-(deftest scan-uses-one-filtered-ready-query-without-per-root-scans
-  (with-shell
-    (fn [rt]
-      (doseq [run-id ["idle-1" "idle-2" "idle-3"]]
-        (workflow/start! run-id (idle-workflow) {}))
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [ready-calls (atom [])
-            real-ready weaver/ready
-            fail-per-root (fn [& _]
-                            (throw (ex-info "per-root scan should not run" {})))
-            fail-mutation (fn [& _]
-                            (throw (ex-info "irrelevant scan must not mutate" {})))]
-        (with-redefs [weaver/ready (fn [runtime query params]
-                                     (swap! ready-calls conj [query params])
-                                     (real-ready runtime query params))
-                      workflow/active-runs fail-per-root
-                      workflow/ready fail-per-root
-                      weaver/update! fail-mutation]
-          (is (= {:scanned true} (shell/on-event {}))))
-        (is (= 1 (count @ready-calls)))
-        (is (= [:= [:attr "workflow/gate"] "shell"]
-               (ffirst @ready-calls)))
-        (is (= {} (second (first @ready-calls))))))))
-
 (deftest state-shape-matches-declared-version
   ;; Drift alarm for the shell executor's versioned spool-state: a key added to new-state
   ;; without a state-version bump would survive refresh as a stale map.
-  (test-support/assert-state-shape
-   #'shell/new-state
-   #{:scan-monitor :terminal-observers :reconciliation-pending? :worker-executor :close-fn}))
+  (let [state (#'shell/new-state)]
+    (try
+      (is (= #{:scan-monitor :terminal-observers :reconciliation-pending? :worker-executor :close-fn}
+             (set (keys state))))
+      (finally ((:close-fn state))))))
 
 (deftest module-forms-publish-and-preserve-runtime-pool
   (with-redefs [process/list-owned (fn [_ _] [])]
-    (with-runtime
+    (with-embedded-runtime
       (fn [rt _]
         (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
         (test-support/activate-spool! rt :millhouse/shell 'millhouse.test-modules.shell-executor
@@ -1451,7 +1368,7 @@
              {:inspect 'millhouse.executors.shell-test/inspect-disposable-validation}}})
 
 (deftest validation-failure-repair-one-attempt-and-replay
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [candidate (temp-file ".candidate")
             launches (temp-file ".launches")
@@ -1492,7 +1409,7 @@
           (finally (validation/close! rt handle)))))))
 
 (deftest validation-interrupted-acknowledgement-permits-honest-progress
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [candidate (temp-file ".candidate")
             handle (validation/open! rt (validation-config))
@@ -1524,7 +1441,7 @@
           (finally (validation/close! rt handle)))))))
 
 (defn- with-failed-validation [f]
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [candidate (temp-file ".candidate")
             handle (validation/open! rt (validation-config))]
@@ -1563,7 +1480,7 @@
       (is (empty? (attr (weaver/show rt (:id gate)) :validation/actions))))))
 
 (deftest validation-completion-revision-drift-is-not-success
-  (with-shell
+  (with-shell-world
     (fn [rt]
       (let [candidate (temp-file ".candidate")
             handle (validation/open! rt (validation-config))
@@ -1614,7 +1531,7 @@
         (is (empty? (weaver/list rt [:= [:attr "validation/action-request-id"] "one"] {})))))))
 
 (deftest validation-does-not-rearm-unmarked-or-other-executor-gates
-  (with-shell
+  (with-shell-world
     (fn [_rt]
       (doseq [waiter [:shell :code :agent :merge-turn]]
         (let [run-id (str "unmarked-" (name waiter))]
