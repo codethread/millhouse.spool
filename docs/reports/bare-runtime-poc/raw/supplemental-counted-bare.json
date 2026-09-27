@@ -1,0 +1,28 @@
+[
+  {
+    "label": "supplemental-counted-bare",
+    "fixture": "bare",
+    "sample": 1,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}} :aliases {:test {:main-opts [\"-i\" \"/Users/ct/dev/projects/millhouse.spool__spike--bare-runtime-fixture/docs/reports/bare-runtime-poc/counted_bare_fixture.clj\" \"-m\" \"millhouse.test-runner\"]}}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "counted": true,
+    "fixture_counts": {
+      "fixture": "bare",
+      "source-url": "file:/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture/src/millstrand/test/alpha.clj",
+      "bare-fixture-invocations": 57,
+      "world-fixture-invocations": 0
+    },
+    "started": "2026-09-27T20:25:49.985885+00:00",
+    "finished": "2026-09-27T20:25:55.515783+00:00",
+    "elapsed_ms": 5529.701,
+    "exit_code": 0,
+    "log": "raw/supplemental-counted-bare-1.log"
+  }
+]
