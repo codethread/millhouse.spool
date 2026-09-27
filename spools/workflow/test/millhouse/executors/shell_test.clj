@@ -255,12 +255,13 @@
 (deftest retained-custody-output-keeps-the-combined-tail-bound
   (let [stdout (temp-file ".stdout")
         stderr (temp-file ".stderr")]
-    (spit stdout (str/join (repeat 12000 "o")))
-    (spit stderr (str/join (repeat 12000 "e")))
+    ;; Exceed each stream's ring buffer as well as the combined tail bound.
+    (spit stdout (str/join (repeat 120000 "o")))
+    (spit stderr (str/join (repeat 120000 "e")))
     (let [output (#'shell/custody-output
                   {:stdout-ref (.getAbsolutePath stdout)
                    :stderr-ref (.getAbsolutePath stderr)})]
-      (is (<= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
+      (is (= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
       (is (str/ends-with? output (str/join (repeat 100 "e")))))))
 
 (deftest terminal-exit-124-is-not-inferred-as-a-timeout
