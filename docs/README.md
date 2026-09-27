@@ -24,3 +24,4 @@ Processes describe the maintained contract, the decisions a repository needs to 
 - [Kondo resource investigation](reports/kondo-investigation/recommendation.md)
 - [Headless editor verification and discovered pitfalls](reports/kondo-rollout/editor-verification.md)
 - [Active-repository Kondo rollout results](reports/kondo-rollout/results.md)
+- [Test-layering acceptance and measured tradeoffs](reports/test-layering/README.md)

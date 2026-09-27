@@ -1,0 +1,833 @@
+{
+  "source_revision": "cd208f5d75265c16ecf28a599ca501ef2b10ffe4",
+  "host": "ct.local; Apple M4; 10 logical CPUs; macOS 26.5.1 (25F80) arm64; Zulu OpenJDK 21.0.11; Clojure CLI 1.12.6.1673",
+  "await_scale": "unset (default 1)",
+  "probe_sha256": "1a6d77c50cf7811dd1f4b270e3e55cf1b30aa75bab7f6d962b00866d38d787b3",
+  "runs": [
+    {
+      "run": 1,
+      "exit": 0,
+      "tests": 490,
+      "assertions": 3969,
+      "preload_seconds": 0.059096792,
+      "in_run_seconds": 462.201105791,
+      "serial_seconds": 273.980661292,
+      "parallel_seconds": 186.223053292,
+      "load_and_dispatch_seconds": 1.9973912069999926,
+      "process_seconds": 464.06459691701457,
+      "outside_runner_seconds": 1.863491126014594,
+      "lock_and_launcher_seconds": 0.03188058297382668,
+      "world_calls": 368,
+      "worlds_reaching_callback": 367,
+      "pre_start_refusals": 1,
+      "world_sum_seconds": 1322.6299376219997,
+      "world_callback_sum_seconds": 89.60838170000002,
+      "world_setup_teardown_sum_seconds": 1233.021555922002,
+      "namespaces": [
+        {
+          "namespace": "millhouse.auto-review-test",
+          "tests": 8,
+          "assertions": 68,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 12.805
+        },
+        {
+          "namespace": "millhouse.auto-run-test",
+          "tests": 22,
+          "assertions": 221,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 32.382
+        },
+        {
+          "namespace": "millhouse.millstrand-workflows-test",
+          "tests": 1,
+          "assertions": 2,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 1.464
+        },
+        {
+          "namespace": "millhouse.consumer-test",
+          "tests": 2,
+          "assertions": 13,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 2.302
+        },
+        {
+          "namespace": "millhouse.workflow-runtime-test",
+          "tests": 55,
+          "assertions": 321,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 76.086
+        },
+        {
+          "namespace": "millhouse.executors.code-test",
+          "tests": 13,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 21.341
+        },
+        {
+          "namespace": "millhouse.kanban-test",
+          "tests": 49,
+          "assertions": 429,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 73.087
+        },
+        {
+          "namespace": "millhouse.land.merge-queue-test",
+          "tests": 28,
+          "assertions": 160,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 45.376
+        },
+        {
+          "namespace": "millhouse.land.workflow-test",
+          "tests": 7,
+          "assertions": 88,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 9.131
+        },
+        {
+          "namespace": "millhouse.affected-test",
+          "tests": 5,
+          "assertions": 46,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.488
+        },
+        {
+          "namespace": "millhouse.quality-lock-test",
+          "tests": 2,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 1.064
+        },
+        {
+          "namespace": "millhouse.authoring-forms-test",
+          "tests": 4,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.055
+        },
+        {
+          "namespace": "millhouse.package-layout-test",
+          "tests": 3,
+          "assertions": 85,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.027
+        },
+        {
+          "namespace": "millhouse.test-support-test",
+          "tests": 2,
+          "assertions": 11,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 13.196
+        },
+        {
+          "namespace": "millhouse.executor-discovery-test",
+          "tests": 1,
+          "assertions": 6,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 6.969
+        },
+        {
+          "namespace": "millhouse.workflow-test",
+          "tests": 24,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.081
+        },
+        {
+          "namespace": "millhouse.workflow-authoring-test",
+          "tests": 29,
+          "assertions": 139,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.536
+        },
+        {
+          "namespace": "millhouse.workflow-spec-test",
+          "tests": 10,
+          "assertions": 45,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.06
+        },
+        {
+          "namespace": "millhouse.workflow-composition-test",
+          "tests": 20,
+          "assertions": 112,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 116.709
+        },
+        {
+          "namespace": "millhouse.workflow-registry-test",
+          "tests": 30,
+          "assertions": 115,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 145.146
+        },
+        {
+          "namespace": "millhouse.workflow-cli-test",
+          "tests": 16,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 89.743
+        },
+        {
+          "namespace": "millhouse.workflow-run-cli-test",
+          "tests": 38,
+          "assertions": 189,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 160.732
+        },
+        {
+          "namespace": "millhouse.chime-test",
+          "tests": 18,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 109.95
+        },
+        {
+          "namespace": "millhouse.cron.runtime-test",
+          "tests": 12,
+          "assertions": 1056,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 50.952
+        },
+        {
+          "namespace": "millhouse.e2e.cron.lifecycle-test",
+          "tests": 2,
+          "assertions": 8,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 24.036
+        },
+        {
+          "namespace": "millhouse.executors.shell-test",
+          "tests": 46,
+          "assertions": 232,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 185.157
+        },
+        {
+          "namespace": "millhouse.identity-test",
+          "tests": 24,
+          "assertions": 191,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 148.727
+        },
+        {
+          "namespace": "millhouse.land.scripts-test",
+          "tests": 19,
+          "assertions": 116,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 22.237
+        }
+      ],
+      "log_sha256": "cd51f3284521cd9059d31f36dfa24913a40aa5c732fedc1ffa301fa2427f1170"
+    },
+    {
+      "run": 2,
+      "exit": 0,
+      "tests": 490,
+      "assertions": 3969,
+      "preload_seconds": 0.054141125,
+      "in_run_seconds": 456.557338542,
+      "serial_seconds": 273.738936334,
+      "parallel_seconds": 181.068495916,
+      "load_and_dispatch_seconds": 1.74990629200002,
+      "process_seconds": 458.35262374999,
+      "outside_runner_seconds": 1.7952852079899912,
+      "lock_and_launcher_seconds": 0.048554500041063875,
+      "world_calls": 368,
+      "worlds_reaching_callback": 367,
+      "pre_start_refusals": 1,
+      "world_sum_seconds": 1281.538215411,
+      "world_callback_sum_seconds": 87.57068038600002,
+      "world_setup_teardown_sum_seconds": 1193.9675350249993,
+      "namespaces": [
+        {
+          "namespace": "millhouse.auto-review-test",
+          "tests": 8,
+          "assertions": 68,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 13.292
+        },
+        {
+          "namespace": "millhouse.auto-run-test",
+          "tests": 22,
+          "assertions": 221,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 33.185
+        },
+        {
+          "namespace": "millhouse.millstrand-workflows-test",
+          "tests": 1,
+          "assertions": 2,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 1.555
+        },
+        {
+          "namespace": "millhouse.consumer-test",
+          "tests": 2,
+          "assertions": 13,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 2.356
+        },
+        {
+          "namespace": "millhouse.workflow-runtime-test",
+          "tests": 55,
+          "assertions": 321,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 75.81
+        },
+        {
+          "namespace": "millhouse.executors.code-test",
+          "tests": 13,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 21.266
+        },
+        {
+          "namespace": "millhouse.kanban-test",
+          "tests": 49,
+          "assertions": 429,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 72.309
+        },
+        {
+          "namespace": "millhouse.land.merge-queue-test",
+          "tests": 28,
+          "assertions": 160,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 44.982
+        },
+        {
+          "namespace": "millhouse.land.workflow-test",
+          "tests": 7,
+          "assertions": 88,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 8.979
+        },
+        {
+          "namespace": "millhouse.affected-test",
+          "tests": 5,
+          "assertions": 46,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.515
+        },
+        {
+          "namespace": "millhouse.quality-lock-test",
+          "tests": 2,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 1.216
+        },
+        {
+          "namespace": "millhouse.authoring-forms-test",
+          "tests": 4,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.065
+        },
+        {
+          "namespace": "millhouse.package-layout-test",
+          "tests": 3,
+          "assertions": 85,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.028
+        },
+        {
+          "namespace": "millhouse.test-support-test",
+          "tests": 2,
+          "assertions": 11,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 13.367
+        },
+        {
+          "namespace": "millhouse.executor-discovery-test",
+          "tests": 1,
+          "assertions": 6,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 7.515
+        },
+        {
+          "namespace": "millhouse.workflow-test",
+          "tests": 24,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.082
+        },
+        {
+          "namespace": "millhouse.workflow-authoring-test",
+          "tests": 29,
+          "assertions": 139,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.549
+        },
+        {
+          "namespace": "millhouse.workflow-spec-test",
+          "tests": 10,
+          "assertions": 45,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.069
+        },
+        {
+          "namespace": "millhouse.workflow-composition-test",
+          "tests": 20,
+          "assertions": 112,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 114.672
+        },
+        {
+          "namespace": "millhouse.workflow-registry-test",
+          "tests": 30,
+          "assertions": 115,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 140.069
+        },
+        {
+          "namespace": "millhouse.workflow-cli-test",
+          "tests": 16,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 84.811
+        },
+        {
+          "namespace": "millhouse.workflow-run-cli-test",
+          "tests": 38,
+          "assertions": 189,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 156.928
+        },
+        {
+          "namespace": "millhouse.chime-test",
+          "tests": 18,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 103.158
+        },
+        {
+          "namespace": "millhouse.cron.runtime-test",
+          "tests": 12,
+          "assertions": 1056,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 47.671
+        },
+        {
+          "namespace": "millhouse.e2e.cron.lifecycle-test",
+          "tests": 2,
+          "assertions": 8,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 21.621
+        },
+        {
+          "namespace": "millhouse.executors.shell-test",
+          "tests": 46,
+          "assertions": 232,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 179.85
+        },
+        {
+          "namespace": "millhouse.identity-test",
+          "tests": 24,
+          "assertions": 191,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 141.112
+        },
+        {
+          "namespace": "millhouse.land.scripts-test",
+          "tests": 19,
+          "assertions": 116,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 22.545
+        }
+      ],
+      "log_sha256": "531eecf3c42345e3cbb69f96ec2d3a744b314c02554f4f5ca6600113a30ccd64"
+    },
+    {
+      "run": 3,
+      "exit": 0,
+      "tests": 490,
+      "assertions": 3969,
+      "preload_seconds": 0.053164083,
+      "in_run_seconds": 464.298386666,
+      "serial_seconds": 277.009331542,
+      "parallel_seconds": 185.518473833,
+      "load_and_dispatch_seconds": 1.7705812910000134,
+      "process_seconds": 466.0672887089895,
+      "outside_runner_seconds": 1.7689020429895095,
+      "lock_and_launcher_seconds": 0.046176458010450006,
+      "world_calls": 368,
+      "worlds_reaching_callback": 367,
+      "pre_start_refusals": 1,
+      "world_sum_seconds": 1315.2377971250007,
+      "world_callback_sum_seconds": 88.78798083300005,
+      "world_setup_teardown_sum_seconds": 1226.4498162920002,
+      "namespaces": [
+        {
+          "namespace": "millhouse.auto-review-test",
+          "tests": 8,
+          "assertions": 68,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 13.783
+        },
+        {
+          "namespace": "millhouse.auto-run-test",
+          "tests": 22,
+          "assertions": 221,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 33.781
+        },
+        {
+          "namespace": "millhouse.millstrand-workflows-test",
+          "tests": 1,
+          "assertions": 2,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 1.529
+        },
+        {
+          "namespace": "millhouse.consumer-test",
+          "tests": 2,
+          "assertions": 13,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 2.492
+        },
+        {
+          "namespace": "millhouse.workflow-runtime-test",
+          "tests": 55,
+          "assertions": 321,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 77.254
+        },
+        {
+          "namespace": "millhouse.executors.code-test",
+          "tests": 13,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 21.419
+        },
+        {
+          "namespace": "millhouse.kanban-test",
+          "tests": 49,
+          "assertions": 429,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 72.583
+        },
+        {
+          "namespace": "millhouse.land.merge-queue-test",
+          "tests": 28,
+          "assertions": 160,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 44.931
+        },
+        {
+          "namespace": "millhouse.land.workflow-test",
+          "tests": 7,
+          "assertions": 88,
+          "fail": 0,
+          "error": 0,
+          "group": "serial-island",
+          "seconds": 9.233
+        },
+        {
+          "namespace": "millhouse.affected-test",
+          "tests": 5,
+          "assertions": 46,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.567
+        },
+        {
+          "namespace": "millhouse.quality-lock-test",
+          "tests": 2,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 1.072
+        },
+        {
+          "namespace": "millhouse.authoring-forms-test",
+          "tests": 4,
+          "assertions": 14,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.055
+        },
+        {
+          "namespace": "millhouse.package-layout-test",
+          "tests": 3,
+          "assertions": 85,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.024
+        },
+        {
+          "namespace": "millhouse.test-support-test",
+          "tests": 2,
+          "assertions": 11,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 12.972
+        },
+        {
+          "namespace": "millhouse.executor-discovery-test",
+          "tests": 1,
+          "assertions": 6,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 7.546
+        },
+        {
+          "namespace": "millhouse.workflow-test",
+          "tests": 24,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.068
+        },
+        {
+          "namespace": "millhouse.workflow-authoring-test",
+          "tests": 29,
+          "assertions": 139,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.572
+        },
+        {
+          "namespace": "millhouse.workflow-spec-test",
+          "tests": 10,
+          "assertions": 45,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 0.059
+        },
+        {
+          "namespace": "millhouse.workflow-composition-test",
+          "tests": 20,
+          "assertions": 112,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 117.91
+        },
+        {
+          "namespace": "millhouse.workflow-registry-test",
+          "tests": 30,
+          "assertions": 115,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 142.63
+        },
+        {
+          "namespace": "millhouse.workflow-cli-test",
+          "tests": 16,
+          "assertions": 74,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 89.522
+        },
+        {
+          "namespace": "millhouse.workflow-run-cli-test",
+          "tests": 38,
+          "assertions": 189,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 159.238
+        },
+        {
+          "namespace": "millhouse.chime-test",
+          "tests": 18,
+          "assertions": 70,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 109.149
+        },
+        {
+          "namespace": "millhouse.cron.runtime-test",
+          "tests": 12,
+          "assertions": 1056,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 49.17
+        },
+        {
+          "namespace": "millhouse.e2e.cron.lifecycle-test",
+          "tests": 2,
+          "assertions": 8,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 22.614
+        },
+        {
+          "namespace": "millhouse.executors.shell-test",
+          "tests": 46,
+          "assertions": 232,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 184.444
+        },
+        {
+          "namespace": "millhouse.identity-test",
+          "tests": 24,
+          "assertions": 191,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 146.388
+        },
+        {
+          "namespace": "millhouse.land.scripts-test",
+          "tests": 19,
+          "assertions": 116,
+          "fail": 0,
+          "error": 0,
+          "group": "parallel",
+          "seconds": 22.325
+        }
+      ],
+      "log_sha256": "14ca217d86158c6b6ea3b3597133329dc65de0da959f43977b421813bb26bbda"
+    }
+  ]
+}
