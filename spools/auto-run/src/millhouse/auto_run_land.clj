@@ -298,7 +298,9 @@
        already be resolved. Clear resolved auto-run blockers with auto-run-unblock
        and retain the evidence in the card notes. At tidy-resources clean only
        the recorded owned inventory and record anything retained. Verify cleanup
-       before closing tidy-resources; Land's finish-card gate owns card completion.
+       and restore card {card} to claimed before closing tidy-resources; read back
+       the lane before advancing. Land's finish-card gate owns card completion
+       and requires a work lane, so never advance it with the card still pending.
 
        Verify Land is done and card {card} is closed with outcome done. Record the
        merged revision, cleanup result and retained resources on the card and

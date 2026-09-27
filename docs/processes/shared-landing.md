@@ -19,6 +19,8 @@ Keep the board truthful: use `pending` while solely waiting for another card or 
 
 Supplemental review requires a live, dedicated review target. A native reviewer continuation retains its original target, so resuming a reviewer whose gate is already closed cannot launch. Preserve that completed review and arrange a separate active review task; record the immutable range and findings at the existing resolution checkpoint. Never reopen a completed executor gate merely to obtain follow-up review.
 
+Before completing `tidy-resources`, restore a pending card to `claimed` and read back its lane: the automatic `finish-card` gate requires a work lane. Land's review/abort card action also accepts pending cards, so an owner can resume or withdraw paused work without first repairing its lane manually.
+
 ## Bootstrap consumption
 
 The recommended consumer uses the shared Codethread bootstrap:

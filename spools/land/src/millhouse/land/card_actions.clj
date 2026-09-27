@@ -26,17 +26,18 @@
   nil)
 
 (defn rework!
-  "Resume agent work on an optional card in claimed; repeat calls are harmless."
+  "Resume pending or human-review work in claimed; repeat calls are harmless."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]
       (case (attr-get view :kanban/lane)
         "claimed" nil
-        "in_review" (do
-                      (when-not (= "active" (:state view))
-                        (fail! "Card must be active to rework" {:card card}))
-                      (weaver/update! runtime card {:attributes {:kanban/lane "claimed"}}))
-        (fail! "Aborted landing card must be claimed or in review" {:card card}))))
+        ("pending" "in_review")
+        (do
+          (when-not (= "active" (:state view))
+            (fail! "Card must be active to rework" {:card card}))
+          (weaver/update! runtime card {:attributes {:kanban/lane "claimed"}}))
+        (fail! "Landing card must be pending, claimed or in review" {:card card}))))
   nil)
 
 (defn finish!

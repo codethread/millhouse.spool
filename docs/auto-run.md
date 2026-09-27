@@ -111,7 +111,8 @@ custody solely because the queue head failed. Use `pending` while solely waiting
 on another card and restore `claimed` when this run progresses. Re-read the
 frontier after each wait: executors can merge and remove the worktree while the
 finisher waits. Queue release is not delivery completion. The finisher must
-complete `tidy-resources`, await Land's `finish-card` gate, verify the closed/done
+restore the card to `claimed` before completing `tidy-resources`, await Land's
+`finish-card` gate, verify the closed/done
 card, and close the delivery observation and custody anchor before returning.
 
 Before stopping for a failure owned by this delivery, reconcile its lane and

@@ -244,6 +244,9 @@
                      Remove scratch files and named resources owned by this work.
                      Stop processes by recorded PID and sessions by exact name.
                      Leave shared or uncertain resources alone; note anything retained.
+                     If the optional card was pending during queue waiting, restore
+                     kanban/lane=claimed now, before completing this step. Re-read
+                     its lane; the automatic finish-card gate requires a work lane.
                      Complete this step after verifying the inventory, including
                      when there are no resources to remove. Then await finish-card
                      and verify the run is done and its card is closed with outcome

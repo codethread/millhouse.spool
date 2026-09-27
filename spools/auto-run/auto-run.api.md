@@ -166,7 +166,7 @@ Recorded autonomous landing phases with one persistent finisher target.
 
 
 Review, freeze and release one independent finisher through recorded phases.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L94-L309">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L94-L311">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-land/failure-policy">`failure-policy`</a>
 ``` clojure
