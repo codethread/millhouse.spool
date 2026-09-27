@@ -56,8 +56,11 @@
        (case mode
          :normal "exec /bin/ps \"$@\"\n"
          :finite-flood
+         ;; Buffer awk's stdout before redirecting it to the scanner's stderr.
+         ;; Per-print awk redirection flushes 20,000 tiny writes unnecessarily;
+         ;; the same 160,000 bytes still exceed pipe capacity, below capture's cap.
          (str "/usr/bin/awk 'BEGIN { for (i=0; i<20000; i++) "
-              "print \"scanner\" > \"/dev/stderr\" }'\n"
+              "print \"scanner\" }' >&2\n"
               "exec /bin/ps \"$@\"\n")
          :stdout-overflow
          "exec /usr/bin/awk 'BEGIN { for (i=0; i<80000; i++) print \"1 1\" }'\n"
@@ -236,10 +239,42 @@
     (fn [{:keys [root profile]}]
       (let [before-helper (thread-count "guidance-preflight-io")
             before-scanner (thread-count "guidance-preflight-scan-io")
-            {:keys [result error elapsed-millis]} (run-profile profile)]
+            original-interpret scan/interpret-output!
+            original-direct identity/retain-direct
+            scans (atom [])
+            retained (atom [])
+            {:keys [result error elapsed-millis]}
+            (with-redefs
+             [scan/interpret-output!
+              (fn [exit-code stdout stderr]
+                (let [rows (original-interpret exit-code stdout stderr)]
+                  (swap! scans conj {:exit-code exit-code
+                                     :stderr-bytes (alength ^bytes stderr)
+                                     :rows rows
+                                     :helper-io-active?
+                                     (> (thread-count "guidance-preflight-io")
+                                        before-helper)})
+                  rows))
+              identity/retain-direct
+              (fn [& args]
+                (let [value (apply original-direct args)]
+                  (swap! retained conj value)
+                  value))]
+              (run-profile profile))]
         (is (nil? error))
-        (is (zero? (:exit-code result)))
+        (is (= 0 (:exit-code result)))
+        (is (= "{}" (:stdout result)))
+        (is (seq @scans))
+        (is (every? #(and (= 0 (:exit-code %))
+                         (= 160000 (:stderr-bytes %))
+                         (seq (:rows %)))
+                    @scans))
+        (is (some :helper-io-active? @scans))
         (is (< elapsed-millis 3000.0))
+        (is (seq @retained))
+        (is (every? (complement identity/live?) @retained))
+        (is (= 3 (count (:owned-pids result))))
+        (is (not-any? alive-pid? (vals (:owned-pids result))))
         (is (false? (process-for-root? root)))
         (is (= before-helper (thread-count "guidance-preflight-io")))
         (is (= before-scanner (thread-count "guidance-preflight-scan-io")))))))
