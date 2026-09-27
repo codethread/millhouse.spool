@@ -6,7 +6,7 @@ eligible, and existing dependencies must close before dispatch.
 
 ## Repository policy
 
-`.millstrand/me/auto_run.clj` owns admission: two concurrent workers, a
+`.millstrand/me/auto_run.clj` owns admission: one worker, a
 15-second scan interval, `wktree` preparation, and Sol/low with
 `auto-human-review` by default. The only allowed workflows are:
 
@@ -40,16 +40,27 @@ status; inspect its exact Harnesses run separately.
 ## Quality lock ownership
 
 Both automatic delivery and shared Land invoke `.millstrand/land-quality.sh`.
-That script alone acquires `/tmp/millstrand-test.lock` with `flock -w 180` before
-running `make quality`; do not wrap that script in another lock. The gate uses
+That script owns `/tmp/millstrand-test.lock` through `scripts/with-test-lock.sh`.
+The helper makes at most ten `flock -w 180` acquisition attempts, reporting each
+wait, then runs `make quality` once while retaining the acquired descriptor.
+Do not wrap the contract in another lock or probe/release the lock before calling
+it: a successful probe cannot reserve capacity for the real executor. The gate uses
 Git changes against the merge-base with `main` to select affected tests and
 independent package gates; static/docs checks remain repository-wide. Inspect
 with `make test-plan`, override with `TEST_BASE=feature/parent`, or request all
 suites with `TEST_FULL=1` (`make quality-full` outside the contract). These Make
 overrides can also be passed to the contract script. CI uses the same selector.
-Direct full suite commands still need the shared lock. Focused tests remain exempt. A lock
-acquisition failure fails the gate without starting quality; apply the normal
-explicit recovery policy rather than clearing the gate or retrying implicitly.
+Direct full suite commands still need the shared lock. Focused tests remain exempt.
+Acquisition conflicts retry inside the same shell attempt; they do not require
+worker replacement or Oracle approval. A started check is never retried by this
+helper, even if it returns the conflict exit code. After the ten attempts are
+exhausted, the gate fails with exit 75 and an explicit command-never-started
+message. Inspect the holder and preserve that evidence before further recovery;
+do not kill a healthy holder or clear an executor gate implicitly.
+
+The test lock is separate from Land's FIFO merge reservation. A failed FIFO head
+retains its turn while its owner repairs and revalidates the candidate. Improving
+test-lock acquisition does not clear that failure or authorize queue withdrawal.
 
 ## Ownership and failure policy
 

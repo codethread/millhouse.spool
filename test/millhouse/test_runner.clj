@@ -8,6 +8,7 @@
 (def test-namespaces
   "All test namespaces, in stable reporting order."
   '[millhouse.affected-test
+    millhouse.quality-lock-test
     millhouse.auto-review-test
     millhouse.auto-run-test
     millhouse.millstrand-workflows-test

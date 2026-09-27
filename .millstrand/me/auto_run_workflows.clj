@@ -46,8 +46,11 @@
              external reviews as a smoke test. Add focused regression tests when
              behavior or ownership boundaries warrant them.
 
-             Run .millstrand/land-quality.sh while iterating; it owns the shared
-             suite lock. Do not wrap it in another flock.
+             Use focused checks while iterating. The following quality gate runs
+             .millstrand/land-quality.sh and owns the shared suite lock; do not
+             repeat the full gate merely to complete implementation. When a
+             repaired revision needs manual quality evidence, invoke that same
+             contract without an outer flock or a probe/release prerequisite.
 
              When implementation and focused verification are complete, commit your
              work and complete this step.

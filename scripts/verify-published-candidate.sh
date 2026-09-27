@@ -11,4 +11,4 @@ git fetch --no-tags origin "+refs/heads/$expected_branch:refs/remotes/origin/$ex
 test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/remotes/origin/$expected_branch")"
 
 # This entrypoint owns the suite lock; make quality and its children do not.
-exec flock -w 180 /tmp/millstrand-test.lock make quality
+exec bash .millstrand/land-quality.sh
