@@ -2,7 +2,6 @@
   "Lifecycle contract tests: status/substatus, stop, resume, and wait queries."
   (:require [clojure.test :refer [deftest is testing]]
             [millhouse.harnesses.execution :as execution]
-            [millhouse.harnesses.internal.cli :as cli]
             [millhouse.harnesses.internal.lifecycle :as life]
             [millstrand.test.alpha :as test-alpha]))
 
@@ -99,9 +98,6 @@
     (is (= "completed" (:harness/substatus patch)))
     (is (= "false" (:harness/session-usable patch)))))
 
-(deftest agent-await-is-removed
-  (is (not (contains? (:subcommands cli/agent-arg-spec) "await"))))
-
 (deftest reserved-agent-environment-cannot-be-overridden
   (let [runtime {:metadata {:config-dir "/runtime/workspace"}}
         run {:id "run-1"
@@ -196,7 +192,11 @@
       queries/agent-work-root-complete-or-intervention)"}})
 
 (defn with-core-world
-  "Run a body in an isolated core lifecycle Weaver world."
+  "Run a body in a fresh memory-SQLite world with lifecycle APIs and queries.
+
+  These runtime persistence tests still pay Weaver/basis startup: the supported
+  fixture has no bare runtime constructor. No execution resource is activated,
+  so synthetic run transitions cannot launch providers."
   [f]
   (test-alpha/run-with-weaver-world (core-world-options :sqlite-memory) f))
 

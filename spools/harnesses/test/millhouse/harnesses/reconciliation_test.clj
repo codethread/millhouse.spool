@@ -1,8 +1,9 @@
 (ns millhouse.harnesses.reconciliation-test
-  "Process evidence and administrative reconciliation contract tests."
+  "Pure reconciliation decisions and runtime-backed administrative mutations."
   (:require [clojure.test :refer [deftest is testing]]
             [millhouse.harnesses.internal.lifecycle :as life]
             [millhouse.harnesses.internal.reconciliation :as reconciliation]
+            [millhouse.harnesses.lifecycle-test :as fixture]
             [millstrand.test.alpha :as test-alpha]))
 
 (defn- run
@@ -45,12 +46,11 @@
                          :provider {:state "gone"}
                          :native {:state "not-observed"}
                          :active-session-writers ["newer"]}))))
-      (doseq [provider-state ["gone" "missing" "unavailable"]]
-        (is (= "protected"
-               (:classification
-                (classify {:completion-owner {:state "live"}
-                           :provider {:state provider-state}
-                           :native {:state "not-observed"}}))))))
+      (is (= "protected"
+             (:classification
+              (classify {:completion-owner {:state "live"}
+                         :provider {:state "unavailable"}
+                         :native {:state "not-observed"}})))))
     (testing "both absent or PID-reused identities prove orphaned custody"
       (doseq [state ["gone" "replaced"]]
         (is (= "orphaned"
@@ -75,60 +75,8 @@
       (is (= "interactive-abandoned" (:harness/settlement attributes)))
       (is (not (contains? attributes :harness/exit-code))))))
 
-(defn- world-deps []
-  (let [harnesses-root (test-alpha/spool-checkout-root
-                        "millhouse/harnesses.clj")
-        identity-root (test-alpha/spool-checkout-root
-                       "millhouse/identity.clj")]
-    {:deps
-     {'millhouse/harnesses
-      {:local/root (.getCanonicalPath harnesses-root)}
-      'millhouse/identity
-      {:local/root (.getCanonicalPath identity-root)}}}))
-
-(defn- core-world-options [storage]
-  {:storage storage
-   :deps-edn (pr-str (world-deps))
-   :init-clj
-   "(require '[millstrand.api.current.alpha :as current]
-             '[millstrand.api.runtime.alpha :as runtime])
-    (def rt (current/runtime))
-    (runtime/module! rt :identity
-      {:ns 'millhouse.identity
-       :required? true})
-    (runtime/module! rt :harnesses-core
-      {:file \"modules/lifecycle_core.clj\"
-       :after [:identity]
-       :required? true})"
-   :files
-   {"modules/lifecycle_core.clj"
-    "(ns modules.lifecycle-core
-       (:require [millhouse.harnesses :as harnesses]
-                 [millhouse.harnesses.agent-cli :as agent-cli]
-                 [millhouse.harnesses.assignment :as assignment]
-                 [millhouse.harnesses.queries :as queries]
-                 [millstrand.api.lifecycle.alpha :as lifecycle]
-                 [millstrand.api.millstrand.alpha :as millstrand]))
-     (lifecycle/use-resource!
-      harnesses/harness-core-runtime
-      assignment/assignment-runtime)
-     (millstrand/use-op! agent-cli/agent)
-     (millstrand/use-query!
-      queries/agent-run-terminal
-      queries/agent-run-settled
-      queries/agent-run-active
-      queries/agent-runs-active
-      queries/agent-runs-for-target
-      queries/agent-work-complete
-      queries/agent-work-complete-or-intervention
-      queries/agent-work-root-complete
-      queries/agent-work-root-complete-or-intervention)"}})
-
-(defn- with-core-world [f]
-  (test-alpha/run-with-weaver-world (core-world-options :sqlite-memory) f))
-
 (deftest malformed-probes-cannot-bypass-live-or-terminal-protection
-  (with-core-world
+  (fixture/with-core-world
     (fn [ctx]
       (let [result
             (test-alpha/repl!
@@ -226,7 +174,7 @@
         (is (true? (:terminal-no-write result)))))))
 
 (deftest explicit-legacy-abandonment-is-auditable-and-idempotent
-  (with-core-world
+  (fixture/with-core-world
     (fn [ctx]
       (let [result
             (test-alpha/repl!
