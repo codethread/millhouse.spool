@@ -191,6 +191,8 @@
          (fail! "Harness run is not ready to start"
                 {:id id :status (life/status run)
                  :substatus (life/substatus run)}))
+       (when-let [target (attr-get run :harness/target)]
+         (runs/require-open-target! rt target))
        (let [guidance-patch
              (try
                (guidance/begin-attempt-patch rt run attempt invocation)

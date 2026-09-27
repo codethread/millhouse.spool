@@ -312,6 +312,37 @@
         (is (= "ready" (:waiting result)))
         (is (= "running" (:running result)))))))
 
+(deftest target-closing-after-readiness-never-starts-an-attempt
+  (with-assignment-world
+    (fn [ctx]
+      (let [result
+            (eval-world
+             ctx
+             '(let [target (add-target! "Closes at launch")
+                    run (assign! (:id target) {})
+                    launch-ready? assignment/launch-ready?
+                    _ (#'execution/activate-state! rt)]
+                (try
+                  (with-redefs [assignment/launch-ready?
+                                (fn [rt candidate]
+                                  (let [ready? (launch-ready? rt candidate)]
+                                    (when (and ready? (= (:id run) (:id candidate)))
+                                      (weaver/update! rt (:id target) {:state "closed"}))
+                                    ready?))]
+                    (#'execution/launch-headless! rt (:id run)))
+                  (let [stopped (weaver/show rt (:id run))]
+                    {:status (mapv #(attr stopped %)
+                                   [:harness/status :harness/settled :harness/settlement])
+                     :attempt (attr stopped :harness/attempt)
+                     :invocation (attr stopped :harness/invocation)
+                     :process (attr stopped :harness/process-handle)})
+                  (finally
+                    ((:close-fn (#'execution/deactivate-state! rt)))))))]
+        (is (= ["stopped" "true" "never-launched"] (:status result)))
+        (is (nil? (:attempt result)))
+        (is (nil? (:invocation result)))
+        (is (nil? (:process result)))))))
+
 (deftest default-and-explicit-policy-are-frozen
   (with-assignment-world
     (fn [ctx]

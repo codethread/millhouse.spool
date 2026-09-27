@@ -211,7 +211,8 @@
                                   :data (ex-data transition-error)}}
                                 transition-error))))))))
     (catch Exception error
-      (when-not (:deferred (ex-data error))
+      (when-not (or (:deferred (ex-data error))
+                    (= :harness/target-unavailable (:reason (ex-data error))))
         (throw error)))
     (finally
       (let [opened (or launch-state (state rt))]
