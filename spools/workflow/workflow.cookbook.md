@@ -421,7 +421,7 @@ The target receives only its defaults plus the explicit params passed to `defer!
 
 Use `call` instead when the author already knows the target. Use checkpoint `:next` when choosing a route should abandon the current stage rather than return to it.
 
-Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `spools/workflow/test/millhouse/workflow_test.clj`.
+Honest source: `defer-returns-to-the-declaring-workflow` and `defer-isolates-the-target-from-caller-params` in `spools/workflow/test/millhouse/workflow_composition_test.clj`.
 
 ---
 
@@ -452,7 +452,7 @@ The selected routine pours below the existing root. The defer join closes when t
 
 An empty or fully conditioned-out target closes the join in the fill transaction. If that was the last outstanding work, `defer!` returns `{:ready [] :done true}`.
 
-Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `spools/workflow/test/millhouse/workflow_test.clj`.
+Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and `defer-into-an-empty-target-does-not-stall-the-run` in `spools/workflow/test/millhouse/workflow_composition_test.clj`.
 
 ---
 
@@ -522,7 +522,7 @@ Honest source: `a-final-defer-returns-without-abandoning-parallel-siblings` and 
   verdict) into a route. Parallelism falls out of edge absence; branching lives
   in checkpoint choices.
 
-Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/workflow_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:agent` gate that `millhouse.harnesses.executors.agent` fulfills.
+Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/workflow_runtime_test.clj` (`workflow-models-pull-request-flow-without-conditional-edges`) and the `:agent` gate that `millhouse.harnesses.executors.agent` fulfills.
 
 ---
 
@@ -603,7 +603,7 @@ Honest source: the forge-agnostic PR flow in `spools/workflow/test/millhouse/wor
   (`"workflow/instruction"`) at build time keeps them faithful across the JSON
   layer (contract [`README.md`](./README.md)).
 
-Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/workflow_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
+Honest source: the `github-pr-bindings` / `bind-attrs` reference in `spools/workflow/test/millhouse/workflow_runtime_test.clj` (`workflow-pr-flow-rebinds-forge-without-spool-changes`), GitHub shipped as default, GitLab swapped in as a partial override.
 
 ---
 

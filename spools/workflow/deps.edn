@@ -12,6 +12,11 @@
    :main-opts
    ["-m" "millhouse.test-runner"
     "millhouse.workflow-test"
+    "millhouse.workflow-authoring-test"
+    "millhouse.workflow-spec-test"
+    "millhouse.workflow-runtime-test"
+    "millhouse.workflow-composition-test"
+    "millhouse.workflow-registry-test"
     "millhouse.workflow-cli-test"
     "millhouse.workflow-run-cli-test"
     "millhouse.executors.code-test"

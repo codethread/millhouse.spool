@@ -17,6 +17,11 @@
     millhouse.test-support-test
     millhouse.executor-discovery-test
     millhouse.workflow-test
+    millhouse.workflow-authoring-test
+    millhouse.workflow-spec-test
+    millhouse.workflow-runtime-test
+    millhouse.workflow-composition-test
+    millhouse.workflow-registry-test
     millhouse.workflow-cli-test
     millhouse.workflow-run-cli-test
     millhouse.chime-test
@@ -36,7 +41,11 @@
   The consumer fixture's generated init runs source-backed module activation
   during weaver startup, before the test body can provide an in-process
   activation seam. Keep that namespace out of the parallel pool so its startup
-  reloads cannot overlap another fixture's shared JVM namespace reloads."
+  reloads cannot overlap another fixture's shared JVM namespace reloads.
+
+  Workflow runtime proofs temporarily redefine batch/apply!, weaver/ready and
+  workflow/attention. Keep those global substitutions away from the other
+  Workflow partitions and every parallel runtime consumer."
   #{'millhouse.auto-review-test
     'millhouse.auto-run-test
     'millhouse.consumer-test
@@ -44,7 +53,8 @@
     'millhouse.kanban-test
     'millhouse.land.merge-queue-test
     'millhouse.land.workflow-test
-    'millhouse.millstrand-workflows-test})
+    'millhouse.millstrand-workflows-test
+    'millhouse.workflow-runtime-test})
 
 (defn- initial-summary [] test/*initial-report-counters*)
 

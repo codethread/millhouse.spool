@@ -3,10 +3,11 @@
  {:unused-private-var
   {:exclude [millhouse.workflow/workflow-authoring-plan
              millhouse.workflow/executor-authoring-plan
-             millhouse.workflow-test/bad-defaults-definition
-             millhouse.workflow-test/bad-spec-definition
-             millhouse.workflow-test/unknown-input-definition
-             millhouse.workflow-test/revisable-definition
-             millhouse.workflow-test/revisable-definition-v2
-             millhouse.workflow-test/exploding-constructor
-             millhouse.workflow-test/malformed-constructor]}}}
+             millhouse.workflow-registry-test/bad-defaults-definition
+             millhouse.workflow-registry-test/bad-spec-definition
+             millhouse.workflow-registry-test/unknown-input-definition
+             millhouse.workflow-registry-test/revisable-definition
+             millhouse.workflow-registry-test/revisable-definition-v2
+             millhouse.workflow-registry-test/exploding-constructor
+             millhouse.workflow-registry-test/malformed-constructor
+             millhouse.workflow-registry-test/tracked-card]}}}
