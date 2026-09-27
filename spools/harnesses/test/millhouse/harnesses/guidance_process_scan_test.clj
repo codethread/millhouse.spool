@@ -266,8 +266,8 @@
         (is (= "{}" (:stdout result)))
         (is (seq @scans))
         (is (every? #(and (= 0 (:exit-code %))
-                         (= 160000 (:stderr-bytes %))
-                         (seq (:rows %)))
+                          (= 160000 (:stderr-bytes %))
+                          (seq (:rows %)))
                     @scans))
         ;; The second scan follows retention of the gated helper, whose inherited
         ;; pipes share the preflight drains. The first scan precedes helper launch.
