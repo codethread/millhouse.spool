@@ -19,6 +19,8 @@ The suite verifies:
 - minimal managed run-reference forwarding, with no inherited child reference;
 - awaited CLI registration and canonical additional developer context;
 - bounded failures, crash-safe duplicate protection and interruption cleanup;
+- retirement of owned process groups before deleting disposable homes, including
+  a writer that outlives its direct parent and an unrelated surviving sentinel;
 - actual Codex plugin discovery, trust and duplicate-injector handling;
 - actual fresh/resumed Codex model-bound input through a local HTTP/SSE fixture.
   One enabled injector contributes one identity message. Duplicate injectors

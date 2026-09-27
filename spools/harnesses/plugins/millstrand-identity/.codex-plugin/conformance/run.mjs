@@ -68,6 +68,8 @@ const outputSchemas = {
 };
 const temporaryDirectories = [];
 const activeChildren = new Set();
+const childStates = new WeakMap();
+let cleanupPromise;
 let environmentRoot;
 
 function temporaryDirectory(prefix) {
@@ -100,10 +102,52 @@ async function waitForFile(path, timeout = 2_000) {
   }
 }
 
-function trackChild(child) {
+function startChild(command, args, options) {
+  assert.equal(cleanupPromise, undefined, "fixture cleanup already started");
+  const child = spawn(command, args, options);
   activeChildren.add(child);
-  child.once("close", () => activeChildren.delete(child));
+  childStates.set(child, {
+    closed: new Promise((resolvePromise) =>
+      child.once("close", resolvePromise),
+    ),
+    retirement: undefined,
+  });
   return child;
+}
+
+function retireChild(child) {
+  const state = childStates.get(child);
+  state.retirement ??= (async () => {
+    const deadline = Date.now() + 2_000;
+    terminateProcessTree(child);
+    let timer;
+    try {
+      await Promise.race([
+        state.closed,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`fixture child ${child.pid} did not close`)),
+            2_000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (child.pid !== undefined && process.platform !== "win32") {
+      // Codex may close while its Git plugin-sync descendants still write HOME.
+      // Keep custody until the private group, not just its leader, has retired.
+      while (processExists(-child.pid)) {
+        assert.ok(
+          Date.now() < deadline,
+          `fixture process group ${child.pid} did not retire`,
+        );
+        await new Promise((resolvePromise) => setImmediate(resolvePromise));
+      }
+    }
+    activeChildren.delete(child);
+  })();
+  return state.retirement;
 }
 
 function processExists(pid) {
@@ -112,6 +156,8 @@ function processExists(pid) {
     return true;
   } catch (error) {
     if (error.code === "ESRCH") return false;
+    // A permission refusal is still positive existence evidence, never retirement.
+    if (error.code === "EPERM") return true;
     throw error;
   }
 }
@@ -136,23 +182,20 @@ function terminateProcessTree(child) {
 }
 
 function cleanup() {
-  for (const child of activeChildren) terminateProcessTree(child);
-  activeChildren.clear();
-  while (temporaryDirectories.length > 0) {
-    rmSync(temporaryDirectories.pop(), {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 20,
-    });
-  }
+  cleanupPromise ??= (async () => {
+    await Promise.all([...activeChildren].map(retireChild));
+    while (temporaryDirectories.length > 0) {
+      rmSync(temporaryDirectories.pop(), { recursive: true, force: true });
+    }
+  })();
+  return cleanupPromise;
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  const handler = () => {
+  const handler = async () => {
     process.off(signal, handler);
     try {
-      cleanup();
+      await cleanup();
     } finally {
       process.kill(process.pid, signal);
     }
@@ -172,14 +215,12 @@ function run(
   } = {},
 ) {
   return new Promise((resolvePromise, reject) => {
-    const child = trackChild(
-      spawn(command, args, {
-        detached: process.platform !== "win32",
-        env,
-        cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-      }),
-    );
+    const child = startChild(command, args, {
+      detached: process.platform !== "win32",
+      env,
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     onSpawn?.(child);
     let stdout = "";
     let stderr = "";
@@ -219,8 +260,14 @@ function run(
     child.stdin.on("error", (error) => {
       recordTerminalError(error, "stdin");
     });
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       clearTimeout(timer);
+      try {
+        await retireChild(child);
+      } catch (error) {
+        reject(error);
+        return;
+      }
       if (terminalErrorSource === "stdin") {
         const invocation = JSON.stringify([command, ...args]);
         const outcome = `code ${String(code)}, signal ${String(signal)}`;
@@ -235,6 +282,67 @@ function run(
     });
     child.stdin.end(input);
   });
+}
+
+async function checkClosedParentDescendantCleanup() {
+  const directory = temporaryDirectory("codex-hook-descendant-");
+  const artifact = join(directory, "writer.pid");
+  const writerSource = `
+    const fs = require("node:fs");
+    fs.writeFileSync(${JSON.stringify(artifact)}, String(process.pid));
+    function write() {
+      fs.writeFileSync(${JSON.stringify(`${artifact}.data`)}, "still writing");
+      setImmediate(write);
+    }
+    write();
+    process.send("ready");
+  `;
+  const parentSource = `
+    const { spawn } = require("node:child_process");
+    const writer = spawn(process.execPath, ["-e", ${JSON.stringify(writerSource)}], {
+      stdio: ["ignore", "ignore", "ignore", "ipc"]
+    });
+    writer.once("message", () => {
+      process.stdout.write(String(writer.pid));
+      writer.disconnect();
+      writer.unref();
+    });
+  `;
+  const sentinel = startChild("/bin/cat", [], {
+    detached: true,
+    env: fixtureEnvironment(),
+    stdio: ["pipe", "ignore", "ignore"],
+  });
+  let parent;
+  try {
+    const result = await run(process.execPath, ["-e", parentSource], {
+      env: fixtureEnvironment(),
+      onSpawn(child) {
+        parent = child;
+      },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const writerPid = Number.parseInt(result.stdout, 10);
+    assert.equal(readFileSync(artifact, "utf8"), String(writerPid));
+    assert.equal(
+      processExists(writerPid),
+      false,
+      "closed-parent writer must retire",
+    );
+    assert.equal(processExists(-parent.pid), false, "owned group must retire");
+    assert.equal(
+      processExists(sentinel.pid),
+      true,
+      "unrelated child must survive",
+    );
+    rmSync(directory, { recursive: true, force: true });
+    assert.equal(existsSync(directory), false);
+  } finally {
+    await Promise.all([...(parent ? [parent] : []), sentinel].map(retireChild));
+  }
+  console.log(
+    "Closed-parent writer cleanup passed (real owned group and sentinel).",
+  );
 }
 
 async function checkEarlyStdinCloseReporting() {
@@ -410,19 +518,17 @@ async function checkHostKillRecovery(payloadText) {
     MILLSTRAND_CODEX_STRAND_BIN: fakeStrand,
     FAKE_STRAND_LOG: logPath,
   });
-  const child = trackChild(
-    spawn("bash", [identityHook, "--configured-source"], {
-      detached: true,
-      env: {
-        ...environment,
-        FAKE_STRAND_MODE: "hold",
-        FAKE_STRAND_GATE: gate,
-        FAKE_STRAND_READY: ready,
-        FAKE_STRAND_PID_FILE: fakePidFile,
-      },
-      stdio: ["pipe", "pipe", "pipe"],
-    }),
-  );
+  const child = startChild("bash", [identityHook, "--configured-source"], {
+    detached: true,
+    env: {
+      ...environment,
+      FAKE_STRAND_MODE: "hold",
+      FAKE_STRAND_GATE: gate,
+      FAKE_STRAND_READY: ready,
+      FAKE_STRAND_PID_FILE: fakePidFile,
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
   child.stdin.end(payloadText);
   await waitForFile(ready);
   await waitForFile(fakePidFile);
@@ -435,6 +541,7 @@ async function checkHostKillRecovery(payloadText) {
   );
   process.kill(-child.pid, "SIGKILL");
   assert.deepEqual(await closed, { code: null, closeSignal: "SIGKILL" });
+  await retireChild(child);
   await waitForProcessExit(fakePid);
   assert.equal(
     processExists(fakePid),
@@ -943,25 +1050,23 @@ function createCodexWorld({
 
 async function listHooks(world, cwd = world.cwd, configOverrides = []) {
   return new Promise((resolvePromise, reject) => {
-    const child = trackChild(
-      spawn(
-        "codex",
-        [
-          ...configOverrides.flatMap((override) => ["-c", override]),
-          "app-server",
-          "--stdio",
-        ],
-        {
-          detached: process.platform !== "win32",
-          env: fixtureEnvironment({
-            CODEX_HOME: world.codexHome,
-            HOME: world.home,
-            CODEX_APP_SERVER_DISABLE_MANAGED_CONFIG: "1",
-          }),
-          cwd: world.cwd,
-          stdio: ["pipe", "pipe", "pipe"],
-        },
-      ),
+    const child = startChild(
+      "codex",
+      [
+        ...configOverrides.flatMap((override) => ["-c", override]),
+        "app-server",
+        "--stdio",
+      ],
+      {
+        detached: process.platform !== "win32",
+        env: fixtureEnvironment({
+          CODEX_HOME: world.codexHome,
+          HOME: world.home,
+          CODEX_APP_SERVER_DISABLE_MANAGED_CONFIG: "1",
+        }),
+        cwd: world.cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     );
     let stdout = "";
     let stderr = "";
@@ -1033,8 +1138,14 @@ async function listHooks(world, cwd = world.cwd, configOverrides = []) {
       clearTimeout(timer);
       reject(error);
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       clearTimeout(timer);
+      try {
+        await retireChild(child);
+      } catch (error) {
+        reject(error);
+        return;
+      }
       if (terminalError) {
         reject(terminalError);
         return;
@@ -1616,7 +1727,10 @@ async function holdInterruptProbe() {
 try {
   if (process.argv[2] === "--interrupt-probe") {
     await holdInterruptProbe();
+  } else if (process.argv[2] === "--descendant-probe") {
+    await checkClosedParentDescendantCleanup();
   } else {
+    await checkClosedParentDescendantCleanup();
     checkStrictJsonRegression();
     await checkEarlyStdinCloseReporting();
     await checkProjectGate();
@@ -1629,5 +1743,5 @@ try {
     );
   }
 } finally {
-  cleanup();
+  await cleanup();
 }

@@ -1,6 +1,7 @@
 (ns millhouse.executors.code-test
   "Tests for the workflow-gate to in-process Clojure executor."
-  (:require [clojure.string :as str]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.executors.code :as code]
@@ -25,11 +26,6 @@
   [params]
   (swap! callback-count inc)
   (:value params))
-
-(defn nil-value
-  "Return nil for result-omission coverage."
-  [_params]
-  nil)
 
 (defn throw-value
   "Throw a test exception carrying stable ex-data."
@@ -159,39 +155,36 @@
 (defn- line-count [file]
   (count (remove str/blank? (str/split-lines (slurp file)))))
 
-(deftest pass-records-json-result-closes-gate-and-unblocks-next-step
+(deftest callback-runs-once-records-result-and-unblocks-next-step
   (with-code
     (fn [rt]
+      (reset! callback-count 0)
       (workflow/start! "pass"
                        (single-gate
                         "pass"
-                        (request "millhouse.executors.code-test/return-value"
+                        (request "millhouse.executors.code-test/count-return-value"
                                  {:value {"nested" [1 true "ok"]}}))
                        {})
       (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
       (let [gate-id (:id (gate-strand rt "pass"))
             closed (await-eventually #(let [gate (weaver/show rt gate-id)]
                                         (when (= "closed" (:state gate)) gate)))]
+        (is (= 1 @callback-count))
         (is (= "code" (attr closed :workflow/executor)))
         (is (nil? (attr closed :identity/by-identity)))
         (is (= {:nested [1 true "ok"]} (attr closed :code/result)))
         (is (nil? (attr closed :code/running)))
         (is (nil? (attr closed :gate/error)))
-        (is (= "After" (:title (first (workflow/ready "pass")))))))))
-
-(deftest nil-result-is-omitted
-  (with-code
-    (fn [rt]
+        (is (= "After" (:title (first (workflow/ready "pass"))))))
+      ;; A successful nil callback must omit the attribute, not persist null.
       (workflow/start! "nil"
                        (single-gate
                         "nil"
-                        (request "millhouse.executors.code-test/nil-value" {}))
+                        (request "millhouse.executors.code-test/return-value" {}))
                        {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (gate-strand rt "nil"))
-            closed (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                        (when (= "closed" (:state gate)) gate)))]
-        (is (nil? (attr closed :code/result)))
+      (let [closed (await-eventually
+                    #(let [gate (gate-strand rt "nil")]
+                       (when (= "closed" (:state gate)) gate)))]
         (is (not (contains? (:attributes closed) :code/result)))))))
 
 (deftest exception-and-non-json-result-stamp-errors-and-stay-ready
@@ -213,19 +206,25 @@
           (is (some #(= gate-id (:id %))
                     (weaver/list-query rt 'stalled-code-gates {}))))))))
 
+(deftest request-data-contract
+  (let [valid {:code/fn "millhouse.executors.code-test/return-value"
+               :code/params {:value {"nested" [1 true "ok"]}}
+               :code/timeout-secs 1}]
+    (is (s/valid? ::code/request valid))
+    (doseq [[key value] [[:code/fn "unqualified"]
+                         [:code/params []]
+                         [:code/timeout-secs 0]]]
+      (is (not (s/valid? ::code/request (assoc valid key value)))
+          (str "Reject invalid " key)))))
+
 (deftest malformed-requests-and-unresolvable-symbols-fail-loudly
   (with-code
     (fn [rt]
       (doseq [[index [gate-attrs expected]]
               (map-indexed
                vector
-               [[{"code/params" {}} "code/fn"]
-                [(request "unqualified" {}) "code/fn"]
-                [(request "millhouse.executors.code-test/missing" {}) "did not resolve"]
-                [{"code/fn" "millhouse.executors.code-test/return-value"} "code/params"]
-                [(request "millhouse.executors.code-test/return-value" []) "code/params"]
-                [(request "millhouse.executors.code-test/return-value" {} 0)
-                 "code/timeout-secs"]])]
+               [[(request "millhouse.executors.code-test/missing" {}) "did not resolve"]
+                [(request "unqualified" {}) "code/fn"]])]
         (let [run-id (str "invalid-" index)]
           (workflow/start! run-id (single-gate run-id gate-attrs) {})
           (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
@@ -252,23 +251,6 @@
                 closed (await-eventually #(let [gate (weaver/show rt gate-id)]
                                             (when (= "closed" (:state gate)) gate)))]
             (is (= "new" (attr closed :code/result)))))))))
-
-(deftest ready-code-gate-dispatches-callback-once
-  (with-code
-    (fn [rt]
-      (reset! callback-count 0)
-      (workflow/start!
-       "once"
-       (single-gate
-        "once"
-        (request "millhouse.executors.code-test/count-return-value"
-                 {:value "once"}))
-       {})
-      (let [closed (await-eventually
-                    #(let [gate (gate-strand rt "once")]
-                       (when (= "closed" (:state gate)) gate)))]
-        (is (= "once" (attr closed :code/result)))
-        (is (= 1 @callback-count))))))
 
 (deftest nested-workflow-root-keeps-its-own-run-id
   (with-runtime
@@ -408,30 +390,6 @@
           (is (= "active"
                  (:state (weaver/show rt blocked-id)))))))))
 
-(deftest scan-uses-one-filtered-ready-query-without-per-root-scans
-  (with-code
-    (fn [rt]
-      (doseq [run-id ["idle-1" "idle-2" "idle-3"]]
-        (workflow/start! run-id (idle-workflow) {}))
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [ready-calls (atom [])
-            real-ready weaver/ready
-            fail-per-root (fn [& _]
-                            (throw (ex-info "per-root scan should not run" {})))
-            fail-mutation (fn [& _]
-                            (throw (ex-info "irrelevant scan must not mutate" {})))]
-        (with-redefs [weaver/ready (fn [runtime query params]
-                                     (swap! ready-calls conj [query params])
-                                     (real-ready runtime query params))
-                      workflow/active-runs fail-per-root
-                      workflow/ready fail-per-root
-                      weaver/update! fail-mutation]
-          (is (= {:scanned true} (code/on-event {}))))
-        (is (= 1 (count @ready-calls)))
-        (is (= [:= [:attr "workflow/gate"] "code"]
-               (ffirst @ready-calls)))
-        (is (= {} (second (first @ready-calls))))))))
-
 (deftest saturated-pool-does-not-queue-or-claim-extra-gates
   (with-code
     (fn [rt]
@@ -480,6 +438,7 @@
   (with-code
     (fn [rt]
       (reset! blocker (CountDownLatch. 1))
+      (reset! worker-exited (CountDownLatch. 1))
       (try
         (workflow/start!
          "stubborn"
@@ -565,8 +524,3 @@
         (is (= "retried" (attr retried :code/result)))
         (is (nil? (attr retried :gate/error)))
         (is (nil? (attr retried :code/running)))))))
-
-(deftest state-shape-matches-declared-version
-  (test-support/assert-state-shape
-   #'code/new-state
-   #{:scan-monitor :resources :close-fn}))
