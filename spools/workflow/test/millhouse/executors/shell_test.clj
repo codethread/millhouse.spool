@@ -257,12 +257,12 @@
         stderr (temp-file ".stderr")]
     ;; Exceed each stream's ring buffer as well as the combined tail bound.
     (spit stdout (str/join (repeat 120000 "o")))
-    (spit stderr (str/join (repeat 120000 "e")))
+    (spit stderr (str (str/join (repeat 120000 "e")) "stderr-tail"))
     (let [output (#'shell/custody-output
                   {:stdout-ref (.getAbsolutePath stdout)
                    :stderr-ref (.getAbsolutePath stderr)})]
       (is (= (alength (.getBytes output "UTF-8")) @#'shell/output-tail-bytes))
-      (is (str/ends-with? output (str/join (repeat 100 "e")))))))
+      (is (str/ends-with? output "stderr-tail")))))
 
 (deftest terminal-exit-124-is-not-inferred-as-a-timeout
   (is (= "shell command exited 124"
