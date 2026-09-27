@@ -203,33 +203,49 @@
         (stop! process)))))
 
 (deftest live-scanner-with-unavailable-birth-still-fails-and-is-cleaned
+  ;; Birth refusal belongs to the scanner boundary, not private-group bootstrap.
+  ;; Keep a real live child and let scan! own its cleanup after the injected error.
   (with-scanner-profile
     :stalled
-    (fn [{:keys [profile]}]
+    (fn [{:keys [root profile]}]
       (let [original-retain identity/retain
             original-direct identity/retain-direct
             scanner (atom nil)
-            sentinel (start-sleep!)]
+            birth-error (ex-info "Fixture live scanner birth unavailable" {})
+            before-scanner (thread-count "guidance-preflight-scan-io")
+            before-worker (thread-count "guidance-admission-worker")
+            sentinel (start-sleep!)
+            started (System/nanoTime)
+            deadline (+ started (.toNanos TimeUnit/SECONDS 3))]
         (try
-          (let [{:keys [error]}
+          (let [error
                 (with-redefs
                  [identity/retain-direct
                   (fn [& args]
                     (let [retained (apply original-direct args)]
-                      (when (= "direct-ownership-scanner" (:role retained))
-                        (reset! scanner retained))
+                      (reset! scanner retained)
                       retained))
                   identity/retain
                   (fn [handle role]
                     (when (= "ownership-scanner" role)
                       (is (.isAlive ^ProcessHandle handle))
-                      (throw (ex-info "Fixture live scanner birth unavailable" {})))
+                      (throw birth-error))
                     (original-retain handle role))]
-                  (run-profile profile))]
-            (is (= "Fixture live scanner birth unavailable" (ex-message error)))
+                  (try
+                    (scan/scan! (dissoc profile :effective-environment)
+                                (:effective-environment profile) root
+                                (str (io/file root "scanner.sh")) deadline
+                                #(- % (System/nanoTime)))
+                    nil
+                    (catch Throwable error error)))]
+            (is (identical? birth-error error))
+            (is (< (/ (- (System/nanoTime) started) 1000000.0) 3000.0))
             (is @scanner)
             (is (not (identity/live? @scanner)))
-            (is (.isAlive sentinel)))
+            (is (.isAlive sentinel))
+            (is (false? (process-for-root? root)))
+            (is (= before-scanner (thread-count "guidance-preflight-scan-io")))
+            (is (= before-worker (thread-count "guidance-admission-worker"))))
           (finally
             (stop! sentinel)))))))
 
@@ -262,10 +278,10 @@
                   value))]
               (run-profile profile))]
         (is (nil? error))
-        (is (= 0 (:exit-code result)))
+        (is (some-> result :exit-code zero?))
         (is (= "{}" (:stdout result)))
         (is (seq @scans))
-        (is (every? #(and (= 0 (:exit-code %))
+        (is (every? #(and (zero? (:exit-code %))
                           (= 160000 (:stderr-bytes %))
                           (seq (:rows %)))
                     @scans))
