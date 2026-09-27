@@ -101,9 +101,10 @@
   {:closed :harness-execution})
 
 (defn schedule!
-  "Claim and asynchronously launch every published, ready headless run."
+  "Settle closed-target custody, then asynchronously launch eligible headless runs."
   [rt]
   (let [opened (state rt)
+        _ (execution-headless/settle-closed-targets! rt)
         claimed (filterv #(claim! opened (:id %)) (ready-headless rt))
         executor (:executor opened)]
     (doseq [run claimed]

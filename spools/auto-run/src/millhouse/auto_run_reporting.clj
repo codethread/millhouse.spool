@@ -28,16 +28,20 @@
 (defn- report-payload [{:keys [strand evidence]} status]
   {:refs {:target strand :evidence evidence}
    :strands [{:ref :target
-              :attributes {:auto-run/agent-blocked "true"
+              :attributes {:kanban/lane (case status
+                                          "needs-decision" "in_review"
+                                          "unknown-failure" "pending")
+                           :auto-run/agent-blocked "true"
                            :auto-run/agent-blocked-status status
                            :auto-run/agent-evidence evidence}}]})
 
 (millstrand/defpattern auto-run-needs-decision
   "Report that the agent needs a decision, then end the run.
 
-  Input: strand (work strand ID), evidence (existing evidence strand ID).
+  Input: strand (feature card ID), evidence (existing evidence strand ID).
   Save the question and context on that evidence strand before applying this
-  pattern. The complete blocker state is published atomically."
+  pattern. Use only for a question requiring the user. The blocker and in_review
+  lane are published atomically."
   {:spec ::report-input}
   [{:keys [input]}]
   (report-payload input "needs-decision"))
@@ -45,9 +49,9 @@
 (millstrand/defpattern auto-run-unknown-failure
   "Report a problem the agent cannot resolve, then end the run.
 
-  Input: strand (work strand ID), evidence (existing evidence strand ID).
+  Input: strand (feature card ID), evidence (existing evidence strand ID).
   Save the investigation and supporting evidence before applying this pattern.
-  The complete blocker state is published atomically."
+  The blocker and pending lane are published atomically for operator recovery."
   {:spec ::report-input}
   [{:keys [input]}]
   (report-payload input "unknown-failure"))
@@ -84,6 +88,20 @@
                 "kanban.label/agent-blocked" (:auto-run/agent-blocked blocker)
                 "kanban.label/needs-decision"
                 (when (= "needs-decision" (:auto-run/agent-blocked-status blocker)) "true"))))}))
+
+(millstrand/defhook validate-blocker-card
+  "Reject blocker reports on closed cards or non-feature targets before commit."
+  {:types #{:batch/apply-before-commit}}
+  [ctx]
+  (doseq [{:keys [ref after]} (:batch/updated ctx)
+          :let [patch (some #(when (= ref (:ref %)) %)
+                            (get-in ctx [:batch/payload :strands]))]
+          :when (= "true" (attr-get patch :auto-run/agent-blocked))]
+    (when-not (and (= "active" (:state after))
+                   (= "true" (attr-get after :kanban/card))
+                   (= "feature" (attr-get after :kanban/type)))
+      (fail! "Agent blocker must target an active feature card"
+             {:strand (:id after)}))))
 
 (defn read-blocker
   "Read the agent-reported blocker and resolve its evidence strand summary.

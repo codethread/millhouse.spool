@@ -72,8 +72,9 @@
    "
      Inspect the failed gate's output, repair the cause, then clear `gate/error`
      to retry. Keep the FIFO turn and merge lock; do not requeue at the back.
-     Obtain focused review for material repairs. For substantial changes,
-     withdraw safely and consult the user.
+     Obtain focused review for material repairs. Request a user decision only
+     when repair changes the authorized scope or ownership. Before a merge has
+     been submitted, withdraw safely if that decision requires changing the plan.
    " {}))
 
 (defn- review-prompt
@@ -150,6 +151,12 @@
         `p1-p2` equal to `none` or `resolved`, and a concise resolution summary.
         The checkpoint retains that evidence. If repairs change HEAD, obtain
         focused follow-up review before accepting.
+
+        A supplemental review needs a live, dedicated review target. Do not resume
+        a reviewer whose executor gate has already closed: native continuation
+        retains that closed target and cannot launch. Keep the completed gate's
+        evidence; run follow-up review on a separate active task and record its
+        exact range and findings here. Do not reopen or repour the original gate.
       " {})})))
 
 (workflow/defworkflow land-abort
@@ -159,8 +166,8 @@
    (fn [{:keys [branch]}] (str "Abort land: " branch))
    (update (stage "abort") :attributes assoc
            "land/abort-reason" (fn [{:keys [reason]}] reason))
-   (support/card-gate :return-card "Return the card to claimed" []
-                      "millhouse.land.card-actions/rework-card!")
+   (support/card-gate :return-card "Pause unfinished work" []
+                      "millhouse.land.card-actions/pause-card!")
    (workflow/step :record-abort "Record the abort and hand over the work" :self
                   :depends-on [:return-card]
                   :attributes {"land/abort-reason" (fn [{:keys [reason]}] reason)}
@@ -169,6 +176,9 @@
                      Record the abort reason on the work task. Leave the PR, branch,
                      and worktree available for follow-up. Discuss major changes
                      with the user.
+                     Before ending, reconcile the card lane: pending without an
+                     active successor, in_review only for a recorded human action,
+                     claimed only while an agent is actively repairing the work.
                    " {}))))
 
 (workflow/defworkflow land-merge
@@ -183,6 +193,12 @@
                      Queue admission and acquisition are automatic. Await this run
                      with `strand workflow await <run-id>`; inspect its place with
                      `strand merge-queue status`. Failures and timeouts retain the turn.
+
+                     A predecessor's failed gate is not a failure of this run.
+                     Notify its recovery owner and keep awaiting this same run;
+                     do not end landing custody or mark your card as needing review
+                     solely because the predecessor is blocked. Re-read the current
+                     frontier after each wait and continue through housekeeping.
 
                      Any trusted agent may withdraw with `strand merge-queue withdraw
                      <entry-id> --reason <reason>`. Withdrawal stops shell work first;
@@ -222,15 +238,7 @@
                      On failure, repair the cause and clear `gate/error` to retry.
                      The next landing may be running; leave its resources alone.
                    " {}))
-   (workflow/step :tidy-resources "Tidy resources created for this work" :self
-                  :depends-on [:remove-branch-worktree]
-                  (format-alpha/prose
-                   "
-                     Remove scratch files and named resources owned by this work.
-                     Stop processes by recorded PID and sessions by exact name.
-                     Leave shared or uncertain resources alone; note anything retained.
-                   " {}))
-   (support/card-gate :finish-card "Finish the optional kanban card" [:tidy-resources]
+   (support/card-gate :finish-card "Finish the optional kanban card" [:remove-branch-worktree]
                       "millhouse.land.card-actions/finish-card!")))
 
 (workflow/defworkflow land
@@ -269,9 +277,16 @@
                          (format-alpha/prose
                           "
                             Read `strand workflow choices <run-id>` for choice inputs.
+                            Before approval, remove owned scratch files and stop
+                            owned processes by exact PID or session name. Record
+                            retained resources and their owners on the work card.
+                            Resources required through merge must be handled by
+                            the tracked executable `.millstrand/land-cleanup.sh`.
+                            Its failure stops cleanup and card completion.
                             Act on the user's existing authorization to land; no
                             repeat approval is needed. Approval covers the FIFO turn,
                             rebase, repairs, focused review, final validation, automatic
-                            merge, and cleanup. Abort and consult the user if the work
-                            has changed substantially.
+                            merge, and cleanup. Request a user decision when the
+                            required repair changes the authorized scope or ownership;
+                            abort before merge if that decision changes the plan.
                           " {})})))

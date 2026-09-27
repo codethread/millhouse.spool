@@ -66,6 +66,7 @@
       (fail! "Native session already has an active managed writer"
              {:session-id session-id :runs (mapv :id writers)}))
     (when target
+      (runs/require-open-target! rt target)
       (when-let [serving (seq (runs/reserving-target-runs rt target))]
         (fail! "Target already has an active managed run"
                {:target target :runs (mapv :id serving)})))

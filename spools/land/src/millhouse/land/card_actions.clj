@@ -26,28 +26,45 @@
   nil)
 
 (defn rework!
-  "Resume agent work on an optional card in claimed; repeat calls are harmless."
+  "Resume pending or human-review work in claimed; repeat calls are harmless."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]
       (case (attr-get view :kanban/lane)
         "claimed" nil
-        "in_review" (do
-                      (when-not (= "active" (:state view))
-                        (fail! "Card must be active to rework" {:card card}))
-                      (weaver/update! runtime card {:attributes {:kanban/lane "claimed"}}))
-        (fail! "Aborted landing card must be claimed or in review" {:card card}))))
+        ("pending" "in_review")
+        (do
+          (when-not (= "active" (:state view))
+            (fail! "Card must be active to rework" {:card card}))
+          (weaver/update! runtime card {:attributes {:kanban/lane "claimed"}}))
+        (fail! "Landing card must be pending, claimed or in review" {:card card}))))
   nil)
 
 (defn finish!
-  "Finish an optional card after housekeeping, accepting an existing done result."
+  "Finish an optional card after verified cleanup, resuming a pending queue waiter."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]
       (if (= "closed" (:state view))
         (when-not (= "done" (attr-get view :kanban/outcome))
           (fail! "Landing card closed with a different outcome" {:card card}))
-        (kanban/finish! runtime card {"--outcome" "done"}))))
+        (do
+          (when (= "pending" (attr-get view :kanban/lane))
+            (rework! runtime {:card card}))
+          (kanban/finish! runtime card {"--outcome" "done"})))))
+  nil)
+
+(defn pause!
+  "Pause an aborted delivery without claiming idle work or hiding a human question."
+  [runtime {:keys [card]}]
+  (when card
+    (let [view (card-view runtime card)]
+      (when-not (= "active" (:state view))
+        (fail! "Card must be active to pause" {:card card}))
+      (case (attr-get view :kanban/lane)
+        ("pending" "in_review") nil
+        "claimed" (weaver/update! runtime card {:attributes {:kanban/lane "pending"}})
+        (fail! "Landing card must be pending, claimed or in review" {:card card}))))
   nil)
 
 ;; The Workflow code executor invokes qualified one-argument callbacks while
@@ -68,3 +85,8 @@
   "Workflow callback for `finish!` in the code executor's bound runtime."
   [params]
   (finish! (current/runtime) params))
+
+(defn pause-card!
+  "Workflow callback for `pause!` in the code executor's bound runtime."
+  [params]
+  (pause! (current/runtime) params))

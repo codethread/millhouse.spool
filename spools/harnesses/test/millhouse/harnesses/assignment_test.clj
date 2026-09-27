@@ -274,6 +274,75 @@
         (is (true? (get-in result [:after :launch-ready])))
         (is (nil? (get-in result [:after :owner])))))))
 
+(deftest scheduler-settles-closed-targets-without-stopping-running-or-blocked-work
+  (with-assignment-world
+    (fn [ctx]
+      (let [result
+            (eval-world
+             ctx
+             '(let [blocker (add-target! "Dependency")
+                    waiting-target (add-target!
+                                    "Waiting" {}
+                                    [{:type "depends-on" :to (:id blocker)}])
+                    expired-target (add-target! "Completed before launch")
+                    running-target (add-target! "Completed by its running agent")
+                    waiting (assign! (:id waiting-target) {})
+                    expired (assign! (:id expired-target) {})
+                    running (assign! (:id running-target) {})
+                    _ (harnesses/begin-attempt! rt (:id running))
+                    _ (weaver/update! rt (:id expired-target) {:state "closed"})
+                    _ (weaver/update! rt (:id running-target) {:state "closed"})
+                    _ (#'execution/activate-state! rt)]
+                (try
+                  (let [scheduled (execution/schedule! rt)
+                        stopped (weaver/show rt (:id expired))
+                        repeated (execution/schedule! rt)]
+                    {:scheduled scheduled :repeated repeated
+                     :expired [(attr stopped :harness/status)
+                               (attr stopped :harness/settled)
+                               (attr stopped :harness/settlement)]
+                     :unchanged (= stopped (weaver/show rt (:id expired)))
+                     :waiting (attr (weaver/show rt (:id waiting)) :harness/status)
+                     :running (attr (weaver/show rt (:id running)) :harness/status)})
+                  (finally
+                    ((:close-fn (#'execution/deactivate-state! rt)))))))]
+        (is (= [] (:scheduled result) (:repeated result)))
+        (is (= ["stopped" "true" "never-launched"] (:expired result)))
+        (is (true? (:unchanged result)))
+        (is (= "ready" (:waiting result)))
+        (is (= "running" (:running result)))))))
+
+(deftest target-closing-after-readiness-never-starts-an-attempt
+  (with-assignment-world
+    (fn [ctx]
+      (let [result
+            (eval-world
+             ctx
+             '(let [target (add-target! "Closes at launch")
+                    run (assign! (:id target) {})
+                    launch-ready? assignment/launch-ready?
+                    _ (#'execution/activate-state! rt)]
+                (try
+                  (with-redefs [assignment/launch-ready?
+                                (fn [rt candidate]
+                                  (let [ready? (launch-ready? rt candidate)]
+                                    (when (and ready? (= (:id run) (:id candidate)))
+                                      (weaver/update! rt (:id target) {:state "closed"}))
+                                    ready?))]
+                    (#'execution/launch-headless! rt (:id run)))
+                  (let [stopped (weaver/show rt (:id run))]
+                    {:status (mapv #(attr stopped %)
+                                   [:harness/status :harness/settled :harness/settlement])
+                     :attempt (attr stopped :harness/attempt)
+                     :invocation (attr stopped :harness/invocation)
+                     :process (attr stopped :harness/process-handle)})
+                  (finally
+                    ((:close-fn (#'execution/deactivate-state! rt)))))))]
+        (is (= ["stopped" "true" "never-launched"] (:status result)))
+        (is (nil? (:attempt result)))
+        (is (nil? (:invocation result)))
+        (is (nil? (:process result)))))))
+
 (deftest default-and-explicit-policy-are-frozen
   (with-assignment-world
     (fn [ctx]

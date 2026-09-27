@@ -187,7 +187,21 @@
             (let [cleanup (first (workflow/ready run-id))]
               (is (= "Remove the landed branch and worktree" (:title cleanup)))
               (is (= (.getCanonicalPath root)
-                     (attr-get (weaver/show rt (:id cleanup)) :shell/cwd)))))
+                     (attr-get (weaver/show rt (:id cleanup)) :shell/cwd))))
+            (weaver/update! rt card {:attributes {:kanban/lane "pending"}})
+            (is (= "active" (:state (weaver/show rt card)))
+                "Cleanup must finish before the card can close")
+            (test-support/activate-spool! rt :test/code
+                                          'millhouse.test-modules.code-executor
+                                          :after [:millhouse/workflow])
+            (complete-ready! run-id)
+            (test-support/poll-until
+             #(workflow/done? run-id)
+             {:timeout-ms (test-support/await-budget-ms)
+              :on-timeout #(throw (ex-info "Post-cleanup card completion stalled" {}))})
+            (is (= ["closed" "done"]
+                   ((juxt :state #(attr-get % :kanban/outcome))
+                    (weaver/show rt card)))))
           (finally
             (test-support/delete-tree! root)))))))
 
@@ -202,26 +216,28 @@
             _ (start-land! run-id params)]
         (try
           (reach-signoff! rt run-id card)
-          ;; A blocker requiring a human can arise at any point, including signoff.
-          (card-actions/review! rt {:card card})
           (let [ready (:ready (workflow/choose! run-id :abort
                                                 {:reason "Needs a larger change."}))
                 abort-root (workflow/current-root run-id)]
-            (is (= "Return the card to claimed" (:title (first ready))))
+            (is (= "Pause unfinished work" (:title (first ready))))
             (is (= "code" (:gate (first ready))))
+            (is (= "millhouse.land.card-actions/pause-card!"
+                   (attr-get (weaver/show rt (:id (first ready))) :code/fn)))
             (hooks/register-hook! rt :test/card-write
                                   #{:strand/update-before-commit}
                                   'millhouse.land.workflow-test/reject-card-write)
             (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                   #"Lifecycle hook failed"
                                   (binding [*fail-card-write* true]
-                                    (card-actions/rework! rt {:card card}))))
+                                    (card-actions/pause! rt {:card card}))))
             (is (= (:id abort-root) (:id (workflow/current-root run-id))))
-            (is (= "in_review" (card-lane rt card)))
-            (is (= "Return the card to claimed"
-                   (:title (first (workflow/ready run-id)))))
-            (card-actions/rework! rt {:card card})
             (is (= "claimed" (card-lane rt card)))
+            (is (= "Pause unfinished work"
+                   (:title (first (workflow/ready run-id)))))
+            (card-actions/pause! rt {:card card})
+            (is (= "pending" (card-lane rt card)))
+            (card-actions/pause! rt {:card card})
+            (is (= "pending" (card-lane rt card)))
             (is (= "in_review" (do (weaver/update! rt card {:attributes {:kanban/lane "in_review"}})
                                    (card-lane rt card)))))
           (finally
@@ -267,10 +283,17 @@
         (try
           (is (nil? (card-actions/review! rt {:card card})))
           (is (= "in_review" (card-lane rt card)))
+          (is (nil? (card-actions/pause! rt {:card card})))
+          (is (= "in_review" (card-lane rt card)))
           (is (nil? (card-actions/review! rt {:card card})))
           (is (nil? (card-actions/rework! rt {:card card})))
           (is (= "claimed" (card-lane rt card)))
           (is (nil? (card-actions/rework! rt {:card card})))
+          (weaver/update! rt card {:attributes {:kanban/lane "pending"}})
+          (is (nil? (card-actions/rework! rt {:card card})))
+          (is (= "claimed" (card-lane rt card))
+              "Paused landing can resume or enter the abort workflow")
+          (weaver/update! rt card {:attributes {:kanban/lane "pending"}})
           (is (nil? (card-actions/finish! rt {:card card})))
           (is (= "closed" (:state (weaver/show rt card))))
           (is (= "done" (attr-get (weaver/show rt card) :kanban/outcome)))
@@ -286,13 +309,13 @@
   (let [definition @(requiring-resolve 'millhouse.land/land-merge)
         ids (mapv :id (:steps definition))]
     (is (= [:take-turn :prepare-merge :merge-pr :pull-main :release-turn
-            :remove-branch-worktree :tidy-resources :finish-card]
+            :remove-branch-worktree :finish-card]
            ids))
     (is (nil? (definition-step definition :quality)))
     (is (= [:pull-main] (:depends-on (definition-step definition :release-turn))))
     (is (= [:release-turn]
            (:depends-on (definition-step definition :remove-branch-worktree))))
-    (is (= [:tidy-resources]
+    (is (= [:remove-branch-worktree]
            (:depends-on (definition-step definition :finish-card))))
     (let [prepare (definition-step definition :prepare-merge)
           prepare-argv ((get-in prepare [:attributes "shell/argv"])

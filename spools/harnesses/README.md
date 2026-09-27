@@ -681,7 +681,11 @@ the updated source through the consumer's supported activation path.
 
 Blocked targets are accepted but remain queued until their `depends-on`
 blockers close. Independent targets launch concurrently, and scheduling
-rechecks target readiness. Parallel workers use distinct task targets; each run
+rechecks target readiness. New runs, retries, and native continuations reject
+closed or missing targets. If a target closes after acceptance but before launch,
+the scheduler settles the queued headless run as `never-launched`; it does not
+stop a running agent or replace the request. Exact request replay still returns
+the original receipt. Parallel workers use distinct task targets; each run
 keeps its direct `serves` edge and every ancestor `serves-root` edge. Wait with
 positive-evidence queries:
 

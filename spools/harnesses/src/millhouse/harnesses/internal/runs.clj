@@ -30,6 +30,16 @@
       (fail! "Strand is not a harness run" {:id id}))
     (guidance/validation-run rt run)))
 
+(defn require-open-target!
+  "Require an existing, open target before accepting or starting run custody."
+  [rt id]
+  (let [target (or (weaver/show rt id)
+                   (fail! "Harness target does not exist" {:target id :reason :harness/target-unavailable}))]
+    (when (= "closed" (:state target))
+      (fail! "Harness target is closed; use a new active task for follow-up work"
+             {:target id :reason :harness/target-unavailable}))
+    target))
+
 (defn runs-where
   "List harness runs matching additional query `clauses`."
   [rt clauses]

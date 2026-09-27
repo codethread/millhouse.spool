@@ -23,9 +23,11 @@
              (def rt (current/runtime))
              (runtime/module! rt :identity
                {:ns 'millhouse.identity :required? true})
+             (runtime/module! rt :kanban
+               {:ns 'millhouse.kanban :required? true})
              (runtime/module! rt :harnesses
                {:ns 'millhouse.harnesses.spool
-                :after [:identity]
+                :after [:identity :kanban]
                 :required? true})"}]
       (is
        (true?
@@ -109,13 +111,30 @@
                                (str request-id "-fresh")])
                              :accepted
                              (catch Exception error (ex-message error)))
+                           _ (harnesses/finish! rt (:id grandchild)
+                                                {:status :done :exit-code 0
+                                                 :session-usable true})
+                           _ (weaver/update! rt (:id target) {:state "closed"})
+                           closed-replay (weaver/op! rt 'agent argv)
+                           before-rejection (weaver/list rt)
+                           closed-errors
+                           (mapv (fn [action]
+                                   (try (action) :accepted
+                                        (catch Exception error (ex-message error))))
+                                 [#(harnesses/resume! rt (:id grandchild) {})
+                                  #(harnesses/create! rt {:harness :fake
+                                                          :mode :interactive
+                                                          :target (:id target)})])
+                           unchanged (= before-rejection (weaver/list rt))
                            after-count
                            (count (weaver/list
                                    rt [:= [:attr "harness/run"] "true"] {}))
                            stored (weaver/show rt (:id first))]
                        {:same (= (:id first) (:id active-replay)
-                                 (:id advanced-replay))
+                                 (:id advanced-replay) (:id closed-replay))
                         :count (= (+ before-count 1) after-count)
+                        :closed-errors closed-errors
+                        :unchanged unchanged
                         :changed changed
                         :changed-selector changed-selector
                         :stale stale
@@ -132,8 +151,9 @@
                    selector-cases)]
               (every?
                (fn [{:keys [same count changed changed-selector stale selector
-                            custody]}]
-                 (and same count selector custody
+                            custody closed-errors unchanged]}]
+                 (and same count selector custody unchanged
+                      (every? #(re-find #"target is closed" %) closed-errors)
                       (re-find #"already held" changed)
                       (re-find #"already held" changed-selector)
                       (re-find #"already has an accepted continuation" stale)))

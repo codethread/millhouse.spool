@@ -411,7 +411,7 @@
         (is (= "first" (get-in (queue/status rt) [:lock :run-id])))
         (is (not= previous (:id (workflow/current-root "second"))))
         (is (= "Scope changed" (attr-get (workflow/current-root "second") :land/abort-reason)))
-        (is (= "Return the card to claimed" (:title (first (workflow/ready "second")))))
+        (is (= "Pause unfinished work" (:title (first (workflow/ready "second")))))
         (is (= "withdrawn" (:outcome (queue/withdraw! rt (:id entry) "Repeated request"))))))))
 
 (deftest failed-abort-cutover-keeps-the-turn-until-a-successful-retry
@@ -462,7 +462,7 @@
           (queue/grant! rt "withdraw-guarded")
           (is (= "withdrawn"
                  (:outcome (queue/withdraw! rt (:id entry) "Guarded withdrawal"))))
-          (is (= "Return the card to claimed"
+          (is (= "Pause unfinished work"
                  (:title (first (workflow/ready "withdraw-guarded")))))
           (finally
             (close-guard! rt)))))))

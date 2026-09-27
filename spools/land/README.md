@@ -46,7 +46,7 @@ original frozen commit. It never interprets stderr text.
 
 Each target repository must own an executable `.millstrand/land-quality.sh`. It runs with `LAND_EXPECTED_BRANCH` and `LAND_EXPECTED_HEAD`. The generic spool does not guess a build command or silently fall back.
 
-Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. No Millstrand warm-REPL behavior is hardcoded.
+Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. Before sign-off, remove scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners; cleanup that must wait for merge belongs in that hook. Successful cleanup automatically finishes the optional card, including a pending queue waiter. There is no post-merge agent bookkeeping gate. No Millstrand warm-REPL behavior is hardcoded.
 
 ## Activation
 

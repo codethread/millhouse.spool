@@ -61,7 +61,10 @@ integration, events, scheduling, and refresh.
   Xerial SQLite with one held connection: suitable for serialized, non-durable
   contracts, not file persistence or multi-connection contention evidence.
   `:sqlite-file` is the default; retain it for durability/reopen, filesystem, or
-  connection-topology claims. Memory storage still pays world/basis startup.
+  connection-topology claims. Use file SQLite when background executors or
+  scheduled work can access the database concurrently with the test body; a
+  sequential test body does not make those actors serialized. Memory storage
+  still pays world/basis startup.
 - For time, use `t/manual-clock`, `t/set-clock!`, and `t/advance!`.
   `t/await-quiescent!` settles the event lane, not work dispatched off it; join
   that work with its own completion signal or established bounded await helper.

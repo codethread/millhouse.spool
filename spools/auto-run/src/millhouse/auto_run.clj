@@ -52,13 +52,22 @@
 (assignment/def-assign-policy auto-run-workflow
   "Follow the repository-selected workflow supplied with your assignment.
 
-  If blocked, save the context on an evidence strand, then use
-  `strand weave` with `auto-run-needs-decision` or `auto-run-unknown-failure`.
-  Both take `strand` (the work strand ID) and `evidence` (the evidence strand ID).
-  Use `strand pattern explain <name>` for the input contract. Publish the blocker
-  as your final work-card mutation, return a brief handoff, and end your run.
+  Report blockers on the feature card, including when serving a task or
+  finisher target. Save the remaining action, responsible owner, and supporting
+  evidence first. Then use `strand weave` with strand (feature card ID) and
+  evidence (existing evidence strand ID):
+  - auto-run-needs-decision only for a specific question requiring the user;
+    it atomically sets in_review with the blocker and labels.
+  - auto-run-unknown-failure for an unresolved failure requiring operator
+    recovery; it atomically sets pending with the blocker and labels.
+  Publish this as the final card mutation, return a brief handoff, and end.
+  Do not report a healthy queue wait or a predecessor's failure as your blocker.
 
-  Use `auto-run-unblock` to clear a resolved blocker; it preserves the evidence.")
+  Use auto-run-unblock after the recorded cause is resolved. It preserves the
+  evidence and lane and does not resume an agent. Inspect the existing workflow
+  frontier and accepted owner; resume that owner's native session only when its
+  target is open and its predecessor is settled. Restore claimed when work
+  resumes. Never create a replacement workflow to recover an existing run.")
 
 (declare scan! wake!)
 
