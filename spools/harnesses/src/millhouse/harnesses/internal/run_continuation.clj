@@ -131,6 +131,7 @@
                        (attr-get run :harness/session-id)
                        (str (UUID/randomUUID)))
           target (attr-get run :harness/target)
+          _ (when target (runs/require-open-target! rt target))
           target-writers (when target
                            (remove #(= id (:id %))
                                    (runs/reserving-target-runs rt target)))
