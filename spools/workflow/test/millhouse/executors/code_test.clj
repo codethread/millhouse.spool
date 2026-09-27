@@ -175,7 +175,17 @@
         (is (= {:nested [1 true "ok"]} (attr closed :code/result)))
         (is (nil? (attr closed :code/running)))
         (is (nil? (attr closed :gate/error)))
-        (is (= "After" (:title (first (workflow/ready "pass")))))))))
+        (is (= "After" (:title (first (workflow/ready "pass"))))))
+      ;; A successful nil callback must omit the attribute, not persist null.
+      (workflow/start! "nil"
+                       (single-gate
+                        "nil"
+                        (request "millhouse.executors.code-test/return-value" {}))
+                       {})
+      (let [closed (await-eventually
+                    #(let [gate (gate-strand rt "nil")]
+                       (when (= "closed" (:state gate)) gate)))]
+        (is (not (contains? (:attributes closed) :code/result)))))))
 
 (deftest exception-and-non-json-result-stamp-errors-and-stay-ready
   (with-code
