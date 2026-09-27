@@ -134,7 +134,14 @@
             (start-land! run-id params)
             (is (= "Resolve and verify the pull request"
                    (:title (first (workflow/ready run-id)))))
-            (is (= "signoff" (:checkpoint (reach-signoff! rt run-id card))))
+            (complete-ready! run-id)
+            (reach-review-resolution! rt run-id card)
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                  #"Value does not satisfy"
+                                  (workflow/choose! run-id :accepted {})))
+            (is (= "resolve-review" (:checkpoint (workflow/ready-checkpoint run-id))))
+            (workflow/choose! run-id :accepted review-evidence)
+            (is (= "signoff" (:checkpoint (workflow/ready-checkpoint run-id))))
             (is (= run-id (attr-get (workflow/current-root run-id) :workflow/run-id))))
           (finally
             (test-support/delete-tree! root)))))))
@@ -253,6 +260,12 @@
                       [:review :land :land-merge :land-abort]))
           (is (= {:entries [] :lock nil :operation "merge-queue status"}
                  (weaver/op! rt :merge-queue ["status"])))
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo #"Unknown flag --by"
+               (weaver/op! rt :merge-queue
+                           ["repair" "run-1" "--kind" "skipped-turn"
+                            "--by" "operator" "--reason" "evidence"
+                            "--evidence" "{}"])))
           (finally
             (test-support/delete-tree! root)))))))
 

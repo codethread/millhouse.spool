@@ -966,7 +966,7 @@
                          :lock (weaver/show rt (:id lock))})))))))
 
 (deftest merge-queue-repair-cli-uses-only-canonical-actor-flag
-  ;; Publication is covered by land-activation; argument shape needs no world.
+  ;; workflow-test covers published dispatch; argument shape needs no world.
   (let [declaration (test-alpha/collect-module-forms
                      :test/land-cli 'millhouse.land.merge-queue-test
                      #(millstrand/use-op! queue/merge-queue))
