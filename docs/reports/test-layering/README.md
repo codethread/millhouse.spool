@@ -8,7 +8,7 @@ Three green root runs have a **7m42.2s median** (range **7m36.6s–7m44.3s**), v
 
 Counts are evidence, not a preservation target. The earlier profiling note `u2ga5` reported 525 tests / 4,072 assertions; the final root suite has 490 / 3,969. At the epic policy-start revision `92524a0`, a static inventory finds 530 declared root test vars (including five affected-selector tests absent from the earlier profiling breakdown); the final inventory is 490. These static counts are distinct from the earlier measured 525. The suites are not identical: Workflow was partitioned, low-value examples were removed, and fixture/lock/tooling checks were added. Independent package totals are separate and must not be added to root totals as unique coverage.
 
-The only aggregate integration repair updates the exact expected affected-component set in `test/millhouse/affected_test.clj:38`: Devflow's narrowed test alias no longer depends on the adapter. The adapter still selects `devflow-check`, which runs its independent gate. No selector, production behavior, package dependency, pool size, timeout or assertion strength changed.
+The only aggregate integration repair updates the exact expected affected-component set in `test/millhouse/affected_test.clj:40`: Devflow's narrowed test alias no longer depends on the adapter. The adapter still selects `devflow-check`, which runs its independent gate. No selector, production behavior, package dependency, pool size, timeout or assertion strength changed.
 
 ## Comparable root measurements
 
