@@ -18,6 +18,22 @@
 (defn- run? [run]
   (= "true" (attr-get run :harness/run)))
 
+(defn settle-closed-targets!
+  "Settle accepted, unstarted headless runs whose target closed before launch."
+  [rt]
+  (harness/call-with-run-publication-lock
+   rt
+   (fn []
+     (doseq [run (weaver/list rt [:and
+                                  [:= [:attr "harness/run"] "true"]
+                                  [:= [:attr "harness/status"] "ready"]
+                                  [:= [:attr "harness/mode"] "headless"]] {})
+             :let [target (attr-get run :harness/target)]
+             :when (and (life/accepted? run) target
+                        (not= "active" (:state (weaver/show rt target))))]
+       (harness/stop! rt (:id run)
+                      {:reason (str "Target " target " closed or disappeared before launch")})))))
+
 (defn ready-headless
   "Return published, assignment-ready headless runs eligible to launch."
   [rt]

@@ -135,7 +135,9 @@ verify an accepted owner will finish both Land and the enclosing delivery run.
 
 Supplemental reviewer work needs a separate active review task. Resuming an
 agent whose original review gate is closed retains that target and cannot
-launch; do not reopen the completed gate or replace the workflow to recover it.
+launch; new requests against closed targets are rejected. If a target closes
+after acceptance but before launch, the scheduler settles that queued request as
+never-launched. Do not reopen a completed gate or replace the workflow.
 
 ## Recovery coordinator procedure
 
