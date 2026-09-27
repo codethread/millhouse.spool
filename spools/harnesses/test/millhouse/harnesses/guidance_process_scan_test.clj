@@ -251,7 +251,7 @@
                   (swap! scans conj {:exit-code exit-code
                                      :stderr-bytes (alength ^bytes stderr)
                                      :rows rows
-                                     :helper-io-active?
+                                     :preflight-io-active?
                                      (> (thread-count "guidance-preflight-io")
                                         before-helper)})
                   rows))
@@ -269,7 +269,9 @@
                          (= 160000 (:stderr-bytes %))
                          (seq (:rows %)))
                     @scans))
-        (is (some :helper-io-active? @scans))
+        ;; The second scan follows retention of the gated helper, whose inherited
+        ;; pipes share the preflight drains. The first scan precedes helper launch.
+        (is (:preflight-io-active? (second @scans)))
         (is (< elapsed-millis 3000.0))
         (is (seq @retained))
         (is (every? (complement identity/live?) @retained))
