@@ -340,6 +340,30 @@
                   (fn [{:keys [scope reviewer]}] (str "Implement " scope " for " reviewer))
                   :self)))
 
+(defn- with-authoring-namespace [f]
+  (let [ns-sym (gensym "millhouse.workflow-authoring-")]
+    (try
+      (binding [*ns* (create-ns ns-sym)]
+        (clojure.core/refer 'clojure.core)
+        (f ns-sym))
+      (finally
+        (remove-ns ns-sym)))))
+
+(deftest defworkflow-evaluates-computed-doc-once
+  (let [[calls value-doc var-doc]
+        (with-authoring-namespace
+          (fn [_]
+            (eval
+             '(let [calls (atom 0)
+                    definition
+                    (millhouse.workflow/defworkflow sample
+                      (do (swap! calls inc) "Computed workflow doc.")
+                      {:entrypoints #{:start}}
+                      (millhouse.workflow/workflow "Computed doc"))]
+                [@calls (:doc @definition) (:doc (meta definition))]))))]
+    (is (= 1 calls))
+    (is (= "Computed workflow doc." value-doc var-doc))))
+
 (deftest defworkflow-defines-a-self-describing-var-and-stays-passive
   ;; Metadata is ordinary authoring data. Even inside a contribution collector,
   ;; an inert declaration must not select itself; publication has its own tests.
@@ -349,20 +373,16 @@
   (is (= ::static-build-params (:param-spec static-build)))
   (is (= {:reviewer "agent"} (:defaults static-build)))
   (is (= [:implement] (mapv :id (:steps static-build))))
-  (let [ns-sym (gensym "millhouse.workflow-passive-")]
-    (try
-      (binding [*ns* (create-ns ns-sym)]
-        (clojure.core/refer 'clojure.core)
-        (is (empty?
-             (:contribution
-              (test-alpha/collect-module-forms
-               :test/passive-workflow ns-sym
-               #(eval '(millhouse.workflow/defworkflow sample
-                         "An inert declaration."
-                         {:entrypoints #{:start}}
-                         (millhouse.workflow/workflow "Sample"))))))))
-      (finally
-        (remove-ns ns-sym)))))
+  (with-authoring-namespace
+    (fn [ns-sym]
+      (is (empty?
+           (:contribution
+            (test-alpha/collect-module-forms
+             :test/passive-workflow ns-sym
+             #(eval '(millhouse.workflow/defworkflow sample
+                       "An inert declaration."
+                       {:entrypoints #{:start}}
+                       (millhouse.workflow/workflow "Sample"))))))))))
 
 (deftest defworkflow-rejects-an-invalid-declaration
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Invalid workflow options"

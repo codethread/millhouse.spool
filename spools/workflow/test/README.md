@@ -7,7 +7,7 @@ contains only compiler proofs.
 | File | Namespace | Owner | Tests |
 | --- | --- | --- | ---: |
 | `workflow_test.clj` | `millhouse.workflow-test` | Authoring/compiler (`bak7b`) | 24 |
-| `workflow_authoring_test.clj` | `millhouse.workflow-authoring-test` | Authoring/declarations (`bak7b`) | 28 |
+| `workflow_authoring_test.clj` | `millhouse.workflow-authoring-test` | Authoring/declarations (`bak7b`) | 29 |
 | `workflow_spec_test.clj` | `millhouse.workflow-spec-test` | Spec/JSON projections (`bak7b`) | 10 |
 | `workflow_runtime_test.clj` | `millhouse.workflow-runtime-test` | Runtime contracts (`w0njw`) | 66 |
 | `workflow_composition_test.clj` | `millhouse.workflow-composition-test` | Returning composition (`w0njw`) | 21 |
@@ -33,9 +33,9 @@ fresh per test and retain file storage and cleanup.
   finally-removed namespace. Metadata remains checked, including a computed
   docstring. Collection proves inert declaration, not module publication; real
   publication, omission rejection and owner replacement remain in registry tests.
-- Remove `defworkflow-evaluates-computed-doc-once` and its global counter. The
-  computed value and Var metadata remain covered; exact evaluation-count
-  protection is consciously dropped.
+- Retain `defworkflow-evaluates-computed-doc-once` after independent review:
+  deterministic metadata alone would not detect double evaluation. Its counter
+  is now test-local inside a fresh, finally-removed namespace, not a global atom.
 - Remove `spec-forms-is-cycle-safe-and-deterministic`: the retained exact recursive
   graph/alias expectations already require finite, ordered, deduplicated output.
   The extra repeated invocation is no longer checked separately.
@@ -75,7 +75,13 @@ original hook proofs passed. Failed setup attempts remain recorded on task
 | Command wall time | 211.64 s | 186.34 s |
 | Wall minus test execution | 3.234 s | 2.342 s |
 
-Both runs passed. The observed 24.408 s test-time difference is not a defensible
+Both runs passed. The after column measures initial implementation `d027597`.
+Review then restored the no-world computed-doc proof: final counts are
+**181 tests / 845 assertions**, with **117 worlds** unchanged. The focused authoring
+recheck passed 29 tests / 139 assertions in 0.474 s; it is not a replacement
+whole-partition timing sample.
+
+The observed 24.408 s test-time difference is not a defensible
 causal speedup estimate: one removed world cannot explain it, and these are
 single runs on a shared host. No meaningful suite speedup is promised.
 
