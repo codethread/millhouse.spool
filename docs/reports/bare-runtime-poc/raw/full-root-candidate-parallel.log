@@ -1,0 +1,180 @@
+mode: normal runner (serial island plus parallel pool)
+core implementation: 56b824f0 (f12549af plus File type hint)
+command: flock -w 180 /tmp/millstrand-test.lock /usr/bin/time -p clojure -Sdeps '{:deps {io.millstrand/millstrand {:local/root "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture"}}}' -M:test
+exit: 0
+The final counted fixture verification ran concurrently for about 11 seconds; this is compatibility evidence, not a controlled performance sample.
+
+WARNING: identity already refers to: #'clojure.core/identity in namespace: millhouse.identity, being replaced by: #'millhouse.identity/identity
+WARNING: deliver already refers to: #'clojure.core/deliver in namespace: auto-run.fixture, being replaced by: #'auto-run.fixture/deliver
+
+Testing millhouse.auto-review-test
+
+Ran 8 tests containing 68 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.auto-review-test {:test 8, :pass 68, :fail 0, :error 0, :group :serial-island, :elapsed-ms 18013}
+
+Testing millhouse.auto-run-test
+
+Ran 22 tests containing 221 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.auto-run-test {:test 22, :pass 221, :fail 0, :error 0, :group :serial-island, :elapsed-ms 45630}
+
+Testing millhouse.millstrand-workflows-test
+
+Ran 1 tests containing 2 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.millstrand-workflows-test {:test 1, :pass 2, :fail 0, :error 0, :group :serial-island, :elapsed-ms 2072}
+
+Testing millhouse.consumer-test
+
+Ran 2 tests containing 13 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.consumer-test {:test 2, :pass 13, :fail 0, :error 0, :group :serial-island, :elapsed-ms 2668}
+
+Testing millhouse.workflow-runtime-test
+
+Ran 55 tests containing 321 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-runtime-test {:test 55, :pass 321, :fail 0, :error 0, :group :serial-island, :elapsed-ms 2187}
+
+Testing millhouse.executors.code-test
+
+Ran 13 tests containing 70 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.executors.code-test {:test 13, :pass 70, :fail 0, :error 0, :group :serial-island, :elapsed-ms 4934}
+
+Testing millhouse.kanban-test
+
+Ran 49 tests containing 429 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.kanban-test {:test 49, :pass 429, :fail 0, :error 0, :group :serial-island, :elapsed-ms 100009}
+
+Testing millhouse.land.merge-queue-test
+
+Ran 28 tests containing 160 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.land.merge-queue-test {:test 28, :pass 160, :fail 0, :error 0, :group :serial-island, :elapsed-ms 5681}
+
+Testing millhouse.land.workflow-test
+
+Ran 7 tests containing 88 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.land.workflow-test {:test 7, :pass 88, :fail 0, :error 0, :group :serial-island, :elapsed-ms 859}
+
+Testing millhouse.affected-test
+
+Ran 5 tests containing 46 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.affected-test {:test 5, :pass 46, :fail 0, :error 0, :group :parallel, :elapsed-ms 397}
+
+Testing millhouse.quality-lock-test
+
+Ran 2 tests containing 14 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.quality-lock-test {:test 2, :pass 14, :fail 0, :error 0, :group :parallel, :elapsed-ms 1039}
+
+Testing millhouse.authoring-forms-test
+
+Ran 4 tests containing 14 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.authoring-forms-test {:test 4, :pass 14, :fail 0, :error 0, :group :parallel, :elapsed-ms 64}
+
+Testing millhouse.package-layout-test
+
+Ran 3 tests containing 85 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.package-layout-test {:test 3, :pass 85, :fail 0, :error 0, :group :parallel, :elapsed-ms 29}
+
+Testing millhouse.test-support-test
+
+Ran 2 tests containing 11 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.test-support-test {:test 2, :pass 11, :fail 0, :error 0, :group :parallel, :elapsed-ms 115}
+
+Testing millhouse.executor-discovery-test
+
+Ran 1 tests containing 6 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.executor-discovery-test {:test 1, :pass 6, :fail 0, :error 0, :group :parallel, :elapsed-ms 1780}
+
+Testing millhouse.workflow-test
+
+Ran 24 tests containing 74 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-test {:test 24, :pass 74, :fail 0, :error 0, :group :parallel, :elapsed-ms 98}
+
+Testing millhouse.workflow-authoring-test
+
+Ran 29 tests containing 139 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-authoring-test {:test 29, :pass 139, :fail 0, :error 0, :group :parallel, :elapsed-ms 548}
+
+Testing millhouse.workflow-spec-test
+
+Ran 10 tests containing 45 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-spec-test {:test 10, :pass 45, :fail 0, :error 0, :group :parallel, :elapsed-ms 71}
+
+Testing millhouse.workflow-composition-test
+
+Ran 20 tests containing 112 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-composition-test {:test 20, :pass 112, :fail 0, :error 0, :group :parallel, :elapsed-ms 14027}
+
+Testing millhouse.workflow-registry-test
+
+Ran 30 tests containing 115 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-registry-test {:test 30, :pass 115, :fail 0, :error 0, :group :parallel, :elapsed-ms 21046}
+
+Testing millhouse.workflow-cli-test
+
+Ran 16 tests containing 74 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-cli-test {:test 16, :pass 74, :fail 0, :error 0, :group :parallel, :elapsed-ms 15908}
+
+Testing millhouse.workflow-run-cli-test
+
+Ran 38 tests containing 189 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-run-cli-test {:test 38, :pass 189, :fail 0, :error 0, :group :parallel, :elapsed-ms 23497}
+
+Testing millhouse.chime-test
+
+Ran 18 tests containing 70 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.chime-test {:test 18, :pass 70, :fail 0, :error 0, :group :parallel, :elapsed-ms 21485}
+
+Testing millhouse.cron.runtime-test
+
+Ran 12 tests containing 1056 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.cron.runtime-test {:test 12, :pass 1056, :fail 0, :error 0, :group :parallel, :elapsed-ms 593}
+
+Testing millhouse.e2e.cron.lifecycle-test
+
+Ran 2 tests containing 8 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.e2e.cron.lifecycle-test {:test 2, :pass 8, :fail 0, :error 0, :group :parallel, :elapsed-ms 8073}
+
+Testing millhouse.executors.shell-test
+
+Ran 46 tests containing 232 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.executors.shell-test {:test 46, :pass 232, :fail 0, :error 0, :group :parallel, :elapsed-ms 43255}
+
+Testing millhouse.identity-test
+
+Ran 24 tests containing 191 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.identity-test {:test 24, :pass 191, :fail 0, :error 0, :group :parallel, :elapsed-ms 19555}
+
+Testing millhouse.land.scripts-test
+
+Ran 19 tests containing 116 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.land.scripts-test {:test 19, :pass 116, :fail 0, :error 0, :group :parallel, :elapsed-ms 18583}
+Aggregate summary: {:test 490, :pass 3969, :fail 0, :error 0}
+real 230.51
+user 471.66
+sys 45.68

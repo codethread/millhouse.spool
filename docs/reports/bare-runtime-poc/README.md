@@ -26,8 +26,7 @@ summaries) are separate from process wall time:
 | Local-root world | 89.090 s | 86.705 s | 87.193 s | 87.193 s |
 | Local-root bare | 3.035 s | 2.897 s | 2.860 s | 2.897 s |
 
-The local-root bare median is **16.9x lower** than the local-root world
-median (a **94.1% lower** observed process wall time). This is an observation
+The local-root bare fixture is **16.9 times faster** by median process wall time (a **94.1% reduction**). This is an observation
 of this focused test process, not a causal suite-wide estimate.
 
 The pinned baseline is a before-edit run using the unchanged command and the
@@ -56,11 +55,11 @@ python3 docs/reports/bare-runtime-poc/run_benchmark.py --label local-world --fix
 python3 docs/reports/bare-runtime-poc/run_benchmark.py --label local-bare --fixture bare --core-root /Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture
 ```
 
-One supplemental counted verification per fixture used the same launcher:
+Supplemental counted verification used the same launcher. The final bare probe measures both API invocation counters:
 
 ```nu
 python3 docs/reports/bare-runtime-poc/run_benchmark.py --label supplemental-counted-world --fixture world --core-root /Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture --counted --samples 1
-python3 docs/reports/bare-runtime-poc/run_benchmark.py --label supplemental-counted-bare --fixture bare --core-root /Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture --counted --samples 1
+python3 docs/reports/bare-runtime-poc/run_benchmark.py --label verified-counted-bare --fixture bare --core-root /Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture --counted --samples 1
 ```
 
 The launcher invokes `clojure -M:test` for both rows. `-Sdeps` supplies only a
@@ -86,9 +85,9 @@ implementation. No upstream files were edited from this worktree.
   `raw/local-world.json` record the local-root world samples.
 - `raw/local-bare-1.log` through `raw/local-bare-3.log` and
   `raw/local-bare.json` record the local-root bare samples.
-- `raw/supplemental-counted-world-1.log`, its count JSON, and the matching
-  bare files record measured public-fixture invocation counts and source URL.
-- `raw/full-root-candidate.log` records the one locked full root candidate.
+- `raw/supplemental-counted-world-1.log` and `raw/verified-counted-bare-1.log`, with their count JSON, record measured public-fixture invocation counts and source URL.
+- The earlier `supplemental-counted-bare` files are retained, but their world-call zero was a constant, not a measurement. The final `verified-counted-bare` probe instruments both public APIs and supersedes that provenance claim. Its timing overlaps the normal root-suite validation and is excluded from the performance tables.
+- `raw/full-root-candidate.log` records locked serial root validation; `raw/full-root-candidate-parallel.log` records locked normal-runner validation.
 
 Each accepted raw run reports zero failures and zero errors. The counted
 world verification measured **57** `run-with-bare-runtime` seam calls and **57**
@@ -97,7 +96,7 @@ actual `run-with-weaver-world` calls. The counted bare verification measured
 `file:/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture/src/millstrand/test/alpha.clj`.
 The fixture-support tests also verify unknown-option/storage refusal,
 current-runtime binding, fresh state, and cleanup after a callback failure.
-No assertions or tests were changed.
+No assertions or tests were changed. These are API invocation counts, not successful runtime-start counts: the invalid-storage fixture test calls the public helper and is rejected before starting a runtime.
 
 ## Change and evidence boundary
 
@@ -122,8 +121,9 @@ flock -w 180 /tmp/millstrand-test.lock /usr/bin/time -p clojure -Sdeps '{:deps {
 
 It passed **490 tests / 3,969 assertions** with zero failures/errors, in
 **266.47 s** process wall time and **262.059 s** namespace in-run total. This
-is root-only evidence; independent package and release quality gates remain
-pending.
+is serial root-only evidence. A coordinator rerun using the normal runner (the same command without `--serial`) also passed **490 tests / 3,969 assertions**, with the serial island and parallel pool unchanged. Its observed process wall time was **230.51 s**; this is a compatibility check, not a paired whole-suite speedup claim. Independent package and release quality gates remain pending.
+
+The POC currently requires Clojure CLI basis metadata. A plain `java -cp` launch was checked and refuses with `Bare runtimes require a Clojure CLI test JVM`. Millhouse's `--stress` child launcher currently uses that form without propagating the basis property, so stress mode needs follow-up before adopting this fixture generally. File-backed Millstrand source is also required. No stress or release acceptance is claimed.
 
 During launcher debugging, one `-i ... -M:test` attempt failed before loading
 the runner because Clojure treated `-M:test` as a file. A subsequent alias-order

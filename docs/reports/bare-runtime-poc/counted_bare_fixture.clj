@@ -3,6 +3,7 @@
          '[millstrand.test.alpha :as test-alpha])
 
 (def ^:private bare-fixture-calls (atom 0))
+(def ^:private world-fixture-calls (atom 0))
 (def ^:private source-url
   (str (or (io/resource "millstrand/test/alpha.clj")
            (throw (ex-info "Millstrand test fixture source is unavailable" {})))))
@@ -11,6 +12,15 @@
       (throw (ex-info "BARE_RUNTIME_COUNT_OUTPUT is required" {}))))
 (def ^:private original-run-with-bare-runtime
   (var-get #'test-alpha/run-with-bare-runtime))
+(def ^:private original-run-with-weaver-world
+  (var-get #'test-alpha/run-with-weaver-world))
+
+(alter-var-root
+ #'test-alpha/run-with-weaver-world
+ (constantly
+  (fn [opts f]
+    (swap! world-fixture-calls inc)
+    (original-run-with-weaver-world opts f))))
 
 (alter-var-root
  #'test-alpha/run-with-bare-runtime
@@ -27,4 +37,4 @@
          (json/write-str {"fixture" "bare"
                           "source-url" source-url
                           "bare-fixture-invocations" @bare-fixture-calls
-                          "world-fixture-invocations" 0}))))
+                          "world-fixture-invocations" @world-fixture-calls}))))
