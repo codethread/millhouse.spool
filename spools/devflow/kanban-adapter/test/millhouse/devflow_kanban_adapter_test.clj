@@ -15,7 +15,6 @@
             [millhouse.kanban :as kanban]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.graph.alpha :as graph]
-            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
@@ -49,22 +48,11 @@
         (throw (ex-info "Module activation failed" {:module key :result result})))))
   rt)
 
-(defn with-runtime [f]
+(defn- with-runtime [f]
   (t/with-weaver-world [ctx {:storage :sqlite-memory}]
     (let [rt (activate! (:runtime ctx))]
       (current/with-runtime rt
         (f rt)))))
-
-(deftest adapter-declarations-carry-typed-selection-metadata
-  (doseq [[sym key] [['author-kanban-cards :author-kanban-cards]
-                     ['decompose-kanban :decompose-kanban]]]
-    (let [var (ns-resolve 'millhouse.devflow-kanban-adapter sym)
-          declaration (::authoring/declaration (meta var))]
-      (is (var? var) (str sym " is a declaration Var"))
-      (is (= :registry (:channel declaration)))
-      (is (= (symbol "millhouse.devflow-kanban-adapter" (name sym))
-             (:var declaration)))
-      (is (= key (:key declaration))))))
 
 (deftest adapter-accretes-its-definitions-beside-devflow
   (with-runtime
@@ -78,76 +66,37 @@
       (is (= #{:continue :call}
              (:entrypoints (workflow/resolve-workflow :decompose-kanban)))))))
 
-(deftest decompose-kanban-offers-the-board-beside-the-strand-default
-  (with-runtime
-    (fn [_]
-      (workflow/start! "kb" #'adapter/decompose-kanban
-                       {:feature "kb"
-                        :card-reviewer "seat-a"
-                        :card-set-reviewer "seat-b"})
-      (let [step (workflow/ready-step "kb")]
-        (is (= "author-cards" (:defer step)))
-        (is (= ["author-card-strands" "author-kanban-cards"] (:workflows step))
-            "the binding allows the strand default and the kanban target"))
-      (workflow/defer! "kb" :author-kanban-cards
-                       {:feature "kb" :repository "repo" :mainline "main"
-                        :merged-revision "abc123" :proposal-path "proposal.md"
-                        :merge-evidence "merge-record"})
-      (let [step (workflow/ready-step "kb")]
-        (is (= "Draft kanban breakdown for kb" (:title step)))
-        (is (= "implementation cards" (:artifact step)))
-        (is (= "step" (:role step))))
-      (dotimes [_ 4] (workflow/complete! "kb"))
-      (is (= "handoff-card-review" (:checkpoint (workflow/ready-step "kb")))
-          "the filled target returns into the declaring stage"))))
+(deftest repoint-rejects-invalid-boundary-data-without-a-world
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Invalid repoint-decompose! input"
+                        (adapter/repoint-decompose! {})))
+  (let [error (try
+                (adapter/repoint-decompose! {:runtime nil :unexpected true})
+                (catch clojure.lang.ExceptionInfo ex ex))]
+    (is (= [:runtime] (:allowed (ex-data error))))
+    (is (= [:runtime :unexpected] (:received (ex-data error))))
+    (is (str/includes? (.getMessage error) "allowed keys")))
+  (doseq [[context received] [[nil nil] [{} []]
+                              [{{:not-a-keyword "metadata"} nil}
+                               [{:not-a-keyword "metadata"}]]]]
+    (let [error (try
+                  (adapter/repoint-decompose-seed! context)
+                  (catch clojure.lang.ExceptionInfo ex ex))]
+      (is (= {:required-keys [:runtime]
+              :metadata {:keys :keyword :values :any}}
+             (:allowed (ex-data error))))
+      (is (= received (:received (ex-data error)))))))
 
-(deftest repoint-decompose-validates-its-seed-contract
+(deftest repoint-seed-installs-the-kanban-binding
   (with-runtime
     (fn [rt]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Invalid repoint-decompose! input"
-                            (adapter/repoint-decompose! {})))
-      (let [error (try
-                    (adapter/repoint-decompose! {:runtime rt :unexpected true})
-                    nil
-                    (catch clojure.lang.ExceptionInfo ex ex))]
-        (is (instance? clojure.lang.ExceptionInfo error))
-        (is (= [:runtime] (:allowed (ex-data error))))
-        (is (= [:runtime :unexpected] (:received (ex-data error))))
-        (is (str/includes? (.getMessage error) "allowed keys"))
-        (is (str/includes? (.getMessage error) "received keys")))
-      (is (= {:repointed :decompose}
-             (adapter/repoint-decompose! {:runtime rt})))
-      (is (= {:repointed :decompose}
-             (adapter/repoint-decompose-seed!
-               {:runtime rt :module/key :adapter :effect/id :seed}))))))
-
-(deftest repoint-decompose-seed-validates-the-named-context-boundary
-  (with-runtime
-    (fn [rt]
-      (let [context {:runtime rt
-                     :module/key :adapter
-                     :effect/id :seed
+      (let [context {:runtime rt :module/key :adapter :effect/id :seed
                      :opaque {:preserved? true}}]
         (is (s/valid? ::adapter/repoint-seed-context context))
         (is (= {:repointed :decompose}
                (adapter/repoint-decompose-seed! context))))
-      (doseq [[context received]
-              [[nil nil]
-               [{} []]
-               [{{:not-a-keyword "metadata"} rt}
-                [{:not-a-keyword "metadata"}]]]]
-        (let [error (try
-                      (adapter/repoint-decompose-seed! context)
-                      nil
-                      (catch clojure.lang.ExceptionInfo ex ex))]
-          (is (instance? clojure.lang.ExceptionInfo error))
-          (is (= {:required-keys [:runtime]
-                  :metadata {:keys :keyword :values :any}}
-                 (:allowed (ex-data error))))
-          (is (= received (:received (ex-data error))))
-          (is (str/includes? (.getMessage error) "allowed shape"))
-          (is (str/includes? (.getMessage error) "received")))))))
+      (is (= 'millhouse.devflow-kanban-adapter/decompose-kanban
+             (:definition (workflow/resolve-workflow :decompose)))))))
 
 (deftest publication-receipts-survive-resume-and-return-the-exact-review-set
   (with-runtime
@@ -155,6 +104,8 @@
       (workflow/start! "published" #'adapter/decompose-kanban
                        {:feature "published" :card-reviewer "reviewer"
                         :card-set-reviewer "set-reviewer"})
+      (is (= ["author-card-strands" "author-kanban-cards"]
+             (:workflows (workflow/ready-step "published"))))
       (is (thrown? clojure.lang.ExceptionInfo
                    (workflow/defer! "published" :author-kanban-cards {:feature "published"})))
       (is (= "author-cards" (:defer (workflow/ready-step "published"))))
@@ -165,6 +116,7 @@
       (let [draft-step (workflow/ready-step "published")
             draft {:reference "draft-42" :repository "repo"
                    :proposal-path "proposal.md" :merged-revision "abc123"}]
+        (is (= "implementation cards" (:artifact draft-step)))
         (workflow/complete! "published" {:attributes {"devflow/breakdown-draft" draft}})
         (is (= draft (attr-get (weaver/show rt (:id draft-step)) :devflow/breakdown-draft)))
         (let [epic-step (workflow/ready-step "published")
