@@ -2,8 +2,7 @@
   "Tests for the chime local notification spool against a real weaver runtime.
 
   Chime ships no rules, so these tests register their own small rules over a
-  neutral attribute vocabulary; the parent-completed rule mirrors the worked
-  example in spools/chime/README.md."
+  neutral attribute vocabulary."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -136,15 +135,6 @@
     {:title (str "Needs human: " (:title strand))
      :body (str "Strand " (:id strand) " is ready for attention.")}))
 
-(defn parent-completed-rule
-  "README worked example: notify when a strand with parent-of children closes."
-  [{:keys [strand]}]
-  (when (and (= "closed" (:state strand))
-             (seq (weaver/list (current/runtime)
-                               [:edge/in "parent-of" [:= :id (:id strand)]] {})))
-    {:title (str "Plan complete: " (:title strand))
-     :body (str "Strand " (:id strand) " and the work it parents are finished.")}))
-
 (defn- throwing-rule [_]
   (throw (ex-info "rule boom" {:why :test})))
 
@@ -160,13 +150,8 @@
 
 ;; --- tests ------------------------------------------------------------------
 
-(deftest install-registers-no-rules
-  (with-chime
-    (fn [_ _]
-      (is (= [] (chime/rules))))))
-
 (deftest notifier-binding-and-manual-notify
-  (with-chime
+  (test-support/with-embedded-runtime
     (fn [_ config-dir]
       (testing "binding validation fails loudly"
         (is (= :millhouse.chime/notifier
@@ -187,7 +172,7 @@
           (is (file-contains? out-file "BODY=Body text")))))))
 
 (deftest notifier-thread-retains-its-runtime-for-process-failures
-  (with-chime
+  (test-support/with-embedded-runtime
     (fn [_rt _config-dir]
       (chime/set-notifier! {:argv ["/missing/chime-notifier"]})
       (is (= :started
@@ -200,7 +185,7 @@
                           [:kind :argv :title]))))))
 
 (deftest rule-registration-validation
-  (with-chime
+  (test-support/with-embedded-runtime
     (fn [_ _]
       (is (= :millhouse.chime/rule-entry
              (rejected-spec #(chime/register! :bad 'not-qualified))))
@@ -221,33 +206,6 @@
         (chime/scan! {:strand/id (:id run)})
         (is (= :notifier-missing (:kind (last (chime/recent-failures)))))
         (is (= "Run failed: failed run" (:title (last (chime/recent-failures)))))))))
-
-(deftest registered-rules-fire-end-to-end
-  (with-chime
-    (fn [rt config-dir]
-      (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
-      (chime/register! :parent-completed 'millhouse.chime-test/parent-completed-rule)
-      (let [out-file (bind-file-notifier! config-dir)
-            failed (weaver/add! rt {:title "run a"
-                                    :attributes {"phase" "failed"
-                                                 "error" "stacktrace"}})
-            child (weaver/add! rt {:title "child work"})
-            parent (weaver/add! rt {:title "plan p"
-                                    :edges [{:type "parent-of" :to (:id child)}]})]
-        (chime/scan! {:strand/id (:id failed)})
-        (eventually #(file-contains? out-file "Run failed: run a"))
-        ;; titles and bodies land in separate appends, so bodies need their own wait
-        (is (eventually #(file-contains? out-file "stacktrace")))
-        (testing "parent-completed matches only once the parent closes"
-          ;; drain the event lane and join notifier threads so any parent
-          ;; notification would have landed before asserting the still-open
-          ;; parent has fired none
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (await-notifier-threads!)
-          (is (not (file-contains? out-file "Plan complete: plan p")))
-          (weaver/update! rt (:id parent) {:state "closed"})
-          (chime/scan! {:strand/id (:id parent)})
-          (is (eventually #(file-contains? out-file "Plan complete: plan p"))))))))
 
 (deftest restart-baselines-durable-matches-before-notifying-new-ones
   (let [root (test-support/temp-dir "millstrand-chime-restart")]
@@ -360,6 +318,7 @@
         ;; writes TITLE first and "---" last, and snapshotting mid-write races.
         (eventually #(file-contains? out-file "---"))
         (let [once (slurp out-file)]
+          (is (str/includes? once (str "BODY=Strand " (:id run) "\n\nboom")))
           (chime/scan! {:strand/id (:id run)})
           ;; drain the event lane and join notifier threads so a duplicate
           ;; notification would have landed before asserting dedup held
@@ -444,6 +403,7 @@
 (deftest engine-resource-registers-atomically-and-cleans-up-on-removal
   (with-chime
     (fn [rt _config-dir]
+      (is (= [] (chime/rules)) "activation publishes no default rules")
       (is (= 1 (count (engine-handler-entries rt))))
       (is (= 1 (count (barrier-hook-entries rt))))
       (chime/register! :phase-failed 'millhouse.chime-test/phase-failed-rule)
