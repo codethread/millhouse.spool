@@ -14,7 +14,7 @@ Reusable one-seat review and serialized landing workflow definitions.
 
 
 Review and merge work through sign-off and a durable FIFO turn.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L258-L299">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L244-L292">Source</a></sub></p>
 
 ## <a name="millhouse.land/land-abort">`land-abort`</a>
 
@@ -22,7 +22,7 @@ Review and merge work through sign-off and a durable FIFO turn.
 
 
 Record an aborted landing and leave the work available for follow-up.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L161-L181">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L162-L182">Source</a></sub></p>
 
 ## <a name="millhouse.land/land-merge">`land-merge`</a>
 
@@ -30,7 +30,7 @@ Record an aborted landing and leave the work available for follow-up.
 
 
 Land approved work in FIFO order.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L183-L256">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L184-L242">Source</a></sub></p>
 
 ## <a name="millhouse.land/review">`review`</a>
 
@@ -38,7 +38,7 @@ Land approved work in FIFO order.
 
 
 Run one configured review agent, then require coordinator P1/P2 resolution.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L100-L159">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L101-L160">Source</a></sub></p>
 
 -----
 # <a name="millhouse.land.card-actions">millhouse.land.card-actions</a>
@@ -55,8 +55,8 @@ Short, repeatable kanban card updates used by landing workflows.
 ```
 Function.
 
-Finish an optional card after housekeeping, accepting an existing done result.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L43-L52">Source</a></sub></p>
+Finish an optional card after verified cleanup, resuming a pending queue waiter.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L43-L55">Source</a></sub></p>
 
 ## <a name="millhouse.land.card-actions/finish-card!">`finish-card!`</a>
 ``` clojure
@@ -65,7 +65,7 @@ Finish an optional card after housekeeping, accepting an existing done result.
 Function.
 
 Workflow callback for `finish!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L68-L71">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L71-L74">Source</a></sub></p>
 
 ## <a name="millhouse.land.card-actions/review!">`review!`</a>
 ``` clojure
@@ -83,7 +83,7 @@ Mark an optional card as needing human attention; in_review is unchanged.
 Function.
 
 Workflow callback for `review!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L58-L61">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L61-L64">Source</a></sub></p>
 
 ## <a name="millhouse.land.card-actions/rework!">`rework!`</a>
 ``` clojure
@@ -101,7 +101,7 @@ Resume pending or human-review work in claimed; repeat calls are harmless.
 Function.
 
 Workflow callback for `rework!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L63-L66">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L66-L69">Source</a></sub></p>
 
 -----
 # <a name="millhouse.land.merge-queue">millhouse.land.merge-queue</a>

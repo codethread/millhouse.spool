@@ -8,7 +8,7 @@
             [millstrand.api.millstrand.alpha :as millstrand]))
 
 (millstrand/use-op! auto-run/auto-run)
-(millstrand/use-hook! reporting/derive-labels)
+(millstrand/use-hook! reporting/derive-labels reporting/validate-blocker-card)
 (millstrand/use-pattern! reporting/auto-run-needs-decision
                          reporting/auto-run-unknown-failure
                          reporting/auto-run-unblock)

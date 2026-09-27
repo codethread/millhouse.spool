@@ -139,28 +139,28 @@ A blocked agent cannot continue. `needs-decision` asks for a decision; `unknown-
 
 Evidence may live on a note, a Kanban card, or any other strand in the workspace. The attribute contains only that strand's ID. Its title gives tooling a useful summary; its contents carry the question, context, or investigation evidence. There are no separate question or responsible-role attributes.
 
-Save the evidence first and reconcile the feature's lane before publishing the blocker. Use `pending` when work stops without an active successor; use `in_review` only for a recorded question or intervention that requires the user. Agent or coordinator recovery does not itself require human review. Keep `claimed` only while an agent is actively progressing the work. Record the remaining action and its owner on the feature even when the blocked target is a task or custody step.
+Save the evidence first, including the remaining action and its owner. Report on the feature card even when serving a task or custody step. Use `auto-run-needs-decision` only for a specific question requiring the user; it atomically sets `in_review` with the blocker and labels. Use `auto-run-unknown-failure` for an unresolved failure requiring operator recovery; it atomically sets `pending` with the blocker and labels. A predecessor's failure or a healthy queue wait is not a blocker on this card.
 
-Then publish the blocker as the final work-card mutation using a registered pattern. The pattern sets all three attributes together; then the agent returns a brief handoff and ends its run. Reporting patterns update evidence and labels, not lanes; the agent must reconcile the lane first. Unblocking also does not resume work or change lanes: inspect the existing workflow and accepted owner, and restore `claimed` when work resumes.
+Publish the pattern as the final card mutation, return a brief handoff, and end the run. Clear a resolved blocker with `auto-run-unblock`; it preserves the evidence and lane. Inspect the existing workflow and accepted owner, then resume that owner's settled native session against its open target. Restore `claimed` when work resumes. Unblocking does not launch an agent.
 
 | Pattern                    | Input                | Result                              |
 | -------------------------- | -------------------- | ----------------------------------- |
-| `auto-run-needs-decision`  | `strand`, `evidence` | Publish the decision variant        |
-| `auto-run-unknown-failure` | `strand`, `evidence` | Publish the unknown-failure variant |
+| `auto-run-needs-decision`  | `strand`, `evidence` | Set blocker and `in_review`        |
+| `auto-run-unknown-failure` | `strand`, `evidence` | Set blocker and `pending` |
 | `auto-run-unblock`         | `strand`             | Remove all three blocker attributes |
 
-Use `strand pattern explain <name>` for the checked input contract and `strand weave --pattern <name> --input <json>` to apply it. Reporting patterns require existing target and evidence strands. Unblocking preserves the evidence strand. None of these patterns starts or resumes an agent.
+Use `strand pattern explain <name>` for the checked input contract and `strand weave --pattern <name> --input <json>` to apply it. Reporting patterns require an active feature card and an existing evidence strand. The validation hook rejects reports against tasks, custody steps, or closed cards before the batch commits. Unblocking preserves the evidence strand. None of these patterns starts or resumes an agent.
 
 ### Derived board labels
 
-Each repository explicitly selects the shared reporting patterns and label hook in its autorun module. Pattern definitions and the hook are inert until selected:
+Each repository explicitly selects the shared reporting patterns, label hook, and feature-card validation hook in its autorun module. Pattern definitions and the hook are inert until selected:
 
 ```clojure
 ;; reporting aliases millhouse.auto-run-reporting
 (millstrand/use-pattern! reporting/auto-run-needs-decision
                          reporting/auto-run-unknown-failure
                          reporting/auto-run-unblock)
-(millstrand/use-hook! reporting/derive-labels)
+(millstrand/use-hook! reporting/derive-labels reporting/validate-blocker-card)
 ```
 
 The hook derives `kanban.label/agent-blocked` for either blocked variant and `kanban.label/needs-decision` only for `needs-decision`. Unblocking removes both labels. Source attributes and labels commit atomically, after evidence exists; agents do not maintain labels themselves. Unrelated labels are unchanged.

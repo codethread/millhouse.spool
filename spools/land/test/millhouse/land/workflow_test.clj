@@ -187,7 +187,21 @@
             (let [cleanup (first (workflow/ready run-id))]
               (is (= "Remove the landed branch and worktree" (:title cleanup)))
               (is (= (.getCanonicalPath root)
-                     (attr-get (weaver/show rt (:id cleanup)) :shell/cwd)))))
+                     (attr-get (weaver/show rt (:id cleanup)) :shell/cwd))))
+            (weaver/update! rt card {:attributes {:kanban/lane "pending"}})
+            (is (= "active" (:state (weaver/show rt card)))
+                "Cleanup must finish before the card can close")
+            (test-support/activate-spool! rt :test/code
+                                          'millhouse.test-modules.code-executor
+                                          :after [:millhouse/workflow])
+            (complete-ready! run-id)
+            (test-support/poll-until
+             #(workflow/done? run-id)
+             {:timeout-ms (test-support/await-budget-ms)
+              :on-timeout #(throw (ex-info "Post-cleanup card completion stalled" {}))})
+            (is (= ["closed" "done"]
+                   ((juxt :state #(attr-get % :kanban/outcome))
+                    (weaver/show rt card)))))
           (finally
             (test-support/delete-tree! root)))))))
 
@@ -275,6 +289,7 @@
           (is (nil? (card-actions/rework! rt {:card card})))
           (is (= "claimed" (card-lane rt card))
               "Paused landing can resume or enter the abort workflow")
+          (weaver/update! rt card {:attributes {:kanban/lane "pending"}})
           (is (nil? (card-actions/finish! rt {:card card})))
           (is (= "closed" (:state (weaver/show rt card))))
           (is (= "done" (attr-get (weaver/show rt card) :kanban/outcome)))
@@ -290,13 +305,13 @@
   (let [definition @(requiring-resolve 'millhouse.land/land-merge)
         ids (mapv :id (:steps definition))]
     (is (= [:take-turn :prepare-merge :merge-pr :pull-main :release-turn
-            :remove-branch-worktree :tidy-resources :finish-card]
+            :remove-branch-worktree :finish-card]
            ids))
     (is (nil? (definition-step definition :quality)))
     (is (= [:pull-main] (:depends-on (definition-step definition :release-turn))))
     (is (= [:release-turn]
            (:depends-on (definition-step definition :remove-branch-worktree))))
-    (is (= [:tidy-resources]
+    (is (= [:remove-branch-worktree]
            (:depends-on (definition-step definition :finish-card))))
     (let [prepare (definition-step definition :prepare-merge)
           prepare-argv ((get-in prepare [:attributes "shell/argv"])

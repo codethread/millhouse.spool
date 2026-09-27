@@ -20,9 +20,9 @@ eligible, and existing dependencies must close before dispatch.
   The custody target stays open throughout; phases never create new assignments.
   The grunt owns
   FIFO merge, cleanup, and card completion. The card stays `claimed` (in progress)
-  throughout agent review and authorized landing; no human-review lane transition
-  is needed. `in_review` indicates a human approval, blocker, or pending decision,
-  not that work has reached a later stage.
+  during agent review and active landing work; no human-review lane transition
+  is needed. `in_review` means a recorded action requires the user. Queue waiting uses
+  `pending`; advancing the workflow does not require human review.
 
 Per-card overrides use `auto-run/seat`, `auto-run/effort`, and
 `auto-run/workflow`. For example:
@@ -99,10 +99,20 @@ is terminal and its running/attempt/custody attributes are absent. An opted-in
 For an ordinary shell gate, a JSON null patch removes only `gate/error` after
 recording the failure. Never complete executor gates manually or repour the run.
 
-Handoff, custody, queue and landing failures still leave delivery open and retain
-owned resources and merge reservations. Do not replace workers, clear those gate
-errors, or withdraw a merge turn without explicit recovery authorization. Normal
-bounded queue waits are not failures.
+After handoff, the independent finisher owns scoped rebase conflicts and defects
+caused by the candidate. Record the exact gate, failed commit and output, repair
+the cause, obtain focused review for material changes, push, then retry the same
+gate after subprocess settlement and removal of live shell custody. Use
+`workflow retry-validation` for an opted-in recipe; otherwise remove only
+`gate/error`. The executor validates the final HEAD. Keep the FIFO reservation.
+These repairs require neither another approval nor a replacement worker.
+
+Escalate to the recovery coordinator only for uncertain subprocess or merge
+settlement, mismatched custody/receipts, unknown resource ownership, failures
+outside the assigned scope, or an exhausted retry budget. Retain the run,
+reservation and resources and record the exact required action. Ask the user
+only for a scope or authorization decision the coordinator cannot make.
+Never withdraw a possibly submitted merge or replace an existing workflow.
 
 A failed FIFO predecessor remains that predecessor's recovery responsibility.
 Downstream finishers record the dependency, notify its owner once, and keep
@@ -111,20 +121,54 @@ custody solely because the queue head failed. Use `pending` while solely waiting
 on another card and restore `claimed` when this run progresses. Re-read the
 frontier after each wait: executors can merge and remove the worktree while the
 finisher waits. Queue release is not delivery completion. The finisher must
-restore the card to `claimed` before completing `tidy-resources`, await Land's
-`finish-card` gate, verify the closed/done
+await Land's automatic cleanup and `finish-card` gates, verify the closed/done
 card, and close the delivery observation and custody anchor before returning.
 
-Before stopping for a failure owned by this delivery, reconcile its lane and
-record the remaining action and owner. Use `pending` without an active successor;
-reserve `in_review` for an actual user question or intervention. Do this before
-the final blocker-pattern mutation, which only updates evidence and labels.
+Before stopping for a failure owned by this delivery, record its remaining
+action, owner, and evidence. Publish on the feature card: `auto-run-needs-decision`
+sets `in_review` for a specific user question; `auto-run-unknown-failure` sets
+`pending` for operator recovery. Each pattern updates lane, evidence, and labels
+atomically.
+
 When recovering, clear resolved blockers while retaining their evidence and
 verify an accepted owner will finish both Land and the enclosing delivery run.
 
 Supplemental reviewer work needs a separate active review task. Resuming an
 agent whose original review gate is closed retains that target and cannot
 launch; do not reopen the completed gate or replace the workflow to recover it.
+
+## Recovery coordinator procedure
+
+1. Inspect with `agent show`, `show`, `workflow ready`, and `merge-queue status`.
+   Do not use `workflow next`, `complete`, or `choose` to inspect state.
+2. Re-read the current PR head/checks and workflow frontier. Clear only blockers
+   whose recorded cause is resolved. Preserve their evidence. A receipt pointing
+   to a settled run is historical evidence, not proof of active work.
+3. Keep one recovery intervention active per epic. Record the card, owner, active
+   intervention task, next action, and existing workflow/run IDs before deferring
+   recovery. The coordinator follows that task after the current intervention
+   settles; removing an intake label does not assign recovery.
+4. Before resuming, verify the exact predecessor is settled, its native session
+   is usable, and its retained target is open. Reuse that native lineage and the
+   original workflow. For a closed review target, create a separate active
+   review task and pass the exact revision and required review lens to it.
+5. Create an intervention task separately from its evidence note. Read only the
+   creation result's `task.id`, verify its active state, then launch against it.
+   Reconcile an accepted but unstarted request before creating a replacement.
+6. For a pre-PR79 lock-only failure, use the updated quality contract on the
+   rebased candidate. Record the old gate and terminal subprocess evidence, then
+   retry that gate once. The helper owns all ten acquisition attempts. Do not
+   probe/release the lock, run duplicate full suites, or seek repeated approvals.
+   If the helper exhausts its budget, record command-never-started and escalate
+   once to the recovery owner. A started suite failure requires diagnosis.
+7. Register an accepted worker continuation before freezing handoff. Read back
+   the current worker receipt and require acknowledgment from the running child.
+   `ready/pending` publication alone does not prove execution. Preserve original
+   request IDs and historical receipts; do not overwrite a frozen finisher.
+8. Include the current recovery rules in every resumed agent's prompt. Frozen
+   guidance and already-poured topology remain unchanged. For an older Land run,
+   complete its existing manual resource-tidy step after verifying owned cleanup;
+   then verify Land/card completion and close delivery observation and custody.
 
 ## Authorized recovery
 

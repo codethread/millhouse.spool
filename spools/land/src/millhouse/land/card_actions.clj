@@ -41,14 +41,17 @@
   nil)
 
 (defn finish!
-  "Finish an optional card after housekeeping, accepting an existing done result."
+  "Finish an optional card after verified cleanup, resuming a pending queue waiter."
   [runtime {:keys [card]}]
   (when card
     (let [view (card-view runtime card)]
       (if (= "closed" (:state view))
         (when-not (= "done" (attr-get view :kanban/outcome))
           (fail! "Landing card closed with a different outcome" {:card card}))
-        (kanban/finish! runtime card {"--outcome" "done"}))))
+        (do
+          (when (= "pending" (attr-get view :kanban/lane))
+            (rework! runtime {:card card}))
+          (kanban/finish! runtime card {"--outcome" "done"})))))
   nil)
 
 ;; The Workflow code executor invokes qualified one-argument callbacks while

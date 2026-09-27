@@ -100,7 +100,7 @@
                   "(ns auto-run.signal-labels
                      (:require [millhouse.auto-run-reporting :as reporting]
                                [millstrand.api.millstrand.alpha :as millstrand]))
-                   (millstrand/use-hook! reporting/derive-labels)
+                   (millstrand/use-hook! reporting/derive-labels reporting/validate-blocker-card)
                    (millstrand/use-pattern! reporting/auto-run-needs-decision
                                             reporting/auto-run-unknown-failure
                                             reporting/auto-run-unblock)"}}]
@@ -635,12 +635,14 @@
             "Autorun does not implicitly activate reporting patterns")
         (runtime/module! rt :signal-labels {:file "signal_labels.clj" :required? true})
         (patterns/weave! rt :auto-run-needs-decision input)
+        (is (= "in_review" (show rt card :kanban/lane)))
         (is (= ["true" "needs-decision" (:id evidence) "true" "true"]
                (mapv #(show rt card %)
                      [:auto-run/agent-blocked :auto-run/agent-blocked-status
                       :auto-run/agent-evidence :kanban.label/agent-blocked
                       :kanban.label/needs-decision])))
         (patterns/weave! rt :auto-run-unknown-failure input)
+        (is (= "pending" (show rt card :kanban/lane)))
         (is (= "unknown-failure" (show rt card :auto-run/agent-blocked-status)))
         (is (nil? (show rt card :kanban.label/needs-decision)))
         (is (= "true" (show rt card :kanban.label/agent-blocked)))
@@ -649,7 +651,8 @@
         (let [before (weaver/show rt (:id card))]
           (doseq [bad-input [(dissoc input :evidence)
                              (assoc input :evidence "missing")
-                             (assoc input :strand "missing")]]
+                             (assoc input :strand "missing")
+                             (assoc input :strand (:id evidence))]]
             (is (thrown? clojure.lang.ExceptionInfo
                          (patterns/weave! rt :auto-run-needs-decision bad-input)))
             (is (= before (weaver/show rt (:id card)))))
@@ -662,6 +665,11 @@
                               [:auto-run/agent-blocked :auto-run/agent-blocked-status
                                :auto-run/agent-evidence :kanban.label/agent-blocked
                                :kanban.label/needs-decision])))
+        (is (= "pending" (show rt card :kanban/lane))
+            "Clearing a blocker does not claim unattended work")
+        (weaver/update! rt (:id card) {:state "closed"})
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (patterns/weave! rt :auto-run-needs-decision input)))
         (is (= "true" (show rt card :kanban.label/custom)))
         (is (= evidence (weaver/show rt (:id evidence))))))))
 

@@ -9,7 +9,7 @@ Every ecosystem repository lands through the reusable `millhouse/land` root. The
 3. Drive `land` with the parameters documented by `strand workflow show land`. Do not merge or push `main` manually.
 4. The shared review path runs one configured agent seat and records an immutable reviewed HEAD plus explicit P1/P2 resolution. A repository may run richer review, but normal landing cannot omit the shared evidence.
 5. Approved work joins the durable FIFO queue. The queue retains a failed turn for repair rather than allowing another landing to overtake it.
-6. After a successful merge, landing updates canonical `main`, releases the queue turn, and removes the feature branch and worktree. The owner then completes `tidy-resources`; the executor finishes the optional card. Verify the workflow is done and the card is closed with outcome `done` before returning. Failed or aborted work remains available for follow-up unless cleanup already completed.
+6. After a successful merge, landing updates canonical `main`, releases the queue turn, and removes the feature branch and worktree. The executor then finishes the optional card, including a card left pending during queue waiting. No agent step separates successful cleanup from card completion. Verify the workflow is done and the card is closed with outcome `done` before returning. Failed or aborted work remains available for follow-up unless cleanup already completed.
 
 Inspect queue state with `strand merge-queue status`. Use the operation's live help for await and withdrawal syntax. Withdrawal must stop owned shell work and must refuse a turn whose merge may already have been submitted.
 
@@ -19,7 +19,7 @@ Keep the board truthful: use `pending` while solely waiting for another card or 
 
 Supplemental review requires a live, dedicated review target. A native reviewer continuation retains its original target, so resuming a reviewer whose gate is already closed cannot launch. Preserve that completed review and arrange a separate active review task; record the immutable range and findings at the existing resolution checkpoint. Never reopen a completed executor gate merely to obtain follow-up review.
 
-Before completing `tidy-resources`, restore a pending card to `claimed` and read back its lane: the automatic `finish-card` gate requires a work lane. Land's review/abort card action also accepts pending cards, so an owner can resume or withdraw paused work without first repairing its lane manually.
+Before sign-off, remove owned scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners. Put cleanup that must wait until after merge in the tracked executable `.millstrand/land-cleanup.sh`; the cleanup executor runs it before branch/worktree removal. Hook failure retains resources and prevents card completion. Land's review/abort card action also accepts pending cards, so resuming or withdrawing paused work does not require a separate lane repair.
 
 ## Bootstrap consumption
 

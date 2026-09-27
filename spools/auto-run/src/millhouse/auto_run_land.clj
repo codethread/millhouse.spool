@@ -14,13 +14,26 @@
   [card]
   (format/prose
    "
-     Handoff, custody or landing failures require explicit recovery.
-     Leave card {card} open unless landing has already completed. Retain and
-     record owned resources and any held merge reservation. Do not clear gate
-     errors, retry failed gates, spawn replacements or withdraw the merge turn.
-     These rules override shared Land's repair/retry guidance.
      Await executor-owned gates; never manually assert a passing result.
      Normal queue waits and await timeouts are not failures; reissue bounded waits.
+     For a failure in your own Land run, inspect the exact gate, subprocess
+     settlement, PR state and failure output before acting.
+
+     The independent finisher owns scoped rebase conflicts and defects caused
+     by the candidate. Record the failure, repair it, obtain focused review for
+     material changes, push, then retry the SAME failed gate after its subprocess
+     is terminal and shell/running, shell/attempt-id and shell/custody-handle are
+     absent. Use workflow retry-validation for an opted-in validation/recipe;
+     otherwise remove only gate/error. The executor must validate the final HEAD.
+     Keep the FIFO reservation. These repairs need no new approval or replacement
+     worker. The worker must not take back an accepted finisher's custody.
+
+     Escalate to the recovery coordinator only for uncertain subprocess/merge
+     settlement, mismatched worker/finisher identity or receipts, unknown resource
+     ownership, a failure outside the assigned scope, or an exhausted retry budget.
+     Retain the run, reservation and resources; record the exact required action.
+     Request the user only for a scope or authorization decision the coordinator
+     cannot make. Do not withdraw a possibly submitted merge or replace a run.
 
      A failed FIFO predecessor belongs to that predecessor's owner. Record the
      dependency and escalate it once to its recovery owner; do not publish a
@@ -72,8 +85,9 @@
      complete a gate manually, reopen passed steps or replace the workflow.
 
      Continue review and autonomous landing only after quality and CI pass for
-     the repaired exact HEAD. This authority does not cover handoff, custody,
-     queue or landing failures; those retain the explicit recovery boundary.
+     the repaired exact HEAD. This authority does not cover handoff
+     or finisher custody changes. After handoff, the independent finisher follows
+     the landing failure policy.
      Normal queue waits and await timeouts are not failures; reissue bounded waits.
    " {:card card}))
 
@@ -140,7 +154,7 @@
        lineage, unchanged task/root ownership and unfrozen handoff. It does not
        supply recovery authorization. Old poured workflows are not migrated.
 
-       Stop owned servers/browser sessions where practical. Record on card {card}
+       Stop owned servers/browser sessions before handoff. Record on card {card}
        the exact reviewed PR/head, Land and delivery run IDs, worker/release step
        ID, finisher target ID, current worker run ID, canonical root, branch,
        worktree and exact owned PIDs/session names/scratch paths (or none).
@@ -296,11 +310,10 @@
        uncertain resources on failure. Before stopping on a reported failure,
        re-read this Land run and the exact PR: a historical queue blocker may
        already be resolved. Clear resolved auto-run blockers with auto-run-unblock
-       and retain the evidence in the card notes. At tidy-resources clean only
-       the recorded owned inventory and record anything retained. Verify cleanup
-       and restore card {card} to claimed before closing tidy-resources; read back
-       the lane before advancing. Land's finish-card gate owns card completion
-       and requires a work lane, so never advance it with the card still pending.
+       and retain the evidence in the card notes. Shared cleanup runs the tracked
+       repository cleanup hook, removes the branch/worktree, then finishes the
+       card automatically, including a pending queue waiter. No agent mutation
+       is needed between successful cleanup and card completion.
 
        Verify Land is done and card {card} is closed with outcome done. Record the
        merged revision, cleanup result and retained resources on the card and

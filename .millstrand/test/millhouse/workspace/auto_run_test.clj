@@ -57,7 +57,10 @@
           (is (= ["test/**" "spools/*/test/**" "spools/*/*/test/**"
                   ".millstrand/test/**"]
                  (:glob lens)))))
-      (let [card (weaver/add! rt {:title "Blocked work"})
+      (let [card (weaver/add! rt {:title "Blocked work"
+                                    :attributes {:kanban/card "true"
+                                                 :kanban/type "feature"
+                                                 :kanban/lane "claimed"}})
             evidence (weaver/add! rt {:title "Decision context"})]
         (weaver/op! rt 'weave
                     ["--pattern" "auto-run-needs-decision" "--input"
