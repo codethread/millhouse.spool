@@ -65,7 +65,25 @@ Finish an optional card after verified cleanup, resuming a pending queue waiter.
 Function.
 
 Workflow callback for `finish!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L71-L74">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L84-L87">Source</a></sub></p>
+
+## <a name="millhouse.land.card-actions/pause!">`pause!`</a>
+``` clojure
+(pause! runtime {:keys [card]})
+```
+Function.
+
+Pause an aborted delivery without claiming idle work or hiding a human question.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L57-L68">Source</a></sub></p>
+
+## <a name="millhouse.land.card-actions/pause-card!">`pause-card!`</a>
+``` clojure
+(pause-card! params)
+```
+Function.
+
+Workflow callback for `pause!` in the code executor's bound runtime.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L89-L92">Source</a></sub></p>
 
 ## <a name="millhouse.land.card-actions/review!">`review!`</a>
 ``` clojure
@@ -83,7 +101,7 @@ Mark an optional card as needing human attention; in_review is unchanged.
 Function.
 
 Workflow callback for `review!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L61-L64">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L74-L77">Source</a></sub></p>
 
 ## <a name="millhouse.land.card-actions/rework!">`rework!`</a>
 ``` clojure
@@ -101,7 +119,7 @@ Resume pending or human-review work in claimed; repeat calls are harmless.
 Function.
 
 Workflow callback for `rework!` in the code executor's bound runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L66-L69">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/card_actions.clj#L79-L82">Source</a></sub></p>
 
 -----
 # <a name="millhouse.land.merge-queue">millhouse.land.merge-queue</a>

@@ -54,6 +54,19 @@
           (kanban/finish! runtime card {"--outcome" "done"})))))
   nil)
 
+(defn pause!
+  "Pause an aborted delivery without claiming idle work or hiding a human question."
+  [runtime {:keys [card]}]
+  (when card
+    (let [view (card-view runtime card)]
+      (when-not (= "active" (:state view))
+        (fail! "Card must be active to pause" {:card card}))
+      (case (attr-get view :kanban/lane)
+        ("pending" "in_review") nil
+        "claimed" (weaver/update! runtime card {:attributes {:kanban/lane "pending"}})
+        (fail! "Landing card must be pending, claimed or in review" {:card card}))))
+  nil)
+
 ;; The Workflow code executor invokes qualified one-argument callbacks while
 ;; binding the originating runtime. These named adapters must remain public so
 ;; generation-scoped resolution is an explicit, inspectable contract; the
@@ -72,3 +85,8 @@
   "Workflow callback for `finish!` in the code executor's bound runtime."
   [params]
   (finish! (current/runtime) params))
+
+(defn pause-card!
+  "Workflow callback for `pause!` in the code executor's bound runtime."
+  [params]
+  (pause! (current/runtime) params))

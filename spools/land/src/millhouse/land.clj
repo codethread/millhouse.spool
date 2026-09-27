@@ -166,8 +166,8 @@
    (fn [{:keys [branch]}] (str "Abort land: " branch))
    (update (stage "abort") :attributes assoc
            "land/abort-reason" (fn [{:keys [reason]}] reason))
-   (support/card-gate :return-card "Return the card to claimed" []
-                      "millhouse.land.card-actions/rework-card!")
+   (support/card-gate :return-card "Pause unfinished work" []
+                      "millhouse.land.card-actions/pause-card!")
    (workflow/step :record-abort "Record the abort and hand over the work" :self
                   :depends-on [:return-card]
                   :attributes {"land/abort-reason" (fn [{:keys [reason]}] reason)}

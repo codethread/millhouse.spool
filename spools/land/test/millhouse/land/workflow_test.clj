@@ -216,26 +216,28 @@
             _ (start-land! run-id params)]
         (try
           (reach-signoff! rt run-id card)
-          ;; A blocker requiring a human can arise at any point, including signoff.
-          (card-actions/review! rt {:card card})
           (let [ready (:ready (workflow/choose! run-id :abort
                                                 {:reason "Needs a larger change."}))
                 abort-root (workflow/current-root run-id)]
-            (is (= "Return the card to claimed" (:title (first ready))))
+            (is (= "Pause unfinished work" (:title (first ready))))
             (is (= "code" (:gate (first ready))))
+            (is (= "millhouse.land.card-actions/pause-card!"
+                   (attr-get (weaver/show rt (:id (first ready))) :code/fn)))
             (hooks/register-hook! rt :test/card-write
                                   #{:strand/update-before-commit}
                                   'millhouse.land.workflow-test/reject-card-write)
             (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                   #"Lifecycle hook failed"
                                   (binding [*fail-card-write* true]
-                                    (card-actions/rework! rt {:card card}))))
+                                    (card-actions/pause! rt {:card card}))))
             (is (= (:id abort-root) (:id (workflow/current-root run-id))))
-            (is (= "in_review" (card-lane rt card)))
-            (is (= "Return the card to claimed"
-                   (:title (first (workflow/ready run-id)))))
-            (card-actions/rework! rt {:card card})
             (is (= "claimed" (card-lane rt card)))
+            (is (= "Pause unfinished work"
+                   (:title (first (workflow/ready run-id)))))
+            (card-actions/pause! rt {:card card})
+            (is (= "pending" (card-lane rt card)))
+            (card-actions/pause! rt {:card card})
+            (is (= "pending" (card-lane rt card)))
             (is (= "in_review" (do (weaver/update! rt card {:attributes {:kanban/lane "in_review"}})
                                    (card-lane rt card)))))
           (finally
@@ -280,6 +282,8 @@
       (let [{:keys [root card]} (card-fixture rt)]
         (try
           (is (nil? (card-actions/review! rt {:card card})))
+          (is (= "in_review" (card-lane rt card)))
+          (is (nil? (card-actions/pause! rt {:card card})))
           (is (= "in_review" (card-lane rt card)))
           (is (nil? (card-actions/review! rt {:card card})))
           (is (nil? (card-actions/rework! rt {:card card})))

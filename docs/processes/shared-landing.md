@@ -19,7 +19,7 @@ Keep the board truthful: use `pending` while solely waiting for another card or 
 
 Supplemental review requires a live, dedicated review target. A native reviewer continuation retains its original target, so resuming a reviewer whose gate is already closed cannot launch. Preserve that completed review and arrange a separate active review task; record the immutable range and findings at the existing resolution checkpoint. Never reopen a completed executor gate merely to obtain follow-up review.
 
-Before sign-off, remove owned scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners. Put cleanup that must wait until after merge in the tracked executable `.millstrand/land-cleanup.sh`; the cleanup executor runs it before branch/worktree removal. Hook failure retains resources and prevents card completion. Land's review/abort card action also accepts pending cards, so resuming or withdrawing paused work does not require a separate lane repair.
+Before sign-off, remove owned scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners. Put cleanup that must wait until after merge in the tracked executable `.millstrand/land-cleanup.sh`; the cleanup executor runs it before branch/worktree removal. Hook failure retains resources and prevents card completion. Aborting automatically moves claimed work to pending, leaves pending work pending, and preserves an explicit human-review lane. Starting review resumes pending work as claimed. An abort does not claim a repair successor.
 
 ## Bootstrap consumption
 
