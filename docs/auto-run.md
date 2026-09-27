@@ -6,7 +6,7 @@ eligible, and existing dependencies must close before dispatch.
 
 ## Repository policy
 
-`.millstrand/me/auto_run.clj` owns admission: two concurrent workers, a
+`.millstrand/me/auto_run.clj` owns admission: one worker, a
 15-second scan interval, `wktree` preparation, and Sol/low with
 `auto-human-review` by default. The only allowed workflows are:
 

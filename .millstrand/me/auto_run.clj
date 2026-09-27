@@ -14,7 +14,7 @@
                          reporting/auto-run-unblock)
 
 (defn open!
-  "Configure two Millhouse worker slots, defaulting to human-reviewed delivery."
+  "Configure one Millhouse worker slot, defaulting to human-reviewed delivery."
   [{:keys [runtime]}]
   (auto-run/configure!
    runtime
@@ -25,7 +25,7 @@
     :workflows #{"auto-human-review" "auto-full-land"}
     :prepare 'millhouse.auto-run-worktree/prepare!
     :enabled? true
-    :max-running 2
+    :max-running 1
     :interval-ms 15000}))
 
 (defn close!

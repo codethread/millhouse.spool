@@ -36,7 +36,7 @@
     [ctx (world-options)]
     (let [rt (:runtime ctx)
           status (auto-run/status rt)]
-      (is (= {:enabled true :max-running 2 :workflow "auto-human-review"}
+      (is (= {:enabled true :max-running 1 :workflow "auto-human-review"}
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
