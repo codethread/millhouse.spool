@@ -695,50 +695,75 @@
                                      target {:harness "codex" :native-session-id "thread"
                                              :identity name}))))))))
 
+(defn- with-receiving-world [origin-attributes f]
+  ;; These cases prove receiver validation, not origin startup or transport.
+  ;; Keep a fresh target per case; the two-world registration test owns wiring.
+  (test-support/with-embedded-runtime
+    {:storage :sqlite-memory}
+    (fn [target target-dir]
+      (let [name "origin-kind-otter"
+            origin {:weaver-id "origin-id"
+                    :workspace "/origin/.millstrand"
+                    :running? true}
+            record {:id "origin-strand"
+                    :title name
+                    :attributes (merge {:identity/session "true"
+                                        :identity/id name
+                                        :identity/harness "codex"
+                                        :identity/native-session-id "thread"}
+                                       origin-attributes)}]
+        (with-redefs [peers/peers (fn [] [origin
+                                          {:weaver-id "target-id"
+                                           :workspace (.getCanonicalPath (io/file target-dir))
+                                           :running? true}])
+                      peers/call! (fn [peer op args]
+                                    (is (= [origin "identity" {:argv ["show" name]}]
+                                           [peer op args]))
+                                    ;; Match the string-keyed peer response.
+                                    (json/read-str
+                                     (json/write-str record
+                                                     :key-fn #(if (keyword? %)
+                                                                (subs (str %) 1)
+                                                                (str %)))))]
+          (f target name #(identity/receive! target name "origin-id")))))))
+
 (deftest registration-rejects-binding-and-origin-conflicts-without-writes
   (doseq [conflict [:name :session :origin]]
-    (with-registration-world
-      (fn [origin target _]
-        (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
-              name (:identity bound)]
-          (case conflict
-            :name (weaver/add! target {:title name
-                                       :attributes {:identity/session "true" :identity/id name
-                                                    :identity/harness "codex"
-                                                    :identity/native-session-id "another-thread"}})
-            :session (identity/startup! target {:harness "codex" :native-session-id "thread"})
-            :origin (do
-                      (identity/register! origin name "target-id" name)
-                      (weaver/update! target (:id (identity/current target name))
-                                      {:attributes {:identity/origin-strand-id "another-strand"}})))
-          (let [before (graph-snapshot target)
-                error (failure #(identity/register! origin name "target-id" name))]
-            (is (re-find #"conflicts" (ex-message error)))
-            (is (= before (graph-snapshot target)))))))))
+    (with-receiving-world
+      {}
+      (fn [target name receive!]
+        (case conflict
+          :name (weaver/add! target {:title name
+                                     :attributes {:identity/session "true" :identity/id name
+                                                  :identity/harness "codex"
+                                                  :identity/native-session-id "another-thread"}})
+          :session (identity/startup! target {:harness "codex" :native-session-id "thread"})
+          :origin (do
+                    (receive!)
+                    (weaver/update! target (:id (identity/current target name))
+                                    {:attributes {:identity/origin-strand-id "another-strand"}})))
+        (let [before (graph-snapshot target)
+              error (failure receive!)]
+          (is (re-find #"conflicts" (ex-message error)))
+          (is (= before (graph-snapshot target))))))))
 
 (deftest registration-preserves-and-validates-forwarded-origin
-  (with-registration-world
-    (fn [origin target _]
-      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
-            name (:identity bound)
-            record-id (:id (identity/current origin name))]
-        (weaver/update! origin record-id
-                        {:attributes {:identity/origin-workspace "/original/.millstrand"
-                                      :identity/origin-strand-id "original-strand"}})
-        (identity/register! origin name "target-id" name)
-        (let [registered (identity/current target name)]
-          (is (= "/original/.millstrand"
-                 (attr-get registered :identity/origin-workspace)))
-          (is (= "original-strand" (attr-get registered :identity/origin-strand-id)))))))
-  (with-registration-world
-    (fn [origin target _]
-      (let [bound (identity/startup! origin {:harness "codex" :native-session-id "thread"})
-            name (:identity bound)]
-        (weaver/update! origin (:id (identity/current origin name))
-                        {:attributes {:identity/origin-workspace "/partial/.millstrand"}})
+  (with-receiving-world
+    {:identity/origin-workspace "/original/.millstrand"
+     :identity/origin-strand-id "original-strand"}
+    (fn [target name receive!]
+      (receive!)
+      (let [registered (identity/current target name)]
+        (is (= "/original/.millstrand"
+               (attr-get registered :identity/origin-workspace)))
+        (is (= "original-strand" (attr-get registered :identity/origin-strand-id))))))
+  (with-receiving-world
+    {:identity/origin-workspace "/partial/.millstrand"}
+    (fn [target _ receive!]
+      (let [before (graph-snapshot target)]
         (is (re-find #"incomplete registration provenance"
-                     (ex-message (failure #(identity/register! origin name "target-id" name)))))
-        (is (empty? (identities target)))))))
+                     (ex-message (failure receive!))))
+        (is (= before (graph-snapshot target)))))))
 
 (deftest registration-rejects-unattached-origin-and-unknown-routing
   (with-registration-world
