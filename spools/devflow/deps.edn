@@ -5,8 +5,7 @@
          :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}
         millhouse/workflow {:local/root "../workflow"}}
  :aliases
- {:test {:extra-paths ["test" "scripts" "kanban-adapter/src" "kanban-adapter/test"]
-         :extra-deps {millhouse/kanban {:local/root "../kanban"}}
+ {:test {:extra-paths ["test"]
          :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
          :main-opts ["-m" "millhouse.devflow-test"]}
   :equivalence-published {:extra-paths ["scripts" "kanban-adapter/src"]

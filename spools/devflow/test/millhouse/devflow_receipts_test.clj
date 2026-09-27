@@ -120,21 +120,20 @@
                        (workflow/ready-gates "landing")))))))))
 
 (deftest direct-loop-input-requires-keyword-keyed-maps
-  (with-runtime
-    (fn [_]
-      (doseq [item [{"id" "alpha" "title" "Alpha"}
-                    {:id "alpha" "title" "Alpha"}
-                    {:id "alpha" :title "Alpha" "harness" "ignored"}]
-              [definition params] [[#'execution/run-afk-delegated
-                                    {:feature "invalid" :tasks [item]
-                                     :delegate-harness "worker"}]
-                                   [#'cards/review-cards
-                                    {:feature "invalid" :cards [item]
-                                     :card-reviewer "reviewer"
-                                     :card-set-reviewer "set-reviewer"}]]]
-        (is (thrown? clojure.lang.ExceptionInfo
-                     (workflow/start! "invalid" definition params)))
-        (is (nil? (workflow/current-root "invalid")))))))
+  ;; Invalid authoring data is rejected before a runtime or graph is needed.
+  ;; The receipt tests above separately prove failed choices leave the frontier intact.
+  (doseq [item [{"id" "alpha" "title" "Alpha"}
+               {:id "alpha" "title" "Alpha"}
+               {:id "alpha" :title "Alpha" "harness" "ignored"}]
+          [definition params] [[#'execution/run-afk-delegated
+                                {:feature "invalid" :tasks [item]
+                                 :delegate-harness "worker"}]
+                               [#'cards/review-cards
+                                {:feature "invalid" :cards [item]
+                                 :card-reviewer "reviewer"
+                                 :card-set-reviewer "set-reviewer"}]]]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (workflow/describe definition params)))))
 
 (deftest cli-json-preserves-named-task-and-card-loop-ids
   (with-runtime

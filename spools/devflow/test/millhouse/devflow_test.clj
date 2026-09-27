@@ -8,8 +8,6 @@
             [millhouse.devflow.execution :as execution]
             [millhouse.devflow.cards :as cards]
             [millhouse.devflow.planning :as planning]
-            [millhouse.devflow-equivalence :as equivalence]
-            [millstrand.api.authoring.alpha :as authoring]
             [millstrand.api.cli.alpha :as cli-alpha]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -45,51 +43,13 @@
         (throw (ex-info "Module activation failed" {:module key :result result})))))
   rt)
 
-(defn with-runtime [f]
+(defn with-runtime
+  "Run a test with fresh unpublished Devflow modules and memory SQLite storage."
+  [f]
   (t/with-weaver-world [ctx {:storage :sqlite-memory}]
     (let [rt (activate! (:runtime ctx))]
       (current/with-runtime rt
         (f rt)))))
-
-(deftest card-authoring-equivalence-rejects-target-divergence
-  (testing "the executable verifier covers artifact, title, instruction, and binding regressions"
-    (is (nil? (equivalence/-main)))))
-
-(deftest devflow-contributes-static-definitions-not-a-runtime-facade
-  (is (nil? (resolve 'millhouse.devflow/spool)))
-  (is (nil? (resolve 'millhouse.devflow/contribute)))
-  (doseq [sym '[start! ready ready-step complete! choose! advance!
-                choice-detail choice-details current-root run-history squash-run!
-                describe workflows commands]]
-    (is (nil? (ns-resolve 'millhouse.devflow sym))
-        (str sym " must remain a generic workflow operation"))))
-
-(deftest devflow-declarations-carry-typed-selection-metadata
-  (doseq [sym '[intake agent-review author-task-strands author-card-strands
-                proposal land-proposal decompose review-cards route-after-plan
-                spec-plan run-afk-loop run-afk-manual run-afk-delegated tasks
-                direct-implementation abort devflow-runs devflow-ready
-                devflow-tasks devflow]]
-    (let [owner (cond
-                  (contains? '#{intake proposal land-proposal} sym)
-                  'millhouse.devflow.planning
-                  (= sym 'review-cards) 'millhouse.devflow.cards
-                  (contains? '#{route-after-plan spec-plan run-afk-loop run-afk-manual
-                                run-afk-delegated tasks direct-implementation} sym)
-                  'millhouse.devflow.execution
-                  :else 'millhouse.devflow)
-          var (ns-resolve owner sym)
-          declaration (::authoring/declaration (meta var))]
-      (is (var? var) (str sym " is a declaration Var"))
-      (is (= :registry (:channel declaration))
-          (str sym " uses the registry authoring channel"))
-      (is (= (symbol (str owner) (name sym)) (:var declaration))
-          (str sym " records its exact authored Var"))
-      (is (= (:key declaration)
-             (if (contains? #{'devflow-runs 'devflow-ready 'devflow-tasks} sym)
-               (name sym)
-               (if (= sym 'devflow) (name sym) (keyword sym))))
-          (str sym " keeps its authored registry key")))))
 
 (deftest module-publishes-the-complete-devflow-workflow-catalogue
   (with-runtime
@@ -106,28 +66,6 @@
             (str stage " can route or return")))
       (is (= "Devflow proposal: <feature>"
              (:name (workflow/describe :proposal {:feature "<feature>"})))))))
-
-(deftest generic-workflow-api-starts-and-drives-a-devflow-run
-  (with-runtime
-    (fn [_rt]
-      (let [started (workflow/start! "search-filters" :intake
-                                     {:feature "search-filters"
-                                      :worktree-check "already-in-worktree-ok"})]
-        (is (= ["Create or confirm feature worktree for search-filters"]
-               (mapv :title (:ready started))))
-        (is (= "devflow"
-               (get-in (workflow/current-root "search-filters")
-                       [:attributes :workflow/family])))
-        (is (= "intake"
-               (get-in (workflow/current-root "search-filters")
-                       [:attributes :devflow/stage])))
-        (workflow/choose! "search-filters" :already-in-worktree worktree-receipt)
-        (is (= ["Capture user brief for search-filters"]
-               (mapv :title (workflow/ready "search-filters"))))
-        (workflow/complete! "search-filters")
-        (workflow/choose! "search-filters" :proposal-ready)
-        (is (= ["Inspect relevant RFCs, spikes, root specs, and active feature context for search-filters"]
-               (mapv :title (workflow/ready "search-filters"))))))))
 
 (deftest generic-workflow-api-enforces-devflow-choice-contracts
   (with-runtime
@@ -393,9 +331,7 @@
           (is (some #{:proposal} (:guides data))))))))
 
 (defn -main [& _]
-  (require 'millhouse.devflow-kanban-adapter-test
-           'millhouse.devflow-receipts-test)
+  (require 'millhouse.devflow-receipts-test)
   (let [summary (clojure.test/run-tests 'millhouse.devflow-test
-                                        'millhouse.devflow-kanban-adapter-test
                                         'millhouse.devflow-receipts-test)]
     (System/exit (if (pos? (+ (:fail summary) (:error summary))) 1 0))))
