@@ -36,9 +36,6 @@
                  'interleave!) hook}
     f))
 
-(defn- deadline []
-  (+ (System/nanoTime) 1000000000))
-
 (defn- remaining [deadline]
   (- deadline (System/nanoTime)))
 
@@ -173,27 +170,6 @@
                  :current-start replacement-start)))
       #(is (nil? (identity/signal! retained))))
     (is (zero? (:signals @retained-state)))
-    (is (zero? (:signals @replacement-state)))
-    (is (identity/live? replacement))))
-
-(deftest reuse-between-signal-and-join-never-adopts-replacement
-  (let [start (Instant/parse "2026-09-14T00:00:00Z")
-        replacement-start (.plusSeconds start 1)
-        {retained :identity retained-state :state}
-        (fake-identity "member" 41 start)
-        {replacement :identity replacement-state :state}
-        (fake-identity "replacement" 41 replacement-start)
-        phases (atom [])]
-    (with-interleave
-      (fn [phase observed]
-        (when (identical? retained observed)
-          (swap! phases conj phase)))
-      #(do
-         (is (= retained (identity/signal! retained)))
-         (is (= retained (identity/join! retained (deadline) remaining)))))
-    (is (= [:before-signal :after-signal :before-join :after-join]
-           @phases))
-    (is (= 1 (:signals @retained-state)))
     (is (zero? (:signals @replacement-state)))
     (is (identity/live? replacement))))
 

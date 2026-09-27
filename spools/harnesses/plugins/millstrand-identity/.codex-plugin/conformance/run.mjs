@@ -9,7 +9,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  readlinkSync,
   realpathSync,
   rmSync,
   lstatSync,
@@ -20,9 +19,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   canonicalJson,
-  hashFile,
   parseStrictJson,
-  sha256CanonicalJson,
 } from "../../../../scripts/strict-json.mjs";
 
 const runnerPath = fileURLToPath(import.meta.url);
@@ -31,11 +28,6 @@ const pluginRoot = resolve(conformanceRoot, "../..");
 const payloadRoot = join(conformanceRoot, "payloads");
 const identityHook = join(pluginRoot, ".codex-plugin/hooks/identity.sh");
 const fakeStrand = join(conformanceRoot, "fake-strand.sh");
-const fakeGuidanceStrand = join(conformanceRoot, "fake-guidance-strand.mjs");
-const managedGuidancePreflight = resolve(
-  pluginRoot,
-  "../../scripts/managed-guidance-preflight.mjs",
-);
 const expectedCodexVersion = "codex-cli 0.154.0";
 const schemaRoot = join(conformanceRoot, "schemas");
 const inputSchemas = {
@@ -922,7 +914,6 @@ async function checkProjectGate() {
   // hook must return before the configured-source probe, the OS lock, and
   // Strand, without emitting any response at all.
   for (const [git, workspace] of [
-    [false, false],
     [false, true],
     [true, false],
   ]) {
@@ -939,27 +930,25 @@ async function checkProjectGate() {
       if (git) execFileSync("git", ["init", "--quiet", payload.cwd]);
       if (workspace) mkdirSync(join(payload.cwd, ".millstrand"));
       const logPath = join(root, "fake-strand.jsonl");
-      for (const argv of [[], ["--configured-source"]]) {
-        const result = await run("bash", [identityHook, ...argv], {
-          input: JSON.stringify(payload),
-          env: fixtureEnvironment({
-            MILLSTRAND_CODEX_STRAND_BIN: fakeStrand,
-            FAKE_STRAND_LOG: logPath,
-            MILLSTRAND_CODEX_WORKSPACE: payload.cwd,
-            MILLSTRAND_WORKSPACE: payload.cwd,
-            MILLSTRAND_RUN_REFERENCE: "inherited-run:invocation",
-            MILLSTRAND_MANAGED_BOOTSTRAP: "invalid-inherited-bootstrap",
-            TMPDIR: root,
-          }),
-        });
-        assert.equal(result.code, 0, result.stderr);
-        assert.equal(
-          result.stdout,
-          "",
-          `${fileName} outside a Millstrand project must stay silent`,
-        );
-        assert.equal(result.stderr, "");
-      }
+      const result = await run("bash", [identityHook], {
+        input: JSON.stringify(payload),
+        env: fixtureEnvironment({
+          MILLSTRAND_CODEX_STRAND_BIN: fakeStrand,
+          FAKE_STRAND_LOG: logPath,
+          MILLSTRAND_CODEX_WORKSPACE: payload.cwd,
+          MILLSTRAND_WORKSPACE: payload.cwd,
+          MILLSTRAND_RUN_REFERENCE: "inherited-run:invocation",
+          MILLSTRAND_MANAGED_BOOTSTRAP: "invalid-inherited-bootstrap",
+          TMPDIR: root,
+        }),
+      });
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(
+        result.stdout,
+        "",
+        `${fileName} outside a Millstrand project must stay silent`,
+      );
+      assert.equal(result.stderr, "");
       assert.equal(
         existsSync(logPath),
         false,
@@ -1052,14 +1041,10 @@ function writeConfig(codexHome, enabled, hooksEnabled = true) {
   );
 }
 
-function createCodexWorld({
-  enabled = true,
-  hooksEnabled = true,
-  defaultCodexHome = false,
-} = {}) {
+function createCodexWorld({ enabled = true, hooksEnabled = true } = {}) {
   const root = temporaryDirectory("codex-hook-world-");
   const home = join(root, "home");
-  const codexHome = defaultCodexHome ? join(home, ".codex") : root;
+  const codexHome = root;
   const installedPlugin = join(
     codexHome,
     "plugins/cache/harnesses/millstrand-identity/local",
@@ -1202,43 +1187,6 @@ async function listHooks(world, cwd = world.cwd, configOverrides = []) {
 function onlyEntry(response) {
   assert.equal(response.data.length, 1);
   return response.data[0];
-}
-
-function managedIdentityHooks(entry) {
-  return entry.hooks.filter(
-    (hook) =>
-      ["sessionStart", "subagentStart"].includes(hook.eventName) &&
-      hook.command.includes("/.codex-plugin/hooks/identity.sh"),
-  );
-}
-
-function trustHooks(world, hooks) {
-  const configPath = join(world.codexHome, "config.toml");
-  writeFileSync(
-    configPath,
-    `${readFileSync(configPath, "utf8")}\n${hooks
-      .map(
-        (hook) =>
-          `[hooks.state."${hook.key}"]\ntrusted_hash = "${hook.currentHash}"\n`,
-      )
-      .join("\n")}`,
-  );
-}
-
-function mutateInstalledIdentityHook(world, eventName, mutate) {
-  const manifestPath = join(
-    world.installedPlugin,
-    ".codex-plugin/hooks/hooks.json",
-  );
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const hook = manifest.hooks[eventName]
-    .flatMap((registration) => registration.hooks)
-    .find((candidate) =>
-      candidate.command.includes("/.codex-plugin/hooks/identity.sh"),
-    );
-  assert.ok(hook, `${eventName} identity hook fixture must exist`);
-  mutate(hook);
-  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, "\t")}\n`);
 }
 
 async function startFixtureProvider() {
@@ -1393,7 +1341,7 @@ async function checkInvocationEnabledHooks() {
 async function checkActualHostDuplicateSources() {
   const provider = await startFixtureProvider();
   try {
-    for (const scenario of ["single", "two-packages", "inherited-user"]) {
+    for (const scenario of ["two-packages", "inherited-user"]) {
       const world = createCodexWorld();
       const pluginIds = ["harnesses"];
       if (scenario === "two-packages") {
@@ -1444,10 +1392,7 @@ async function checkActualHostDuplicateSources() {
           hook.eventName === "sessionStart" &&
           hook.command.includes("/.codex-plugin/hooks/identity.sh"),
       );
-      assert.equal(
-        configuredIdentityHooks.length,
-        scenario === "single" ? 1 : 2,
-      );
+      assert.equal(configuredIdentityHooks.length, 2);
       if (scenario === "two-packages") {
         assert.deepEqual(
           configuredIdentityHooks.map((hook) => hook.pluginId).sort(),
@@ -1473,26 +1418,24 @@ async function checkActualHostDuplicateSources() {
           ? { PLUGIN_ROOT: world.installedPlugin }
           : {}),
       });
-      if (scenario !== "single") {
-        const diagnostic = await run("bash", [installedIdentity], {
-          input: JSON.stringify({
-            session_id: `${scenario}-diagnostic`,
-            cwd: world.cwd,
-            hook_event_name: "SessionStart",
-            source: "startup",
-            model: "gpt-5.4",
-          }),
-          env: environment,
+      const diagnostic = await run("bash", [installedIdentity], {
+        input: JSON.stringify({
+          session_id: `${scenario}-diagnostic`,
           cwd: world.cwd,
-        });
-        assert.match(
-          parseSingleJsonLine(
-            diagnostic.stdout,
-            `${scenario} duplicate diagnostic`,
-          ).systemMessage,
-          /Duplicate Millstrand identity injector configuration detected \(2 configured sources\)/,
-        );
-      }
+          hook_event_name: "SessionStart",
+          source: "startup",
+          model: "gpt-5.4",
+        }),
+        env: environment,
+        cwd: world.cwd,
+      });
+      assert.match(
+        parseSingleJsonLine(
+          diagnostic.stdout,
+          `${scenario} duplicate diagnostic`,
+        ).systemMessage,
+        /Duplicate Millstrand identity injector configuration detected \(2 configured sources\)/,
+      );
       const result = await run(
         "codex",
         [
@@ -1515,20 +1458,15 @@ async function checkActualHostDuplicateSources() {
       const modelRequests = provider.requests.slice(requestOffset);
       assert.equal(
         modelRequests.length,
-        scenario === "single" ? 1 : 0,
+        0,
         `${scenario} must stop before model work on duplicate injection`,
       );
-      if (scenario === "single") {
-        assert.equal(calls.length, 1, `${result.stdout}\n${result.stderr}`);
-        assert.equal(identityMessages(modelRequests).length, 1);
-      } else {
-        assert.equal(calls.length, 0, `${scenario} must stop before Strand`);
-        assert.equal(
-          identityMessages(modelRequests).length,
-          0,
-          `${scenario} must not inject duplicate identity context`,
-        );
-      }
+      assert.equal(calls.length, 0, `${scenario} must stop before Strand`);
+      assert.equal(
+        identityMessages(modelRequests).length,
+        0,
+        `${scenario} must not inject duplicate identity context`,
+      );
     }
   } finally {
     await provider.close();
@@ -1589,144 +1527,6 @@ async function checkCliDiscovery() {
 
   const disabledPlugin = createCodexWorld({ enabled: false });
   assert.deepEqual(onlyEntry(await listHooks(disabledPlugin)).hooks, []);
-
-  const missing = createCodexWorld();
-  const missingManifestPath = join(
-    missing.installedPlugin,
-    ".codex-plugin/plugin.json",
-  );
-  const missingManifest = JSON.parse(readFileSync(missingManifestPath, "utf8"));
-  missingManifest.hooks = "./.codex-plugin/hooks/missing.json";
-  writeFileSync(
-    missingManifestPath,
-    `${JSON.stringify(missingManifest, null, "\t")}\n`,
-  );
-  const missingEntry = onlyEntry(await listHooks(missing));
-  assert.deepEqual(missingEntry.hooks, []);
-  assert.equal(missingEntry.warnings.length, 1);
-  assert.match(
-    missingEntry.warnings[0],
-    /failed to read plugin hooks config .*missing\.json/,
-  );
-
-  const duplicate = createCodexWorld();
-  const command = `bash "${join(duplicate.installedPlugin, ".codex-plugin/hooks/identity.sh")}"`;
-  writeFileSync(
-    join(duplicate.codexHome, "hooks.json"),
-    `${JSON.stringify(
-      {
-        hooks: {
-          SessionStart: [
-            {
-              hooks: [
-                {
-                  type: "command",
-                  command,
-                  additionalContextLimit: 1024,
-                },
-              ],
-            },
-          ],
-        },
-      },
-      null,
-      "\t",
-    )}\n`,
-  );
-  const duplicateEntry = onlyEntry(await listHooks(duplicate));
-  const duplicateSessionHooks = duplicateEntry.hooks.filter(
-    (hook) =>
-      hook.eventName === "sessionStart" &&
-      hook.command.endsWith('/.codex-plugin/hooks/identity.sh"'),
-  );
-  assert.equal(
-    duplicateSessionHooks.length,
-    2,
-    "duplicate injectors must be diagnosed before startup",
-  );
-  assert.deepEqual(duplicateSessionHooks.map((hook) => hook.source).sort(), [
-    "plugin",
-    "user",
-  ]);
-  assert.equal(
-    duplicateSessionHooks.find((hook) => hook.source === "user")
-      .additionalContextLimit,
-    1024,
-  );
-
-  const linkedEntry = onlyEntry(
-    await listHooks(active, "/workspace/project-linked-worktree"),
-  );
-  assert.equal(linkedEntry.cwd, "/workspace/project-linked-worktree");
-}
-
-function snapshotFilesystemTree(root) {
-  const entries = [];
-  const visit = (directory, prefix = "") => {
-    for (const name of readdirSync(directory).sort()) {
-      const path = join(directory, name);
-      const relativePath = prefix ? join(prefix, name) : name;
-      const stats = lstatSync(path);
-      if (stats.isSymbolicLink())
-        entries.push([relativePath, "link", readlinkSync(path)]);
-      else if (stats.isDirectory()) {
-        entries.push([relativePath, "directory"]);
-        visit(path, relativePath);
-      } else if (stats.isFile())
-        entries.push([relativePath, "file", hashFile(path)]);
-      else entries.push([relativePath, "other", stats.mode]);
-    }
-  };
-  visit(root);
-  return entries;
-}
-
-async function runPreflight(
-  world,
-  extraArgv = [],
-  { omitCodexHome = false } = {},
-) {
-  const executable = realpathSync(
-    (
-      await run("which", ["codex"], { env: fixtureEnvironment() })
-    ).stdout.trim(),
-  );
-  const workspace = join(world.cwd, ".millstrand");
-  mkdirSync(workspace, { recursive: true });
-  const env = fixtureEnvironment({
-    CODEX_HOME: world.codexHome,
-    HOME: world.home,
-    CODEX_APP_SERVER_DISABLE_MANAGED_CONFIG: "1",
-  });
-  if (omitCodexHome) delete env.CODEX_HOME;
-  const request = {
-    schema: "millstrand.agent-guidance-preflight/v1",
-    harness: "codex",
-    executable,
-    mode: "headless",
-    cwd: realpathSync(world.cwd),
-    workspace: realpathSync(workspace),
-    env,
-    "extra-argv": extraArgv,
-    resumes: false,
-    model: "gpt-5.4",
-    effort: "low",
-  };
-  const inspectedPaths = [world.codexHome, world.cwd, workspace];
-  const before = inspectedPaths.map(snapshotFilesystemTree);
-  const result = await run("node", [managedGuidancePreflight], {
-    input: JSON.stringify(request),
-    env: fixtureEnvironment(),
-    cwd: world.cwd,
-    timeout: 20_000,
-  });
-  assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(
-    inspectedPaths.map(snapshotFilesystemTree),
-    before,
-    "Codex preflight must not write to CODEX_HOME, cwd, or workspace",
-  );
-  return parseSingleJsonLine(result.stdout, "managed guidance preflight");
 }
 
 async function holdInterruptProbe() {

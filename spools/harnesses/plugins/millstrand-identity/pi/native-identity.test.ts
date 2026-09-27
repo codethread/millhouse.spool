@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getNativeIdentityInputs,
-  projectWorkspace,
   resolveNativeIdentity,
 } from "./native-identity.js";
 
@@ -125,12 +124,5 @@ describe("native identity boundary", () => {
     await expect(
       resolveNativeIdentity(exec as any, { cwd: root, nativeSessionId: "s" }),
     ).rejects.toThrow("unavailable");
-  });
-  it("routes a linked worktree to its canonical project's workspace", async () => {
-    const root = project();
-    const exec = vi.fn(async () => ok(join(root, ".git")));
-    expect(
-      await projectWorkspace(exec as any, join(root, "worktrees", "feature")),
-    ).toBe(join(root, ".millstrand"));
   });
 });

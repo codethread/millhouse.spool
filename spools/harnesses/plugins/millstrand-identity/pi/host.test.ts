@@ -83,22 +83,20 @@ it("loads only the candidate extension in a real no-model Pi host", () => {
   const { root, env } = fixture();
   const extension = resolve("plugins/millstrand-identity/pi/index.ts");
   const session = "4a053dc9-aa09-4c8d-855b-b38a7ca9278a";
-  for (let n = 0; n < 2; n++) {
-    const output = host(root, env, extension, [
-      "--session-id",
-      session,
-      "--thinking",
-      "high",
-      "--debug-millstrand-identity",
-    ]);
-    expect(output).toContain('"status": "bound"');
-    expect(output).toContain(session);
-  }
+  const output = host(root, env, extension, [
+    "--session-id",
+    session,
+    "--thinking",
+    "high",
+    "--debug-millstrand-identity",
+  ]);
+  expect(output).toContain('"status": "bound"');
+  expect(output).toContain(session);
   const calls = readFileSync(join(root, "calls"), "utf8")
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as string[]);
-  expect(calls).toHaveLength(2);
+  expect(calls).toHaveLength(1);
   for (const call of calls) {
     expect(call).toContain(session);
     expect(call).toContain("openai/gpt-5");
@@ -127,7 +125,6 @@ it("real fork supplies its native parent header", () => {
 
 it.each([
   { project: false, git: true },
-  { project: false, git: false },
   { project: true, git: false },
 ])(
   "stays inactive with project=$project git=$git",

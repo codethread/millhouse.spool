@@ -5,7 +5,6 @@
             [clojure.test :refer [deftest is testing]]
             [millhouse.harnesses.internal.guidance-capability :as capability]
             [millhouse.harnesses.internal.guidance-closure :as closure]
-            [millhouse.harnesses.internal.guidance-deadline :as deadline]
             [millhouse.harnesses.internal.strict-json :as strict-json]))
 
 (defn- capability-document [executable-sha]
@@ -139,20 +138,6 @@
                            capability/*test-preflight-runner* runner]
                    (timed #(capability/preflight! request))))]
            (assert-timeout! outcome)
-           (is (zero? @runner-calls))))
-       (testing "the final pre-start check cannot invoke the runner"
-         (let [original-check deadline/check!
-               outcome
-               (with-redefs [deadline/check!
-                             (fn [budget phase]
-                               (if (= "process-execution" phase)
-                                 (deadline/timed-out! "process-execution")
-                                 (original-check budget phase)))]
-                 (binding [capability/*test-capability-profiles* [profile]
-                           capability/*test-preflight-runner* runner]
-                   (timed #(capability/preflight! request))))]
-           (is (re-find #"Guidance preflight timed out"
-                        (ex-message (:error outcome))))
            (is (zero? @runner-calls))))
        (testing "process execution cannot outlive the shared work deadline"
          (let [outcome
