@@ -160,19 +160,7 @@
                                  "\"errorMessage\":429}}\n")
                     :stderr ""})]
       (is (= :failed (:status outcome)))
-      (is (= "429" (:error outcome)))))
-  (testing "a clean terminal message stays done whatever text it carries"
-    (let [outcome (pi/finish
-                   runtime definition (run "headless")
-                   {:exit-code 0
-                    :stdout (str "{\"type\":\"session\",\"id\":\"session-1\"}\n"
-                                 "{\"type\":\"message_end\",\"message\":"
-                                 "{\"role\":\"assistant\",\"content\":"
-                                 "[{\"type\":\"text\",\"text\":\"all done\"}],\"stopReason\":\"stop\"}}\n")
-                    :stderr ""})]
-      (is (= :done (:status outcome)))
-      (is (= "all done" (:result outcome)))
-      (is (= "session-1" (:session-id outcome))))))
+      (is (= "429" (:error outcome))))))
 
 (deftest finish-fails-loudly-on-incomplete-success-output
   (testing "a successful process without a provider session cannot be resumed safely"

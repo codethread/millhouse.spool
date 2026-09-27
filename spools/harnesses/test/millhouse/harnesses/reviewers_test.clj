@@ -226,20 +226,9 @@
                (mapv :seat (:runs result))))))))
 
 (deftest public-start-fans-out-ready-runs-and-freezes-context
-  (with-review-world
+  (with-review-world*
+    true
     (fn [ctx]
-      (test-alpha/repl! ctx register-fakes)
-      (spit (io/file (:config-dir ctx) "init.clj")
-            (str (:review-init ctx)
-                 "\n(runtime/module! rt :review-selection"
-                 " {:file \"modules/review_selection.clj\""
-                 " :after [:review-definitions] :required? true})"))
-      (test-alpha/repl!
-       ctx
-       '(do
-          (require '[millstrand.api.runtime.alpha :as runtime])
-          (runtime/refresh! rt)
-          (runtime/refresh! rt)))
       (let [result
             (test-alpha/repl!
              ctx
@@ -321,19 +310,9 @@
                      (second (first (:systems result)))))))))
 
 (deftest public-start-validates-before-capture-or-create
-  (with-review-world
+  (with-review-world*
+    true
     (fn [ctx]
-      (test-alpha/repl! ctx register-fakes)
-      (spit (io/file (:config-dir ctx) "init.clj")
-            (str (:review-init ctx)
-                 "\n(runtime/module! rt :review-selection"
-                 " {:file \"modules/review_selection.clj\""
-                 " :after [:review-definitions] :required? true})"))
-      (test-alpha/repl!
-       ctx
-       '(do
-          (require '[millstrand.api.runtime.alpha :as runtime])
-          (runtime/refresh! rt)))
       (is (= [true true true]
              (test-alpha/repl!
               ctx
