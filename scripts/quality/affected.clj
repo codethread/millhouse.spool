@@ -80,6 +80,7 @@
                       'millhouse.e2e.cron.lifecycle-test '#{millhouse/cron}
                       'millhouse.package-layout-test (disj (set (keys roots)) 'workspace)
                       'millhouse.affected-test #{}
+                      'millhouse.quality-lock-test #{}
                       'millhouse.test-support-test '#{millhouse/workflow millhouse/land}}
         tests (into {} (for [ns-sym runner/test-namespaces]
                          (let [path (test-path ns-sym)
