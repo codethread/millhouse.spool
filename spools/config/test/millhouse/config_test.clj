@@ -49,7 +49,7 @@
                                    [:generated :harness/model])]
           (is (true? (harnesses/flag rt agents/allow-china-flag)))
           (is (true? (:available (harnesses/availability rt :deepseek))))
-          (is (= "deepseek/deepseek-v4-flash" (grunt-model)))
+          (is (= "deepseek/deepseek-flash" (grunt-model)))
           (is (= "max"
                  (get-in (harnesses/resolve-harness rt :grunt)
                          [:generated :harness/effort])))
@@ -64,7 +64,7 @@
           (is (false? (:available (harnesses/availability rt :deepseek))))
           (is (= "openai-codex/gpt-5.6-luna" (grunt-model)))
           (harnesses/set-flag! rt agents/allow-china-flag true)
-          (is (= "deepseek/deepseek-v4-flash" (grunt-model)))))
+          (is (= "deepseek/deepseek-flash" (grunt-model)))))
       (testing "shared review lenses prefer grunt and retain its fallback"
         (let [selected-seats
               #(into {}
