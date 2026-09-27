@@ -154,7 +154,20 @@
   (let [fake-bin (io/file (:root fixture) "pr-check-bin")
         gh-log (io/file (:root fixture) "pr-check-gh.log")
         view-count (io/file (:root fixture) "pr-check-view-count")
-        head-file (io/file (:root fixture) "pr-check-head")]
+        head-file (io/file (:root fixture) "pr-check-head")
+        clock (io/file (:root fixture) "pr-check-clock")]
+    ;; Finite scripted reads make registration independent of second boundaries.
+    ;; Exhaustion fails loudly rather than freezing a broken polling loop.
+    (spit clock "100\n100\n")
+    (write-file!
+     fake-bin "date"
+     (str "#!/bin/sh\nset -eu\n"
+          "[ \"$*\" = '+%s' ] || exit 64\n"
+          "IFS= read -r now <\"$GH_TEST_CLOCK\" || { echo 'test clock exhausted' >&2; exit 64; }\n"
+          "tail -n +2 \"$GH_TEST_CLOCK\" >\"$GH_TEST_CLOCK.next\"\n"
+          "mv \"$GH_TEST_CLOCK.next\" \"$GH_TEST_CLOCK\"\n"
+          "printf '%s\\n' \"$now\"\n")
+     true)
     (spit view-count "0\n")
     (spit head-file (str (:feature-head fixture) "\n"))
     (write-file!
@@ -190,13 +203,15 @@
           "fi\n"
           "exit 64\n")
      true)
-    {:env {"GH_TEST_LOG" (.getPath gh-log)
+    {:env {"GH_TEST_CLOCK" (.getPath clock)
+           "GH_TEST_LOG" (.getPath gh-log)
            "GH_TEST_VIEW_COUNT" (.getPath view-count)
            "GH_TEST_HEAD_FILE" (.getPath head-file)
            "GH_TEST_BRANCH" branch
            "PATH" (str (.getPath fake-bin) java.io.File/pathSeparator
                        (System/getenv "PATH"))}
      :log gh-log
+     :clock clock
      :view-count view-count
      :head-file head-file}))
 
@@ -225,7 +240,7 @@
 
 (deftest pr-checks-delegates-registered-pending-pass-and-fail-rollups
   (let [fixture (fixture)
-        {:keys [env log view-count]} (pr-check-env fixture)]
+        {:keys [env log view-count clock]} (pr-check-env fixture)]
     (try
       (doseq [[case-name empty-views check-output check-exit expected-success?]
               [["empty-then-pending-then-pass" "1" "pending then passed" "0" true]
@@ -233,6 +248,7 @@
                ["fail" "0" "checks failed" "7" false]]]
         (spit log "")
         (spit view-count "0\n")
+        (spit clock "100\n100\n")
         (let [result (run-script (:worktree fixture) "pr-checks.sh"
                                  ["required" branch "1" "0"]
                                  (assoc env
@@ -256,6 +272,23 @@
                      (nth calls (- (count calls) 2))
                      (last calls)))
                 case-name))))
+      (finally
+        (test-support/delete-tree! (:root fixture))))))
+
+(deftest pr-checks-expires-at-the-positive-registration-deadline
+  (let [fixture (fixture)
+        {:keys [env log clock]} (pr-check-env fixture)]
+    (try
+      ;; Reproduce crossing a second boundary before the first registration poll.
+      (spit clock "100\n101\n")
+      (let [result (run-script (:worktree fixture) "pr-checks.sh"
+                               ["required" branch "1" "0"] env)
+            calls (str/split-lines (slurp log))]
+        (is (not (zero? (:exit result))))
+        (is (str/includes? (:output result) "within 1s; policy required"))
+        (is (= 1 (count calls)))
+        (is (not-any? #(str/starts-with? % "pr checks ") calls))
+        (is (= "" (slurp clock)) "both deadline reads were consumed"))
       (finally
         (test-support/delete-tree! (:root fixture))))))
 
