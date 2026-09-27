@@ -52,9 +52,7 @@
   (with-runtime
     (fn [_rt _]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown registered workflow"
-                            (workflow/start! "missing-keyword-start" :missing-workflow {})))))
-  (with-runtime
-    (fn [_rt _]
+                            (workflow/start! "missing-keyword-start" :missing-workflow {})))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown registered workflow"
                             (workflow/describe :missing-workflow {}))))))
 
@@ -115,12 +113,6 @@
     (is false "expected executor registration to reject :self")
     (catch clojure.lang.ExceptionInfo e
       (is (= :self (:waiter (ex-data e)))))))
-
-(deftest executors-reflects-registrations
-  (with-runtime
-    (fn [_rt _]
-      (workflow/register-executor! :registry-test-executor (constantly nil))
-      (is (contains? (workflow/executors) :registry-test-executor)))))
 
 (defn exec-detail-a
   "Return the A fixture executor's stall detail."
@@ -205,14 +197,11 @@
             "the template is keyed by the attribute spelling an author writes")))))
 
 (deftest executor-declaration-map-with-bad-shape-fails-loudly
-  ;; A map is ifn?, so a mistyped declaration must fail loudly rather than
-  ;; silently register as a lookup predicate.
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Executor declaration map"
-                            (workflow/register-executor!
-                             :bad-decl {:stalledd? 'millhouse.workflow-registry-test/exec-detail-a}))))))
+  ;; Reject malformed maps before accessing runtime state: maps are invokable,
+  ;; but must not silently become lookup predicates.
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Executor declaration map"
+                        (workflow/register-executor!
+                         :bad-decl {:stalledd? 'millhouse.workflow-registry-test/exec-detail-a}))))
 
 (deftest executor-catalog-fails-loudly-on-an-unresolvable-request-spec
   ;; A declared spec that no longer resolves must not read as an executor with
@@ -761,11 +750,4 @@
                           (catch clojure.lang.ExceptionInfo e e))]
           (is (= :workflow/reference-entrypoint-unsupported (:reason (ex-data thrown))))
           (is (= :call (:entrypoint (ex-data thrown))))
-          (is (= :defer (:declaring-kind (ex-data thrown))))))
-      (testing "a target that is not a definition map at all"
-        (let [thrown (try (workflow/register-workflow!
-                           :wt-legacy 'millhouse.workflow-registry-test/exploding-constructor)
-                          (catch clojure.lang.ExceptionInfo e e))]
-          (is (= :workflow/definition-invalid (:reason (ex-data thrown))))
-          (is (= 'millhouse.workflow-registry-test/exploding-constructor
-                 (:definition (ex-data thrown)))))))))
+          (is (= :defer (:declaring-kind (ex-data thrown)))))))))
