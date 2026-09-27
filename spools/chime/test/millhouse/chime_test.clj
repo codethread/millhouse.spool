@@ -318,6 +318,7 @@
         ;; writes TITLE first and "---" last, and snapshotting mid-write races.
         (eventually #(file-contains? out-file "---"))
         (let [once (slurp out-file)]
+          (is (str/includes? once (str "BODY=Strand " (:id run) "\n\nboom")))
           (chime/scan! {:strand/id (:id run)})
           ;; drain the event lane and join notifier threads so a duplicate
           ;; notification would have landed before asserting dedup held
