@@ -18,13 +18,13 @@ Dispatch opted-in, ready Kanban features into repository-owned workflows.
 Function.
 
 Inspect or explicitly scan the repository's automatic card dispatcher.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L376-L410">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L384-L418">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/auto-run-workflow">`auto-run-workflow`</a>
 
 
 
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L52-L61">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L52-L69">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/classify">`classify`</a>
 ``` clojure
@@ -33,7 +33,7 @@ Inspect or explicitly scan the repository's automatic card dispatcher.
 Function.
 
 Classify already-collected delivery evidence without mutation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L349-L352">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L357-L360">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/configure!">`configure!`</a>
 ``` clojure
@@ -56,7 +56,7 @@ Enable repository-owned dispatch from a lifecycle resource's open hook.
 
   Invalid configuration fails activation. Disabling prevents new admission;
   it never stops existing workers. Reconfiguration is serialized with scans.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L79-L122">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L87-L130">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/eligible?">`eligible?`</a>
 ``` clojure
@@ -69,7 +69,7 @@ Return whether a graph-ready strand permits a first automatic assignment.
   Readiness itself belongs to Weaver. This predicate checks card state, opt-in,
   authoritative current ownership, and previous dispatch receipts. Reporter,
   actor, and other participation history do not make an unclaimed card owned.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L133-L147">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L141-L155">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/explain">`explain`</a>
 ``` clojure
@@ -78,7 +78,7 @@ Return whether a graph-ready strand permits a first automatic assignment.
 Function.
 
 Return one bounded, read-only delivery explanation for `card-id`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L354-L360">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L362-L368">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/scan!">`scan!`</a>
 ``` clojure
@@ -95,7 +95,7 @@ Admit ready cards up to repository capacity, returning dispatch receipts.
   their card and are never retried by another scan. Accepted assignments remain
   assigned after process exit; moving a card or toggling its label cannot rearm
   it. Use explicit Harnesses continuation for subsequent work.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L306-L337">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L314-L345">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/status">`status`</a>
 ``` clojure
@@ -104,7 +104,7 @@ Admit ready cards up to repository capacity, returning dispatch receipts.
 Function.
 
 Return configuration and durable card receipts without inferring completion.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L362-L374">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L370-L382">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/stop!">`stop!`</a>
 ``` clojure
@@ -113,7 +113,7 @@ Return configuration and durable card receipts without inferring completion.
 Function.
 
 Disable admission and cancel its wake without touching any worker.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L124-L131">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L132-L139">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run/wake!">`wake!`</a>
 ``` clojure
@@ -122,7 +122,7 @@ Disable admission and cancel its wake without touching any worker.
 Function.
 
 Rearm and scan one durable wake, ignoring an obsolete configuration.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L339-L347">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run.clj#L347-L355">Source</a></sub></p>
 
 -----
 # <a name="millhouse.auto-run-explain">millhouse.auto-run-explain</a>
@@ -166,7 +166,7 @@ Recorded autonomous landing phases with one persistent finisher target.
 
 
 Review, freeze and release one independent finisher through recorded phases.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L85-L292">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L94-L309">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-land/failure-policy">`failure-policy`</a>
 ``` clojure
@@ -175,7 +175,7 @@ Review, freeze and release one independent finisher through recorded phases.
 Function.
 
 Render the handoff and landing stop rules, after delivery validation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L12-L26">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L12-L35">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-land/validation-failure-policy">`validation-failure-policy`</a>
 ``` clojure
@@ -187,7 +187,7 @@ Render agent repair authority for implementation and pre-review validation.
 
   Diagnosis belongs to the assigned agent. This guidance grants scoped repair,
   not permission to bypass executor results or handoff and landing custody.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L28-L69">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L37-L78">Source</a></sub></p>
 
 -----
 # <a name="millhouse.auto-run-recovery">millhouse.auto-run-recovery</a>

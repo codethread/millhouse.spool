@@ -22,6 +22,15 @@
      Await executor-owned gates; never manually assert a passing result.
      Normal queue waits and await timeouts are not failures; reissue bounded waits.
 
+     A failed FIFO predecessor belongs to that predecessor's owner. Record the
+     dependency and escalate it once to its recovery owner; do not publish a
+     blocker on this card or end finisher custody merely because another run
+     holds the turn. Keep waiting on this SAME Land run. While solely waiting
+     for a predecessor, use pending; restore claimed when this run progresses.
+     Re-read your own frontier after every wait: executors may have advanced
+     through merge and worktree removal while you were waiting. An empty queue
+     or released turn is not proof that cleanup and card completion are done.
+
      Follow the assigned blocker contract when reporting; preserve its evidence.
    " {:card card}))
 
@@ -217,6 +226,11 @@
        settlement wait, executor verification, signoff, then landing observation.
        Keep this anchor open throughout; no additional assignment is needed.
 
+       Retain responsibility through queue waiting, resource cleanup and card
+       completion. Do not return merely because signoff succeeded, the PR merged,
+       the queue released, or the worktree disappeared. A predecessor's failure
+       does not transfer this custody to the predecessor's recovery agent.
+
        Close this anchor only after the observation step is closed, Land is done
        and the card is closed with outcome done. Attach the verified landing
        receipt and return a concise handover. If final bookkeeping fails after
@@ -279,9 +293,12 @@
        Finisher only: read card {card}'s handoff and continue ONLY land-auto-{card}.
        Its existing gates own FIFO, final-head validation, merge, main update and
        cleanup. Await them; never manually assert success. Keep reservations and
-       uncertain resources on failure. At tidy-resources clean only the recorded
-       owned inventory and record anything retained. Verify cleanup before closing
-       tidy-resources; Land's finish-card gate owns card completion.
+       uncertain resources on failure. Before stopping on a reported failure,
+       re-read this Land run and the exact PR: a historical queue blocker may
+       already be resolved. Clear resolved auto-run blockers with auto-run-unblock
+       and retain the evidence in the card notes. At tidy-resources clean only
+       the recorded owned inventory and record anything retained. Verify cleanup
+       before closing tidy-resources; Land's finish-card gate owns card completion.
 
        Verify Land is done and card {card} is closed with outcome done. Record the
        merged revision, cleanup result and retained resources on the card and

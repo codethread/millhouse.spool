@@ -104,6 +104,27 @@ owned resources and merge reservations. Do not replace workers, clear those gate
 errors, or withdraw a merge turn without explicit recovery authorization. Normal
 bounded queue waits are not failures.
 
+A failed FIFO predecessor remains that predecessor's recovery responsibility.
+Downstream finishers record the dependency, notify its owner once, and keep
+awaiting their existing Land runs; they do not publish their own blocker or end
+custody solely because the queue head failed. Use `pending` while solely waiting
+on another card and restore `claimed` when this run progresses. Re-read the
+frontier after each wait: executors can merge and remove the worktree while the
+finisher waits. Queue release is not delivery completion. The finisher must
+complete `tidy-resources`, await Land's `finish-card` gate, verify the closed/done
+card, and close the delivery observation and custody anchor before returning.
+
+Before stopping for a failure owned by this delivery, reconcile its lane and
+record the remaining action and owner. Use `pending` without an active successor;
+reserve `in_review` for an actual user question or intervention. Do this before
+the final blocker-pattern mutation, which only updates evidence and labels.
+When recovering, clear resolved blockers while retaining their evidence and
+verify an accepted owner will finish both Land and the enclosing delivery run.
+
+Supplemental reviewer work needs a separate active review task. Resuming an
+agent whose original review gate is closed retains that target and cannot
+launch; do not reopen the completed gate or replace the workflow to recover it.
+
 ## Authorized recovery
 
 Inspect the target's role **before** launching a continuation. A recovery worker

@@ -14,7 +14,7 @@ Reusable one-seat review and serialized landing workflow definitions.
 
 
 Review and merge work through sign-off and a durable FIFO turn.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L236-L277">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L255-L296">Source</a></sub></p>
 
 ## <a name="millhouse.land/land-abort">`land-abort`</a>
 
@@ -22,7 +22,7 @@ Review and merge work through sign-off and a durable FIFO turn.
 
 
 Record an aborted landing and leave the work available for follow-up.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L155-L172">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L161-L181">Source</a></sub></p>
 
 ## <a name="millhouse.land/land-merge">`land-merge`</a>
 
@@ -30,7 +30,7 @@ Record an aborted landing and leave the work available for follow-up.
 
 
 Land approved work in FIFO order.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L174-L234">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L183-L253">Source</a></sub></p>
 
 ## <a name="millhouse.land/review">`review`</a>
 
@@ -38,7 +38,7 @@ Land approved work in FIFO order.
 
 
 Run one configured review agent, then require coordinator P1/P2 resolution.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L100-L153">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L100-L159">Source</a></sub></p>
 
 -----
 # <a name="millhouse.land.card-actions">millhouse.land.card-actions</a>

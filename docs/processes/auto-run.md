@@ -139,7 +139,9 @@ A blocked agent cannot continue. `needs-decision` asks for a decision; `unknown-
 
 Evidence may live on a note, a Kanban card, or any other strand in the workspace. The attribute contains only that strand's ID. Its title gives tooling a useful summary; its contents carry the question, context, or investigation evidence. There are no separate question or responsible-role attributes.
 
-Save the evidence first, then publish the blocker as the final work-card mutation using a registered pattern. The pattern sets all three attributes together; then the agent returns a brief handoff and ends its run.
+Save the evidence first and reconcile the feature's lane before publishing the blocker. Use `pending` when work stops without an active successor; use `in_review` only for a recorded question or intervention that requires the user. Agent or coordinator recovery does not itself require human review. Keep `claimed` only while an agent is actively progressing the work. Record the remaining action and its owner on the feature even when the blocked target is a task or custody step.
+
+Then publish the blocker as the final work-card mutation using a registered pattern. The pattern sets all three attributes together; then the agent returns a brief handoff and ends its run. Reporting patterns update evidence and labels, not lanes; the agent must reconcile the lane first. Unblocking also does not resume work or change lanes: inspect the existing workflow and accepted owner, and restore `claimed` when work resumes.
 
 | Pattern                    | Input                | Result                              |
 | -------------------------- | -------------------- | ----------------------------------- |

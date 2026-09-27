@@ -150,6 +150,12 @@
         `p1-p2` equal to `none` or `resolved`, and a concise resolution summary.
         The checkpoint retains that evidence. If repairs change HEAD, obtain
         focused follow-up review before accepting.
+
+        A supplemental review needs a live, dedicated review target. Do not resume
+        a reviewer whose executor gate has already closed: native continuation
+        retains that closed target and cannot launch. Keep the completed gate's
+        evidence; run follow-up review on a separate active task and record its
+        exact range and findings here. Do not reopen or repour the original gate.
       " {})})))
 
 (workflow/defworkflow land-abort
@@ -169,6 +175,9 @@
                      Record the abort reason on the work task. Leave the PR, branch,
                      and worktree available for follow-up. Discuss major changes
                      with the user.
+                     Before ending, reconcile the card lane: pending without an
+                     active successor, in_review only for a recorded human action,
+                     claimed only while an agent is actively repairing the work.
                    " {}))))
 
 (workflow/defworkflow land-merge
@@ -183,6 +192,12 @@
                      Queue admission and acquisition are automatic. Await this run
                      with `strand workflow await <run-id>`; inspect its place with
                      `strand merge-queue status`. Failures and timeouts retain the turn.
+
+                     A predecessor's failed gate is not a failure of this run.
+                     Notify its recovery owner and keep awaiting this same run;
+                     do not end landing custody or mark your card as needing review
+                     solely because the predecessor is blocked. Re-read the current
+                     frontier after each wait and continue through housekeeping.
 
                      Any trusted agent may withdraw with `strand merge-queue withdraw
                      <entry-id> --reason <reason>`. Withdrawal stops shell work first;
@@ -229,6 +244,10 @@
                      Remove scratch files and named resources owned by this work.
                      Stop processes by recorded PID and sessions by exact name.
                      Leave shared or uncertain resources alone; note anything retained.
+                     Complete this step after verifying the inventory, including
+                     when there are no resources to remove. Then await finish-card
+                     and verify the run is done and its card is closed with outcome
+                     done. Merge and queue release alone do not finish this work.
                    " {}))
    (support/card-gate :finish-card "Finish the optional kanban card" [:tidy-resources]
                       "millhouse.land.card-actions/finish-card!")))

@@ -55,10 +55,18 @@
   If blocked, save the context on an evidence strand, then use
   `strand weave` with `auto-run-needs-decision` or `auto-run-unknown-failure`.
   Both take `strand` (the work strand ID) and `evidence` (the evidence strand ID).
-  Use `strand pattern explain <name>` for the input contract. Publish the blocker
+  Use `strand pattern explain <name>` for the input contract. Before reporting,
+  reconcile the feature's lane: pending when work stops without an active
+  successor; in_review only when the user must answer a recorded question or
+  intervene. An agent or coordinator recovery is not human review. Keep claimed
+  only while work is actually progressing. Record the remaining action and its
+  owner on the feature, including when reporting against a task or custody step.
+  The blocker patterns change evidence and labels, not lanes. Publish the blocker
   as your final work-card mutation, return a brief handoff, and end your run.
 
-  Use `auto-run-unblock` to clear a resolved blocker; it preserves the evidence.")
+  Use `auto-run-unblock` to clear a resolved blocker; it preserves the evidence.
+  Unblocking does not resume an agent. Reconcile the existing workflow frontier
+  and accepted owner before resuming; restore claimed when active work resumes.")
 
 (declare scan! wake!)
 

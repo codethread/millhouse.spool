@@ -9,9 +9,15 @@ Every ecosystem repository lands through the reusable `millhouse/land` root. The
 3. Drive `land` with the parameters documented by `strand workflow show land`. Do not merge or push `main` manually.
 4. The shared review path runs one configured agent seat and records an immutable reviewed HEAD plus explicit P1/P2 resolution. A repository may run richer review, but normal landing cannot omit the shared evidence.
 5. Approved work joins the durable FIFO queue. The queue retains a failed turn for repair rather than allowing another landing to overtake it.
-6. After a successful merge, landing updates canonical `main`, finishes the optional card, and removes the feature branch and worktree. Failed or aborted work remains available for follow-up unless cleanup already completed.
+6. After a successful merge, landing updates canonical `main`, releases the queue turn, and removes the feature branch and worktree. The owner then completes `tidy-resources`; the executor finishes the optional card. Verify the workflow is done and the card is closed with outcome `done` before returning. Failed or aborted work remains available for follow-up unless cleanup already completed.
 
 Inspect queue state with `strand merge-queue status`. Use the operation's live help for await and withdrawal syntax. Withdrawal must stop owned shell work and must refuse a turn whose merge may already have been submitted.
+
+A failed predecessor belongs to its recovery owner. Record that dependency and notify the owner once, then keep awaiting the same Land run; do not treat it as your own failure or stop owning the downstream delivery. Re-read the frontier after every wait because executors can merge and remove the worktree without another agent turn. Queue release and an empty queue do not prove resource cleanup or card completion.
+
+Keep the board truthful: use `pending` while solely waiting for another card or when stopping without an active successor, `claimed` when agent work resumes, and `in_review` only for a specific human action recorded on the card. Preserve failure evidence and reservations. A recovery coordinator must inspect both Land and its enclosing delivery workflow; resuming execution is incomplete until an accepted owner is responsible for cleanup and final bookkeeping.
+
+Supplemental review requires a live, dedicated review target. A native reviewer continuation retains its original target, so resuming a reviewer whose gate is already closed cannot launch. Preserve that completed review and arrange a separate active review task; record the immutable range and findings at the existing resolution checkpoint. Never reopen a completed executor gate merely to obtain follow-up review.
 
 ## Bootstrap consumption
 
