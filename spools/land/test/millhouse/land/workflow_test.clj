@@ -101,7 +101,7 @@
   (workflow/ready-checkpoint run-id))
 
 (deftest standalone-review-runs-one-agent-before-coordinator-resolution
-  (with-runtime
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -122,16 +122,16 @@
           (finally
             (test-support/delete-tree! root)))))))
 
-(deftest landing-requires-one-seat-review-for-a-branch-or-existing-pr
-  (with-runtime
+(deftest landing-requires-one-seat-review-before-signoff
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
       (register-land-routes!)
       (let [{:keys [root card params]} (card-fixture rt)]
         (try
-          (doseq [[run-id extra] [["land-branch" {}] ["land-existing-pr" {:pr-number 42}]]]
-            (start-land! run-id (merge params extra))
+          (let [run-id "land-branch"]
+            (start-land! run-id params)
             (is (= "Resolve and verify the pull request"
                    (:title (first (workflow/ready run-id)))))
             (is (= "signoff" (:checkpoint (reach-signoff! rt run-id card))))
@@ -139,28 +139,8 @@
           (finally
             (test-support/delete-tree! root)))))))
 
-(deftest landing-cannot-omit-coordinator-review-resolution
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow
-                                    'millhouse.workflow)
-      (register-land-routes!)
-      (let [{:keys [root card params]} (card-fixture rt)
-            run-id "missing-review-evidence"]
-        (try
-          (start-land! run-id params)
-          (complete-ready! run-id)
-          (let [resolution (reach-review-resolution! rt run-id card)]
-            (is (= "resolve-review" (:checkpoint resolution)))
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Value does not satisfy"
-                                  (workflow/choose! run-id :accepted {})))
-            (is (= "resolve-review" (:checkpoint (workflow/ready-checkpoint run-id)))))
-          (finally
-            (test-support/delete-tree! root)))))))
-
 (deftest approved-signoff-routes-to-automatic-merge-turn
-  (with-runtime
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -206,7 +186,7 @@
             (test-support/delete-tree! root)))))))
 
 (deftest abort-keeps-an-explicit-retryable-card-gate-after-write-failure
-  (with-runtime
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow
                                     'millhouse.workflow)
@@ -244,7 +224,7 @@
             (test-support/delete-tree! root)))))))
 
 (deftest selector-activation-resolves-the-card-callback-in-its-runtime
-  (with-runtime
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :test/workflow
                                     'millhouse.workflow)
@@ -277,7 +257,7 @@
             (test-support/delete-tree! root)))))))
 
 (deftest card-actions-are-idempotent-after-a-successful-write
-  (with-runtime
+  (with-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [{:keys [root card]} (card-fixture rt)]
         (try

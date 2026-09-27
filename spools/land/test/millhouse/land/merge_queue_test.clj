@@ -5,7 +5,9 @@
             [millhouse.executors.shell :as shell]
             [millhouse.land.merge-queue :as queue]
             [millhouse.workflow :as workflow]
+            [millstrand.api.cli.alpha :as cli]
             [millstrand.api.current.alpha :as current]
+            [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.process.alpha :as process]
@@ -964,21 +966,19 @@
                          :lock (weaver/show rt (:id lock))})))))))
 
 (deftest merge-queue-repair-cli-uses-only-canonical-actor-flag
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :test/workflow 'millhouse.workflow)
-      (test-support/activate-spool! rt :test/land 'millhouse.land.spool
-                                    :after [:test/workflow])
-      (let [flags (get-in (weaver/resolve-op rt 'merge-queue)
-                          [:arg-spec :subcommands "repair" :flags])]
-        (is (contains? flags :by-identity))
-        (is (not (contains? flags :by)))
-        (is (thrown-with-msg?
-             clojure.lang.ExceptionInfo #"Unknown flag --by"
-             (weaver/op! rt :merge-queue
-                         ["repair" "run-1" "--kind" "skipped-turn"
+  ;; Publication is covered by land-activation; argument shape needs no world.
+  (let [declaration (test-alpha/collect-module-forms
+                     :test/land-cli 'millhouse.land.merge-queue-test
+                     #(millstrand/use-op! queue/merge-queue))
+        args (get-in declaration [:contribution :ops :entries "merge-queue" :arg-spec])
+        flags (get-in args [:subcommands "repair" :flags])]
+    (is (contains? flags :by-identity))
+    (is (not (contains? flags :by)))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"Unknown flag --by"
+         (cli/parse args ["repair" "run-1" "--kind" "skipped-turn"
                           "--by" "operator" "--reason" "evidence"
-                          "--evidence" "{}"])))))))
+                          "--evidence" "{}"])))))
 
 (deftest land-activation-protects-and-scans-persisted-queue-gates
   (with-runtime

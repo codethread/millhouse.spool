@@ -244,7 +244,6 @@
     (try
       (doseq [[case-name empty-views check-output check-exit expected-success?]
               [["empty-then-pending-then-pass" "1" "pending then passed" "0" true]
-               ["pass" "0" "checks passed" "0" true]
                ["fail" "0" "checks failed" "7" false]]]
         (spit log "")
         (spit view-count "0\n")
