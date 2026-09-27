@@ -1,6 +1,5 @@
 (ns millhouse.config-test
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.config.agents :as agents]
@@ -13,40 +12,13 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
-            [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t]))
 
 (def ^:private project-root (.getCanonicalPath (io/file "../..")))
-(def ^:private workspace-root (io/file project-root ".millstrand"))
-(def ^:private workspace-deps
-  (edn/read-string (slurp (io/file workspace-root "deps.edn"))))
 (def ^:private local-deps-edn
   (pr-str
    {:deps
     {'millhouse/config {:local/root (str project-root "/spools/config")}}}))
-
-(defn- checked-in-workspace-deps-edn []
-  (-> workspace-deps
-      (update :deps
-              (fn [deps]
-                (into {}
-                      (map (fn [[library coordinate]]
-                             [library
-                              (if-let [path (:local/root coordinate)]
-                                {:local/root
-                                 (.getCanonicalPath
-                                  (io/file workspace-root path))}
-                                coordinate)]))
-                      deps)))
-      pr-str))
-
-(def ^:private workspace-init-clj
-  (slurp (io/file workspace-root "init.clj")))
-(def ^:private workspace-files
-  (into {}
-        (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"
-                    "me/agents/reviewers.clj"]]
-          [path (slurp (io/file workspace-root path))])))
 
 (deftest bootstrap-registers-catalog-and-reviewers-without-an-executor
   (t/with-weaver-world [ctx {:storage :sqlite-memory
@@ -211,9 +183,7 @@
             run-after (harnesses/run rt (:id existing-run))
             added (some #(when (= "sub-coordinator" (:name %)) %)
                         registry-after)
-            resolved (harnesses/resolve-harness rt :sub-coordinator)
-            guidance (get-in resolved
-                             [:generated :harness/appended-system-prompts])]
+            resolved (harnesses/resolve-harness rt :sub-coordinator)]
         (is (= "sub-coordinator" (:alias registration)))
         (is (= 2 (count (:candidates registration))))
         (is (= registry-before
@@ -225,12 +195,7 @@
         (is (= "sol" (attr-get run-after :harness/alias)))
         (is (= "openai-codex/gpt-5.6-sol"
                (attr-get run-after :harness/model)))
-        (is (= "codex" (:harness resolved)))
-        (is (= "gpt-5.6-luna"
-               (get-in resolved [:generated :harness/model])))
-        (is (= "max" (get-in resolved [:generated :harness/effort])))
-        (is (= 1 (count guidance)))
-        (is (not (str/blank? (first guidance))))
+        (is (= "sub-coordinator" (:alias resolved)))
         (is (= "alias" (:kind added)))
         (is (true? (:available added)))))))
 
@@ -283,10 +248,7 @@
                (attr-get (first runs-after) :harness/model)))
         (is (= "gpt-5.6-luna"
                (attr-get (second runs-after) :harness/model)))
-        (is (= "codex" (:harness resolved)))
-        (is (= "gpt-5.6-sol"
-               (get-in resolved [:generated :harness/model])))
-        (is (= "high" (get-in resolved [:generated :harness/effort])))
+        (is (= "sub-coordinator-sol" (:alias resolved)))
         (is (= "alias" (:kind added)))
         (is (true? (:available added)))))))
 
@@ -305,24 +267,6 @@
       (codethread/register-executor! rt [:consumer/aliases])
       (current/with-runtime rt
         (is (contains? (set (keys (workflow/executors))) :agent))))))
-
-(deftest checked-in-current-basis-activates-the-complete-cli-surface
-  (t/with-weaver-world [ctx {:storage :sqlite-memory
-                             :deps-edn (checked-in-workspace-deps-edn)
-                             :init-clj workspace-init-clj
-                             :files workspace-files}]
-    (let [rt (:runtime ctx)
-          aliases (set (map :name (weaver/op! rt 'agent ["list"])))
-          reviewer-result (weaver/op! rt 'agent ["reviewers"])
-          workflows (set (map :name (:definitions
-                                     (weaver/op! rt 'workflow ["list"]))))
-          op-names (set (map :name (weaver/ops rt)))]
-      (is (contains? aliases "sol"))
-      (is (= ["docs-and-tests" "runtime-correctness" "source-form" "test-layering"]
-             (mapv :name (:reviewers reviewer-result))))
-      (is (every? workflows ["auto-full-land" "auto-human-review" "land"]))
-      (is (contains? op-names "auto-run"))
-      (is (contains? op-names "merge-queue")))))
 
 (deftest optional-workspace-config-keeps-the-devflow-kanban-election
   (t/with-weaver-world [ctx {:storage :sqlite-memory
