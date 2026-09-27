@@ -1,0 +1,21 @@
+command: clojure -Sdeps '{:deps {io.millstrand/millstrand {:local/root "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture"}} :aliases {:test {:main-opts ["-i" "/Users/ct/dev/projects/millhouse.spool__spike--bare-runtime-fixture/docs/reports/bare-runtime-poc/world_fixture_override.clj" "-m" "millhouse.test-runner"]}}}}}' -M:test millhouse.workflow-runtime-test millhouse.test-support-test
+sample: 2
+started: 2026-09-27T20:17:40.446277+00:00
+
+
+Testing millhouse.workflow-runtime-test
+
+Ran 55 tests containing 321 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.workflow-runtime-test {:test 55, :pass 321, :fail 0, :error 0, :group :serial, :elapsed-ms 83651}
+
+Testing millhouse.test-support-test
+
+Ran 2 tests containing 11 assertions.
+0 failures, 0 errors.
+Namespace summary: millhouse.test-support-test {:test 2, :pass 11, :fail 0, :error 0, :group :serial, :elapsed-ms 3054}
+Aggregate summary: {:test 57, :pass 332, :fail 0, :error 0}
+
+exit: 0
+finished: 2026-09-27T20:19:09.543179+00:00
+elapsed_ms: 89088.444

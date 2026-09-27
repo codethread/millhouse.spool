@@ -54,21 +54,6 @@
 
 (def ^:private module-activation-lock (Object.))
 
-(defn- repository-root []
-  (-> (test-alpha/spool-checkout-root "millhouse/workflow.clj")
-      .getParentFile
-      .getParentFile
-      .getCanonicalPath))
-
-(defn- fixture-deps-edn []
-  (let [root (repository-root)]
-    (pr-str {:paths [(str root "/test")
-                     (str root "/spools/workflow/test")]
-             :deps {'millhouse/workflow
-                    {:local/root (str root "/spools/workflow")}
-                    'millhouse/land
-                    {:local/root (str root "/spools/land")}}})))
-
 (defn with-module-activation
   "Run one source-backed module activation under the JVM namespace lock.
 
@@ -82,29 +67,29 @@
 (defn with-embedded-runtime
   "Call f with a fresh embedded Weaver runtime and its config directory File.
 
-  Bind the runtime for runtime-implied APIs. Each call owns a disposable
-  workspace, database, registries, generation basis and shutdown/cleanup.
-  This is a full world, not a cheap bare-runtime constructor.
+  Bind the runtime for runtime-implied APIs. Each call owns disposable
+  classpath-backed runtime state, database, registries and shutdown/cleanup.
+  No modules are activated implicitly.
 
   Options are :prefix (Weaver name) and :storage (:sqlite-file by default,
-  or :sqlite-memory for serialized, non-durable contracts). Memory storage
-  still starts a world and basis; use file storage for durability or connection
-  topology. No modules are activated implicitly. For startup files, explicit
-  roots or durable reopen, use millstrand.test.alpha/with-weaver-world directly."
+  or :sqlite-memory for serialized, non-durable contracts). Memory storage is
+  still real SQLite with a held connection; use file storage for durability or
+  connection-topology claims. For startup files, explicit roots or durable
+  reopen, use millstrand.test.alpha/run-with-weaver-world directly."
   ([f] (with-embedded-runtime {} f))
   ([opts f]
    (when-let [unknown (seq (remove #{:prefix :storage} (keys opts)))]
      (throw (ex-info "Unknown Millhouse runtime fixture options"
                      {:keys (vec unknown)})))
-   (test-alpha/run-with-weaver-world
-    (cond-> (merge {:deps-edn (fixture-deps-edn)} (select-keys opts [:storage]))
+   (test-alpha/run-with-bare-runtime
+    (cond-> (select-keys opts [:storage])
       (:prefix opts) (assoc :name (:prefix opts)))
     (fn [{:keys [runtime config-dir]}]
       (current/with-runtime runtime
         (f runtime (io/file config-dir)))))))
 
 (defn with-runtime
-  "Call f using with-embedded-runtime; this existing name starts a full world.
+  "Call f using with-embedded-runtime; this existing name starts a bare runtime.
 
   Accept the same :prefix and :storage options. Omitted storage remains
   file-backed; existing callers are not switched to memory implicitly."
