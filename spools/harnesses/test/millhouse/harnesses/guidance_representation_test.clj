@@ -19,39 +19,6 @@
     nil
     (catch clojure.lang.ExceptionInfo error error)))
 
-(defn- hook-fact [harness]
-  (if (= "codex" harness)
-    {"eventName" "sessionStart"
-     "key" "managed-guidance"
-     "source" "plugin"
-     "sourcePath" "/fixture/plugin/hooks.json"
-     "pluginId" "agents-fixture"
-     "command" "node managed-guidance.js"
-     "enabled" true
-     "trustStatus" "trusted"
-     "currentHash" "trusted-current-hash"
-     "timeoutSec" 15
-     "additionalContextLimit" 4096}
-    {"host-package" "@mariozechner/pi-coding-agent"
-     "host-package-version" "0.84.4"
-     "host-package-sha256" sha-a
-     "extensions"
-     [{"entrypoint" "/fixture/pi/managed-guidance.ts"
-       "closure-sha256" sha-b}]
-     "prompt-owner-entrypoint" "/fixture/pi/managed-guidance.ts"
-     "system-prompt-options-contract" "owned-v1"}))
-
-(defn- capability-document [harness]
-  {"schema" "millstrand.agent-guidance-capability/v1"
-   "harness" harness
-   "adapter-contract" "native-v1"
-   "adapter-sha256" sha-a
-   "executable-sha256" sha-b
-   "host-version" (if (= "codex" harness) "0.154.0" "0.84.4")
-   "launch-profile-sha256" sha-a
-   "max-context-bytes" (if (= "codex" harness) 3072 65536)
-   "hook-fact" (hook-fact harness)})
-
 (defn- valid-run [harness transport]
   (let [run-id (str harness "-" transport)
         template {"schema" context/schema
@@ -59,7 +26,7 @@
                   "appended-system-prompts" []}
         materialized (context/validate!
                       (context/bind-markers template run-id identity-id))
-        capability (capability-document harness)
+        capability (fixture/capability-document harness)
         attributes
         (cond-> {:harness/guidance-version 1
                  :harness/guidance-transport transport

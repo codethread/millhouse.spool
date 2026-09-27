@@ -1,5 +1,5 @@
 (ns millhouse.harnesses.guidance-protocol-repair-test
-  "Protocol grammar failures remain side-effect free in disposable worlds."
+  "Pure protocol grammar and provider argument contracts."
   (:require [clojure.test :refer [deftest is]]
             [millhouse.harnesses.guidance-representation-fixture :as representation-fixture]
             [millhouse.harnesses.internal.cli :as cli]
@@ -57,9 +57,7 @@
                 ["--config" "shell={instructions=\"x\"}"]
                 ["--other" "developer_instructions=\"x\""]
                 ["--" "--config" "developer_instructions=\"x\""]]]
-    (let [unchanged (vec argv)]
-      (is (nil? (prompt/reject! "codex" argv)))
-      (is (= unchanged argv))))
+    (is (nil? (prompt/reject! "codex" argv))))
   (doseq [argv [["--system-prompt" "competing"]
                 ["--append-system-prompt=competing"]
                 ["--system-prompt"]
@@ -96,9 +94,7 @@
                 ["--SYSTEM-PROMPT" "x"]
                 ["--plugin" "/tmp/system-prompt-plugin"]
                 ["--provider-option" "system-prompt" "value"]]]
-    (let [unchanged (vec argv)]
-      (is (nil? (prompt/reject! "pi" argv)))
-      (is (= unchanged argv)))))
+    (is (nil? (prompt/reject! "pi" argv)))))
 
 (deftest pi-launch-preserves-owned-extra-argv-byte-for-byte
   (let [extra ["--name" "--system-prompt"
