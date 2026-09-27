@@ -214,12 +214,13 @@ function run(
     cwd = env.HOME,
   } = {},
 ) {
+  const hasInput = input.length > 0;
   return new Promise((resolvePromise, reject) => {
     const child = startChild(command, args, {
       detached: process.platform !== "win32",
       env,
       cwd,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
     });
     onSpawn?.(child);
     let stdout = "";
@@ -257,9 +258,11 @@ function run(
       clearTimeout(timer);
       reject(error);
     });
-    child.stdin.on("error", (error) => {
-      recordTerminalError(error, "stdin");
-    });
+    if (hasInput) {
+      child.stdin.on("error", (error) => {
+        recordTerminalError(error, "stdin");
+      });
+    }
     child.on("close", async (code, signal) => {
       clearTimeout(timer);
       try {
@@ -280,7 +283,7 @@ function run(
       } else if (terminalError) reject(terminalError);
       else resolvePromise({ code, signal, stdout, stderr });
     });
-    child.stdin.end(input);
+    if (hasInput) child.stdin.end(input);
   });
 }
 
@@ -345,25 +348,47 @@ async function checkClosedParentDescendantCleanup() {
   );
 }
 
+async function checkNoInputSubprocesses() {
+  const env = fixtureEnvironment();
+  const onSpawn = (child) => {
+    assert.equal(child.stdin, null, "no payload must not create a stdin pipe");
+  };
+  const gate = join(temporaryDirectory("codex-no-input-"), "gate");
+  const fifo = await run("mkfifo", [gate], { env, onSpawn });
+  assert.equal(fifo.code, 0, fifo.stderr);
+  assert.ok(lstatSync(gate).isFIFO());
+  const exited = await run(process.execPath, ["-e", "process.exit(23)"], {
+    input: "",
+    env,
+    onSpawn,
+  });
+  assert.equal(exited.code, 23, "no-input handling preserves child failure");
+}
+
 async function checkEarlyStdinCloseReporting() {
   const diagnostic = "fixture closed stdin before consuming its payload";
-  const closeStdin = [
-    "process.stdin.destroy();",
-    `process.stderr.write(${JSON.stringify(`${diagnostic}\n`)});`,
-    "setTimeout(() => process.exit(23), 20);",
-  ].join("");
-  await assert.rejects(
-    run(process.execPath, ["-e", closeStdin], {
-      input: "x".repeat(1_000_000),
-    }),
-    (error) => {
-      assert.match(error.message, /stdin failed: write EPIPE/);
-      assert.match(error.message, /child outcome: code 23, signal null/);
-      assert.match(error.message, new RegExp(diagnostic));
-      assert.match(error.message, /process\.stdin\.destroy/);
-      return true;
-    },
-  );
+  for (const code of [23, 0]) {
+    const closeStdin = [
+      "process.stdin.destroy();",
+      `process.stderr.write(${JSON.stringify(`${diagnostic}\n`)});`,
+      `setTimeout(() => process.exit(${code}), 20);`,
+    ].join("");
+    await assert.rejects(
+      run(process.execPath, ["-e", closeStdin], {
+        input: "x".repeat(1_000_000),
+      }),
+      (error) => {
+        assert.match(error.message, /stdin failed: write EPIPE/);
+        assert.match(
+          error.message,
+          new RegExp(`child outcome: code ${code}, signal null`),
+        );
+        assert.match(error.message, new RegExp(diagnostic));
+        assert.match(error.message, /process\.stdin\.destroy/);
+        return true;
+      },
+    );
+  }
 }
 
 function parseJsonLines(text, label) {
@@ -1729,9 +1754,14 @@ try {
     await holdInterruptProbe();
   } else if (process.argv[2] === "--descendant-probe") {
     await checkClosedParentDescendantCleanup();
+  } else if (process.argv[2] === "--subprocess-probe") {
+    await checkNoInputSubprocesses();
+    await checkEarlyStdinCloseReporting();
+    console.log("Codex conformance subprocess checks passed.");
   } else {
     await checkClosedParentDescendantCleanup();
     checkStrictJsonRegression();
+    await checkNoInputSubprocesses();
     await checkEarlyStdinCloseReporting();
     await checkProjectGate();
     await checkPayloadReplay();

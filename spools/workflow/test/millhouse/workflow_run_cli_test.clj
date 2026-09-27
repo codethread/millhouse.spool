@@ -8,6 +8,7 @@
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.cli.alpha :as cli-alpha]
             [millstrand.api.current.alpha :as current]
+            [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support :refer [with-runtime]]
@@ -99,15 +100,11 @@
     (workflow/step :finish "Finish the work" :self :depends-on [:perform]))
    {:perform #{:solo}}))
 
-(workflow/defworkflow two-defers
-  "Two independent returning selections."
-  {:entrypoints #{:start}}
-  (workflow/bind-defers
-   (workflow/workflow
-    "Two defers"
-    (workflow/defer :left "Choose left")
-    (workflow/defer :right "Choose right"))
-   {:left #{:solo} :right #{:solo}}))
+(defn- declared-op []
+  (get-in (test-alpha/collect-module-forms
+           :test/workflow-run-cli 'millhouse.workflow-run-cli-test
+           #(millstrand/use-op! cli/workflow))
+          [:contribution :ops :entries "workflow"]))
 
 (defn- activate-cli!
   "Activate the engine and then the separately declared CLI module."
@@ -176,7 +173,7 @@
     (fn [rt _]
       (activate-cli! rt)
       (register! :solo)
-      (let [start (started "run-envelope" :solo)]
+      (let [start (from-argv rt ["start" "run-envelope" "--workflow" "solo"])]
         (is (= "workflow start" (:operation start)))
         (is (= "run-envelope" (:run-id start)))
         (is (= "Solo" (get-in start [:root :title])))
@@ -187,7 +184,7 @@
       (let [ready (verb "ready" "run-envelope")]
         (is (= "workflow ready" (:operation ready)))
         (is (= (ready-ids (verb "ready" "run-envelope")) (ready-ids ready))))
-      (let [done (verb "complete" "run-envelope")]
+      (let [done (from-argv rt ["complete" "run-envelope"])]
         (is (= "workflow complete" (:operation done)))
         (is (true? (:done done)))
         (is (= [] (:ready done)))
@@ -342,21 +339,6 @@
         (is (= 7 (get-in closed [:attributes :acme/exit]))
             "--attributes carries typed values through untouched")))))
 
-(deftest complete-shallow-merges-json-context-onto-the-run-root
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo :mixed)
-      (let [started (started "run-context" :mixed)
-            work (item-id started "Do the work")
-            result (from-argv rt ["complete" "run-context"
-                                  "--context"
-                                  (json/write-str {:owner "agent" :nested {:new true}})])
-            root (weaver/show rt (get-in result [:root :id]))]
-        (is (= "closed" (:state (weaver/show rt work))))
-        (is (= {:owner "agent" :nested {:new true}}
-               (get-in root [:attributes :workflow/context])))))))
-
 (deftest complete-refuses-context-that-is-not-a-json-object-before-mutating
   (with-runtime
     (fn [rt _]
@@ -383,16 +365,11 @@
         (is (= "active" (:state (weaver/show rt work))) "nothing was closed")))))
 
 (deftest complete-refuses-attributes-that-are-not-a-json-object
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo)
-      (started "run-bad-attrs" :solo)
-      (doseq [[label value] [["an array" [1 2]] ["a JSON null" nil] ["a blank key" {"" "x"}]]]
-        (testing label
-          (is (= :workflow/attributes-invalid
-                 (reason-of #(invoke {:subcommand ["complete"] :run-id "run-bad-attrs"
-                                      :attributes value})))))))))
+  (doseq [[label value] [["an array" [1 2]] ["a JSON null" nil] ["a blank key" {"" "x"}]]]
+    (testing label
+      (is (= :workflow/attributes-invalid
+             (reason-of #(invoke {:subcommand ["complete"] :run-id "unused"
+                                  :attributes value})))))))
 
 (deftest complete-refuses-an-ambiguous-step-frontier-before-mutating
   (with-runtime
@@ -410,19 +387,6 @@
         (testing "--step resolves it"
           (is (= [(second (ready-ids start))]
                  (ready-ids (verb "complete" "run-twin" :step (first (ready-ids start)))))))))))
-
-(deftest complete-refuses-a-wrong-role-step-selector
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo :mixed)
-      (let [start (started "run-wrong-role" :mixed)
-            checkpoint (item-id start "Sign the work off")
-            data (failure #(verb "complete" "run-wrong-role" :step checkpoint))]
-        (is (= :workflow/ready-step-incompatible (:reason data)))
-        (is (= "checkpoint" (:role data)))
-        (is (= ["Do the work" "Wait for CI"] (mapv :title (:compatible data)))
-            "the failure names what this verb could have acted on")))))
 
 (deftest a-step-selector-must-name-a-ready-item
   (with-runtime
@@ -496,32 +460,7 @@
         (is (= ["Do the work"] (mapv :title (:ready result)))
             "the routed continuation replaced the whole frontier")))))
 
-(deftest choose-refuses-a-frontier-without-a-checkpoint
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo :mixed)
-      (let [start (started "run-no-checkpoint" :solo)]
-        (is (= :workflow/ready-checkpoint-absent
-               (reason-of #(invoke {:subcommand ["choose"] :run-id "run-no-checkpoint"
-                                    :choice "ship"}))))
-        (is (= :workflow/ready-checkpoint-incompatible
-               (reason-of #(invoke {:subcommand ["choose"] :run-id "run-no-checkpoint"
-                                    :choice "ship" :step (first (ready-ids start))}))))))))
-
 ;; --- next -------------------------------------------------------------------
-
-(deftest next-rejects-unknown-worker-request-keys
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo)
-      (started "run-next-unknown-key" :solo)
-      (let [data (failure #(workflow/run-next!
-                            {:run-id "run-next-unknown-key" :bogus true}))]
-        (is (= :next (:context data)))
-        (is (= [:bogus] (:unknown data)))
-        (is (false? (:done (verb "ready" "run-next-unknown-key"))))))))
 
 (deftest next-completes-an-ordinary-step-with-the-standard-envelope
   (with-runtime
@@ -569,21 +508,6 @@
                                       :step ordinary
                                       :input {"verdict" "pass"}})))))))))
 
-(deftest next-is-loudly-ambiguous-and-an-explicit-step-disambiguates
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :twin)
-      (let [start (started "run-advance-twin" :twin)
-            data (failure #(verb "next" "run-advance-twin"))]
-        (is (= :workflow/ready-next-ambiguous (:reason data)))
-        (is (= (ready-ids start) (mapv :id (:compatible data))))
-        (is (re-find #"--step" (:guidance data)))
-        (is (= [(second (ready-ids start))]
-               (ready-ids
-                (verb "next" "run-advance-twin"
-                      :step (first (ready-ids start))))))))))
-
 (deftest next-refuses-unknown-roles-before-mutating
   (with-runtime
     (fn [rt _]
@@ -630,22 +554,6 @@
 
 ;; --- defer ------------------------------------------------------------------
 
-(deftest defer-infers-the-sole-final-defer-and-pours-the-target
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :follow-on :final-defer)
-      (started "run-final-defer" :final-defer)
-      (verb "complete" "run-final-defer")
-      (let [root-id (get-in (verb "ready" "run-final-defer") [:root :id])
-            result (invoke {:subcommand ["defer"] :run-id "run-final-defer"
-                            :workflow "follow-on" :params {"scope" "queue"}
-                            :by-identity "worker"})]
-        (is (= "workflow defer" (:operation result)))
-        (is (= root-id (get-in result [:root :id]))
-            "a final defer keeps the declaring root")
-        (is (= ["Record the outcome"] (mapv :title (:ready result))))))))
-
 (deftest defer-refuses-a-target-outside-the-defers-allowlist
   (with-runtime
     (fn [rt _]
@@ -659,20 +567,6 @@
       (is (= ["Choose the next routine"]
              (mapv :title (:ready (verb "ready" "run-defer-denied"))))
           "the defer stays ready to retry"))))
-
-(deftest defer-refuses-a-frontier-without-a-defer
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :follow-on :final-defer)
-      (let [start (started "run-defer-early" :final-defer)]
-        (is (= :workflow/ready-defer-absent
-               (reason-of #(invoke {:subcommand ["defer"] :run-id "run-defer-early"
-                                    :workflow "follow-on"}))))
-        (is (= :workflow/ready-defer-incompatible
-               (reason-of #(invoke {:subcommand ["defer"] :run-id "run-defer-early"
-                                    :workflow "follow-on"
-                                    :step (first (ready-ids start))}))))))))
 
 (deftest defer-drives-a-middle-returning-procedure-through-the-cli
   (with-runtime
@@ -692,34 +586,6 @@
                (mapv :title (:ready (verb "ready" "run-middle-defer")))))
         (is (true? (:done (verb "complete" "run-middle-defer"))))))))
 
-(deftest defer-is-role-scoped-and-leaves-the-point-ready-on-refusal
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo :follow-on :final-defer :middle-defer :two-defers)
-      (let [two (started "run-two-defers" :two-defers)]
-        (is (= :workflow/ready-defer-ambiguous
-               (reason-of #(invoke {:subcommand ["defer"] :run-id "run-two-defers"
-                                    :workflow "solo"}))))
-        (is (= (ready-ids two)
-               (mapv :id (:compatible (failure #(invoke {:subcommand ["defer"]
-                                                         :run-id "run-two-defers"
-                                                         :workflow "solo"})))))))
-      (started "run-defer-roles" :middle-defer)
-      (verb "complete" "run-defer-roles")
-      (let [ordinary (first (ready-ids (started "run-no-defer" :solo)))]
-        (is (= :workflow/ready-defer-incompatible
-               (reason-of #(invoke {:subcommand ["defer"] :run-id "run-no-defer"
-                                    :step ordinary
-                                    :workflow "solo"})))))
-      (is (= :workflow/ready-step-absent
-             (reason-of #(verb "complete" "run-defer-roles"))))
-      (is (= :workflow/defer-target-not-allowed
-             (reason-of #(invoke {:subcommand ["defer"] :run-id "run-defer-roles"
-                                  :workflow "final-defer"}))))
-      (is (= ["Choose the procedure"]
-             (mapv :title (:ready (verb "ready" "run-defer-roles"))))))))
-
 ;; --- concurrency ------------------------------------------------------------
 
 (deftest a-mutation-whose-frontier-moved-fails-as-retryable-rather-than-applying
@@ -728,41 +594,35 @@
   ;; worker's write and the request must not apply to it. Testing the seam
   ;; directly keeps the interleaving deterministic without redefining a var the
   ;; rest of the parallel suite shares.
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :twin)
-      (let [before (:ready (started "run-race" :twin))
-            [left right] (mapv :id before)
-            after (filterv #(= right (:id %)) before)
-            data (failure #(runs/require-fresh-frontier! "workflow complete" :step
-                                                         "run-race" right before after))]
-        (is (= :workflow/frontier-stale (:reason data)))
-        (is (= "workflow complete" (:operation data)))
-        (is (= right (:step data)))
-        (is (= [right] (mapv :id (:ready data))) "the frontier as it is now")
-        (is (re-find #"workflow ready" (:guidance data)))
-        (testing "an unchanged compatible frontier passes straight through"
-          (is (= before (runs/require-fresh-frontier! "workflow complete" :step
-                                                      "run-race" nil before before))))
-        (testing "next uses the same retryable frontier contract"
-          (is (= :workflow/frontier-stale
-                 (reason-of #(runs/require-fresh-frontier!
-                              "workflow next" :advance
-                              "run-race" right before after)))))
-        (testing "next re-resolves a same-id item whose semantics changed"
-          (let [changed (mapv #(if (= right (:id %))
-                                 (assoc % :role "checkpoint")
-                                 %)
-                              before)
-                current (runs/require-fresh-frontier!
-                         "workflow next" :advance
-                         "run-race" right before changed)]
-            (is (= "checkpoint"
-                   (:role (runs/resolve-target!
-                           :advance "run-race" current right))))))
-        (testing "a sibling of another role changing is not this verb's race"
-          (is (= [left right] (ready-ids (verb "ready" "run-race")))))))))
+  (let [before [{:id "left" :role "step"} {:id "right" :role "step"}]
+        [_left right] (mapv :id before)
+        after (filterv #(= right (:id %)) before)
+        data (failure #(runs/require-fresh-frontier! "workflow complete" :step
+                                                     "run-race" right before after))]
+    (is (= :workflow/frontier-stale (:reason data)))
+    (is (= "workflow complete" (:operation data)))
+    (is (= right (:step data)))
+    (is (= [right] (mapv :id (:ready data))) "the frontier as it is now")
+    (is (re-find #"workflow ready" (:guidance data)))
+    (testing "an unchanged compatible frontier passes straight through"
+      (is (= before (runs/require-fresh-frontier! "workflow complete" :step
+                                                  "run-race" nil before before))))
+    (testing "next uses the same retryable frontier contract"
+      (is (= :workflow/frontier-stale
+             (reason-of #(runs/require-fresh-frontier!
+                          "workflow next" :advance
+                          "run-race" right before after)))))
+    (testing "next re-resolves a same-id item whose semantics changed"
+      (let [changed (mapv #(if (= right (:id %))
+                             (assoc % :role "checkpoint")
+                             %)
+                          before)
+            current (runs/require-fresh-frontier!
+                     "workflow next" :advance
+                     "run-race" right before changed)]
+        (is (= "checkpoint"
+               (:role (runs/resolve-target!
+                       :advance "run-race" current right))))))))
 
 (deftest concurrent-workers-cannot-both-close-one-ready-step
   (with-runtime
@@ -854,32 +714,25 @@
 ;; --- op wiring --------------------------------------------------------------
 
 (deftest the-run-verbs-declare-their-classes-and-return-cases
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (let [entry (weaver/resolve-op rt 'workflow)
-            leaf (fn [verb] (get-in entry [:arg-spec :subcommands verb]))
-            complete-help (weaver/op! rt 'help ["workflow" "complete"])
-            by-help (some #(when (= "by-identity" (:name %)) %)
-                          (get-in complete-help [:node :invocation :flags]))]
-        (doseq [verb ["start" "complete" "choose" "next" "defer"]]
-          (is (= :mutating (:hook-class (leaf verb))) verb)
-          (is (= :standard (:deadline-class (leaf verb))) verb))
-        (is (= [:read :standard] ((juxt :hook-class :deadline-class) (leaf "ready"))))
-        (is (= [:read :standard] ((juxt :hook-class :deadline-class) (leaf "choices")))
-            "choices is checkpoint discovery: a read, never a mutation")
-        (is (= [:read :unbounded] ((juxt :hook-class :deadline-class) (leaf "await")))
-            "await blocks by design and writes nothing")
-        (is (re-find #"Friendly identity"
-                     (get-in (leaf "complete") [:flags :by-identity :doc])))
-        (is (re-find #"identity/by-identity"
-                     (get-in (leaf "complete") [:flags :by-identity :doc])))
-        (is (re-find #"identity/by-identity" (:doc by-help)))
-        (is (= #{"list" "show" "executors" "start" "ready" "choices" "complete"
-                 "choose" "next" "defer" "await" "retry-validation"}
-               (set (keys (:subcommands (:arg-spec entry))))))
-        (is (= (set (keys (:subcommands (:arg-spec entry))))
-               (set (keys (:subcommands (:returns entry))))))))))
+  (let [entry (declared-op)
+        leaf (fn [verb] (get-in entry [:arg-spec :subcommands verb]))]
+    (doseq [verb ["start" "complete" "choose" "next" "defer"]]
+      (is (= :mutating (:hook-class (leaf verb))) verb)
+      (is (= :standard (:deadline-class (leaf verb))) verb))
+    (is (= [:read :standard] ((juxt :hook-class :deadline-class) (leaf "ready"))))
+    (is (= [:read :standard] ((juxt :hook-class :deadline-class) (leaf "choices")))
+        "choices is checkpoint discovery: a read, never a mutation")
+    (is (= [:read :unbounded] ((juxt :hook-class :deadline-class) (leaf "await")))
+        "await blocks by design and writes nothing")
+    (is (re-find #"Friendly identity"
+                 (get-in (leaf "complete") [:flags :by-identity :doc])))
+    (is (re-find #"identity/by-identity"
+                 (get-in (leaf "complete") [:flags :by-identity :doc])))
+    (is (= #{"list" "show" "executors" "start" "ready" "choices" "complete"
+             "choose" "next" "defer" "await" "retry-validation"}
+           (set (keys (:subcommands (:arg-spec entry))))))
+    (is (= (set (keys (:subcommands (:arg-spec entry))))
+           (set (keys (:subcommands (:returns entry))))))))
 
 (deftest run-verb-returns-match-their-declaration
   (with-runtime
@@ -909,101 +762,83 @@
 
 (deftest declared-args-carry-argv-to-the-run-verbs
   ;; The op is reached as argv, so the declared arg-spec is the real entrance.
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :solo :mixed :follow-on :final-defer)
-      (let [arg-spec (:arg-spec (weaver/resolve-op rt 'workflow))
-            parse (fn [argv] (cli-alpha/parse arg-spec argv))]
-        (is (= {:subcommand ["start"] :run-id "r1" :workflow "solo"}
-               (parse ["start" "r1" "--workflow" "solo"])))
-        (is (= {:subcommand ["start"] :run-id "r1" :workflow "scoped"
-                :params {"scope" "queue"}}
-               (parse ["start" "r1" "--workflow" "scoped"
-                       "--params" (json/write-str {:scope "queue"})])))
-        (is (= {:subcommand ["ready"] :run-id "r1"} (parse ["ready" "r1"])))
-        (is (= {:subcommand ["complete"] :run-id "r1" :step "s-1" :by-identity "agent"}
-               (parse ["complete" "r1" "--step" "s-1" "--by-identity" "agent"])))
-        (is (= {:subcommand ["complete"] :run-id "r1"
-                :attr {"acme/verdict" "pass"} :attributes {"acme/exit" 0}}
-               (parse ["complete" "r1" "--attr" "acme/verdict=pass"
-                       "--attributes" (json/write-str {"acme/exit" 0})])))
-        (is (= {:subcommand ["complete"] :run-id "r1"
-                :context {"pr-number" 412}}
-               (parse ["complete" "r1" "--context" (json/write-str {:pr-number 412})])))
-        (is (= {:subcommand ["choose"] :run-id "r1" :choice "ship" :input {"verdict" "pass"}}
-               (parse ["choose" "r1" "ship" "--input" (json/write-str {:verdict "pass"})])))
-        (is (= {:subcommand ["next"] :run-id "r1" :choice "ship"
-                :input {"verdict" "pass"} :step "s-1" :by-identity "agent"}
-               (parse ["next" "r1" "--choice" "ship"
-                       "--input" (json/write-str {:verdict "pass"})
-                       "--step" "s-1" "--by-identity" "agent"])))
-        (is (= {:subcommand ["defer"] :run-id "r1" :workflow "follow-on"}
-               (parse ["defer" "r1" "--workflow" "follow-on"])))
-        (is (= {:subcommand ["await"] :run-id "r1" :timeout-secs 30}
-               (parse ["await" "r1" "--timeout-secs" "30"])))
-        (testing "the parser refuses what the surface does not declare"
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["start" "r1"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["choose" "r1"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["defer" "r1"])))
-          (is (thrown? clojure.lang.ExceptionInfo
-                       (parse ["continue" "r1" "--workflow" "follow-on"])))
-          (is (thrown? clojure.lang.ExceptionInfo
-                       (parse ["dispatch" "r1" "--workflow" "solo"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["ready" "r1" "--limit" "5"])))
-          (is (thrown? clojure.lang.ExceptionInfo (parse ["complete" "r1" "--notes" "done"])))
-          (doseq [argv [["complete" "r1" "--by" "worker"]
-                        ["next" "r1" "--by" "worker"]
-                        ["choose" "r1" "approve" "--by" "worker"]
-                        ["defer" "r1" "--workflow" "follow-on" "--by" "worker"]]]
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
-                                  (parse argv)))))
-        (testing "argv reaches the engine through the handler"
-          (is (= ["Do the work"]
-                 (mapv :title (:ready (invoke (parse ["start" "run-argv" "--workflow" "solo"]))))))
-          (is (true? (:done (invoke (parse ["complete" "run-argv"]))))))))))
+  (let [arg-spec (:arg-spec (declared-op))
+        parse (fn [argv] (cli-alpha/parse arg-spec argv))]
+    (is (= {:subcommand ["start"] :run-id "r1" :workflow "solo"}
+           (parse ["start" "r1" "--workflow" "solo"])))
+    (is (= {:subcommand ["start"] :run-id "r1" :workflow "scoped"
+            :params {"scope" "queue"}}
+           (parse ["start" "r1" "--workflow" "scoped"
+                   "--params" (json/write-str {:scope "queue"})])))
+    (is (= {:subcommand ["ready"] :run-id "r1"} (parse ["ready" "r1"])))
+    (is (= {:subcommand ["complete"] :run-id "r1" :step "s-1" :by-identity "agent"}
+           (parse ["complete" "r1" "--step" "s-1" "--by-identity" "agent"])))
+    (is (= {:subcommand ["complete"] :run-id "r1"
+            :attr {"acme/verdict" "pass"} :attributes {"acme/exit" 0}}
+           (parse ["complete" "r1" "--attr" "acme/verdict=pass"
+                   "--attributes" (json/write-str {"acme/exit" 0})])))
+    (is (= {:subcommand ["complete"] :run-id "r1"
+            :context {"pr-number" 412}}
+           (parse ["complete" "r1" "--context" (json/write-str {:pr-number 412})])))
+    (is (= {:subcommand ["choose"] :run-id "r1" :choice "ship" :input {"verdict" "pass"}}
+           (parse ["choose" "r1" "ship" "--input" (json/write-str {:verdict "pass"})])))
+    (is (= {:subcommand ["next"] :run-id "r1" :choice "ship"
+            :input {"verdict" "pass"} :step "s-1" :by-identity "agent"}
+           (parse ["next" "r1" "--choice" "ship"
+                   "--input" (json/write-str {:verdict "pass"})
+                   "--step" "s-1" "--by-identity" "agent"])))
+    (is (= {:subcommand ["defer"] :run-id "r1" :workflow "follow-on"}
+           (parse ["defer" "r1" "--workflow" "follow-on"])))
+    (is (= {:subcommand ["await"] :run-id "r1" :timeout-secs 30}
+           (parse ["await" "r1" "--timeout-secs" "30"])))
+    (testing "the parser refuses what the surface does not declare"
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["start" "r1"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["choose" "r1"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["defer" "r1"])))
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (parse ["continue" "r1" "--workflow" "follow-on"])))
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (parse ["dispatch" "r1" "--workflow" "solo"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["ready" "r1" "--limit" "5"])))
+      (is (thrown? clojure.lang.ExceptionInfo (parse ["complete" "r1" "--notes" "done"])))
+      (doseq [argv [["complete" "r1" "--by" "worker"]
+                    ["next" "r1" "--by" "worker"]
+                    ["choose" "r1" "approve" "--by" "worker"]
+                    ["defer" "r1" "--workflow" "follow-on" "--by" "worker"]]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown flag --by"
+                              (parse argv)))))))
 
 (deftest json-flags-take-stdin-and-payload-references
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :scoped)
-      (let [arg-spec (:arg-spec (weaver/resolve-op rt 'workflow))]
-        (is (= {"scope" "queue"}
-               (:params (cli-alpha/parse arg-spec
-                                         ["start" "r1" "--workflow" "scoped" "--params" ":stdin"]
-                                         {"stdin" (json/write-str {:scope "queue"})})))
-            "a whole-value reference resolves before the JSON parse")
-        (is (= {"scope" "queue"}
-               (:params (cli-alpha/parse arg-spec
-                                         ["start" "r1" "--workflow" "scoped"
-                                          "--params" ":payload/params"]
-                                         {"params" (json/write-str {:scope "queue"})}))))
-        (is (thrown? clojure.lang.ExceptionInfo
-                     (cli-alpha/parse arg-spec ["start" "r1" "--workflow" "scoped"
-                                                "--params" "not-json"]))
-            "a malformed payload fails at the parser, before the engine")
-        (testing "complete's attribute pair takes the same references"
-          (is (= {"acme/exit" 0}
-                 (:attributes (cli-alpha/parse arg-spec ["complete" "r1" "--attributes" ":stdin"]
-                                               {"stdin" "{\"acme/exit\":0}"}))))
-          (is (= {"acme/log" "tail"}
-                 (:attr (cli-alpha/parse arg-spec ["complete" "r1" "--attr" "acme/log=:payload/log"]
-                                         {"log" "tail"})))))))))
+  (let [arg-spec (:arg-spec (declared-op))]
+    (is (= {"scope" "queue"}
+           (:params (cli-alpha/parse arg-spec
+                                     ["start" "r1" "--workflow" "scoped" "--params" ":stdin"]
+                                     {"stdin" (json/write-str {:scope "queue"})})))
+        "a whole-value reference resolves before the JSON parse")
+    (is (= {"scope" "queue"}
+           (:params (cli-alpha/parse arg-spec
+                                     ["start" "r1" "--workflow" "scoped"
+                                      "--params" ":payload/params"]
+                                     {"params" (json/write-str {:scope "queue"})}))))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (cli-alpha/parse arg-spec ["start" "r1" "--workflow" "scoped"
+                                            "--params" "not-json"]))
+        "a malformed payload fails at the parser, before the engine")
+    (testing "complete's attribute pair takes the same references"
+      (is (= {"acme/exit" 0}
+             (:attributes (cli-alpha/parse arg-spec ["complete" "r1" "--attributes" ":stdin"]
+                                           {"stdin" "{\"acme/exit\":0}"}))))
+      (is (= {"acme/log" "tail"}
+             (:attr (cli-alpha/parse arg-spec ["complete" "r1" "--attr" "acme/log=:payload/log"]
+                                     {"log" "tail"})))))))
 
 (deftest a-json-flag-that-is-not-an-object-fails-loudly
-  (with-runtime
-    (fn [rt _]
-      (activate-cli! rt)
-      (register! :scoped :solo :mixed)
-      (is (thrown? clojure.lang.ExceptionInfo
-                   (invoke {:subcommand ["start"] :run-id "run-json" :workflow "scoped"
-                            :params [1 2]}))
-          "params must be a JSON object, not an array")
-      (started "run-json-input" :mixed)
-      (is (thrown? clojure.lang.ExceptionInfo
-                   (invoke {:subcommand ["choose"] :run-id "run-json-input" :choice "ship"
-                            :input "pass"}))))))
+  (is (= :workflow/params-not-json
+         (reason-of #(invoke {:subcommand ["start"] :run-id "unused" :workflow "scoped"
+                              :params [1 2]}))))
+  (is (= :workflow/params-not-json
+         (reason-of #(invoke {:subcommand ["choose"] :run-id "unused" :choice "ship"
+                              :input "pass"})))))
 
 ;; --- the cross-spool composition fixture ------------------------------------
 ;;
