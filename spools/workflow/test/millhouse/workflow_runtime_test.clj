@@ -482,6 +482,11 @@
     (fn [rt _]
       (let [definition (workflow/workflow "Bad attrs run" (workflow/step :a "Do A" :self))
             [step] (:ready (workflow/start! "bad-attrs-run" definition {}))]
+        (let [data (ex-data (try (workflow/complete! "bad-attrs-run" {:notes "outcome"})
+                                 (catch clojure.lang.ExceptionInfo e e)))]
+          (is (= {:reason :workflow/notes-removed :op "complete!"}
+                 (select-keys data [:reason :op])))
+          (is (re-find #":attributes" (:guidance data))))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
                               #"Invalid workflow complete attributes"
                               (workflow/complete! "bad-attrs-run"
@@ -863,7 +868,13 @@
         (is (= :workflow/advance-input-without-checkpoint
                (failure-reason #(workflow/advance! "advance-run"
                                                    {:input {:verdict "pass"}}))))
-        (let [step-id (:id (workflow/ready-step "advance-run"))]
+        (let [step-id (:id (workflow/ready-step "advance-run"))
+              data (ex-data (try (workflow/advance! "advance-run" {:notes "outcome"})
+                                 (catch clojure.lang.ExceptionInfo e e)))]
+          (is (= {:reason :workflow/notes-removed :op "advance!"}
+                 (select-keys data [:reason :op])))
+          (is (re-find #":attributes" (:guidance data)))
+          (is (= "active" (:state (weaver/show rt step-id))))
           (weaver/update! rt step-id {:attributes {"workflow/role" "improvised"}})
           (is (= :workflow/ready-next-incompatible
                  (failure-reason #(workflow/advance! "advance-run"
