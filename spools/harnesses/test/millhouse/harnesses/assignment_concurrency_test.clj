@@ -5,7 +5,8 @@
             [millhouse.harnesses :as harnesses]
             [millhouse.harnesses.assignment :as assignment]
             [millhouse.harnesses.assignment-test :as fixture]
-            [millhouse.harnesses.execution :as execution]))
+            [millhouse.harnesses.execution :as execution]
+            [millhouse.harnesses.internal.execution-headless :as headless]))
 
 (deftest native-resume-reapplies-all-caller-guidance-on-current-invocation
   (fixture/with-assignment-world
@@ -241,7 +242,8 @@
                         (.await validation-release))
                       true))
     (with-redefs-fn
-      {(ns-resolve 'millhouse.harnesses.execution 'ready-headless)
+      {#'headless/settle-closed-targets! (constantly nil)
+       (ns-resolve 'millhouse.harnesses.execution 'ready-headless)
        (fn [_]
          (.countDown ready-entered)
          (.await ready-release)
@@ -271,7 +273,8 @@
                      (swap! queued conj runnable)))
         scheduler-state {:in-flight in-flight :executor executor}]
     (with-redefs-fn
-      {(ns-resolve 'millhouse.harnesses.execution 'ready-headless)
+      {#'headless/settle-closed-targets! (constantly nil)
+       (ns-resolve 'millhouse.harnesses.execution 'ready-headless)
        (fn [_]
          (if (= 1 (swap! ready-calls inc))
            [{:id run-id}]
