@@ -131,3 +131,20 @@ attempt produced three green 5.365 s, 5.176 s, and 5.085 s samples that had no
 world marker and were actually bare runs. Those mislabeled samples are excluded
 from every table. Their old logs were overwritten while correcting the
 launcher; no results are fabricated from them.
+
+## Promotion addendum
+
+This dated POC report intentionally retains its original limitation and
+benchmark evidence. After the core fixture is landed and consumers adopt its
+immutable SHA, `millstrand.test.alpha/run-with-bare-runtime` is the supported
+public seam for direct runtime-state tests. It retains closed `:storage` and
+`:name` options, returns an explicit context with `:runtime`, config/data/state
+paths and file-storage `:db-path`, and owns fresh state plus cleanup on success
+or failure.
+
+The promoted contract removes the POC-only plain-Java and Clojure CLI-basis
+restriction. It still does not resolve per-world dependencies or replace
+world/process evidence: keep `run-with-weaver-world` for startup files,
+workspace dependency resolution, full refresh, durable reopen, and process
+replacement. The historical tables, raw samples, and old limitation above are
+unchanged. Pin changes wait for the coordinator's immutable landed core SHA.

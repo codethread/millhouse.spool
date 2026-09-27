@@ -91,3 +91,19 @@ is an ownership/discovery improvement, not a fixture-cost reduction. The
 remains: runtime contracts still need embedded worlds because no supported cheap
 bare-runtime constructor is available. Stateful fixture reduction belongs to the
 subsequent runtime and publication cards.
+
+## Promotion addendum
+
+The limitation above describes the earlier pinned core. After adopting a landed
+core revision that exports `millstrand.test.alpha/run-with-bare-runtime`, use
+that public fixture for direct runtime contracts and classpath-visible module
+activation. It retains `:storage` and `:name`, supplies explicit runtime and
+config/data/state paths (plus file-storage `:db-path`), and owns fresh state and
+cleanup. It does not resolve per-world dependencies or mutate ambient runtime
+selection, and it supports plain-Java test JVMs without a new CLI-basis
+requirement.
+
+Keep `run-with-weaver-world` for startup files, workspace dependency resolution,
+full refresh, durable reopen, transport, and process-replacement claims. The
+historical measurements above are unchanged; pin adoption waits for the
+coordinator's immutable landed core SHA.

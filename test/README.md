@@ -47,6 +47,36 @@ and starts Weaver; there is no supported downstream bare-runtime constructor
 with deterministic teardown independent of world/basis startup. Do not copy
 upstream repository helpers or import `millstrand.core.*` to fill that gap.
 
+## Public bare-runtime fixture promotion addendum
+
+The limitation above records the pinned pre-promotion API. After adopting a
+landed Millstrand revision that exports
+`millstrand.test.alpha/run-with-bare-runtime`, direct runtime contracts may use
+that public fixture instead of starting a Weaver world:
+
+```clojure
+(t/run-with-bare-runtime
+ {:storage :sqlite-file :name "runtime-contract"}
+ (fn [{:keys [runtime config-dir data-dir state-dir storage db-path]}]
+   ...))
+```
+
+The options map is closed to `:storage` (`:sqlite-file` by default or
+`:sqlite-memory`) and `:name`. The callback receives the explicit `:runtime`,
+`:config-dir`, `:data-dir`, `:state-dir`, and `:storage`; file storage also
+provides `:db-path`. Each invocation owns fresh runtime state, SQLite storage,
+registries, and temporary paths, and cleans them up after success or failure.
+The fixture reuses the test JVM classpath without resolving per-world
+`deps.edn`, does not publish or mutate an ambient runtime, and supports both
+Clojure CLI and plain-Java test JVM launches without adding a CLI-basis
+requirement.
+
+Use `t/activate-module!` with the explicit runtime for classpath-visible module
+activation. Keep `run-with-weaver-world` for startup files, workspace dependency
+resolution, full refresh, durable reopen, and other world/process claims. Do
+not change a Millhouse pin to an unreleased or placeholder revision; adoption
+waits for the coordinator's immutable landed core SHA.
+
 ## Definition-CLI pilot (4zjji)
 
 Same host, fresh JVM, focused `clojure.test/run-tests`, no lock wait. A wrapper

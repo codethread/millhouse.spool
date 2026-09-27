@@ -34,12 +34,22 @@ Use `millstrand.test.alpha` (aliased below as `t`) and blessed
 - For runtime-backed API contracts, pass an explicit unpublished runtime to the
   blessed APIs; use `millstrand.api.current.alpha/with-runtime` when the caller
   uses runtime-bound APIs. `t/activate-module!` activates an already-classpath-
-  visible namespace on an existing bare runtime. It does not construct that
-  runtime or prove startup-file/dependency loading.
-- Check the available fixture before choosing it: Millhouse's
-  `millhouse.test-support/with-runtime` currently creates a **full Weaver world**,
-  not a cheap direct runtime. If no supported cheaper constructor exists, name
-  that limitation; do not invent one or import upstream private test helpers.
+  visible namespace on an existing bare runtime. It does not prove
+  startup-file/dependency loading.
+- On a core revision exporting `t/run-with-bare-runtime`, use that public fixture
+  for direct runtime-state contracts. Its closed options are `:storage`
+  (`:sqlite-file` by default or `:sqlite-memory`) and `:name`. The callback
+  receives explicit `:runtime`, `:config-dir`, `:data-dir`, `:state-dir`, and
+  `:storage`; file storage also provides `:db-path`. Each invocation owns fresh
+  state and cleanup, performs no per-world dependency resolution, and does not
+  mutate ambient runtime selection. It supports plain-Java test JVM launches;
+  no new Clojure CLI basis requirement is part of this contract.
+- Check the available fixture before choosing it. Use the bare fixture for
+  classpath-visible activation and direct runtime behavior; use the Weaver-world
+  fixture for startup files, workspace dependency resolution, full refresh,
+  durable reopen, or process-topology claims. Do not invent a constructor or
+  import upstream private test helpers when the consumer's pinned core does not
+  yet export the promoted fixture.
 
 ### Embedded Weaver worlds
 
