@@ -35,10 +35,9 @@
         (is (contains? (set (:affected plan)) "millhouse/auto-review"))
         (is (contains? (set (:namespaces plan)) "millhouse.e2e.cron.lifecycle-test"))
         (is (not (contains? (set (:affected plan)) "millhouse/land")))))
-    (testing "nested packages and test extra-paths retain their own boundary"
+    (testing "the optional adapter does not select Devflow's independent classpath"
       (let [plan (select "spools/devflow/kanban-adapter/src/adapter.clj")]
-        (is (= #{"millhouse/devflow-kanban-adapter" "millhouse/devflow"
-                 "millhouse/config" "workspace"}
+        (is (= #{"millhouse/devflow-kanban-adapter" "millhouse/config" "workspace"}
                (set (:affected plan))))
         (is (= ["config-check" "devflow-check" "workspace-test"] (:targets plan)))))
     (testing "foundational changes follow the complete reverse closure"
