@@ -99,9 +99,10 @@
 
 (deftest bounded-manual-and-scheduled-scans-reach-later-orphans
   (test-alpha/run-with-weaver-world
-   ;; Cursor fairness needs stored rows, not file durability. The reopen test
-   ;; below separately retains file SQLite and two runtime generations.
-   (full-world-options :sqlite-memory)
+   ;; Background execution and the scheduled sweep can write concurrently with
+   ;; the test body. They need file SQLite's connection topology, not the single
+   ;; held connection used by the serialized memory fixture.
+   (full-world-options :sqlite-file)
    (fn [ctx]
      (let [result
            (test-alpha/repl!
