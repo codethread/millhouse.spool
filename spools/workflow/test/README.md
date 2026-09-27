@@ -103,7 +103,8 @@ cleanup. It does not resolve per-world dependencies or mutate ambient runtime
 selection, and it supports plain-Java test JVMs without a new CLI-basis
 requirement.
 
-Keep `run-with-weaver-world` for startup files, workspace dependency resolution,
-full refresh, durable reopen, transport, and process-replacement claims. The
-historical measurements above are unchanged; pin adoption waits for the
-coordinator's immutable landed core SHA.
+Keep `run-with-weaver-world` for startup files, workspace dependency
+resolution, full refresh, durable reopen, and transport claims. Use separate
+disposable process fixtures for process topology, generation adoption, and
+replacement-process claims. The historical measurements above are unchanged;
+pin adoption waits for the coordinator's immutable landed core SHA.

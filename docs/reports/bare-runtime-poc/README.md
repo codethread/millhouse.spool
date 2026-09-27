@@ -142,9 +142,11 @@ public seam for direct runtime-state tests. It retains closed `:storage` and
 paths and file-storage `:db-path`, and owns fresh state plus cleanup on success
 or failure.
 
-The promoted contract removes the POC-only plain-Java and Clojure CLI-basis
-restriction. It still does not resolve per-world dependencies or replace
-world/process evidence: keep `run-with-weaver-world` for startup files,
-workspace dependency resolution, full refresh, durable reopen, and process
-replacement. The historical tables, raw samples, and old limitation above are
-unchanged. Pin changes wait for the coordinator's immutable landed core SHA.
+The promotion contract is intended to remove the POC-only plain-Java and
+Clojure CLI-basis restriction; this branch does not claim that promotion has
+landed. It still does not resolve per-world dependencies: keep
+`run-with-weaver-world` for startup files, workspace dependency resolution, full
+refresh, and durable reopen. Use separate disposable process fixtures for
+process topology, generation adoption, and replacement-process claims. The
+historical tables, raw samples, and old limitation above are unchanged. Pin
+changes wait for the coordinator's immutable landed core SHA.

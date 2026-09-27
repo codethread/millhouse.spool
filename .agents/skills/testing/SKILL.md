@@ -46,10 +46,11 @@ Use `millstrand.test.alpha` (aliased below as `t`) and blessed
   no new Clojure CLI basis requirement is part of this contract.
 - Check the available fixture before choosing it. Use the bare fixture for
   classpath-visible activation and direct runtime behavior; use the Weaver-world
-  fixture for startup files, workspace dependency resolution, full refresh,
-  durable reopen, or process-topology claims. Do not invent a constructor or
-  import upstream private test helpers when the consumer's pinned core does not
-  yet export the promoted fixture.
+  fixture for startup files, workspace dependency resolution, full refresh, and
+  durable reopen. Use separate disposable process fixtures for process topology
+  and replacement-generation claims. Do not invent a constructor or import
+  upstream private test helpers when the consumer's pinned core does not yet
+  export the promoted fixture.
 
 ### Embedded Weaver worlds
 

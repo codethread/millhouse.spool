@@ -13,71 +13,40 @@ compiler, authoring, spec, runtime, composition and publication partitions.
   `millstrand.test.alpha/collect-module-forms` to inspect public selections as
   data. This proves neither publication nor startup. See `declared-op` in
   [the Workflow CLI pilot](../spools/workflow/test/millhouse/workflow_cli_test.clj).
-- **Runtime-backed:** `millhouse.test-support/with-embedded-runtime` takes a
-  callback `(fn [runtime config-dir-file] ...)`, optionally preceded by
-  `{:prefix "test-name" :storage :sqlite-memory}`. It binds the current runtime,
-  starts a full unpublished Weaver world, and owns shutdown and generated
-  workspace cleanup, including when the callback throws. Each call gets fresh
-  database, runtime, workspace and registry state. It activates no modules.
-- **Existing callers:** `with-runtime` is the same full-world fixture, with the
-  same options. Both default to `:sqlite-file`; no existing caller is silently
-  switched to memory. `activate-spool!` retains the shared namespace-activation
-  lock; do not remove that isolation to save time.
+- **Runtime-backed direct contracts:** the adoption draft's
+  `millhouse.test-support/with-embedded-runtime` delegates to the public
+  `millstrand.test.alpha/run-with-bare-runtime`. It takes the existing callback
+  shape `(fn [runtime config-dir-file] ...)`, keeps `:prefix` and `:storage`,
+  defaults to file-backed SQLite, owns fresh state and cleanup, and activates no
+  modules implicitly. Existing `with-runtime` callers retain this same seam and
+  `activate-spool!` retains its namespace-activation lock.
 - **Startup/reload/durable reopen:** use upstream `with-weaver-world` directly
-  for `:deps-edn`, activation files, `:files` or retained roots. An explicit
-  `:root` is retained by default; the caller owns cleanup. Two embedded runtimes
-  over one file database prove reopen, not replacement-process adoption.
-- **Process topology:** keep real disposable process fixtures for built CLI or
-  generation-adoption claims. Direct function calls are not transport evidence.
+  for `:deps-edn`, activation files, `:files`, retained roots, and dependency
+  resolution. An explicit `:root` is retained by default; the caller owns
+  cleanup. Embedded runtimes over one file database prove durable reopen, not
+  replacement-process adoption.
+- **Process topology:** use separate disposable process fixtures for built CLI,
+  generation-adoption, and replacement-process claims. Direct function calls and
+  embedded worlds do not prove process topology.
 
-Storage is independent of the proof tier. Opt into `:sqlite-memory` for
-serialized, non-durable contracts only. It is real SQLite with a held connection,
-not file persistence or multi-connection contention evidence. It still pays
-world and dependency-basis startup. Use `:sqlite-file` for those other claims.
-Unknown local options and unsupported storage values fail rather than falling
-back. For the complete upstream options, use its public fixture directly.
+Storage is independent of the proof tier. For the bare runtime, `:sqlite-file`
+remains the default and `:sqlite-memory` is an explicit choice for serialized,
+non-durable contracts only. Memory SQLite is real SQLite with a held connection,
+not file persistence or multi-connection contention evidence. The bare fixture
+reuses the test JVM classpath without per-world dependency resolution or world
+basis startup. Use file storage for durability, filesystem, or connection-
+topology claims; use `with-weaver-world` when those claims also require
+workspace startup or dependency inputs. Unknown local options and unsupported
+storage values fail rather than falling back.
 
-## Pinned API limitation
+The adoption draft requires a core revision exporting the public bare-runtime
+fixture; its Millstrand pin remains unchanged until the coordinator supplies the
+immutable landed SHA.
 
-At Millstrand `34f940ddb2e69898554bf76251749715b250ae15`,
-`millstrand.test.alpha/activate-module!` requires an existing runtime;
-`millstrand.api.current.alpha/with-runtime` only binds one. The public runtime
-API has no constructor. The supported world fixture creates a generation basis
-and starts Weaver; there is no supported downstream bare-runtime constructor
-with deterministic teardown independent of world/basis startup. Do not copy
-upstream repository helpers or import `millstrand.core.*` to fill that gap.
+## Historical definition-CLI pilot (4zjji)
 
-## Public bare-runtime fixture promotion addendum
-
-The limitation above records the pinned pre-promotion API. After adopting a
-landed Millstrand revision that exports
-`millstrand.test.alpha/run-with-bare-runtime`, direct runtime contracts may use
-that public fixture instead of starting a Weaver world:
-
-```clojure
-(t/run-with-bare-runtime
- {:storage :sqlite-file :name "runtime-contract"}
- (fn [{:keys [runtime config-dir data-dir state-dir storage db-path]}]
-   ...))
-```
-
-The options map is closed to `:storage` (`:sqlite-file` by default or
-`:sqlite-memory`) and `:name`. The callback receives the explicit `:runtime`,
-`:config-dir`, `:data-dir`, `:state-dir`, and `:storage`; file storage also
-provides `:db-path`. Each invocation owns fresh runtime state, SQLite storage,
-registries, and temporary paths, and cleans them up after success or failure.
-The fixture reuses the test JVM classpath without resolving per-world
-`deps.edn`, does not publish or mutate an ambient runtime, and supports both
-Clojure CLI and plain-Java test JVM launches without adding a CLI-basis
-requirement.
-
-Use `t/activate-module!` with the explicit runtime for classpath-visible module
-activation. Keep `run-with-weaver-world` for startup files, workspace dependency
-resolution, full refresh, durable reopen, and other world/process claims. Do
-not change a Millhouse pin to an unreleased or placeholder revision; adoption
-waits for the coordinator's immutable landed core SHA.
-
-## Definition-CLI pilot (4zjji)
+The following measurements are historical evidence from the pre-promotion
+fixture path; they do not describe the current public bare-runtime contract.
 
 Same host, fresh JVM, focused `clojure.test/run-tests`, no lock wait. A wrapper
 around public `run-with-weaver-world` measured actual invocations and elapsed

@@ -102,15 +102,17 @@ Task `45jfm` retains the exact temporary probe (`coin4`), failed original output
 
 ## Promotion addendum
 
-The supported-API follow-up described above is resolved by the landed public
-`millstrand.test.alpha/run-with-bare-runtime` fixture. Once consumers adopt its
-immutable core SHA, use it for direct runtime-state contracts: it accepts only
+The supported-API follow-up described above is addressed by the proposed
+public `millstrand.test.alpha/run-with-bare-runtime` fixture once its core
+revision lands and consumers adopt the immutable SHA. It accepts only
 `:storage` and `:name`, supplies explicit runtime and config/data/state paths
 (and file-storage `:db-path`), and owns fresh state and cleanup. It does not
-resolve dependencies per world or mutate ambient runtime selection, and it
-supports plain-Java test JVMs without adding a Clojure CLI basis requirement.
+resolve dependencies per world or mutate ambient runtime selection, and the
+promotion contract supports plain-Java test JVMs without a new Clojure CLI basis
+requirement.
 
 The historical measurements and pinned limitation above remain unchanged. Keep
-Weaver-world and process fixtures for startup, dependency resolution, refresh,
-durable reopen, transport, and replacement-generation claims. Millhouse pin
-updates remain pending the coordinator's immutable landed core SHA.
+Weaver-world fixtures for startup, dependency resolution, refresh, durable
+reopen, and transport claims. Use separate disposable process fixtures for
+process topology and replacement-generation claims. Millhouse pin updates
+remain pending the coordinator's immutable landed core SHA.
