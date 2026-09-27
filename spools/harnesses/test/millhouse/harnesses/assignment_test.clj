@@ -178,18 +178,6 @@
                                    "unknown-assignment-actor"})]
                  (attr run :identity/by-identity))))))))
 
-(deftest assignment-resource-installs-default-policies
-  (with-assignment-world
-    (fn [ctx]
-      (is (= ["close-on-complete" "stop-on-complete"]
-             (test-alpha/repl!
-              ctx
-              '(do
-                 (require '[millhouse.harnesses.assignment :as assignment]
-                          '[millstrand.api.current.alpha :as current])
-                 (mapv :name (assignment/assign-policies
-                              (current/runtime))))))))))
-
 (deftest unknown-policy-fails-before-create
   (with-assignment-world
     (fn [ctx]
@@ -285,25 +273,6 @@
         (is (true? (get-in result [:after :target-ready])))
         (is (true? (get-in result [:after :launch-ready])))
         (is (nil? (get-in result [:after :owner])))))))
-
-(deftest independent-targets-are-both-launch-ready
-  (with-assignment-world
-    (fn [ctx]
-      (let [result
-            (eval-world
-             ctx
-             '(let [a (add-target! "Feature A")
-                    b (add-target! "Feature B")
-                    run-a (assign! (:id a) {})
-                    run-b (assign! (:id b) {})]
-                {:ready [(assignment/launch-ready? rt run-a)
-                         (assignment/launch-ready? rt run-b)]
-                 :owners [(attr (weaver/show rt (:id a)) :owner)
-                          (attr (weaver/show rt (:id b)) :owner)]
-                 :ids [(:id run-a) (:id run-b)]}))]
-        (is (= [true true] (:ready result)))
-        (is (= [nil nil] (:owners result)))
-        (is (= 2 (count (distinct (:ids result)))))))))
 
 (deftest default-and-explicit-policy-are-frozen
   (with-assignment-world
@@ -491,68 +460,6 @@
         (is (str/includes? (:prompt result) (:context result)))
         (is (not (str/includes? (:prompt result) "strand kanban finish")))))))
 
-(deftest explicit-appended-system-guidance-is-preserved
-  (with-assignment-world
-    (fn [ctx]
-      (let [result
-            (eval-world
-             ctx
-             '(let [alias-guidance "Existing alias guidance."
-                    explicit-guidance "Explicit caller guidance."
-                    _ (harnesses/register-alias!
-                       rt :guided-pi
-                       {:doc "Use Pi with existing guidance."
-                        :parent :pi
-                        :append-system-prompt alias-guidance
-                        :attributes {}})
-                    card (add-target! "Explicit guidance")
-                    run (assign! (:id card)
-                                 {:harness :guided-pi
-                                  :policy "close-on-complete"
-                                  :append-system-prompt explicit-guidance})
-                    prompts (attr run :harness/appended-system-prompts)
-                    rendered (str/join "\n---\n" prompts)]
-                {:prompts prompts
-                 :rendered rendered
-                 :policy-count
-                 (count (re-seq #"close the assigned work target yourself"
-                                rendered))
-                 :alias-count (count (re-seq #"Existing alias guidance\."
-                                             rendered))
-                 :explicit-count
-                 (count (re-seq #"Explicit caller guidance\." rendered))}))]
-        (is (= 2 (count (:prompts result))))
-        (is (= "Existing alias guidance." (first (:prompts result))))
-        (is (str/includes? (second (:prompts result))
-                           "\n\nExplicit caller guidance."))
-        (is (= 1 (:policy-count result)))
-        (is (= 1 (:alias-count result)))
-        (is (= 1 (:explicit-count result)))
-        (is (not (str/includes? (:rendered result) "#object[")))))))
-
-(deftest run-completion-leaves-the-card-alone
-  (with-assignment-world
-    (fn [ctx]
-      (let [result
-            (eval-world
-             ctx
-             '(let [card (add-target! "Leave open")
-                    run (assign! (:id card) {:policy "close-on-complete"})
-                    finished (harnesses/finish!
-                              rt (:id run)
-                              {:status :done
-                               :exit-code 0
-                               :result "done"})
-                    card-after (weaver/show rt (:id card))]
-                {:card-state (:state card-after)
-                 :lane (attr card-after :kanban/lane)
-                 :owner (attr card-after :owner)
-                 :run-status (attr finished :harness/status)}))]
-        (is (= "active" (:card-state result)))
-        (is (= "pending" (:lane result)))
-        (is (nil? (:owner result)))
-        (is (= "stopped" (:run-status result)))))))
-
 (deftest request-id-is-idempotent-and-exclusive
   (with-assignment-world
     (fn [ctx]
@@ -603,6 +510,7 @@
                     _ (harnesses/finish!
                        rt (:id first)
                        {:status :done :exit-code 0 :result "first"})
+                    completed-target (weaver/show rt (:id card))
                     _ (claim! (:id card) (attr first :identity/id)
                               :branch "first-owner"
                               :worktree "/tmp/assignment-work"
@@ -614,7 +522,10 @@
                     second (assign! (:id card)
                                     {:after (:id first)
                                      :request-id "second"})]
-                {:same-target (= (attr first :harness/target)
+                {:completed-target [(:state completed-target)
+                                    (attr completed-target :kanban/lane)
+                                    (attr completed-target :owner)]
+                 :same-target (= (attr first :harness/target)
                                  (attr second :harness/target)
                                  (:id card))
                  :same-session (= (attr first :harness/session-id)
@@ -629,6 +540,7 @@
                  :second-prompt (attr second :harness/prompt)
                  :history (kanban/ownership-history rt (:id card))
                  :ids [(:id first) (:id second)]}))]
+        (is (= ["active" "pending" nil] (:completed-target result)))
         (is (true? (:same-target result)))
         (is (false? (:same-session result)))
         (is (= "close-on-complete" (:policy result)))

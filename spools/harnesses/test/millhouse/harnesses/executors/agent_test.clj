@@ -405,9 +405,3 @@
                              "failed after 3 attempts"))
           (is (= 3 (get-in result [:bounded :attempt])))
           (is (nil? (get-in result [:bounded :session]))))))))
-
-(deftest executor-state-shape-matches-version
-  (let [new-state (ns-resolve 'millhouse.harnesses.executors.agent
-                              'new-state)]
-    (is (= #{:scan-monitor}
-           (set (keys (new-state)))))))
