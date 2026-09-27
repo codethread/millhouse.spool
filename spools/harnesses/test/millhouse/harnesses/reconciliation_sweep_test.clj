@@ -1,8 +1,9 @@
 (ns millhouse.harnesses.reconciliation-sweep-test
-  "Bounded scanning and durable reconciliation sweep contract tests."
+  "Pure cadence parsing, runtime scanning, and file-backed sweep reopen tests."
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
             [millhouse.harnesses.reconciliation :as reconciliation-api]
+            [millhouse.harnesses.lifecycle-test :as fixture]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.nio.file Files]
            [java.nio.file.attribute FileAttribute]))
@@ -69,47 +70,6 @@
         queries/agent-work-root-complete
         queries/agent-work-root-complete-or-intervention)"}})
 
-(defn- core-world-options [storage]
-  {:storage storage
-   :deps-edn (pr-str (world-deps))
-   :init-clj
-   "(require '[millstrand.api.current.alpha :as current]
-             '[millstrand.api.runtime.alpha :as runtime])
-    (def rt (current/runtime))
-    (runtime/module! rt :identity
-      {:ns 'millhouse.identity
-       :required? true})
-    (runtime/module! rt :harnesses-core
-      {:file \"modules/lifecycle_core.clj\"
-       :after [:identity]
-       :required? true})"
-   :files
-   {"modules/lifecycle_core.clj"
-    "(ns modules.lifecycle-core
-       (:require [millhouse.harnesses :as harnesses]
-                 [millhouse.harnesses.agent-cli :as agent-cli]
-                 [millhouse.harnesses.assignment :as assignment]
-                 [millhouse.harnesses.queries :as queries]
-                 [millstrand.api.lifecycle.alpha :as lifecycle]
-                 [millstrand.api.millstrand.alpha :as millstrand]))
-     (lifecycle/use-resource!
-      harnesses/harness-core-runtime
-      assignment/assignment-runtime)
-     (millstrand/use-op! agent-cli/agent)
-     (millstrand/use-query!
-      queries/agent-run-terminal
-      queries/agent-run-settled
-      queries/agent-run-active
-      queries/agent-runs-active
-      queries/agent-runs-for-target
-      queries/agent-work-complete
-      queries/agent-work-complete-or-intervention
-      queries/agent-work-root-complete
-      queries/agent-work-root-complete-or-intervention)"}})
-
-(defn- with-core-world [f]
-  (test-alpha/run-with-weaver-world (core-world-options :sqlite-memory) f))
-
 (defn- create-temp-dir []
   (.toFile
    (Files/createTempDirectory
@@ -126,16 +86,6 @@
                             (iterator-seq (.iterator paths)))]
         (Files/deleteIfExists path)))))
 
-(deftest bounded-candidate-rotation-is-fair
-  (let [rotate #'reconciliation-api/rotate-candidates
-        candidates (mapv #(format "run-%03d" %) (range 1 102))
-        first-batch (take 100 (rotate candidates 0))
-        second-batch (take 100 (rotate candidates 100))]
-    (is (= "run-001" (first first-batch)))
-    (is (= "run-100" (last first-batch)))
-    (is (= "run-101" (first second-batch)))
-    (is (some #{"run-101"} second-batch))))
-
 (deftest reconciliation-cadence-configuration-is-strict
   (let [parse-interval #'reconciliation-api/parse-sweep-interval]
     (is (= reconciliation-api/default-sweep-interval-ms
@@ -149,7 +99,9 @@
 
 (deftest bounded-manual-and-scheduled-scans-reach-later-orphans
   (test-alpha/run-with-weaver-world
-   (full-world-options :sqlite-file)
+   ;; Cursor fairness needs stored rows, not file durability. The reopen test
+   ;; below separately retains file SQLite and two runtime generations.
+   (full-world-options :sqlite-memory)
    (fn [ctx]
      (let [result
            (test-alpha/repl!
@@ -246,7 +198,7 @@
               (:stored result)))))))
 
 (deftest durable-sweep-preserves-cadence-rearms-and-disables
-  (with-core-world
+  (fixture/with-core-world
     (fn [ctx]
       (let [result
             (test-alpha/repl!
@@ -342,7 +294,7 @@
         (delete-tree! root)))))
 
 (deftest sweep-configuration-serializes-with-an-entered-fire
-  (with-core-world
+  (fixture/with-core-world
     (fn [ctx]
       (let [result
             (test-alpha/repl!

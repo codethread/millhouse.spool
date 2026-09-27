@@ -1,5 +1,8 @@
 (ns millhouse.harnesses.reconciliation-callback-test
-  "Interactive callback fencing and retry custody regression tests."
+  "Runtime callback fencing and retry races, without launching providers.
+
+  PID observations read this test JVM; supplied completion callbacks do not
+  prove provider exit or external process custody."
   (:require [clojure.test :refer [deftest is testing]]
             [millstrand.test.alpha :as test-alpha]))
 

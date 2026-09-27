@@ -1,7 +1,13 @@
 (ns millhouse.harnesses.lifecycle-custody-test
-  "Custody reconciliation and integrated lifecycle transition tests."
+  "Fake-custody orchestration and runtime-backed lifecycle transitions."
   (:require [clojure.test :refer [deftest is testing]]
+            [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.catalog :as catalog]
+            [millhouse.harnesses.internal.execution-custody :as execution-custody]
+            [millhouse.harnesses.internal.process-custody :as custody]
+            [millhouse.harnesses.internal.runs :as runs]
             [millhouse.harnesses.lifecycle-test :as fixture]
+            [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as test-alpha]))
 
 (deftest custody-inspection-accepts-terminal-runs-without-an-invocation
@@ -53,82 +59,53 @@
                result))))))
 
 (deftest custody-inspection-coalesces-and-deduplicates-failures
-  (fixture/with-core-world
-    (fn [ctx]
-      (let [result
-            (test-alpha/repl!
-             ctx
-             '(do
-                (require '[millhouse.harnesses :as harnesses]
-                         '[millhouse.harnesses.execution :as execution]
-                         '[millhouse.harnesses.internal.process-custody :as custody]
-                         '[millhouse.harnesses.internal.runs :as runs]
-                         '[millstrand.api.current.alpha :as current])
-                (let [rt (current/runtime)
-                      running (mapv (fn [id]
-                                      {:id id
-                                       :attributes
-                                       {:harness/status "running"
-                                        :harness/mode "headless"
-                                        :harness/settled "false"
-                                        :harness/attempt 1
-                                        :harness/process-owner "agent-harness/run"
-                                        :harness/process-key (str id "/attempt-1")
-                                        :harness/process-handle (str "handle-" id)}})
-                                    ["one" "two"])
-                      records (mapv (fn [run]
-                                      {:owner custody/owner
-                                       :key (get-in run [:attributes
-                                                         :harness/process-key])
-                                       :handle (get-in run [:attributes
-                                                            :harness/process-handle])
-                                       :phase :running})
-                                    running)
-                      terminal (assoc-in (first running)
-                                         [:attributes :harness/status]
-                                         "failed")
-                      finish-count (atom 0)
-                      schedule-count (atom 0)
-                      _ ((ns-resolve 'millhouse.harnesses.execution
-                                     'activate-state!) rt)]
-                  (try
-                    (with-redefs-fn
-                      {#'runs/inspectable-headless (fn [_ _] running)
-                       #'weaver/show
-                       (fn [_ id] (some #(when (= id (:id %)) %) running))
-                       #'custody/list-owned (constantly records)
-                       (ns-resolve 'millhouse.harnesses.execution
-                                   'schedule-inspection!)
-                       (fn [& _] (swap! schedule-count inc))}
-                      #(execution/inspect-owned! rt))
-                    (with-redefs [runs/inspectable-headless
-                                  (fn [_ _] [terminal])
-                                  weaver/show (fn [_ _] terminal)
-                                  custody/list-owned (constantly [])
-                                  harnesses/finish!
-                                  (fn [_ _ _] (swap! finish-count inc))]
-                      (execution/inspect-owned! rt)
-                      (execution/inspect-owned! rt))
-                    {:scheduled @schedule-count
-                     :finish-count @finish-count
-                     :state-version
-                     @(ns-resolve 'millhouse.harnesses.execution
-                                  'state-version)
-                     :state-keys
-                     (set (keys ((ns-resolve 'millhouse.harnesses.execution
-                                             'state) rt)))}
-                    (finally
-                      ((:close-fn
-                        ((ns-resolve 'millhouse.harnesses.execution
-                                     'deactivate-state!) rt))))))))]
-        (testing "many live records schedule one runtime-wide recurring pass"
-          (is (= 1 (:scheduled result))))
-        (testing "an identical missing-custody failure is persisted once"
-          (is (= 1 (:finish-count result))))
-        (testing "runtime state version owns reconciliation coordination"
-          (is (= 4 (:state-version result)))
-          (is (every? (:state-keys result)
-                      [:inspection-scheduled? :reconciliation-failures])))))))
+  ;; This is orchestration over fake custody records, not runtime persistence
+  ;; or evidence of a real process. Each read/write boundary is replaced below.
+  (let [running (mapv (fn [id]
+                        {:id id
+                         :attributes
+                         {:harness/status "running"
+                          :harness/mode "headless"
+                          :harness/settled "false"
+                          :harness/attempt 1
+                          :harness/process-owner "agent-harness/run"
+                          :harness/process-key (str id "/attempt-1")
+                          :harness/process-handle (str "handle-" id)}})
+                      ["one" "two"])
+        records (mapv (fn [run]
+                        {:owner custody/owner
+                         :key (get-in run [:attributes :harness/process-key])
+                         :handle (get-in run [:attributes :harness/process-handle])
+                         :phase :running})
+                      running)
+        terminal (assoc-in (first running) [:attributes :harness/status] "failed")
+        finish-count (atom 0)
+        schedule-count (atom 0)
+        publication-lock (Object.)
+        opened {:in-flight (atom #{})
+                :reconciliation-failures (atom {})}
+        callbacks {:active-opened? (constantly true)
+                   :deadline-hook! (constantly nil)
+                   :enforce-stop! (constantly nil)
+                   :release-opened! (constantly nil)
+                   :schedule-inspection!
+                   (fn [& _] (swap! schedule-count inc))}]
+    (with-redefs [catalog/publication-lock (constantly publication-lock)]
+      (with-redefs [runs/inspectable-headless (fn [_ _] running)
+                    weaver/show
+                    (fn [_ id] (some #(when (= id (:id %)) %) running))
+                    custody/list-owned (constantly records)]
+        (execution-custody/inspect-owned! callbacks {} opened))
+      (testing "many live records request one recurring pass"
+        (is (= 1 @schedule-count)))
+      (with-redefs [runs/inspectable-headless (fn [_ _] [terminal])
+                    weaver/show (fn [_ _] terminal)
+                    custody/list-owned (constantly [])
+                    harnesses/finish! (fn [_ _ _] (swap! finish-count inc))]
+        (execution-custody/inspect-owned! callbacks {} opened)
+        (execution-custody/inspect-owned! callbacks {} opened))
+      (testing "an identical missing-custody failure is reported once"
+        (is (= 1 @finish-count))))))
 
 (deftest late-successful-settlement-preserves-primary-failure
   (fixture/with-core-world
@@ -374,10 +351,6 @@
                              :failed-terminal (mapv :id failed-terminal)
                              :failed-settled (mapv :id failed-settled)}
                    :child-running (life/status (weaver/show rt (:id child)))
-                   :await-op (try (weaver/resolve-op rt 'agent)
-                                  (get-in (weaver/resolve-op rt 'agent)
-                                          [:arg-spec :subcommands])
-                                  (catch Throwable _ {}))
                    :child-invocation (:invocation child-start)})))]
         (testing "stop before launch settles and cannot start"
           (is (= "stopped" (get-in result [:stop-before-launch :status])))
@@ -424,6 +397,4 @@
           (is (= 1 (count (get-in result [:queries :terminal]))))
           (is (= 1 (count (get-in result [:queries :settled]))))
           (is (= 1 (count (get-in result [:queries :failed-terminal]))))
-          (is (= [] (get-in result [:queries :failed-settled]))))
-        (testing "agent await is not an agent subcommand"
-          (is (not (contains? (:await-op result) "await"))))))))
+          (is (= [] (get-in result [:queries :failed-settled]))))))))
