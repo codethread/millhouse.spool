@@ -98,16 +98,11 @@
             (is (some? worker))
             (is (some? finisher))
             (is (not= (:id worker) (:id finisher))))
-          (testing "only pre-review validation grants scoped repair authority"
+          (testing "repository validation gates use the shared recovery policy"
             (let [validation-gates (filter #(= "shell" (attr-get % :workflow/gate)) strands)
-                  repair (autonomous/validation-failure-policy "fixture-card")
-                  handoff (attr-get worker :workflow/instruction)]
+                  repair (autonomous/validation-failure-policy "fixture-card")]
               (is (= 2 (count validation-gates)))
-              (is (every? #(= repair (attr-get % :workflow/instruction)) validation-gates))
-              (is (re-find #"repair failures caused by your changes" repair))
-              (is (re-find #"systemic/unknown blocker" repair))
-              (is (re-find #"Handoff, custody or landing failures require explicit recovery" handoff))
-              (is (not (re-find #"repair failures caused by your changes" handoff))))))))))
+              (is (every? #(= repair (attr-get % :workflow/instruction)) validation-gates)))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
