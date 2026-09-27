@@ -10,6 +10,7 @@
             [millhouse.harnesses.assignment :as assignment]
             [millhouse.kanban :as kanban]
             [millhouse.workflow :as workflow]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -660,6 +661,13 @@
                        (weaver/update! rt (:id card)
                                        {:attributes {:auto-run/agent-blocked nil}})))
           (is (= before (weaver/show rt (:id card)))))
+        (batch/apply! rt {:refs {:card (:id card)}
+                          :strands [{:ref :card :state "closed"}]})
+        (is (= "closed" (:state (weaver/show rt (:id card))))
+            "Historical blocker evidence must not prevent unrelated lifecycle batches")
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (patterns/weave! rt :auto-run-unknown-failure input)))
+        (weaver/update! rt (:id card) {:state "active"})
         (patterns/weave! rt :auto-run-unblock {:strand (:id card)})
         (is (every? nil? (map #(show rt card %)
                               [:auto-run/agent-blocked :auto-run/agent-blocked-status

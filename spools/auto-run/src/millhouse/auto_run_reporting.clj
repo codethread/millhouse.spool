@@ -93,8 +93,10 @@
   "Reject blocker reports on closed cards or non-feature targets before commit."
   {:types #{:batch/apply-before-commit}}
   [ctx]
-  (doseq [{:keys [after]} (:batch/updated ctx)
-          :when (= "true" (attr-get after :auto-run/agent-blocked))]
+  (doseq [{:keys [ref after]} (:batch/updated ctx)
+          :let [patch (some #(when (= ref (:ref %)) %)
+                            (get-in ctx [:batch/payload :strands]))]
+          :when (= "true" (attr-get patch :auto-run/agent-blocked))]
     (when-not (and (= "active" (:state after))
                    (= "true" (attr-get after :kanban/card))
                    (= "feature" (attr-get after :kanban/type)))

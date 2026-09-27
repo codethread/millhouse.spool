@@ -308,7 +308,7 @@ Read the agent-reported blocker and resolve its evidence strand summary.
 
   Return an unblocked state or the blocked status with evidence ID and title.
   Missing evidence or an incomplete union fails visibly.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_reporting.clj#L104-L122">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_reporting.clj#L106-L124">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-reporting/validate-blocker-card">`validate-blocker-card`</a>
 ``` clojure
@@ -317,7 +317,7 @@ Read the agent-reported blocker and resolve its evidence strand summary.
 Function.
 
 Reject blocker reports on closed cards or non-feature targets before commit.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_reporting.clj#L92-L102">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_reporting.clj#L92-L104">Source</a></sub></p>
 
 -----
 # <a name="millhouse.auto-run-worktree">millhouse.auto-run-worktree</a>
