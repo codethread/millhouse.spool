@@ -568,7 +568,13 @@
                   (is (nil? (attr after-reconciliation :gate/error)))))))
           (finally
             (.shutdownNow shutdown-executor)
-            (.shutdownNow usable-executor)))))))
+            (.shutdownNow usable-executor)
+            (is (.awaitTermination shutdown-executor (test-support/await-budget-ms)
+                                   java.util.concurrent.TimeUnit/MILLISECONDS)
+                "rejected observer pool stops before fixture teardown")
+            (is (.awaitTermination usable-executor (test-support/await-budget-ms)
+                                   java.util.concurrent.TimeUnit/MILLISECONDS)
+                "resumed observer pool stops before fixture teardown")))))))
 
 (deftest interrupted-observer-can-resume-without-losing-attempt
   (with-shell-world
