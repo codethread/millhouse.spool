@@ -40,6 +40,18 @@
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "checked-in basis publishes the complete CLI surface"
+        (let [aliases (set (map :name (weaver/op! rt 'agent ["list"])))
+              reviewers (weaver/op! rt 'agent ["reviewers"])
+              workflows (set (map :name (:definitions
+                                         (weaver/op! rt 'workflow ["list"]))))
+              operations (set (map :name (weaver/ops rt)))]
+          (is (contains? aliases "sol"))
+          (is (= ["docs-and-tests" "runtime-correctness" "source-form" "test-layering"]
+                 (mapv :name (:reviewers reviewers))))
+          (is (every? workflows ["auto-full-land" "auto-human-review" "land"]))
+          (is (contains? operations "auto-run"))
+          (is (contains? operations "merge-queue"))))
       (testing "workspace policy adds its lens without replacing shared reviewers"
         (let [catalog (into {} (map (juxt :name identity)) (reviewers/reviewers rt))
               lens (get catalog "test-layering")]
