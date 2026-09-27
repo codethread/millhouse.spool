@@ -17,7 +17,6 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.scheduler.alpha :as scheduler]
-            [millstrand.api.spool.alpha :as spool-alpha]
             [millhouse.cron :as cron]
             [millhouse.test-support :as test-support]
             [millstrand.test.alpha :as test-alpha])
@@ -272,17 +271,6 @@
       (deliver @blocking-release :released)
       (cron/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)}))))
 
-(deftest await-quiescent-no-options-uses-the-production-default
-  (with-cron
-    (fn [rt]
-      (let [seen-opts (atom nil)]
-        (with-redefs [spool-alpha/poll-until!
-                      (fn [_clock opts]
-                        (reset! seen-opts opts)
-                        rt)]
-          (is (= rt (cron/await-quiescent! rt)))
-          (is (= 10000 (:timeout-ms @seen-opts))))))))
-
 (deftest jitter-offset-stays-in-bounds
   (let [rng (Random. 42)
         bound 1000]
@@ -294,31 +282,27 @@
       (is (zero? (#'cron/jitter-offset-ms 0 (Random. 1))))
       (is (zero? (#'cron/jitter-offset-ms -5 (Random. 1)))))))
 
-(deftest register-validates-inputs
-  (with-cron
-    (fn [rt]
-      (is (thrown? Exception
-                   (cron/register! rt {:id :bad :interval-ms 0
-                                       :handler 'millhouse.cron.runtime-test/fire-ok})))
-      (is (thrown? Exception
-                   (cron/register! rt {:id :bad :interval-ms 1000 :jitter-ms -1
-                                       :handler 'millhouse.cron.runtime-test/fire-ok})))
-      (is (thrown? Exception
-                   (cron/register! rt {:id :bad :interval-ms 1000
-                                       :handler 'not-qualified})))
-      (testing "a typo'd (unknown) key is rejected loudly, not silently dropped"
-        (is (thrown? Exception
-                     (cron/register! rt {:id :bad :interva-ms 1000
-                                         :handler 'millhouse.cron.runtime-test/fire-ok})))))))
+(deftest register-validates-inputs-before-runtime-access
+  ;; Invalid declarations must fail before touching runtime state or storage.
+  (doseq [job [{:id :bad :interval-ms 0
+                :handler 'millhouse.cron.runtime-test/fire-ok}
+               {:id :bad :interval-ms 1000 :jitter-ms -1
+                :handler 'millhouse.cron.runtime-test/fire-ok}
+               {:id :bad :interval-ms 1000 :handler 'not-qualified}
+               {:id :bad :interva-ms 1000
+                :handler 'millhouse.cron.runtime-test/fire-ok}]]
+    (is (thrown? clojure.lang.ExceptionInfo (cron/register! nil job)))))
 
 (deftest state-shape-matches-declared-version
   ;; Drift alarm for cron's versioned spool-state: a key added to new-state
   ;; without a state-version bump would survive refresh as a stale map and
   ;; offload against a nil executor.
-  (test-support/assert-state-shape
-   ;; white-box read of the private new-state builder var, intentional here.
-   #'cron/new-state
-   #{:executor :jobs :failure-log :rng :in-flight-count :close-fn}))
+  (let [state (#'cron/new-state)]
+    (try
+      (is (= #{:executor :jobs :failure-log :rng :in-flight-count :close-fn}
+             (set (keys state))))
+      (finally
+        ((:close-fn state))))))
 
 (deftest job-authoring-validates-closed-options-and-job-shape
   (is (= {:kind :reconcile

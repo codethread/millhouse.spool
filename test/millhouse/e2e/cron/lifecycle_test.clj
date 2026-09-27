@@ -1,26 +1,15 @@
 (ns millhouse.e2e.cron.lifecycle-test
-  "End-to-end proofs for the two load-bearing properties of the wake-backed cron
-  spool (`PLAN-cron-on-scheduler-001.PH2`), driven against real weaver runtimes
-  in disposable worlds the way trusted config would drive them.
+  "Embedded Cron lifecycle proofs: file-backed durable reopen and event-lane
+  isolation. Two runtimes reopen one retained SQLite store; this is not
+  replacement-process adoption or startup-config loading evidence.
 
-  `.V1` restart durability: a cron job's cadence lives in its durable `cron/<id>`
-  scheduler wake, so it survives a real weaver stop/start — a fresh weaver adopts
-  the pending wake through the startup-config path (re-running the identical
-  `register!` with no in-memory config preserves the countdown, `.A4`) and the
-  job fires and re-arms. Unlike `millstrand.e2e.scheduler.lifecycle-test`'s restart proof, cron's
-  `fire-wake` needs the in-memory job present before it fires, so the adopted
-  wake is released deterministically off a manual clock after `register!` rather
-  than by the wall-clock startup timer; the seed instant is therefore placed in
-  the wall future so the startup timer stays dormant until `advance!` drives it.
+  Re-registering the same job in the fresh runtime preserves its pending wake.
+  A wall-future seed keeps the startup timer dormant until the manual clock
+  releases that wake. The job then fires and re-arms its cadence.
 
-  `.V2` lane hygiene: a blocking `:handler` never holds the shared event lane —
-  `fire-wake` offloads the body to the cron executor, so `await-quiescent!`
-  returns while the job is still blocked and a subsequent event still dispatches.
-
-  Fires drive off a manual runtime clock and `millstrand.test.alpha/advance!`; job
-  results join via `cron/await-quiescent!` — no `Thread/sleep` or wall waits
-  (`.V3`). Handlers are resolved by fully qualified symbol, so their fire and
-  latch signals live in namespace state the tests reset between runs."
+  A separate blocking handler proves Cron offloads work without holding the
+  shared event lane. Manual clocks release wakes; Cron quiescence joins the
+  offloaded work. Handler signals are reset per test."
   (:require [clojure.test :refer [deftest is]]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.scheduler.alpha :as scheduler]
@@ -37,7 +26,7 @@
 (def ^:private marker-fired (atom (promise)))
 
 (defn record-run
-  "Restart-durability job body: return a sentinel result the test reads back off
+  "Durable-reopen job body: return a sentinel result the test reads back off
   the fired job's `:last-result`."
   [_runtime]
   :fired)
@@ -60,7 +49,7 @@
   [rt key]
   (first (filter #(= key (:key %)) (scheduler/pending rt))))
 
-(deftest cron-cadence-survives-weaver-restart-and-fires-on-rearm
+(deftest cron-cadence-survives-durable-reopen-and-fires-on-rearm
   (let [root (test-support/temp-dir "millhouse-cron-restart")
         interval-ms (* 60 60 1000)
         job {:id :survivor :interval-ms interval-ms :jitter-ms 0
@@ -81,7 +70,7 @@
          (cron/register! rt1 job)
          (is (= seed-ms (:wake_at (cron-wake rt1 "cron/survivor")))
              "the cron wake is durably pending in the first weaver")))
-      ;; A fresh weaver adopts the durable wake via the startup-config path:
+      ;; A fresh embedded runtime reopens the durable wake:
       ;; re-running the identical register! with no in-memory config preserves
       ;; the pending wake (.A4) rather than resetting its countdown.
       (test-alpha/run-with-weaver-world
@@ -96,7 +85,7 @@
            (test-alpha/await-quiescent! rt2 {:timeout-ms (test-support/await-budget-ms)})
            (cron/await-quiescent! rt2 {:timeout-ms (test-support/await-budget-ms)})
            (is (= :fired (:last-result (first (cron/jobs rt2))))
-               "the adopted wake fired and recorded its result after restart")
+               "the adopted wake fired and recorded its result after durable reopen")
            (is (= (+ fired-at-ms interval-ms) (:wake_at (cron-wake rt2 "cron/survivor")))
                "the next cron wake is re-armed at the fire instant + interval"))))
       (finally
