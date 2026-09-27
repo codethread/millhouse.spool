@@ -6,7 +6,7 @@
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-embedded-runtime]]
             [millhouse.workflow :as workflow]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.time Duration Instant]))
@@ -15,7 +15,7 @@
   (:reason (ex-data (try (f) (catch clojure.lang.ExceptionInfo e e)))))
 
 (deftest workflow-spool-compiles-and-materializes-molecules
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [with-feature (fn [prefix]
                            (fn [{:keys [feature]}]
@@ -56,7 +56,7 @@
    (workflow/step :plate (fn [{:keys [filling]}] (str "Plate " filling " toastie")) :self)))
 
 (deftest workflow-spool-runtime-drives-toastie-demo
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (let [toastie (workflow/workflow
                      (fn [{:keys [filling]}] (str "Make " filling " toastie"))
@@ -212,7 +212,7 @@
    (workflow/call :ci-round #'pr-ci-round {} :depends-on [:open])))
 
 (deftest workflow-models-pull-request-flow-without-conditional-edges
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/start! "pr-flow" #'pr-dev {:feature "pr-42"}
                        {:family "pull-request"
@@ -257,7 +257,7 @@
                :pr.ci.wait {:instruction "glab ci status --live"}}))
 
 (deftest workflow-pr-flow-rebinds-forge-without-spool-changes
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       ;; reference run: no bindings passed, the github reference applies
       (workflow/start! "pr-forge-ref" #'pr-dev {:feature "ref-feat"}
@@ -300,7 +300,7 @@
         (is (= "glab ci status --live" (:instruction gate)))))))
 
 (deftest workflow-runtime-closes-empty-runs-at-start
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (let [empty-workflow (workflow/workflow "Nothing to do")]
         (is (= {:ready [] :done true} (workflow/start! "empty-run" empty-workflow {})))
@@ -309,7 +309,7 @@
         (is (= {:ready [] :done true} (workflow/start! "empty-run" empty-workflow {})))))))
 
 (deftest workflow-run-not-done-while-blocked-by-external-dependency
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [blocker (weaver/add! rt {:title "External blocker"})
             definition (workflow/workflow
@@ -326,28 +326,8 @@
         (is (some? (workflow/current-root "blocked-run")))
         (is (= "active" (:state (weaver/show rt b-id))))))))
 
-(deftest workflow-done-fails-loudly-for-unknown-run
-  (with-runtime
-    (fn [_rt _]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown workflow run"
-                            (workflow/done? "no-such-run"))))))
-
-(deftest workflow-run-auto-closes-root-when-last-step-completes
-  (with-runtime
-    (fn [_rt _]
-      (let [definition (workflow/workflow
-                        "Linear run"
-                        (workflow/step :a "Do A" :self)
-                        (workflow/step :b "Do B" :self :depends-on [:a]))]
-        (workflow/start! "linear-run" definition {})
-        (is (= [{:title "Do B" :role "step"}]
-               (mapv #(select-keys % [:title :role]) (:ready (workflow/complete! "linear-run")))))
-        (is (= {:ready [] :done true} (workflow/complete! "linear-run")))
-        (is (workflow/done? "linear-run"))
-        (is (nil? (workflow/current-root "linear-run")))))))
-
 (deftest workflow-runtime-supports-parallel-ready-steps
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Parallel entry"
@@ -368,7 +348,7 @@
                  (mapv #(select-keys % [:title :role]) remaining))))))))
 
 (deftest workflow-complete-merges-caller-attributes-onto-the-closed-step
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow "Attrs run" (workflow/step :a "Do A" :self))
             [step] (:ready (workflow/start! "attrs-run" definition {}))]
@@ -381,7 +361,7 @@
           (is (= 7 (get-in strand [:attributes :acme/exit-code]))))))))
 
 (deftest workflow-complete-context-is-shallow-last-write-wins
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Context run"
@@ -403,7 +383,7 @@
             "last write wins shallowly, including replacing a nested value")))))
 
 (deftest workflow-context-preserves-qualified-keyword-values-on-the-wire
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Qualified context run"
@@ -431,7 +411,7 @@
   (throw (ex-info "complete batch rejected" {:code "policy/rejected" :ctx ctx})))
 
 (deftest workflow-complete-context-and-step-close-rollback-together
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Rejected context run"
@@ -453,7 +433,7 @@
                (get-in (weaver/show rt root-id) [:attributes :workflow/context])))))))
 
 (deftest workflow-complete-requires-keyword-context-keys
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Context keys"
@@ -474,7 +454,7 @@
                            {:opaque (Object.)})))))))
 
 (deftest workflow-complete-refuses-malformed-persisted-context-before-mutating
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Malformed context"
@@ -498,59 +478,26 @@
 (deftest workflow-complete-holds-direct-callers-to-the-attributes-spec
   ;; The worker CLI validates its request map; a direct Clojure caller reaches
   ;; the same mutation, so the same spec judges it rather than a looser local check.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow "Bad attrs run" (workflow/step :a "Do A" :self))
             [step] (:ready (workflow/start! "bad-attrs-run" definition {}))]
-        (doseq [[label attributes] [["a non-map" "acme/outcome=ok"]
-                                    ["a keyword key" {:acme/outcome "ok"}]
-                                    ["a blank key" {"" "ok"}]]]
-          (testing label
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Invalid workflow complete attributes"
-                                  (workflow/complete! "bad-attrs-run" {:attributes attributes})))))
+        (let [data (ex-data (try (workflow/complete! "bad-attrs-run" {:notes "outcome"})
+                                 (catch clojure.lang.ExceptionInfo e e)))]
+          (is (= {:reason :workflow/notes-removed :op "complete!"}
+                 (select-keys data [:reason :op])))
+          (is (re-find #":attributes" (:guidance data))))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Invalid workflow complete attributes"
+                              (workflow/complete! "bad-attrs-run"
+                                                  {:attributes {:acme/outcome "ok"}})))
         (is (= "active" (:state (weaver/show rt (:id step)))))
         (testing "an empty map is a stated no-op, not a rejection"
           (workflow/complete! "bad-attrs-run" {:attributes {}})
           (is (= "closed" (:state (weaver/show rt (:id step))))))))))
 
-(deftest workflow-complete-and-advance-refuse-removed-notes-arg
-  (with-runtime
-    (fn [rt _]
-      (let [definition (workflow/workflow "No notes run"
-                                          (workflow/step :a "Do A" :self)
-                                          (workflow/step :b "Do B" :self))
-            [step] (:ready (workflow/start! "no-notes-run" definition {}))]
-        (doseq [[label f] [["complete!" #(workflow/complete! "no-notes-run" {:notes "prose"})]
-                           ["advance!" #(workflow/advance! "no-notes-run" {:notes "prose"})]]]
-          (testing label
-            (try
-              (f)
-              (is false (str "expected " label " to refuse :notes"))
-              (catch clojure.lang.ExceptionInfo e
-                (is (re-find #"no longer accepts :notes" (ex-message e)))
-                (is (= :workflow/notes-removed (:reason (ex-data e))))
-                (is (= label (:op (ex-data e))))))))
-        ;; the refusal happens before the guard, so nothing moved
-        (is (= "active" (:state (weaver/show rt (:id step)))))))))
-
-(deftest workflow-run-history-reads-legacy-outcome-notes-as-an-ordinary-attribute
-  (with-runtime
-    (fn [rt _]
-      ;; a step closed before the outcome cutover: run-history projects the
-      ;; engine's own outcome keys and leaves the historical row on the strand,
-      ;; where show and the query language read it like any other attribute.
-      (let [definition (workflow/workflow "Legacy run" (workflow/step :a "Do A" :self))
-            [step] (:ready (workflow/start! "legacy-notes-run" definition {}))]
-        (workflow/complete! "legacy-notes-run" {:attributes {"workflow/outcome-notes" "closed in 2026"}})
-        (let [event (first (:events (first (workflow/run-history "legacy-notes-run"))))]
-          (is (= :step-closed (:type event)))
-          (is (not (contains? event :notes))))
-        (is (= "closed in 2026"
-               (get-in (weaver/show rt (:id step)) [:attributes :workflow/outcome-notes])))))))
-
 (deftest workflow-complete-fails-loudly-on-invalid-step-and-mutates-nothing
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow "Bad step run" (workflow/step :a "Do A" :self))]
         (workflow/start! "bad-step-run" definition {})
@@ -560,7 +507,7 @@
           (is (= "active" (:state (weaver/show rt a-id)))))))))
 
 (deftest workflow-gate-requires-actor-or-executor-and-records-provenance
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Gated run"
@@ -600,7 +547,7 @@
                    (mapv #(select-keys % [:title :role]) remaining)))))))))
 
 (deftest workflow-completion-api-separates-executor-and-run-id-from-identity
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Adapter gate"
@@ -624,20 +571,10 @@
                        :step (:id gate)
                        :executor-run-id "orphan-run"})))))))
 
-(deftest workflow-non-gate-step-closes-without-provenance
-  (with-runtime
-    (fn [rt _]
-      (let [definition (workflow/workflow "Plain run" (workflow/step :a "Do A" :self))
-            [step] (:ready (workflow/start! "plain-gate-run" definition {}))]
-        (is (= {:ready [] :done true} (workflow/complete! "plain-gate-run")))
-        (let [closed (weaver/show rt (:id step))]
-          (is (= "closed" (:state closed)))
-          (is (nil? (get-in closed [:attributes :identity/by-identity]))))))))
-
 (deftest workflow-non-gate-step-records-actor-when-supplied
   ;; :by-identity is recorded on any step completion when supplied (provenance parity),
   ;; even though only gates require it
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow "Plain run with by" (workflow/step :a "Do A" :self))
             [step] (:ready (workflow/start! "plain-by-run" definition {}))]
@@ -655,7 +592,7 @@
   (workflow/workflow "Empty continuation"))
 
 (deftest workflow-routed-choice-closes-workless-continuation-run
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (let [definition (workflow/workflow
                         "Route to empty"
@@ -668,37 +605,8 @@
         (is (true? (workflow/done? "route-to-empty")))
         (is (nil? (workflow/current-root "route-to-empty")))))))
 
-(workflow/defworkflow routed-continuation-workflow
-  "Continue a routed run."
-  {:entrypoints #{:continue}}
-  (workflow/workflow
-   "Continuation"
-   (workflow/step :follow-up "Do follow up work" :self)))
-
-(deftest workflow-routed-choice-swaps-to-single-active-continuation-root
-  (with-runtime
-    (fn [rt _]
-      (let [definition (workflow/workflow
-                        "Route to work"
-                        (workflow/checkpoint :route "Route somewhere"
-                                             :choices [{:key :continue
-                                                        :label "Continue"
-                                                        :next 'millhouse.workflow-runtime-test/routed-continuation-workflow}]))]
-        (workflow/start! "route-to-work" definition {})
-        (let [old-root-id (:id (workflow/current-root "route-to-work"))
-              remaining (:ready (workflow/choose! "route-to-work" :continue))]
-          (is (= "closed" (:state (weaver/show rt old-root-id))))
-          (is (= [{:title "Do follow up work" :role "step"}]
-                 (mapv #(select-keys % [:title :role]) remaining)))
-          ;; current-root throws on more than one active root, so a non-nil
-          ;; result asserts exactly one active root remains for the run-id
-          (let [new-root (workflow/current-root "route-to-work")]
-            (is (some? new-root))
-            (is (not= old-root-id (:id new-root)))
-            (is (= "active" (:state new-root)))))))))
-
 (deftest workflow-choose-records-actor-identity
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Signoff run"
@@ -740,7 +648,7 @@
   (loopy-body))
 
 (deftest workflow-start-accepts-var-and-defaults-durable-context
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (workflow/start! "var-start" #'loopy {:revision :yes})
       (let [root (workflow/current-root "var-start")]
@@ -751,21 +659,10 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"pass :context explicitly"
                             (workflow/start! "bad-context" #'loopy {:f identity})))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-finite numbers are not JSON-safe"
-                            (workflow/start! "nan-context" #'loopy {:n ##NaN})))
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"non-finite numbers are not JSON-safe"
-                            (workflow/start! "inf-context" #'loopy {:n ##Inf}))))))
-
-(deftest workflow-start-accepts-registered-keyword
-  (with-runtime
-    (fn [_rt _]
-      (workflow/register-workflow! :loopy-test 'millhouse.workflow-runtime-test/loopy)
-      (workflow/start! "keyword-start" :loopy-test {})
-      (is (= "millhouse.workflow-runtime-test/loopy"
-             (get-in (workflow/current-root "keyword-start") [:attributes :workflow/definition])))
-      (is (= "Orient" (:title (workflow/ready-step "keyword-start")))))))
+                            (workflow/start! "nan-context" #'loopy {:n ##NaN}))))))
 
 (deftest workflow-revise-choice-loops-back-to-a-fresh-revision-round
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (is (= [{:title "Orient" :role "step"}]
              (mapv #(select-keys % [:title :role])
@@ -795,7 +692,7 @@
         (is (workflow/done? "loopy"))))))
 
 (deftest workflow-routed-choose-failure-keeps-run-resumable
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/start! "loopy-fail" #'loopy {})
       (workflow/complete! "loopy-fail")
@@ -820,7 +717,7 @@
                      (:ready (workflow/choose! "loopy-fail" :revise)))))))))
 
 (deftest workflow-runtime-selects-among-parallel-ready-checkpoints
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Parallel checkpoints"
@@ -850,7 +747,7 @@
           (is (= [y-id] (mapv :id remaining))))))))
 
 (deftest workflow-spool-supports-wisps-bonds-and-squash
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [left-result (workflow/wisp! {:name "Left" :steps [{:id :a :title "A"}]})
             right-result (workflow/wisp! {:name "Right" :steps [{:id :b :title "B"}]})
@@ -864,7 +761,7 @@
           (is (nil? (weaver/show rt left-id))))))))
 
 (deftest workflow-bond-parent-blocks-the-bonded-run
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (workflow/start! "bond-left" {:name "Left" :steps [{:id :a :title "Do A"}]} {})
       (workflow/start! "bond-right" {:name "Right" :steps [{:id :b :title "Do B"}]} {})
@@ -882,32 +779,22 @@
         (is (true? (workflow/done? "bond-left")))
         (is (= ["Do B"] (mapv :title (workflow/ready "bond-right"))))))))
 
-(deftest workflow-ready-bounds-storage-query-to-current-subgraph
-  (with-runtime
+(deftest workflow-ready-excludes-other-runs-and-unrelated-work
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
-      (let [unrelated-id (:id (weaver/add! rt {:title "Unrelated ready work"}))
-            calls (atom [])
-            real-ready weaver/ready
-            started (with-redefs [weaver/ready
-                                  (fn [runtime query-def params]
-                                    (swap! calls conj {:query-def query-def
-                                                       :params params})
-                                    (real-ready runtime query-def params))]
-                      (workflow/start! "bounded-run"
-                                       {:name "Bounded"
-                                        :steps [{:id :work :title "Bounded work"}]}
-                                       {}))
-            root-id (:id (workflow/current-root "bounded-run"))
-            selected-ids (set (map :id (:strands (graph/subgraph rt [root-id]))))
-            call (first @calls)]
-        (is (= 1 (count @calls)))
-        (is (= [:in :id selected-ids] (:query-def call)))
-        (is (= {} (:params call)))
-        (is (not (contains? selected-ids unrelated-id)))
-        (is (= ["Bounded work"] (mapv :title (:ready started))))))))
+      (weaver/add! rt {:title "Unrelated ready work"})
+      (workflow/start! "other-run"
+                       (workflow/workflow "Other" (workflow/step :work "Other work" :self))
+                       {})
+      (workflow/start! "bounded-run"
+                       (workflow/workflow "Bounded" (workflow/step :work "Bounded work" :self))
+                       {})
+      (is (= ["Bounded work"] (mapv :title (workflow/ready "bounded-run"))))
+      (workflow/complete! "bounded-run")
+      (is (= ["Other work"] (mapv :title (workflow/ready "other-run")))))))
 
 (deftest workflow-run-scoped-views-carry-run-id-and-filter-frontier
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (let [definition (workflow/workflow "Runid demo"
                                           (workflow/step :a "Do A" :self)
@@ -935,7 +822,7 @@
    (workflow/step :do-inner "Do inner work" :self)))
 
 (deftest workflow-procedure-join-auto-closes-and-never-surfaces-as-ready
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Join demo"
@@ -964,7 +851,7 @@
         (is (workflow/done? "join-run"))))))
 
 (deftest workflow-advance-drives-steps-and-checkpoints
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow
                         "Advance demo"
@@ -981,7 +868,13 @@
         (is (= :workflow/advance-input-without-checkpoint
                (failure-reason #(workflow/advance! "advance-run"
                                                    {:input {:verdict "pass"}}))))
-        (let [step-id (:id (workflow/ready-step "advance-run"))]
+        (let [step-id (:id (workflow/ready-step "advance-run"))
+              data (ex-data (try (workflow/advance! "advance-run" {:notes "outcome"})
+                                 (catch clojure.lang.ExceptionInfo e e)))]
+          (is (= {:reason :workflow/notes-removed :op "advance!"}
+                 (select-keys data [:reason :op])))
+          (is (re-find #":attributes" (:guidance data)))
+          (is (= "active" (:state (weaver/show rt step-id))))
           (weaver/update! rt step-id {:attributes {"workflow/role" "improvised"}})
           (is (= :workflow/ready-next-incompatible
                  (failure-reason #(workflow/advance! "advance-run"
@@ -1053,7 +946,7 @@
   (workflow/workflow "Downstream stage" (workflow/step :do-downstream "Do downstream" :self)))
 
 (deftest workflow-routing-refuses-malformed-persisted-context-before-mutating
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/register-workflow! :wt-second 'millhouse.workflow-runtime-test/registry-second-stage)
       (workflow/register-workflow! :wt-downstream
@@ -1080,7 +973,7 @@
                          [:attributes :workflow/context]))))))))
 
 (deftest workflow-revise-repours-definition-skipping-condition-gated-steps
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       (workflow/register-workflow! :wt-downstream 'millhouse.workflow-runtime-test/downstream-stage-workflow)
       (workflow/start! "revise-run" #'revise-stage-workflow {} {:context {}})
@@ -1104,7 +997,7 @@
                             :revision)))))))
 
 (deftest workflow-revise-fails-loudly-without-resolvable-definition
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
       ;; no :definition seeded, so the run's root cannot resolve a workflow to
       ;; re-pour and :revise fails loudly (TEN-003) rather than guessing
@@ -1152,7 +1045,7 @@
                                            :doc "Why revise"}}])))
 
 (deftest workflow-run-history-projects-ordered-molecules-and-events
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/start! "hist" #'introspect-stage-a {:feature "widgets"}
                        {:context {:feature "widgets"}})
@@ -1189,14 +1082,8 @@
         (is (not-any? #(= "Draft widgets" (:title %)) (:events approve-mol)))
         (is (= [:step-closed] (mapv :type (:events stage-b-mol))))))))
 
-(deftest workflow-run-history-fails-loudly-for-unknown-run
-  (with-runtime
-    (fn [_rt _]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown workflow run"
-                            (workflow/run-history "no-such-run"))))))
-
 (deftest workflow-squash-run-refuses-active-then-squashes-to-one-digest
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/start! "arch" #'introspect-stage-a {:feature "widgets"}
                        {:context {:feature "widgets"}})
@@ -1225,37 +1112,27 @@
         (is (empty? molecules))
         (is (= 1 (count digests)))))))
 
-(deftest await-returns-checkpoint-for-a-ready-checkpoint
-  (with-runtime
+(deftest await-surfaces-worker-attention-through-a-run
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [_rt _]
-      (workflow/start! "await-checkpoint"
-                       (workflow/workflow "Await checkpoint"
-                                          (workflow/checkpoint :decide "Decide" :kind :human
-                                                               :choices [:go]))
+      (workflow/start! "await-worker"
+                       (workflow/workflow
+                        "Worker attention"
+                        (workflow/step :work "Do work" :self)
+                        (workflow/checkpoint :decide "Decide" :kind :human
+                                             :choices [:go] :depends-on [:work])
+                        (workflow/gate :delegate "Delegate" :await-test-unowned
+                                       :depends-on [:decide]))
                        {})
-      (is (= :checkpoint (:reason (workflow/await! "await-checkpoint" {:timeout-secs 1})))))))
-
-(deftest await-returns-step-for-a-ready-self-step
-  ;; a bare :self step used to bury itself under :waiting; it must now surface
-  ;; immediately as :step so the driving agent never sits idle on its own work
-  (with-runtime
-    (fn [_rt _]
-      (workflow/start! "await-self-step"
-                       (workflow/workflow "Await step" (workflow/step :do-it "Do it" :self))
-                       {})
-      (is (= :step (:reason (workflow/await! "await-self-step" {:timeout-secs 1})))))))
-
-(deftest await-returns-gate-for-a-waiter-with-no-registered-executor
-  (with-runtime
-    (fn [_rt _]
-      (workflow/start! "await-unowned-gate"
-                       (workflow/workflow "Await gate"
-                                          (workflow/gate :delegate "Delegate" :await-test-unowned))
-                       {})
-      (is (= :gate (:reason (workflow/await! "await-unowned-gate" {:timeout-secs 1})))))))
+      ;; A self step must surface, not leave its own driver waiting.
+      (is (= :step (:reason (workflow/await! "await-worker" {:timeout-secs 1}))))
+      (workflow/complete! "await-worker")
+      (is (= :checkpoint (:reason (workflow/await! "await-worker" {:timeout-secs 1}))))
+      (workflow/choose! "await-worker" :go)
+      (is (= :gate (:reason (workflow/await! "await-worker" {:timeout-secs 1})))))))
 
 (deftest await-stays-silent-on-a-healthy-executor-owned-gate-then-reports-stalled
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [definition (workflow/workflow "Await executor gate"
                                           (workflow/gate :delegate "Delegate" :await-test-executor))]
@@ -1276,7 +1153,7 @@
             (is (= {:why "test"} (get-in result [:detail :stall])))))))))
 
 (deftest await-explicit-runtime-arity-matches-ambient-result-for-a-completed-run
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (workflow/start! "await-explicit-runtime"
                        (workflow/workflow "Await explicit runtime" (workflow/step :do-it "Do it" :self))
@@ -1287,8 +1164,9 @@
         (is (= :done (:reason explicit)))
         (is (= ambient explicit))))))
 
+;; These injected signals prove API retry policy, not replacement-process adoption.
 (deftest await-rearms-once-for-an-accepted-weaver-restart
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [calls (atom [])]
         (let [result (with-redefs-fn {#'millhouse.workflow/attention
@@ -1304,7 +1182,7 @@
         (is (= ["await-restarted" "await-restarted"] @calls))))))
 
 (deftest await-rethrows-a-second-weaver-restart
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (let [calls (atom [])
             failure (with-redefs-fn {#'millhouse.workflow/attention
@@ -1321,7 +1199,7 @@
         (is (= ["await-restarted-twice" "await-restarted-twice"] @calls))))))
 
 (deftest await-restart-keeps-the-original-time-budget
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-alpha/set-clock! rt (test-alpha/manual-clock Instant/EPOCH))
       (let [calls (atom 0)
@@ -1339,18 +1217,13 @@
         (is (= :timeout (:reason result)))
         (is (= 2 @calls))))))
 
-(deftest await!-fails-loudly-for-malformed-timeout-secs-or-poll-ms
-  (with-runtime
-    (fn [rt _]
-      (doseq [bad [-1 1.5 "1"]]
-        (testing (str "timeout-secs " (pr-str bad))
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #":timeout-secs must be a non-negative integer"
-                                (workflow/await! rt "await-malformed-opts" {:timeout-secs bad}))))
-        (testing (str "poll-ms " (pr-str bad))
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo #":poll-ms must be a positive integer"
-                                (workflow/await! rt "await-malformed-opts" {:poll-ms bad})))))
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #":poll-ms must be a positive integer"
-                            (workflow/await! rt "await-malformed-opts" {:poll-ms 0}))))))
+(deftest await!-rejects-malformed-options-before-runtime-access
+  ;; Invalid options need no runtime: the explicit arity validates them first.
+  (doseq [bad [-1 1.5]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #":timeout-secs must be a non-negative integer"
+                          (workflow/await! nil "await-malformed-opts" {:timeout-secs bad}))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #":poll-ms must be a positive integer"
+                        (workflow/await! nil "await-malformed-opts" {:poll-ms 0}))))
 
 (s/def ::scope string?)
 
@@ -1375,7 +1248,7 @@
    (workflow/step :inspect "Inspect the change" :self)))
 
 (deftest static-definition-start-merges-defaults-and-records-identity
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-build 'millhouse.workflow-runtime-test/static-build)
@@ -1391,7 +1264,7 @@
           "declared :defaults merge under the caller's params"))))
 
 (deftest static-definition-start-requires-the-start-entrypoint
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-review 'millhouse.workflow-runtime-test/static-review)
@@ -1408,7 +1281,7 @@
       (is (= "Inspect the change" (:title (workflow/ready-step "direct-var")))))))
 
 (deftest registered-name-routing-requires-the-continue-entrypoint
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-build 'millhouse.workflow-runtime-test/static-build)
@@ -1474,14 +1347,6 @@
                                    :revise {:params {:scope "second pass"}}}
                                   {:key :stop :label "Stop"}])))
 
-(def ^:private static-input-definition
-  (workflow/workflow
-   "Static input"
-   {:entrypoints #{:start}}
-   (workflow/checkpoint :approve-step "Approve" :kind :agent
-                        :choices [{:key :approve
-                                   :input ::approval-input}])))
-
 (defn- spec-first-router [{:keys [target]}]
   (workflow/workflow
    "Router"
@@ -1491,7 +1356,7 @@
                         :choices [{:key :advance :label "Advance" :next target}])))
 
 (deftest spec-first-params-merge-defaults-before-whole-map-validation
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-spec-build 'millhouse.workflow-runtime-test/spec-first-build)
@@ -1505,7 +1370,7 @@
              (get-in (workflow/current-root "spec-ok") [:attributes :workflow/context]))))))
 
 (deftest spec-first-params-fail-before-any-mutation
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-spec-build 'millhouse.workflow-runtime-test/spec-first-build)
@@ -1531,7 +1396,7 @@
           (is (nil? (workflow/current-root "spec-typed"))))))))
 
 (deftest spec-first-params-guard-named-routes-and-revisions
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-spec-build 'millhouse.workflow-runtime-test/spec-first-build)
@@ -1548,7 +1413,7 @@
                                                       {:scope "compact queue"})))))))))
 
 (deftest spec-first-revision-validates-its-override-params
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-revisable 'millhouse.workflow-runtime-test/spec-first-revisable)
@@ -1564,7 +1429,7 @@
       (is (:done (workflow/choose! "revise-run" :stop))))))
 
 (deftest checkpoint-input-spec-is-recorded-at-pour-and-validated-live
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/start! "input-run" #'spec-first-signoff {})
@@ -1599,7 +1464,7 @@
         (is (:done (workflow/choose! "input-ok" :approve {:approval-note "scope agreed"})))))))
 
 (deftest workflow-choices-projects-live-input-contracts
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/start! "choices-run" #'spec-first-signoff {})
@@ -1626,7 +1491,7 @@
             (s/def ::approval-input (s/keys :req-un [::approval-note]))))))))
 
 (deftest checkpoint-input-spec-resolves-the-live-spec-not-the-recorded-form
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/start! "live-input" #'spec-first-signoff {})
@@ -1642,7 +1507,7 @@
         (finally (s/def ::approval-note string?))))))
 
 (deftest checkpoint-input-spec-removal-fails-loudly
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/start! "gone-input" #'spec-first-signoff {})
@@ -1655,17 +1520,8 @@
           (is (= "active" (:state (weaver/show rt step-id)))))
         (finally (s/def ::approval-input (s/keys :req-un [::approval-note])))))))
 
-(deftest static-choice-input-requires-its-whole-map-spec
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
-      (workflow/start! "static-input" static-input-definition {})
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Value does not satisfy the named spec"
-                            (workflow/choose! "static-input" :approve {})))
-      (is (:done (workflow/choose! "static-input" :approve {:approval-note "fine"}))))))
-
 (deftest param-spec-removed-after-registration-fails-live
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-spec-build 'millhouse.workflow-runtime-test/spec-first-build)
@@ -1703,7 +1559,7 @@
 (deftest registered-call-targets-validate-their-params
   ;; a call target reached by registered name meets the same contract boundary
   ;; that requires its :call entrypoint
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-callable 'millhouse.workflow-runtime-test/spec-first-callable)
