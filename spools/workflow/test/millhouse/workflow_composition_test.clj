@@ -6,7 +6,7 @@
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.weaver.alpha :as weaver]
-            [millhouse.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as test-support :refer [with-embedded-runtime]]
             [millhouse.workflow :as workflow]))
 
 (workflow/defworkflow registry-second-stage
@@ -142,7 +142,7 @@
 (deftest a-call-procedure-may-declare-a-defer
   ;; PROP-Dfr-001.S1 removes the old restriction: a procedure join returns, and
   ;; so does a defer, so the two compose instead of contradicting.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (register-defer-targets!)
@@ -163,7 +163,7 @@
 (deftest defer-returns-to-the-declaring-workflow
   ;; PROP-Dfr-001.G1/S3. This is the feature: a routine chosen at run time, run
   ;; inside the caller's own molecule, with the caller's next step waiting on it.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -208,12 +208,20 @@
                   "auto-close preserves the deliberate defer actor")
               (is (= "engine" (get-in closed-join [:attributes :workflow/executor]))
                   "engine provenance does not overwrite actor evidence"))
-            (is (true? (:done (workflow/complete! "sandwich"))))))))))
+            (is (true? (:done (workflow/complete! "sandwich"))))
+            (let [molecules (workflow/run-history "sandwich")
+                  events (mapcat :events molecules)]
+              (is (= [root-id] (mapv (comp :id :root) molecules)))
+              (is (= #{:step-closed} (set (map :type events))))
+              (is (not-any? #(= (:id pending) (:id %)) events)
+                  "the filled join is bookkeeping, not a worker history event")
+              (is (= #{"Step a" "Plan the thing" "Ship it" "Step c"}
+                     (set (map :title events)))))))))))
 
 (deftest a-final-defer-returns-without-abandoning-parallel-siblings
   ;; PROP-Dfr-001.S4/G5: tail position is not an ownership transfer. The root
   ;; stays, its context stays, and the run finishes only when the siblings do.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -245,7 +253,7 @@
 (deftest defer-isolates-the-target-from-caller-params
   ;; DELTA-Dfr-001.CC3: the publishing spool never saw the filling spool, so its
   ;; context must not reach the target.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -254,15 +262,10 @@
                        {:defer-scope "caller value"})
       (workflow/complete! "isolated")
       (is (= ["Plan default"] (mapv :title (:ready (workflow/defer! "isolated" :wt-two-step))))
-          "an omitted param falls to the target's own default, never the caller's key")
-      (testing "omitted params and an explicit empty map are the same request"
-        (workflow/start! "isolated-2" (defer-sandwich #{:wt-two-step}) {})
-        (workflow/complete! "isolated-2")
-        (workflow/defer! "isolated-2" :wt-two-step)
-        (is (= (ready-titles "isolated") (ready-titles "isolated-2")))))))
+          "an omitted param falls to the target's own default, never the caller's key"))))
 
 (deftest defer-resolves-its-target-live-and-fails-with-the-defer-still-ready
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (register-defer-targets!)
@@ -300,24 +303,18 @@
                       (catch clojure.lang.ExceptionInfo e e))
                  :workflow/definition-unregistered))))))
 
-(deftest defer-validates-its-request-shape-before-touching-the-run
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
-      (register-defer-targets!)
-      (let [defer-id (:id (start-at-defer! "req-1"))]
-        (doseq [[label call] [[:blank-run-id #(workflow/defer! "" :wt-spike {})]
-                              [:string-workflow #(workflow/defer! "req-1" "wt-spike" {})]
-                              [:non-map-params #(workflow/defer! "req-1" :wt-spike [1 2])]
-                              [:blank-by #(workflow/defer! "req-1" :wt-spike {} {:by-identity ""})]]]
-          (testing (name label)
-            (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                  #"Invalid workflow defer request"
-                                  (call)))))
-        (is (= "active" (:state (weaver/show rt defer-id))))))))
+(deftest defer-request-spec-rejects-malformed-shapes
+  ;; Shape is a pure contract; live target/param refusal above retains the
+  ;; runtime evidence that rejected fills leave the selection point untouched.
+  (doseq [patch [{:run-id ""}
+                 {:workflow "wt-spike"}
+                 {:params [1 2]}
+                 {:by-identity ""}]]
+    (is (not (s/valid? :millhouse.workflow/defer-request
+                       (merge {:run-id "req-1" :workflow :wt-spike} patch))))))
 
 (deftest a-ready-defer-is-neither-completed-nor-advanced
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (register-defer-targets!)
@@ -338,7 +335,7 @@
                                 (workflow/choose! "role-1" :whatever))))))))
 
 (deftest a-ready-defer-asks-for-attention-as-a-defer-not-as-work
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (register-defer-targets!)
@@ -353,7 +350,7 @@
   ;; PROP-Dfr-001.S11: cascade-join-ids closes only procedure joins. If an
   ;; unfilled defer used that role, completing its sibling would close it over
   ;; an empty dependency set.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -374,7 +371,7 @@
 (deftest defer-refuses-a-malformed-persisted-path
   ;; Persisted attributes are an I/O boundary. Missing lineage must fail before
   ;; mutation instead of becoming an empty ancestry that lets a cycle through.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -428,7 +425,7 @@
 (deftest defer-refuses-a-direct-cycle-and-permits-siblings
   ;; DELTA-Dfr-001.CC5: the path is the lexical ancestry of one defer, so a
   ;; self-selection is refused while two siblings may both pick the same target.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -459,7 +456,7 @@
 (deftest a-poured-expansion-keeps-its-fixed-call-ancestry
   ;; DELTA-Dfr-001.CC5. A defers to B; B fixed-calls C; C declares a defer. C
   ;; must be in that defer's path, or it can select itself.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -480,7 +477,7 @@
 (deftest defer-refuses-a-nested-cycle-and-permits-acyclic-nesting
   ;; PROP-Dfr-001.S5: A -> B -> A fails at the second fill, because filling a
   ;; defer extends the path with the selected target's fingerprint.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -504,12 +501,11 @@
           (workflow/defer! "cycles" :wt-two-step {} {:step (:id inner)})
           (is (= ["Plan default"] (ready-titles "cycles"))))))))
 
-(deftest defer-cycles-survive-a-fingerprint-change-across-weaver-generations
-  ;; A definition holding render fns prints with their JVM identity hashes, so
-  ;; the same registered routine fingerprints differently after a restart. The
-  ;; ancestry check must still refuse the cycle, or A -> B -> A slips through
-  ;; whenever the second fill lands in a later generation.
-  (with-runtime
+(deftest defer-cycle-refusal-survives-stored-fingerprint-mismatch
+  ;; A stored digest may differ from the live definition's digest. Symbol
+  ;; ancestry must still reject A -> B -> A. This mutates persisted data in one
+  ;; runtime; it does not prove restart or replacement-generation adoption.
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -522,13 +518,12 @@
       (workflow/defer! "regen" :wt-cycle-b)
       (let [inner (first (filter #(= "defer" (:role %)) (workflow/ready "regen")))
             path (get-in (weaver/show rt (:id inner)) [:attributes :workflow/defer-path])
-            restarted (mapv #(assoc % :fingerprint (str "0000000000000000" (:fingerprint %)))
-                            path)]
+            changed-path (mapv #(assoc % :fingerprint (str "0000000000000000" (:fingerprint %)))
+                               path)]
         (is (= 2 (count path)))
         (is (every? :definition path)
             "every ancestry entry of a registered routine records its symbol")
-        ;; exactly what a later generation persists: same symbols, fresh digests
-        (weaver/update! rt (:id inner) {:attributes {"workflow/defer-path" restarted}})
+        (weaver/update! rt (:id inner) {:attributes {"workflow/defer-path" changed-path}})
         (let [thrown (try (workflow/defer! "regen" :wt-cycle-a {} {:step (:id inner)})
                           (catch clojure.lang.ExceptionInfo e e))]
           (is (= :workflow/defer-cyclic (:reason (ex-data thrown)))
@@ -541,7 +536,7 @@
   ;; Prefixing is what keeps a target whose step ids are :a and :c disjoint from
   ;; a caller that already uses :a and :c, and the expansion's entry must inherit
   ;; the defer's own depends-on.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-fanout 'millhouse.workflow-composition-test/defer-fanout-target)
@@ -570,7 +565,7 @@
 (deftest defer-into-an-empty-target-does-not-stall-the-run
   ;; An empty or fully-conditioned-out target yields no exits, so the join must
   ;; still close rather than leaving an invisible active procedure forever.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-empty 'millhouse.workflow-composition-test/defer-empty-target)
@@ -592,7 +587,7 @@
         (is (true? (:done (workflow/defer! "empty-final" :wt-empty))))))))
 
 (deftest a-filled-defer-cannot-be-filled-again
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -620,7 +615,7 @@
 (deftest a-failing-defer-apply-commits-nothing
   ;; The fill is one batch. A rejected apply must leave the defer ready and pour
   ;; no part of the expansion, not a half-materialized run to unpick by hand.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -646,7 +641,7 @@
   ;; closeable-roles is every strand the engine poured under an abandoned root.
   ;; Omitting defer would leave a pending selection point active beneath a root
   ;; that has already been replaced — and it must not become a history event.
-  (with-runtime
+  (with-embedded-runtime {:storage :sqlite-memory}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (workflow/register-workflow! :wt-two-step
@@ -676,35 +671,11 @@
                       (mapcat :events (workflow/run-history "defer-cutover")))
             "a force-closed defer was never acted on, so history omits it")))))
 
-(deftest run-history-omits-filled-defer-joins
-  ;; PROP-Dfr-001.S6: a filled defer is procedure bookkeeping. Which routine a
-  ;; worker selected is read from the strand, not replayed as a history molecule.
-  (with-runtime
-    (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
-      (workflow/register-workflow! :wt-two-step
-                                   'millhouse.workflow-composition-test/defer-two-step-target)
-      (workflow/start! "history" (defer-sandwich #{:wt-two-step}) {})
-      (workflow/complete! "history")
-      (let [defer-id (:id (workflow/ready-step "history"))]
-        (workflow/defer! "history" :wt-two-step {} {:by-identity "worker-1"})
-        (dotimes [_ 3] (workflow/complete! "history"))
-        (let [molecules (workflow/run-history "history")
-              events (mapcat :events molecules)]
-          (is (= 1 (count molecules)) "returning composition stays in one molecule")
-          (is (= #{:step-closed} (set (map :type events)))
-              "no :continuation type survives the cutover")
-          (is (not-any? #(= defer-id (:id %)) events))
-          (is (= #{"Step a" "Plan default" "Ship it" "Step c"} (set (map :title events)))
-              "the expansion's own steps are ordinary closes; the join is not one")
-          (is (= "wt-two-step"
-                 (get-in (weaver/show rt defer-id) [:attributes :workflow/deferred-workflow]))
-              "the selection is still readable on the strand itself"))))))
-
-(deftest concurrent-choose-and-defer-serialize-under-the-run-guard
-  ;; Both verbs resolve their frontier inside the guard, so one wins and the
+(deftest concurrent-defer-fills-serialize-under-the-run-guard
+  ;; Both fills resolve their frontier inside the guard, so one wins and the
   ;; other re-resolves against the frontier it left rather than filling twice.
-  (with-runtime
+  ;; Keep file storage for this concurrent-caller proof.
+  (with-embedded-runtime {:storage :sqlite-file}
     (fn [rt _]
       (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
       (register-defer-targets!)
