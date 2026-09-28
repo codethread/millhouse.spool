@@ -152,7 +152,13 @@
             (is (= count-before (count (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {}))))
             (is (empty? (weaver/list rt [:= [:attr "execution/action-key"] "retry"] {})))
             (is (= :accepted (:status (execution/retry! rt retry))))
-            (is (= :succeeded (get-in (await-done rt "claim" id) [:result :outcome])))))
+            (is (= :succeeded (get-in (await-done rt "claim" id) [:result :outcome])))
+            (testing "public burns retain the original idempotent retry action"
+              (let [action-id (:id (first (weaver/list rt [:= [:attr "execution/action-key"] "retry"] {})))]
+                (is (thrown? clojure.lang.ExceptionInfo (graph/burn-by-ids! rt [action-id])))
+                (is (thrown? clojure.lang.ExceptionInfo
+                             (batch/apply! rt {:refs {:action action-id} :burn [:action]})))
+                (is (= :replayed (:status (execution/retry! rt retry))))))))
         (testing "failed completion retains the terminal attempt and closes no gate or join"
           (let [definition (workflow/workflow "Completion"
                                               (workflow/step :prepare "Prepare" :self)

@@ -69,10 +69,10 @@
              (:strands (graph/subgraph rt [(:id row)])))))
 
 (defn before-burn
-  "Retain managed gates, attempts and their roots on the public graph burn path."
+  "Retain execution evidence and its roots on the public graph burn path."
   [ctx]
   (doseq [row (:strand/before ctx)]
-    (when (or (attr-get row :execution/owner)
+    (when (or (some execution-key? (keys (:attributes row)))
               (= "workflow-execution" (attr-get row :kind))
               (managed-descendants? (current/runtime) row false nil))
       (refuse! "Managed execution evidence cannot be burned" (:id row))))
@@ -126,7 +126,7 @@
                    (not= before after))
           (refuse! "Execution attempts belong to the common driver" id))))
     (doseq [{:keys [id before]} (:batch/burned ctx)]
-      (when (or (attr-get before :execution/owner)
+      (when (or (some execution-key? (keys (:attributes before)))
                 (= "workflow-execution" (attr-get before :kind))
                 (managed-descendants? (current/runtime) before false nil))
         (refuse! "Managed execution evidence cannot be burned" id))))

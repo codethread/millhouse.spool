@@ -44,7 +44,7 @@ existing frozen-recipe policy through this operation.
 
 Removing or blanking `gate/error` is **not** retry authority. Direct completion,
 raw closure and executor/actor string spoofing cannot complete a managed gate.
-Public burn paths retain managed evidence and its roots; callers cannot forge
+Public burn paths retain managed evidence, retry actions and their roots; callers cannot forge
 attempt rows, seed execution authority, or create an already-closed managed gate.
 Removing a descriptor does not remove persisted ownership, including on gates
 that were never ready. Unregistered manual/external waiters are unchanged.
