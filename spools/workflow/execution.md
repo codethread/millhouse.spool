@@ -45,7 +45,7 @@ existing frozen-recipe policy through this operation.
 Removing or blanking `gate/error` is **not** retry authority. Direct completion,
 raw closure and executor/actor string spoofing cannot complete a managed gate.
 Public burn paths retain managed evidence and its roots; callers cannot forge
-attempt rows or seed execution authority on new strands.
+attempt rows, seed execution authority, or create an already-closed managed gate.
 Removing a descriptor does not remove persisted ownership, including on gates
 that were never ready. Unregistered manual/external waiters are unchanged.
 
@@ -84,8 +84,12 @@ The Clojure API supplies the Code path for explicit retirement:
 (workflow/choose! run-id :move {} {:step checkpoint-id :retirement receipt})
 ```
 
-Freeze covers live and not-yet-ready managed work. `resume-run!` consumes an exact
-positive retirement receipt and removes only that freeze; it retries nothing.
+Freeze covers live and not-yet-ready managed work belonging to that nearest root.
+Independent nested roots require their own retirement and cutover: even a retired
+child cannot have its active managed gates closed by an ancestor's receipt. The
+final transaction rechecks nearest-root membership; planned row images do not
+stand in for parent-edge evidence. `resume-run!` consumes an exact positive
+retirement receipt and removes only that freeze; it retries nothing.
 `abandon-run!` can instead close the exact retired root and pour a supplied
 replacement atomically. Its optional domain patches are data-only exact
 before-image/update pairs on existing non-Workflow rows, never callbacks, creates,
@@ -101,8 +105,9 @@ slice does not freeze legacy Shell/Agent/queue execution or authorize their cuto
 - `workflow-execution-test`: one disposable file-backed runtime proves claim,
   completion and abandonment before-image refusal/no partial write, postcommit
   root-finalization recovery without callback replay, cascading
-  joins, nearest nested root, unchanged refresh/removal/readoption, ordinary manual gates,
-  protected unstarted work, forged creation/burn refusal, routed retirement and
+  joins, nearest-root authority (including a separate edge-only writer), unchanged
+  refresh/removal/readoption, ordinary manual gates, protected unstarted work,
+  forged creation/burn refusal, routed retirement and
   bounded domain-patch cutover with replacement definition/family identity.
 - `executors.code-test`: public JSON/nil success, thrown/interrupted/non-JSON and
   malformed-input failure, corrected explicit retry/replay/conflict; real

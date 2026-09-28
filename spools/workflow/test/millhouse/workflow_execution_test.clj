@@ -12,7 +12,7 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver])
-  (:import [java.util.concurrent CountDownLatch TimeUnit]))
+  (:import [java.util.concurrent Callable CountDownLatch FutureTask TimeUnit]))
 
 (def ^:private trap (atom nil))
 (def ^:private entered (atom nil))
@@ -43,7 +43,8 @@
           match? (case mode
                    :claim attempt?
                    :completion (and close? (= "done" (get-in patch [:attributes "execution/phase"])))
-                   :abandon (and close? (= id (name (:ref patch))))
+                   :abandon (and close? (= id (some-> patch :ref name)))
+                   :topology (and close? (= id (some-> patch :ref name)))
                    :hold-finalization (and close? (or (= id (:strand/id ctx))
                                                       (= id (some-> patch :ref name))))
                    :hold-completion close?
@@ -52,7 +53,22 @@
         (if (contains? #{:hold-completion :hold-finalization} mode)
           (throw (ex-info "Hold redelivery after before-image refusal" {}))
           (when (compare-and-set! trap expected (when (= :completion mode) {:mode :hold-completion :id id}))
-            (weaver/update! (current/runtime) id {:attributes {"test/drift" (name mode)}}))))))
+            ;; A separate actor must not inherit the outer transaction's dynamic
+            ;; authority. This writer commits before the planned batch starts.
+            (let [rt (current/runtime)
+                  write (FutureTask.
+                         ^Callable
+                         (fn []
+                           (current/with-runtime rt
+                             (if-let [payload (:edge-payload expected)]
+                               (batch/apply! rt payload)
+                               (weaver/update! rt id {:attributes {"test/drift" (name mode)}})))))
+                  actor (Thread. write "execution-test-writer")]
+              (.start actor)
+              (try (.get write (long (support/await-budget-ms)) TimeUnit/MILLISECONDS)
+                   (finally
+                     (.interrupt actor)
+                     (.join actor (long (support/await-budget-ms)))))))))))
   {:hook/value (:hook/value ctx)})
 
 (def replacement
@@ -101,6 +117,9 @@
         (is (thrown? clojure.lang.ExceptionInfo
                      (weaver/add! rt {:title "Forged attempt" :attributes {"kind" "workflow-execution"}})))
         (is (thrown? clojure.lang.ExceptionInfo
+                     (weaver/add! rt {:title "Already completed" :state "closed"
+                                      :attributes {"workflow/gate" "code"}})))
+        (is (thrown? clojure.lang.ExceptionInfo
                      (workflow/start! "forged" (workflow/workflow "Forged"
                                                                   (workflow/gate :fake "Fake" :code
                                                                                  :attributes {"execution/current" "forged-token"})) {})))
@@ -128,6 +147,7 @@
               (is (thrown? clojure.lang.ExceptionInfo (graph/burn-by-ids! rt [(:id row)]))))
             (reset! trap {:mode :claim :id id})
             (is (thrown? clojure.lang.ExceptionInfo (execution/retry! rt retry)))
+            (is (= "claim" (attr-get (weaver/show rt id) :test/drift)))
             (is (= (:attempt-id failed) (:attempt-id (inspect rt "claim" id))))
             (is (= count-before (count (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {}))))
             (is (empty? (weaver/list rt [:= [:attr "execution/action-key"] "retry"] {})))
@@ -146,7 +166,12 @@
                   before @calls]
               (reset! trap {:mode :completion :id id})
               (workflow/complete! "completion")
-              (support/poll-until #(when (= :hold-completion (:mode @trap)) true))
+              (support/poll-until #(when (and (= :hold-completion (:mode @trap))
+                                              (= "completion" (attr-get (weaver/show rt id) :test/drift))) true))
+              ;; Join the first refused delivery before inspecting it. The hold
+              ;; also refuses another delivery without hiding the original one.
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (execution/reconcile! rt {:run-id "completion" :step id})))
               (is (= "active" (:state (weaver/show rt id))))
               (is (= :committing (:phase (inspect rt "completion" id))))
               (is (nil? (:result (inspect rt "completion" id))))
@@ -190,6 +215,7 @@
                   (reset! trap {:mode :abandon :id (:id root)})
                   (is (thrown? clojure.lang.ExceptionInfo
                                (workflow/choose! "route" :move {} {:step checkpoint :retirement receipt})))
+                  (is (= "abandon" (attr-get (weaver/show rt (:id root)) :test/drift)))
                   (is (= (:id root) (:id (workflow/current-root "route"))))
                   (is (= "active" (:state (weaver/show rt checkpoint))))
                   (is (= ["Replacement step"]
@@ -202,6 +228,43 @@
                                                       (gate :check "millhouse.workflow-execution-test/callback" :depends-on [:wait])) {})
           (weaver/update! rt (:id (workflow/current-root "outer"))
                           {:edges [{:type "parent-of" :to (:id (workflow/current-root "inner"))}]})
+          (let [outer (:id (workflow/current-root "outer"))
+                inner (:id (workflow/current-root "inner"))
+                freeze (execution/quiesce-run! rt "outer" "Retire only this root")
+                receipt (execution/retire! rt freeze)
+                before (graph/subgraph rt [outer])]
+            (is (= {} (:attempts freeze)))
+            (is (= :settled (:status receipt)))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (execution/abandon-run! rt {:run-id "outer" :root-id outer
+                                                     :reason "Retire only this root" :by-identity "test-worker"
+                                                     :retirement receipt :workflow #'abort-replacement :params {}})))
+            (is (= before (graph/subgraph rt [outer])))
+            (is (= outer (:id (workflow/current-root "outer"))))
+            (execution/resume-run! rt "outer" receipt)
+            (testing "an edge-only writer cannot change ownership after planning"
+              (workflow/start! "edge-fence" (workflow/workflow "Edge fence"
+                                                               (workflow/step :wait "Wait" :self)
+                                                               (gate :check "millhouse.workflow-execution-test/callback" :depends-on [:wait])) {})
+              (let [root-id (:id (workflow/current-root "edge-fence"))
+                    gate-id (:id (first (filter #(= "code" (attr-get % :workflow/gate))
+                                                (:strands (graph/subgraph rt [root-id])))))
+                    freeze (execution/quiesce-run! rt "edge-fence" "Fence topology")
+                    receipt (execution/retire! rt freeze)
+                    rows (mapv #(weaver/show rt %) [root-id gate-id inner])
+                    edge {:refs {:parent inner :gate gate-id} :strands []
+                          :edges [{:op :upsert :from :parent :to :gate :type "parent-of"}]}
+                    request {:run-id "edge-fence" :root-id root-id :reason "Fence topology"
+                             :by-identity "test-worker" :retirement receipt
+                             :workflow #'abort-replacement :params {}}]
+                (reset! trap {:mode :topology :id root-id :edge-payload edge})
+                (is (thrown? clojure.lang.ExceptionInfo (execution/abandon-run! rt request)))
+                (is (= rows (mapv #(weaver/show rt %) [root-id gate-id inner])))
+                (is (= #{root-id inner}
+                       (set (map :from_strand_id (graph/incoming-edges rt [gate-id] "parent-of")))))
+                (is (= root-id (:id (workflow/current-root "edge-fence"))))
+                (batch/apply! rt (assoc-in edge [:edges 0 :op] :remove))
+                (is (= ["Abort"] (mapv :title (:ready (execution/abandon-run! rt request))))))))
           (let [ready (workflow/complete! "inner")
                 id (:id (first (:ready ready)))]
             (is (= "inner" (get-in (await-done rt "inner" id) [:result :run-id])))

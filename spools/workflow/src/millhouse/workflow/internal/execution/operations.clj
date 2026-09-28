@@ -7,6 +7,7 @@
             [millhouse.workflow.internal.execution.driver :as driver]
             [millhouse.workflow.internal.execution.state :as state]
             [millhouse.workflow.internal.execution.store :as store]
+            [millhouse.workflow.internal.execution.roots :as roots]
             [millhouse.workflow.internal.guard :as guard]
             [millhouse.workflow.internal.query :as query]))
 
@@ -15,7 +16,7 @@
 
 (defn select-gate [rt {:keys [run-id step]}]
   (let [gate (weaver/show rt step)
-        root (store/nearest-root rt gate)]
+        root (roots/nearest-root rt gate)]
     (when-not (= run-id (attr-get root :workflow/run-id))
       (refuse! "Gate does not belong to the requested nearest workflow root"))
     gate))
@@ -43,7 +44,7 @@
                   {:status :replayed :action previous}
                   (refuse! "Retry request-id payload conflict"))
                 (let [gate (select-gate rt request)
-                      root (store/nearest-root rt gate)
+                      root (roots/nearest-root rt gate)
                       prior (store/current-attempt rt gate)
                       view (when prior (store/model prior))
                       descriptor (get (state/selected rt) (attr-get gate :execution/owner))]
@@ -70,7 +71,7 @@
 
 (defn managed-gates [rt root]
   (filterv #(and (attr-get % :execution/owner)
-                 (= (:id root) (:id (store/nearest-root rt %))))
+                 (= (:id root) (:id (roots/nearest-root rt %))))
            (:strands (graph/subgraph rt [(:id root)]))))
 
 (defn freeze [root] (some-> (attr-get root :execution/freeze) data/decode))

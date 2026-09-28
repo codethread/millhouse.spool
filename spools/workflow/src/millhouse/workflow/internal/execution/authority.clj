@@ -5,7 +5,8 @@
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.spool.alpha :refer [attr-get]]
-            [millhouse.workflow.internal.execution.state :as state]))
+            [millhouse.workflow.internal.execution.state :as state]
+            [millhouse.workflow.internal.execution.roots :as roots]))
 
 (def ^:dynamic *transaction* nil)
 
@@ -48,6 +49,8 @@
                        (:creates *transaction*))
         allowed (when descriptor {"execution/owner" (name (:waiter descriptor))
                                   "execution/revision" (:revision descriptor)})]
+    (when (and descriptor (= "closed" (:state row)))
+      (refuse! "A new managed gate cannot assert completion" (:id row)))
     (if expected
       (when-not (and (= (count expected) (count attrs))
                      (every? (fn [[key value]] (= value (attr-get row key))) expected))
@@ -107,12 +110,18 @@
                    (not (contains? (get-in *transaction* [:abandonment :closures]) id)))
           (refuse! "A root with active managed gates requires exact retirement" id))
         (when (and owner (not= (:state before) (:state after)))
-          (when-not (or (and (= "closed" (:state after))
-                             (= id (nth (:completion *transaction*) 3 nil))
-                             (= (attr-get before :execution/current)
-                                (nth (:completion *transaction*) 4 nil)))
-                        (contains? (get-in *transaction* [:abandonment :closures]) id))
-            (refuse! "Managed completion requires execution or exact retirement authority" id)))
+          ;; Resolve topology at final precommit, while the batch writer excludes
+          ;; other writers. Our completion/cutover payloads never reparent old
+          ;; gates: fresh committed parent edges are also this transaction's
+          ;; parent edges. Planned row preimages alone cannot fence edge changes.
+          (let [rt (current/runtime)
+                root (roots/nearest-root rt before)
+                run-id (attr-get root :workflow/run-id)]
+            (when-not (and root (= "closed" (:state after))
+                           (or (completion-authorized? rt run-id (:id root) id
+                                                       (attr-get before :execution/current))
+                               (abandonment-authorized? rt run-id (:id root) id)))
+              (refuse! "Managed completion requires authority for its exact nearest root" id))))
         (when (and (= "workflow-execution" (attr-get before :kind)) (nil? patch)
                    (not= before after))
           (refuse! "Execution attempts belong to the common driver" id))))

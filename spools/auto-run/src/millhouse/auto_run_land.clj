@@ -30,9 +30,13 @@
      worker. The worker must not take back an accepted finisher's custody.
 
      Managed Code gates use workflow execution RUN --step GATE for inspection.
-     After repairing the cause and confirming a settled failed attempt, use
-     `workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
-     with a fresh request key. Never clear their gate/error or use
+     After repairing the cause and confirming a settled failed attempt, invoke:
+
+     ```nu
+     strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
+     ```
+
+     Use a fresh request key. Never clear their gate/error or use
      shell custody fields as Code settlement evidence.
 
      Escalate to the recovery coordinator only for uncertain subprocess/merge

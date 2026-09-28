@@ -8,6 +8,7 @@
             [millhouse.workflow.internal.execution.data :as data]
             [millhouse.workflow.internal.execution.state :as state]
             [millhouse.workflow.internal.execution.store :as store]
+            [millhouse.workflow.internal.execution.roots :as roots]
             [millhouse.workflow.internal.guard :as guard]
             [millhouse.workflow.internal.query :as query]
             [millhouse.workflow.internal.routing :as routing])
@@ -58,7 +59,7 @@
         gate (weaver/show rt (:gate-id attempt))
         current? (= (:attempt-id attempt) (attr-get gate :execution/current))
         active? (and current? (= "active" (:state root)) (= "active" (:state gate))
-                     (= (:id root) (:id (store/nearest-root rt gate))))
+                     (= (:id root) (:id (roots/nearest-root rt gate))))
         deadline (:deadline attempt)
         expired? (and deadline (not (.isBefore (Instant/parse (store/now rt)) (Instant/parse deadline))))
         effect (fn [operation candidate image]
@@ -131,7 +132,7 @@
     nil))
 
 (defn- adopt-and-claim! [rt descriptor gate claim?]
-  (when-let [root (store/nearest-root rt gate)]
+  (when-let [root (roots/nearest-root rt gate)]
     (when-let [run-id (attr-get root :workflow/run-id)]
       (when (or (not claim?) (= "active" (:state root)))
         (state/with-run!
@@ -140,7 +141,7 @@
                    rt run-id
                    (fn []
                      (let [gate (weaver/show rt (:id gate))
-                           root (store/nearest-root rt gate)]
+                           root (roots/nearest-root rt gate)]
                        (when (and (or (not claim?) (= "active" (:state root))) (= "active" (:state gate))
                                   (= descriptor (get (state/selected rt) (name (:waiter descriptor))))
                                   (or (not claim?)

@@ -108,7 +108,11 @@
                     This card update is automatic. On failure, inspect the exact
                     attempt with workflow execution RUN --step GATE and repair
                     the cause. After positive settlement, invoke:
-                    `workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
+
+                    ```nu
+                    strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
+                    ```
+
                     Use a fresh request key. Never clear gate/error or manually
                     complete a managed Code gate.
                   " {})))

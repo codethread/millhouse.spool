@@ -350,7 +350,7 @@ Resolve the canonical checkout while the feature worktree still exists.
 Function.
 
 Build a short, retryable card bookkeeping gate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L99-L114">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L99-L118">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-cleanup-argv">`land-cleanup-argv`</a>
 ``` clojure
@@ -451,4 +451,4 @@ Return shell argv that runs script with name as `$0` and args as positionals.
 Function.
 
 Build a shell gate whose request is frozen with the worktree context.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L116-L124">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L120-L128">Source</a></sub></p>

@@ -104,7 +104,8 @@
 (defn quiesce-run!
   "Freeze the current root and request stop; return an exact quiescence receipt.
 
-  The freeze covers not-yet-ready managed gates. It is not proof of settlement."
+  The freeze covers not-yet-ready managed gates belonging to this nearest root.
+  Independent nested roots do not share its authority. This is not settlement."
   [rt run-id reason]
   (current/with-runtime rt (operations/quiesce! rt run-id reason)))
 
@@ -120,6 +121,9 @@
 
 (defn abandon-run!
   "Atomically abandon a frozen, positively retired root and pour its replacement.
+
+  Independent nested roots require their own cutover: this receipt cannot close
+  their active managed gates, even if those roots are separately retired.
 
   Request keys: :run-id, :root-id, :reason, :by-identity, :retirement,
   :workflow, :params, and optional :domain-patches. Domain patches are exact

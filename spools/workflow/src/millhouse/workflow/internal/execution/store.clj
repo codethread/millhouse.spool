@@ -2,7 +2,6 @@
   "Private conditional storage of immutable attempt inputs and lifecycle snapshots."
   (:require [clojure.spec.alpha :as s]
             [millstrand.api.batch.alpha :as batch]
-            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
@@ -17,17 +16,6 @@
 
 (defn now [rt] (str (runtime/now rt)))
 (defn uuid [] (str (UUID/randomUUID)))
-
-(defn nearest-root [rt gate]
-  (loop [frontier [(:id gate)] seen #{}]
-    (let [ids (->> (graph/incoming-edges rt frontier "parent-of")
-                   (map :from_strand_id) (remove seen) distinct vec)
-          roots (filterv #(= "root" (attr-get % :workflow/role)) (graph/strands-by-ids rt ids))]
-      (cond
-        (= 1 (count roots)) (first roots)
-        (> (count roots) 1) (throw (ex-info "Ambiguous nearest workflow root" {:gate (:id gate)}))
-        (empty? ids) nil
-        :else (recur ids (into seen frontier))))))
 
 (defn attempt-row [rt token]
   (when token

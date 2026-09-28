@@ -1180,11 +1180,14 @@ Function.
 
 Atomically abandon a frozen, positively retired root and pour its replacement.
 
+  Independent nested roots require their own cutover: this receipt cannot close
+  their active managed gates, even if those roots are separately retired.
+
   Request keys: :run-id, :root-id, :reason, :by-identity, :retirement,
   :workflow, :params, and optional :domain-patches. Domain patches are exact
   {:before row :update patch} pairs on existing non-Workflow rows only. No
   callbacks, new domain rows, edges or success authority are accepted.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L121-L151">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L122-L155">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/abandonment-authorized?">`abandonment-authorized?`</a>
 ``` clojure
@@ -1193,7 +1196,7 @@ Atomically abandon a frozen, positively retired root and pour its replacement.
 Function.
 
 Recognize exact non-success closure authority, never success authority.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L158-L161">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L162-L165">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/close!">`close!`</a>
 ``` clojure
@@ -1214,7 +1217,7 @@ Stop admission and persist exact stop intent before removing a descriptor.
 Function.
 
 Recognize the kernel's exact success scope; provenance strings grant no authority.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L153-L156">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L157-L160">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/inspect">`inspect`</a>
 ``` clojure
@@ -1249,8 +1252,9 @@ Function.
 
 Freeze the current root and request stop; return an exact quiescence receipt.
 
-  The freeze covers not-yet-ready managed gates. It is not proof of settlement.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L104-L109">Source</a></sub></p>
+  The freeze covers not-yet-ready managed gates belonging to this nearest root.
+  Independent nested roots do not share its authority. This is not settlement.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L104-L110">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/reconcile!">`reconcile!`</a>
 ``` clojure
@@ -1268,7 +1272,7 @@ Observe/deliver the exact current attempt; never authorize another attempt.
 Function.
 
 Remove only the exact positively retired freeze; never retry failed gates.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L116-L119">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L117-L120">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/retire!">`retire!`</a>
 ``` clojure
@@ -1277,7 +1281,7 @@ Remove only the exact positively retired freeze; never retry failed gates.
 Function.
 
 Reconcile the exact frozen attempt set; report positive settlement or unknown.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L111-L114">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L112-L115">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/retry!">`retry!`</a>
 ``` clojure
