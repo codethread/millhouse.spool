@@ -382,27 +382,30 @@
           (is (= "attempt-interrupted" (attr after :shell/attempt-id)))
           (is (= "attempt-interrupted" (attr after :shell/running))))))))
 
-(deftest closed-attempt-with-acknowledged-fact-recovery-clears-only-its-claim
-  (with-embedded-runtime {:storage :sqlite-memory}
-    (fn [rt _]
-      (let [gate (weaver/add! rt {:title "Closed custody"
-                                  :state "closed"
-                                  :attributes {"workflow/gate" "shell"
-                                               "shell/attempt-id" "attempt-closed"
-                                               "shell/custody-handle" "handle-closed"}})
-            result (shell/apply-shell-attempts!
-                    {:runtime rt
-                     :desired [{:gate-id (:id gate)
-                                :state "closed"
-                                :attempt-id "attempt-closed"
-                                :custody-handle "handle-closed"}]
-                     :actual []})
-            after (weaver/show rt (:id gate))]
-        (is (= :closed-without-custody-fact
-               (:recovered (first (:attempts result)))))
-        (is (nil? (attr after :shell/attempt-id)))
-        (is (nil? (attr after :shell/custody-handle)))
-        (is (nil? (attr after :gate/error)))))))
+(deftest closed-attempt-recovery-uses-explicit-lifecycle-runtime
+  ;; Pooled startup has not published an ambient runtime. Do not use the
+  ;; convenience fixture that binds one and masks this lifecycle boundary.
+  (test-alpha/run-with-bare-runtime
+   {:storage :sqlite-memory}
+   (fn [{rt :runtime}]
+     (let [gate (weaver/add! rt {:title "Closed custody"
+                                 :state "closed"
+                                 :attributes {"workflow/gate" "shell"
+                                              "shell/attempt-id" "attempt-closed"
+                                              "shell/custody-handle" "handle-closed"}})
+           result (shell/apply-shell-attempts!
+                   {:runtime rt
+                    :desired [{:gate-id (:id gate)
+                               :state "closed"
+                               :attempt-id "attempt-closed"
+                               :custody-handle "handle-closed"}]
+                    :actual []})
+           after (weaver/show rt (:id gate))]
+       (is (= :closed-without-custody-fact
+              (:recovered (first (:attempts result)))))
+       (is (nil? (attr after :shell/attempt-id)))
+       (is (nil? (attr after :shell/custody-handle)))
+       (is (nil? (attr after :gate/error)))))))
 
 (deftest owner-facts-remain-visible-when-no-attempt-is-desired
   (let [fact {:handle "orphan-handle" :owner :millhouse/shell-executor
