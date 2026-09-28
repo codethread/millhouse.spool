@@ -28,7 +28,9 @@
             [millstrand.api.format.alpha :as fmt]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.runtime.glossary.alpha :as glossary]
-            [millhouse.workflow :as workflow]))
+            [millhouse.workflow :as workflow]
+            [millhouse.workflow.execution :as execution]
+            [millstrand.api.current.alpha :as current]))
 
 (defn- list-request
   "Return the engine list request for parsed `args`.
@@ -256,6 +258,20 @@
                          "|A stored input spec that no longer resolves is
                           |reported with registered false; choose is where that
                           |absence fails loudly.")]}}
+    "execution" {:doc "Inspect the current managed gate attempt, result and settlement."
+                 :hook-class :read :deadline-class :standard
+                 :positionals [run-id-positional]
+                 :flags {:step (assoc step-flag :required? true)}}
+    "retry" {:doc "Authorize one new managed attempt after positive failure settlement."
+             :hook-class :mutating :deadline-class :standard
+             :positionals [run-id-positional]
+             :flags {:step (assoc step-flag :required? true)
+                     :by-identity (assoc by-identity-flag :required? true)
+                     :request-id {:type :string :required? true :doc "Immutable retry request key."}
+                     :expected-attempt {:type :string :required? true :doc "Exact failed attempt UUID."}
+                     :expected-revision {:type :string :doc "Frozen validation revision, when required."}
+                     :reason {:type :string :required? true :doc "Explicit retry reason."}
+                     :dry-run {:type :boolean :doc "Inspect eligibility without writing."}}}
     "retry-validation" {:doc "Reserve one opted-in failed shell validation attempt, never assert success."
                         :hook-class :mutating
                         :deadline-class :standard
@@ -462,6 +478,8 @@
                           ;; are owned by the engine's ::choices-result spec
                           ;; and the millstrand.api.spec.alpha node grammar.
                           :choices :json}}
+    "execution" {:type :map :required {:gate-id :string} :extra :json}
+    "retry" {:type :map :required {:status :string} :extra :json}
     "retry-validation" {:type :map :required {:state :string} :extra :json}
     "complete" run-result-return
     "choose" run-result-return
@@ -579,6 +597,12 @@
       "ready" (workflow/run-ready {:run-id (:run-id args)})
       "choices" (workflow/run-choices (-> {:run-id (:run-id args)}
                                           (carry args :step :step)))
+      "execution" (execution/inspect (current/runtime) (select-keys args [:run-id :step]))
+      "retry" (update (execution/retry!
+                       (current/runtime)
+                       (select-keys args [:run-id :step :expected-attempt :request-id
+                                          :expected-revision :reason :by-identity :dry-run]))
+                      :status name)
       "retry-validation" (workflow/retry-validation!
                           (select-keys args [:run-id :step :request-id :expected-revision
                                              :reason :by-identity :episode-ref :dry-run]))
@@ -600,7 +624,7 @@
       (throw (ex-info "Unsupported workflow subcommand"
                       {:subcommand subcommand
                        :allowed ["list" "show" "executors" "start" "ready" "choices"
-                                 "complete" "choose" "next" "defer" "await" "retry-validation"]})))))
+                                 "complete" "choose" "next" "defer" "await" "execution" "retry" "retry-validation"]})))))
 
 (defn seed-workflow-glossary!
   "Seed the Workflow CLI's process-lifetime failure glossary."

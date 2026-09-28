@@ -13,9 +13,9 @@
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
-(workflow/use-executor! code/code-stalled? shell/shell-stalled?)
+(workflow/use-executor! shell/shell-stalled?)
 
-(millstrand/use-query! code/stalled-code-gates shell/stalled-shell-gates)
+(millstrand/use-query! shell/stalled-shell-gates)
 (millstrand/use-op! cli/workflow)
 
 (lifecycle/use-resource! code/code-engine shell/shell-pool shell/shell-handler)

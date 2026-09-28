@@ -33,6 +33,10 @@
                                                 poll-until!]]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.workflow.internal.compile :as cmp]
+            [millhouse.workflow.internal.completion :as completion]
+            [millhouse.workflow.internal.execution.authority]
+            [millhouse.workflow.internal.execution.abandon :as execution-abandon]
+            [millstrand.api.lifecycle.alpha :as lifecycle]
             [millhouse.workflow.internal.definitions :as defs]
             [millhouse.workflow.internal.discovery :as discovery]
             [millhouse.workflow.internal.guard :as guard]
@@ -622,47 +626,10 @@
        (guard/with-run!
          rt run-id
          (fn []
-           (let [step (or (query/resolve-ready-step rt run-id opts)
-                          (fail! "No ready workflow step" {:run-id run-id}))]
-             (when (= "checkpoint" (query/attr step :workflow/role))
-               (fail! "Cannot complete a checkpoint; use choose!"
-                      {:run-id run-id :step (query/strand->view step)}))
-             (when (= "defer" (query/attr step :workflow/role))
-               (fail! "Cannot complete a defer; use defer!"
-                      {:reason :workflow/step-is-defer
-                       :run-id run-id :step (query/strand->view step)}))
-             (let [gate (query/attr step :workflow/gate)
-                   actor (:by-identity opts)
-                   executor (:executor opts)
-                   executor-run-id (:executor-run-id opts)]
-               (when (and gate (not (or (non-blank-string? actor)
-                                        (non-blank-string? executor))))
-                 (fail! "Gate steps require actor or executor provenance"
-                        {:run-id run-id :step (query/strand->view step) :gate gate
-                         :by-identity actor :executor executor}))
-               (let [attrs (cond-> (or (routing/close-attributes! opts) {})
-                             actor (assoc "identity/by-identity" actor)
-                             executor (assoc "workflow/executor" executor)
-                             executor-run-id
-                             (assoc "workflow/executor-run-id" executor-run-id))
-                     root (query/current-root-with-rt rt run-id)
-                     existing-context (query/attr root :workflow/context)
-                     _ (when (and (contains? opts :context)
-                                  (not (map? existing-context)))
-                         (fail! "Workflow root context is malformed"
-                                {:reason :workflow/context-invalid
-                                 :run-id run-id
-                                 :root (:id root)
-                                 :context existing-context
-                                 :expected "map"}))
-                     root-attrs (when (contains? opts :context)
-                                  {"workflow/context"
-                                   (merge existing-context context)})
-                     join-ids (routing/cascade-join-ids rt (:id root) #{(:id step)})]
-                 (batch/apply! rt (routing/close-batch (:id step) (not-empty attrs) join-ids
-                                                       (:id root) root-attrs))
-                 (routing/close-run-if-done! rt run-id)
-                 (query/run-result rt run-id))))))))))
+           (let [plan (completion/plan rt run-id opts context)]
+             (batch/apply! rt (:batch plan))
+             (routing/close-run-if-done! rt run-id)
+             (query/run-result rt run-id))))))))
 
 (defn choose!
   "Record a checkpoint choice for run-id, optionally pour its continuation,
@@ -673,6 +640,11 @@
   also include `:by-identity`, recorded as \"identity/by-identity\" on the closed
   checkpoint alongside \"workflow/outcome\"/\"workflow/outcome-input\" to
   persist who made the choice (unenforced per TEN-002).
+
+  A root containing managed gates requires an exact positive `:retirement`
+  receipt from execution/quiesce-run! and execution/retire! before a routed
+  choice can abandon it. Refusal writes nothing; no executors are stopped while
+  this operation holds the Workflow guard.
 
   When the chosen choice declares an `:input` contract, `choose!` fails loudly
   before any mutation unless `input` satisfies it: a whole-map spec is resolved
@@ -697,7 +669,7 @@
   ([run-id choice input opts]
    (let [rt (current/runtime)]
      (util/require-map! opts [:opts])
-     (reject-unknown-keys! opts #{:step :by-identity} :choose)
+     (reject-unknown-keys! opts #{:step :by-identity :retirement} :choose)
      (when (and (contains? opts :by-identity)
                 (not (non-blank-string? (:by-identity opts))))
        (fail! "Workflow actor must be a non-blank string"
@@ -709,11 +681,10 @@
                step (routing/resolve-checkpoint! rt run-id opts)
                _ (routing/validate-choice! run-id step choice input)
                route (routing/route-plan rt run-id step choice input)
-               outcome (routing/choice-outcome choice input opts)
-               batch (if route
-                       (routing/routed-batch rt route step outcome)
-                       (routing/terminal-batch rt run-id step outcome))]
-           (batch/apply! rt batch)
+               outcome (routing/choice-outcome choice input opts)]
+           (if route
+             (execution-abandon/apply-route! rt route step outcome (:retirement opts) [])
+             (batch/apply! rt (routing/terminal-batch rt run-id step outcome)))
           ;; also covers a routed continuation that poured no active work, so the
           ;; new root cannot linger active on a logically finished run
            (routing/close-run-if-done! rt run-id)
@@ -1817,11 +1788,16 @@
                    :millhouse.workflow.view.params/spec-forms
                    :millhouse.workflow.view.params/contract
                    :millhouse.workflow.view.params/template]))
+(s/def :millhouse.workflow.view.executor/driver #{"execution"})
+(s/def :millhouse.workflow.view.executor/revision non-blank-string?)
+
 (s/def ::executor-view
   (s/and (s/keys :req-un [:millhouse.workflow.view.executor/waiter
                           :millhouse.workflow.view.executor/stall-predicate]
-                 :opt-un [:millhouse.workflow.view.executor/request])
-         #(every? #{:waiter :stall-predicate :request} (keys %))))
+                 :opt-un [:millhouse.workflow.view.executor/request
+                          :millhouse.workflow.view.executor/driver
+                          :millhouse.workflow.view.executor/revision])
+         #(every? #{:waiter :stall-predicate :request :driver :revision} (keys %))))
 
 ;; --- run lifecycle request and result shapes ------------------------------
 
@@ -2516,3 +2492,10 @@
   [opts]
   (require-valid! ::poll-ms (get opts :poll-ms 250)
                   "await! :poll-ms must be a positive integer"))
+
+(lifecycle/defresource execution-authority
+  "Protect persisted managed gates for the lifetime of this runtime."
+  {:open 'millhouse.workflow.internal.execution.authority/open!
+   :close 'millhouse.workflow.internal.execution.authority/close!})
+
+(lifecycle/use-resource! execution-authority)

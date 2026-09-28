@@ -1,526 +1,176 @@
 (ns millhouse.executors.code-test
-  "Tests for the workflow-gate to in-process Clojure executor."
-  (:require [clojure.spec.alpha :as s]
-            [clojure.string :as str]
-            [clojure.test :refer [deftest is]]
-            [millstrand.api.weaver.alpha :as weaver]
+  "Code-specific mapping/capacity proofs plus the common public tracer bullet."
+  (:require [clojure.test :refer [deftest is]]
             [millhouse.executors.code :as code]
-            [millhouse.test-support :as test-support :refer [with-runtime]]
+            [millhouse.test-support :as support]
             [millhouse.workflow :as workflow]
-            [millstrand.test.alpha :as test-alpha])
-  (:import [java.io File]
+            [millhouse.workflow.execution :as execution]
+            [millhouse.workflow.cli :as cli]
+            [millstrand.api.cli.alpha :as cli-alpha]
+            [millstrand.api.weaver.alpha :as weaver]
+            [millstrand.test.alpha :as t])
+  (:import [java.time Duration Instant]
            [java.util.concurrent CountDownLatch TimeUnit]))
 
-(def ^:private blocker (atom (CountDownLatch. 0)))
-(def ^:private worker-exited (atom (CountDownLatch. 0)))
-(def ^:private interrupt-once? (atom true))
-(def ^:private callback-count (atom 0))
-
-(defn return-value
-  "Return the test value supplied in `params`."
-  [params]
-  (:value params))
-
-(defn count-return-value
-  "Count callback invocations before returning the test value."
-  [params]
-  (swap! callback-count inc)
-  (:value params))
-
-(defn throw-value
-  "Throw a test exception carrying stable ex-data."
-  [_params]
-  (throw (ex-info "code test exploded" {:reason "broken"})))
-
-(defn interrupt-once
-  "Interrupt the first callback and succeed on the retry."
-  [params]
-  (if (compare-and-set! interrupt-once? true false)
-    (throw (InterruptedException. "code callback interrupted"))
-    (:value params)))
-
-(defn non-json-value
-  "Return a value that cannot be persisted as JSON."
-  [_params]
-  (Object.))
-
-(defn late-value
-  "Return the original value used before a test redefines this Var."
-  [_params]
-  "old")
-
-(defn wait-for-release
-  "Occupy a worker until the test-owned latch is released."
-  [params]
-  (.await ^CountDownLatch @blocker)
-  (:value params))
-
-(defn ignore-interrupt-until-release
-  "Ignore interrupts and return only after the test-owned latch is released."
-  [params]
-  (try
-    (loop []
-      (if (try
-            (.await ^CountDownLatch @blocker 100 TimeUnit/MILLISECONDS)
-            (catch InterruptedException _
-              false))
-        (:value params)
-        (recur)))
-    (finally
-      (.countDown ^CountDownLatch @worker-exited))))
-
-(defn poll-short-subprocesses
-  "Poll short-lived subprocesses until interrupted, cleaning up the active child."
-  [params]
-  (let [marker (File. ^String (:marker params))]
-    (try
-      (loop []
-        (when (Thread/interrupted)
-          (throw (InterruptedException. "poll interrupted")))
-        (spit marker "tick\n" :append true)
-        ;; `read` blocks on the pipe this function owns until the executor
-        ;; interrupts waitFor; no wall-clock delay decides when the child exits.
-        (let [process (.start (ProcessBuilder. ^java.util.List ["sh" "-c" "read _"]))]
-          (try
-            (.waitFor process)
-            (catch InterruptedException interrupted
-              (.destroyForcibly process)
-              (.waitFor process)
-              (throw interrupted))))
-        (recur))
-      (finally
-        (.countDown ^CountDownLatch @worker-exited)))))
+(defn return-value "Return the supplied JSON value, including nil." [params] (:value params))
+(defn throw-value "Fail this callback." [_] (throw (ex-info "Callback failed" {})))
+(defn interrupt-value "Report callback interruption without automatic retry." [_]
+  (throw (InterruptedException. "Interrupted callback")))
+(defn non-json-value "Return an invalid backend value." [_] (Object.))
 
 (defn- with-code [f]
-  (with-runtime
+  (support/with-runtime
     (fn [rt _]
-      (test-support/activate-spool! rt :millhouse/workflow 'millhouse.workflow)
-      (test-support/activate-spool! rt :millhouse/code 'millhouse.test-modules.code-executor
-                                    :after [:millhouse/workflow])
+      (support/activate-spool! rt :workflow 'millhouse.workflow)
+      (support/activate-spool! rt :code 'millhouse.test-modules.code-executor :after [:workflow])
       (f rt))))
 
-(defn- await-eventually
-  ([pred] (await-eventually pred (test-support/await-budget-ms)))
-  ([pred timeout-ms]
-   (test-support/poll-until pred
-                            {:timeout-ms timeout-ms
-                             :on-timeout #(throw (ex-info "Timed out" {}))})))
+(defn- definition [function params]
+  (workflow/workflow "Code"
+                     (workflow/gate :check "Check" :code
+                                    :attributes {"code/fn" function "code/params" params})
+                     (workflow/step :after "After" :self :depends-on [:check])))
 
-(defn- attr [strand k]
-  (get-in strand [:attributes k]))
+(defn- from-argv [rt argv]
+  (cli/workflow {:op/args (cli-alpha/parse (:arg-spec (weaver/resolve-op rt 'workflow)) argv {})
+                 :op/argv argv}))
 
-(defn- single-gate [run-id gate-attrs]
-  (workflow/workflow
-   "Code single"
-   (workflow/gate :check "Run code check" :code
-                  :attributes (assoc gate-attrs "test/run-id" run-id))
-   (workflow/step :after "After" :self :depends-on [:check])))
+(defn- view [rt run-id gate-id]
+  (execution/inspect rt {:run-id run-id :step gate-id}))
 
-(defn- gated-gate [run-id gate-attrs]
-  (workflow/workflow
-   "Code gated"
-   (workflow/step :first "First" :self)
-   (workflow/gate :check "Run code check" :code
-                  :depends-on [:first]
-                  :attributes (assoc gate-attrs "test/run-id" run-id))
-   (workflow/step :after "After" :self :depends-on [:check])))
+(defn- await-done [rt run-id gate-id]
+  (support/poll-until #(let [v (view rt run-id gate-id)]
+                         (when (= :done (:phase v)) v))
+                      {:on-timeout #(throw (ex-info "Attempt did not finish" (view rt run-id gate-id)))}))
 
-(defn- idle-workflow []
-  (workflow/workflow
-   "Idle workflow"
-   (workflow/step :wait "Wait" :self)))
-
-(defn- request
-  ([fn-name params]
-   {"code/fn" fn-name "code/params" params})
-  ([fn-name params timeout-secs]
-   {"code/fn" fn-name
-    "code/params" params
-    "code/timeout-secs" timeout-secs}))
-
-(defn- gate-strand [rt run-id]
-  (first (weaver/list rt
-                      [:and
-                       [:= [:attr "workflow/gate"] "code"]
-                       [:= [:attr "test/run-id"] run-id]]
-                      {})))
-
-(defn- ready-code-gate [run-id]
-  (first (filter #(= "code" (:gate %)) (workflow/ready run-id))))
-
-(defn- temp-file []
-  (doto (File/createTempFile "code-executor-test" ".txt")
-    (.deleteOnExit)))
-
-(defn- line-count [file]
-  (count (remove str/blank? (str/split-lines (slurp file)))))
-
-(deftest callback-runs-once-records-result-and-unblocks-next-step
+(deftest public-success-failure-and-exact-repaired-retry
   (with-code
     (fn [rt]
-      (reset! callback-count 0)
-      (workflow/start! "pass"
-                       (single-gate
-                        "pass"
-                        (request "millhouse.executors.code-test/count-return-value"
-                                 {:value {"nested" [1 true "ok"]}}))
-                       {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (:id (gate-strand rt "pass"))
-            closed (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                        (when (= "closed" (:state gate)) gate)))]
-        (is (= 1 @callback-count))
-        (is (= "code" (attr closed :workflow/executor)))
-        (is (nil? (attr closed :identity/by-identity)))
-        (is (= {:nested [1 true "ok"]} (attr closed :code/result)))
-        (is (nil? (attr closed :code/running)))
-        (is (nil? (attr closed :gate/error)))
-        (is (= "After" (:title (first (workflow/ready "pass"))))))
-      ;; A successful nil callback must omit the attribute, not persist null.
-      (workflow/start! "nil"
-                       (single-gate
-                        "nil"
-                        (request "millhouse.executors.code-test/return-value" {}))
-                       {})
-      (let [closed (await-eventually
-                    #(let [gate (gate-strand rt "nil")]
-                       (when (= "closed" (:state gate)) gate)))]
-        (is (not (contains? (:attributes closed) :code/result)))))))
+      (support/activate-spool! rt :workflow-cli 'millhouse.test-modules.workflow-cli :after [:workflow])
+      (is (= :unknown (:status (code/observe! rt {:attempt-id "lost-local-handle"}))))
+      (doseq [[run-id value] [["value" {:nested [1 true "ok"]}] ["nil" nil]]]
+        (let [started (workflow/start! run-id
+                                       (definition "millhouse.executors.code-test/return-value" {:value value}) {})
+              gate-id (:id (first (:ready started)))
+              done (await-done rt run-id gate-id)]
+          (is (= :succeeded (get-in done [:result :outcome])))
+          (is (= value (get-in done [:result :value])))
+          (is (= "After" (:title (first (workflow/ready run-id)))))))
+      (doseq [[run-id function] [["throw" "millhouse.executors.code-test/throw-value"]
+                                 ["invalid" "unqualified"]
+                                 ["interrupt" "millhouse.executors.code-test/interrupt-value"]
+                                 ["json" "millhouse.executors.code-test/non-json-value"]]]
+        (let [started (workflow/start! run-id (definition function {}) {})
+              gate-id (:id (first (:ready started)))
+              failed (await-done rt run-id gate-id)
+              retry {:run-id run-id :step gate-id :expected-attempt (:attempt-id failed)
+                     :request-id "repair" :reason "Fix callback" :by-identity "test-worker"}]
+          (is (= :failed (get-in failed [:result :outcome])))
+          (is (= :settled (get-in failed [:result :settlement])))
+          (when (= "invalid" run-id) (is (false? (:accepted? failed))))
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (weaver/update! rt gate-id {:attributes {"gate/error" nil}})))
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (workflow/complete! run-id {:step gate-id :executor "code"})))
+          (weaver/update! rt gate-id {:attributes {"code/fn" "millhouse.executors.code-test/return-value"
+                                                   "code/params" {:value "repaired"}}})
+          (is (= (:attempt-id failed)
+                 (:attempt-id (from-argv rt ["execution" run-id "--step" gate-id]))))
+          (is (= "eligible" (:status (from-argv rt ["retry" run-id "--step" gate-id
+                                                    "--expected-attempt" (:attempt-id failed)
+                                                    "--request-id" "repair" "--reason" "Fix callback"
+                                                    "--by-identity" "test-worker" "--dry-run"]))))
+          (let [accepted (execution/retry! rt retry)
+                done (await-done rt run-id gate-id)]
+            (is (= :accepted (:status accepted)))
+            (is (not= (:attempt-id failed) (:attempt-id done)))
+            (is (= "repaired" (get-in done [:result :value])))
+            (weaver/update! rt gate-id {:attributes {"code/params" {:value "later"}}})
+            (is (= (:action accepted) (:action (execution/retry! rt retry))))
+            (is (= "replayed" (:status (from-argv rt ["retry" run-id "--step" gate-id
+                                                      "--expected-attempt" (:attempt-id failed)
+                                                      "--request-id" "repair" "--reason" "Fix callback"
+                                                      "--by-identity" "test-worker"]))))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (execution/retry! rt (assoc retry :reason "conflict"))))))))))
 
-(deftest exception-and-non-json-result-stamp-errors-and-stay-ready
+(def ^:private controls (atom {}))
+(def ^:private calls (atom {}))
+
+(defn stubborn
+  "Ignore interruption until the test-owned release establishes real settlement."
+  [{:keys [id]}]
+  (let [{:keys [entered release interrupted]} (get @controls id)]
+    (swap! calls update id (fnil inc 0))
+    (.countDown ^CountDownLatch entered)
+    (loop []
+      (if (try (.await ^CountDownLatch release) true
+               (catch InterruptedException _
+                 (.countDown ^CountDownLatch interrupted)
+                 false))
+        "late"
+        (recur)))))
+
+(defn count-value "Count accepted callback invocations." [{:keys [id]}]
+  (swap! calls update id (fnil inc 0))
+  id)
+
+(defn- latch! [^CountDownLatch latch]
+  (is (.await latch (support/await-budget-ms) TimeUnit/MILLISECONDS)))
+
+(defn- start-code! [run-id function params timeout]
+  (let [definition (definition function params)
+        definition (cond-> definition timeout
+                           (assoc-in [:steps 0 :attributes "code/timeout-secs"] timeout))]
+    (:id (first (:ready (workflow/start! run-id definition {}))))))
+
+(deftest occupied-workers-busy-stop-and-fixed-deadline
   (with-code
     (fn [rt]
-      (doseq [[run-id fn-name expected]
-              [["throw" "millhouse.executors.code-test/throw-value" "code test exploded"]
-               ["json" "millhouse.executors.code-test/non-json-value" "not JSON-safe"]]]
-        (workflow/start! run-id (single-gate run-id (request fn-name {})) {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (let [gate-id (:id (ready-code-gate run-id))
-              errored (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                           (when (attr gate :gate/error) gate)))]
-          (is (= "active" (:state errored)))
-          (is (str/includes? (attr errored :gate/error) expected))
-          (is (nil? (attr errored :code/result)))
-          (is (nil? (attr errored :code/running)))
-          (is (= gate-id (:gate (code/code-stalled? (ready-code-gate run-id)))))
-          (is (some #(= gate-id (:id %))
-                    (weaver/list-query rt 'stalled-code-gates {}))))))))
-
-(deftest request-data-contract
-  (let [valid {:code/fn "millhouse.executors.code-test/return-value"
-               :code/params {:value {"nested" [1 true "ok"]}}
-               :code/timeout-secs 1}]
-    (is (s/valid? ::code/request valid))
-    (doseq [[key value] [[:code/fn "unqualified"]
-                         [:code/params []]
-                         [:code/timeout-secs 0]]]
-      (is (not (s/valid? ::code/request (assoc valid key value)))
-          (str "Reject invalid " key)))))
-
-(deftest malformed-requests-and-unresolvable-symbols-fail-loudly
-  (with-code
-    (fn [rt]
-      (doseq [[index [gate-attrs expected]]
-              (map-indexed
-               vector
-               [[(request "millhouse.executors.code-test/missing" {}) "did not resolve"]
-                [(request "unqualified" {}) "code/fn"]])]
-        (let [run-id (str "invalid-" index)]
-          (workflow/start! run-id (single-gate run-id gate-attrs) {})
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [gate-id (:id (ready-code-gate run-id))
-                errored (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                             (when (attr gate :gate/error) gate)))]
-            (is (str/includes? (attr errored :gate/error) expected)
-                (str "case " index))
-            (is (nil? (attr errored :code/result)))))))))
-
-(deftest function-var-is-resolved-when-the-poured-gate-executes
-  (with-code
-    (fn [rt]
-      (workflow/start! "late"
-                       (gated-gate
-                        "late"
-                        (request "millhouse.executors.code-test/late-value" {}))
-                       {})
-      (let [first-step (first (workflow/ready "late"))]
-        (with-redefs [late-value (fn [_params] "new")]
-          (workflow/complete! "late" {:step (:id first-step)})
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [gate-id (:id (gate-strand rt "late"))
-                closed (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                            (when (= "closed" (:state gate)) gate)))]
-            (is (= "new" (attr closed :code/result)))))))))
-
-(deftest nested-workflow-root-keeps-its-own-run-id
-  (with-runtime
-    (fn [rt _]
-      (reset! callback-count 0)
-      (test-support/activate-spool! rt :millhouse/workflow
-                                    'millhouse.workflow)
-      (workflow/start! "outer" (idle-workflow) {})
-      (workflow/start!
-       "inner"
-       (gated-gate
-        "inner"
-        (request "millhouse.executors.code-test/return-value"
-                 {:value "inner"}))
-       {})
-      (weaver/update! rt (:id (workflow/current-root "outer"))
-                      {:edges [{:type "parent-of"
-                                :to (:id (workflow/current-root "inner"))}]})
-      (test-support/activate-spool! rt :millhouse/code
-                                    'millhouse.test-modules.code-executor
-                                    :after [:millhouse/workflow])
-      (let [gate-id (:id (gate-strand rt "inner"))]
-        (workflow/complete! "inner")
-        (let [closed (await-eventually
-                      #(let [gate (weaver/show rt gate-id)]
-                         (when (= "closed" (:state gate)) gate)))]
-          (is (= "inner" (attr closed :code/result)))
-          (is (= "active" (:state (workflow/current-root "outer")))))))))
-
-(defn- nested-ready-code-gate! [rt]
-  (workflow/start! "outer" (idle-workflow) {})
-  (workflow/start!
-   "inner"
-   (gated-gate
-    "inner"
-    (request "millhouse.executors.code-test/count-return-value"
-             {:value "inner"}))
-   {})
-  (let [outer-root (workflow/current-root "outer")
-        inner-root (workflow/current-root "inner")]
-    (weaver/update! rt (:id outer-root)
-                    {:edges [{:type "parent-of" :to (:id inner-root)}]})
-    (workflow/complete! "inner")
-    (let [gate (ready-code-gate "inner")]
-      (is (= "active" (:state gate)))
-      (is (= (:id gate) (:id (first (workflow/ready "inner")))))
-      {:gate-id (:id gate)
-       :inner-root-id (:id inner-root)
-       :outer-root-id (:id outer-root)})))
-
-(deftest closed-nested-workflow-root-does-not-release-code-gate-to-outer-run
-  (with-runtime
-    (fn [rt _]
-      (reset! callback-count 0)
-      (test-support/activate-spool! rt :millhouse/workflow
-                                    'millhouse.workflow)
-      (let [{:keys [gate-id inner-root-id outer-root-id]}
-            (nested-ready-code-gate! rt)]
-        (weaver/update! rt inner-root-id {:state "closed"})
-        (test-support/activate-spool! rt :millhouse/code
-                                      'millhouse.test-modules.code-executor
-                                      :after [:millhouse/workflow])
-        (code/on-event {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (is (= "closed" (:state (weaver/show rt inner-root-id))))
-        (is (= "active" (:state (weaver/show rt outer-root-id))))
-        (is (= "active" (:state (weaver/show rt gate-id))))
-        (is (nil? (attr (weaver/show rt gate-id) :code/running)))
-        (is (some #(= gate-id (:id %)) (weaver/ready rt)))
-        (is (zero? @callback-count))))))
-
-(deftest superseded-nested-workflow-root-does-not-release-code-gate-to-outer-run
-  (with-runtime
-    (fn [rt _]
-      (reset! callback-count 0)
-      (test-support/activate-spool! rt :millhouse/workflow
-                                    'millhouse.workflow)
-      (let [{:keys [gate-id inner-root-id outer-root-id]}
-            (nested-ready-code-gate! rt)
-            replacement (weaver/add! rt {:title "Inner replacement"
-                                         :attributes {"workflow/role" "root"
-                                                      "workflow/run-id" "inner"}})]
-        (weaver/update! rt outer-root-id
-                        {:edges [{:type "parent-of" :to (:id replacement)}]})
-        (weaver/supersede! rt inner-root-id (:id replacement))
-        (test-support/activate-spool! rt :millhouse/code
-                                      'millhouse.test-modules.code-executor
-                                      :after [:millhouse/workflow])
-        (code/on-event {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (is (= "replaced" (:state (weaver/show rt inner-root-id))))
-        (is (= "active" (:state (workflow/current-root "inner"))))
-        (is (= "active" (:state (weaver/show rt outer-root-id))))
-        (is (= "active" (:state (weaver/show rt gate-id))))
-        (is (nil? (attr (weaver/show rt gate-id) :code/running)))
-        (is (some #(= gate-id (:id %)) (weaver/ready rt)))
-        (is (zero? @callback-count))))))
-
-(deftest blocked-errored-and-orphaned-gates-are-not-dispatched
-  (with-runtime
-    (fn [rt _]
-      (reset! callback-count 0)
-      (test-support/activate-spool! rt :millhouse/workflow
-                                    'millhouse.workflow)
-      (workflow/start!
-       "blocked"
-       (gated-gate
-        "blocked"
-        (request "millhouse.executors.code-test/count-return-value"
-                 {:value "blocked"}))
-       {})
-      (workflow/start!
-       "errored"
-       (gated-gate
-        "errored"
-        (request "millhouse.executors.code-test/count-return-value"
-                 {:value "errored"}))
-       {})
-      (let [blocked-id (:id (gate-strand rt "blocked"))]
-        (workflow/complete! "errored")
-        (let [errored-id (:id (ready-code-gate "errored"))
-              orphan (weaver/add! rt {:title "Orphan code gate"
-                                      :state "active"
-                                      :attributes
-                                      {"workflow/gate" "code"
-                                       "code/fn" "millhouse.executors.code-test/count-return-value"
-                                       "code/params" {:value "orphan"}}})]
-          (weaver/update! rt errored-id
-                          {:attributes {"gate/error" "prior failure"}})
-          (test-support/activate-spool! rt :millhouse/code
-                                        'millhouse.test-modules.code-executor
-                                        :after [:millhouse/workflow])
-          (code/on-event {})
-          (is (zero? @callback-count))
-          (is (= "active" (:state (weaver/show rt (:id orphan)))))
-          (is (nil? (attr (weaver/show rt errored-id) :code/running)))
-          (is (= "active"
-                 (:state (weaver/show rt blocked-id)))))))))
-
-(deftest saturated-pool-does-not-queue-or-claim-extra-gates
-  (with-code
-    (fn [rt]
-      (reset! blocker (CountDownLatch. 1))
-      (reset! worker-exited (CountDownLatch. 1))
-      (let [run-id "saturation"
-            gates (mapv (fn [index]
-                          (workflow/gate
-                           (keyword (str "gate-" index))
-                           (str "Gate " index)
-                           :code
-                           :attributes
-                           (assoc (request
-                                   "millhouse.executors.code-test/wait-for-release"
-                                   {:value index})
-                                  "test/run-id" run-id)))
-                        (range 9))]
-        (try
-          (workflow/start! run-id (apply workflow/workflow "Saturation" gates) {})
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [all-gates #(weaver/list rt
-                                        [:and
-                                         [:= [:attr "workflow/gate"] "code"]
-                                         [:= [:attr "test/run-id"] run-id]]
-                                        {})]
-            (await-eventually
-             #(when (= 8 (count (filter (fn [gate]
-                                          (some? (attr gate :code/running)))
-                                        (all-gates))))
-                true))
-            (is (= 1 (count (filter (fn [gate]
-                                      (nil? (attr gate :code/running)))
-                                    (all-gates)))))
-            (is (zero? (.size (.getQueue ^java.util.concurrent.ThreadPoolExecutor
-                               (:worker-executor
-                                (with-bindings {#'code/*runtime* rt}
-                                  (#'code/resources)))))))
-            (.countDown ^CountDownLatch @blocker)
-            (await-eventually #(when (every? (fn [gate] (= "closed" (:state gate)))
-                                             (all-gates))
-                                 true)))
-          (finally
-            (.countDown ^CountDownLatch @blocker)))))))
-
-(deftest timeout-abandons-stubborn-thread-without-late-write-or-lost-capacity
-  (with-code
-    (fn [rt]
-      (reset! blocker (CountDownLatch. 1))
-      (reset! worker-exited (CountDownLatch. 1))
+      (t/set-clock! rt (t/manual-clock (Instant/parse "2026-09-28T00:00:00Z")))
+      (reset! calls {})
+      (reset! controls (into {} (for [i (range 8)]
+                                  [i {:entered (CountDownLatch. 1) :release (CountDownLatch. 1)
+                                      :interrupted (CountDownLatch. 1)}])))
       (try
-        (workflow/start!
-         "stubborn"
-         (single-gate
-          "stubborn"
-          (request "millhouse.executors.code-test/ignore-interrupt-until-release"
-                   {:value "late"}
-                   1))
-         {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (let [gate-id (:id (ready-code-gate "stubborn"))
-              timed-out (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                             (when (attr gate :gate/error) gate)))]
-          (is (str/includes? (attr timed-out :gate/error) "timed out"))
-          (is (nil? (attr timed-out :code/running)))
-          (workflow/start!
-           "fresh"
-           (single-gate
-            "fresh"
-            (request "millhouse.executors.code-test/return-value"
-                     {:value "fresh"}))
-           {})
-          (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-          (let [fresh-id (:id (gate-strand rt "fresh"))
-                fresh (await-eventually #(let [gate (weaver/show rt fresh-id)]
-                                           (when (= "closed" (:state gate)) gate)))]
-            (is (= "fresh" (attr fresh :code/result))))
-          (.countDown ^CountDownLatch @blocker)
-          (is (.await ^CountDownLatch @worker-exited
-                      (test-support/await-budget-ms)
-                      TimeUnit/MILLISECONDS))
-          (let [after-late-return (weaver/show rt gate-id)]
-            (is (= "active" (:state after-late-return)))
-            (is (str/includes? (attr after-late-return :gate/error) "timed out"))
-            (is (nil? (attr after-late-return :code/result)))))
+        (let [gates (mapv (fn [i]
+                            (start-code! (str "occupied-" i) "millhouse.executors.code-test/stubborn"
+                                         {:id i} (when (zero? i) 1))) (range 8))]
+          (doseq [i (range 8)] (latch! (get-in @controls [i :entered])))
+          (let [stopped (start-code! "busy-stop" "millhouse.executors.code-test/count-value" {:id "stop"} 30)
+                eventual (start-code! "eventual" "millhouse.executors.code-test/count-value" {:id "eventual"} 30)
+                busy (support/poll-until #(let [v (view rt "eventual" eventual)]
+                                            (when (and (:attempt-id v) (false? (:accepted? v))
+                                                       (false? (:dispatch-uncertain? v))) v)))
+                freeze (execution/quiesce-run! rt "busy-stop" "Stop before capacity")]
+            (is (= :settled (:status (support/poll-until
+                                      #(let [receipt (execution/retire! rt freeze)]
+                                         (when (= :settled (:status receipt)) receipt))))))
+            (is (= :cancelled (get-in (await-done rt "busy-stop" stopped) [:result :outcome])))
+            (is (nil? (get @calls "stop")))
+            (t/advance! rt (Duration/ofSeconds 2))
+            (latch! (get-in @controls [0 :interrupted]))
+            (let [timed-out (view rt "occupied-0" (first gates))]
+              (is (= :timed-out (get-in timed-out [:stop-reason :outcome])))
+              (is (= :stopping (:phase timed-out)))
+              (is (nil? (:result timed-out)))
+              (is (false? (:accepted? (view rt "eventual" eventual))))
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (execution/retry! rt {:run-id "occupied-0" :step (first gates)
+                                                 :expected-attempt (:attempt-id timed-out)
+                                                 :request-id "unsafe" :reason "Still occupied" :by-identity "test-worker"}))))
+            (weaver/update! rt eventual {:attributes {"code/params" {:id "edited-after-claim"}}})
+            ;; Capacity returns only after an unrelated occupied callable returns.
+            (.countDown ^CountDownLatch (get-in @controls [1 :release]))
+            (let [done (await-done rt "eventual" eventual)]
+              (is (= (:deadline busy) (:deadline done)))
+              (is (= (:attempt-id busy) (:attempt-id done)))
+              (is (= 1 (get @calls "eventual")))
+              (is (nil? (get @calls "edited-after-claim"))))
+            (.countDown ^CountDownLatch (get-in @controls [0 :release]))
+            (let [done (await-done rt "occupied-0" (first gates))]
+              (is (= :timed-out (get-in done [:result :outcome])))
+              (is (nil? (get-in done [:result :value])))
+              (is (= "active" (:state (weaver/show rt (first gates))))))))
         (finally
-          (.countDown ^CountDownLatch @blocker))))))
-
-(deftest timeout-stops-cooperative-subprocess-poll-with-no-late-completion
-  (with-code
-    (fn [rt]
-      (reset! worker-exited (CountDownLatch. 1))
-      (let [marker (temp-file)]
-        (workflow/start!
-         "poll"
-         (single-gate
-          "poll"
-          (request "millhouse.executors.code-test/poll-short-subprocesses"
-                   {:marker (.getPath marker)}
-                   1))
-         {})
-        (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-        (let [gate-id (:id (ready-code-gate "poll"))
-              timed-out (await-eventually #(let [gate (weaver/show rt gate-id)]
-                                             (when (attr gate :gate/error) gate)))
-              count-at-timeout (line-count marker)]
-          (is (str/includes? (attr timed-out :gate/error) "timed out"))
-          (is (pos? count-at-timeout))
-          (is (.await ^CountDownLatch @worker-exited
-                      (test-support/await-budget-ms)
-                      TimeUnit/MILLISECONDS))
-          (is (= count-at-timeout (line-count marker)))
-          (let [after-wait (weaver/show rt gate-id)]
-            (is (= "active" (:state after-wait)))
-            (is (nil? (attr after-wait :code/result)))))))))
-
-(deftest interrupted-callback-clears-claim-and-is-retryable
-  (with-code
-    (fn [rt]
-      (reset! interrupt-once? true)
-      (workflow/start!
-       "interrupted"
-       (single-gate
-        "interrupted"
-        (request "millhouse.executors.code-test/interrupt-once"
-                 {:value "retried"}))
-       {})
-      (test-alpha/await-quiescent! rt {:timeout-ms (test-support/await-budget-ms)})
-      (let [gate-id (-> (gate-strand rt "interrupted") :id)
-            retried (await-eventually
-                     #(let [gate (weaver/show rt gate-id)]
-                        (when (= "closed" (:state gate)) gate)))]
-        (is (= "retried" (attr retried :code/result)))
-        (is (nil? (attr retried :gate/error)))
-        (is (nil? (attr retried :code/running)))))))
+          (doseq [control (vals @controls)] (.countDown ^CountDownLatch (:release control))))))))

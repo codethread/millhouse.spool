@@ -4,6 +4,7 @@
 
 - [workflow cookbook](./workflow.cookbook.md) · [workflow API](./workflow.api.md)
 - [code executor cookbook](./code.cookbook.md) · [code executor API](./code.api.md)
+- [Managed execution, explicit retry and retirement](./execution.md)
 - [shell executor cookbook](./shell.cookbook.md) · [shell executor API](./shell.api.md)
 - [Millstrand workflows API](./millstrand-workflows.api.md)
 - [Explicit guarded validation retry](./validation.md) — opt-in recipes, schemas,
@@ -54,8 +55,11 @@ Activate `app.workflow-cli` after `:workflow/engine`. Add `millhouse/workflow` t
 (lifecycle/use-reconcile! shell/shell-attempts)
 ```
 
-The code executor follows the same pattern with `code/code-stalled?`,
-`code/stalled-code-gates`, and `code/code-engine`.
+Code uses the common execution lifecycle rather than a legacy stall declaration.
+Select only `(lifecycle/use-resource! code/code-engine)` from a module requiring
+`millhouse.executors.code`. Its ordinary `code/executor` descriptor is inert.
+Do not select a legacy driver for the same waiter. See [managed execution](execution.md)
+for common inspection/retry, deadline and positive-settlement contracts.
 
 ### Select reusable workflows
 

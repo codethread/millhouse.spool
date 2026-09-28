@@ -26,8 +26,6 @@
     millhouse.workflow/defexecutor!
     millhouse.workflow/use-workflow!
     millhouse.workflow/use-executor!
-    millhouse.executors.code/code-stalled?
-    millhouse.executors.code/stalled-code-gates
     millhouse.executors.code/code-engine
     millhouse.executors.shell/shell-stalled?
     millhouse.executors.shell/stalled-shell-gates

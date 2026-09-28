@@ -17,7 +17,8 @@
              "spools/auto-run/src/millhouse/auto_run_land.clj"]
     :outfile "spools/auto-run/auto-run.api.md"}
    {:source ["spools/workflow/src/millhouse/workflow.clj"
-             "spools/workflow/src/millhouse/workflow/validation.clj"]
+             "spools/workflow/src/millhouse/workflow/validation.clj"
+             "spools/workflow/src/millhouse/workflow/execution.clj"]
     :outfile "spools/workflow/workflow.api.md"}
    {:source "spools/chime/src/millhouse/chime.clj"
     :outfile "spools/chime/chime.api.md"}
