@@ -25,7 +25,7 @@
    {:doc (format-alpha/prose
           "
             Scores: complexity 6; code-taste 7; resilience 6; ui-design X; cost 9.
-            deepseek-v4-flash
+            DeepSeek V4.1 Flash
 
             Strong coding model that works fast and effectively against well-scoped
             acceptance criteria. Very fast and cheap; favour it when work is well
@@ -35,7 +35,7 @@
             "
           {})
     :parent :pi
-    :model "deepseek/deepseek-v4-flash"
+    :model "deepseek/deepseek-flash"
     :effort :max
     :when allow-china-flag
     :allow #{:reviewer :oracle}
