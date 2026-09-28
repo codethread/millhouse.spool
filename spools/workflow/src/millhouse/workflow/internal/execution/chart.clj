@@ -99,7 +99,7 @@
                                                                         :acknowledgement (if (:accepted? m) :pending :not-needed)}))))
                      (state {:id :done}
                             (transition {:id :acknowledged :event :acknowledged :target :finished}
-                                        (action :acknowledged-data (fn [_ _] {:desired nil :acknowledgement :confirmed})))
+                                        (action :acknowledged-data (fn [_ _] {:desired nil :acknowledgement :confirmed :attention nil})))
                             (transition {:id :ack-unknown :event :ack-unknown}
                                         (action :ack-unknown-data (fn [_ e] {:desired :acknowledge :acknowledgement :unknown
                                                                              :attention (:error e)})))))

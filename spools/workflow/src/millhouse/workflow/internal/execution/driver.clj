@@ -67,17 +67,21 @@
                (not (:attention attempt)))
       (cond
         (and (not= :done (:phase view)) (nil? (:stop-reason view))
-             (or expired? (attr-get root :execution/freeze) (not active?)))
+             (or expired? (attr-get root :execution/freeze) (not active?)
+                 (contains? @(:draining (state/state rt)) (name (:executor attempt)))))
         (do (stop-attempt! rt row (if expired?
                                     (stop-reason :timed-out "Execution deadline expired")
-                                    (stop-reason :cancelled "Execution root is frozen or inactive"))) nil)
+                                    (stop-reason :cancelled "Execution root is frozen, inactive or its executor is draining"))) nil)
 
         (= :committing (:phase view))
         (do (store/deliver! rt row attempt) nil)
 
         (= :done (:phase view))
-        (do (routing/close-run-if-done! rt (:run-id attempt))
-            (when (= :acknowledge (:desired view)) (effect :acknowledge attempt row)))
+        (if (:finalization-pending? attempt)
+          (do (routing/close-run-if-done! rt (:run-id attempt))
+              (store/save! rt row (dissoc attempt :finalization-pending?))
+              nil)
+          (when (= :acknowledge (:desired view)) (effect :acknowledge attempt row)))
 
         (= :stopping (:phase view)) (effect :stop attempt row)
 
@@ -122,12 +126,14 @@
                   (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
                     (store/save! rt row
                                  (assoc updated :result (store/result-envelope updated (store/model updated)))))
-                  (update-observation! rt row attempt response))))))))))
+                  (update-observation! rt row attempt response))))))))
+    (swap! (:errors (state/state rt)) dissoc [:attempt (attr-get row :execution/token)])
+    nil))
 
-(defn- adopt-and-claim! [rt descriptor gate]
+(defn- adopt-and-claim! [rt descriptor gate claim?]
   (when-let [root (store/nearest-root rt gate)]
     (when-let [run-id (attr-get root :workflow/run-id)]
-      (when (= "active" (:state root))
+      (when (or (not claim?) (= "active" (:state root)))
         (state/with-run!
           rt run-id
           (fn [] (guard/with-run!
@@ -135,11 +141,11 @@
                    (fn []
                      (let [gate (weaver/show rt (:id gate))
                            root (store/nearest-root rt gate)]
-                       (when (and (= "active" (:state root)) (= "active" (:state gate)))
-                         (when-not (attr-get gate :execution/owner)
-                           (when (or (attr-get gate :code/running) (attr-get gate :gate/error))
-                             (throw (ex-info "Legacy Code evidence requires drain before adoption" {:gate (:id gate)}))))
-                         (if (and (not (attr-get root :execution/freeze))
+                       (when (and (or (not claim?) (= "active" (:state root))) (= "active" (:state gate))
+                                  (= descriptor (get (state/selected rt) (name (:waiter descriptor))))
+                                  (or (not claim?)
+                                      (not (contains? @(:draining (state/state rt)) (name (:waiter descriptor))))))
+                         (if (and claim? (not (attr-get root :execution/freeze))
                                   (not (attr-get gate :execution/current))
                                   (some #(= (:id gate) (:id %)) (query/ready-with-rt rt run-id {})))
                            (store/claim! rt root gate (store/prepare-attempt rt descriptor root gate) nil)
@@ -149,6 +155,13 @@
                               {:refs {:gate (:id gate)}
                                :strands [{:ref :gate :attributes {"execution/owner" (name (:waiter descriptor))
                                                                   "execution/revision" (:revision descriptor)}}]} {})))))))))))))
+
+(defn retain-ownership!
+  "Join any in-progress claims and persist unstarted ownership before removal."
+  [rt descriptor]
+  (doseq [gate (weaver/list rt [:and [:= :state "active"]
+                                [:= [:attr "workflow/gate"] (name (:waiter descriptor))]] {})]
+    (adopt-and-claim! rt descriptor gate false)))
 
 (defn- reconcile-one! [rt gate-id f]
   (try
@@ -164,8 +177,9 @@
     (when (compare-and-set! (:dirty (state/state rt)) true false)
       (doseq [[waiter descriptor] (state/selected rt)]
         (doseq [gate (weaver/list rt [:and [:= :state "active"] [:= [:attr "workflow/gate"] waiter]] {})]
-          (reconcile-one! rt [:gate (:id gate)] #(adopt-and-claim! rt descriptor gate)))))
-    (doseq [row (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {})]
+          (reconcile-one! rt [:gate (:id gate)] #(adopt-and-claim! rt descriptor gate true)))))
+    (doseq [row (weaver/list rt [:and [:= [:attr "kind"] "workflow-execution"]
+                                 [:= [:attr "execution/reconcile"] true]] {})]
       (reconcile-one! rt [:attempt (attr-get row :execution/token)] #(drive-attempt! rt row)))))
 
 (defn on-event

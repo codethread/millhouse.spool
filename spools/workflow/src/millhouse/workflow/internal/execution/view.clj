@@ -19,6 +19,8 @@
      :deadline (:deadline attempt) :phase (or (:phase view) :unstarted)
      :accepted? (:accepted? view) :dispatch-uncertain? (:uncertain? view)
      :stop-reason (:stop-reason view) :result (:result attempt)
+     :cleanup {:acknowledgement (:acknowledgement view)
+               :root-finalization-pending? (boolean (:finalization-pending? attempt))}
      :attention (or (:attention attempt) (:attention view)
                     (when (and (attr-get gate :execution/owner) (nil? selected))
                       {:code "execution/descriptor-missing" :message "Select the recorded descriptor to reconcile" :data {}})

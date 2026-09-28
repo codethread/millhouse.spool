@@ -9,6 +9,7 @@
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
+            [millstrand.api.weaver.alpha :as weaver]
             [millhouse.workflow.execution :as execution]
             [millhouse.workflow.internal.execution.data :as data])
   (:import [java.util.concurrent ExecutorService RejectedExecutionException
@@ -123,9 +124,22 @@
    :start 'millhouse.executors.code/start! :observe 'millhouse.executors.code/observe!
    :stop 'millhouse.executors.code/stop! :acknowledge 'millhouse.executors.code/acknowledge!})
 
+(defn- require-clean-cutover! [rt]
+  (when-let [gate (first (weaver/list rt [:and [:= :state "active"]
+                                          [:= [:attr "workflow/gate"] "code"]
+                                          [:or [:exists [:attr "code/running"]]
+                                           [:and [:exists [:attr "gate/error"]]
+                                            [:not [:exists [:attr "execution/current"]]]]]] {}))]
+    (throw (ex-info "Drain legacy Code gates before selecting managed execution; no snapshot translation is supported"
+                    {:gate-id (:id gate)}))))
+
 (defn open-code-engine!
-  "Open the bounded backend and select its common lifecycle descriptor."
+  "Open the bounded backend and select its common lifecycle descriptor.
+
+  Refuse active legacy invocation/error markers rather than translating them or
+  treating a missing local handle as settlement. Drain before this cutover."
   [{:keys [runtime]}]
+  (require-clean-cutover! runtime)
   (let [pool (:pool (backend runtime))]
     (locking pool
       (when-let [^ExecutorService old @pool]

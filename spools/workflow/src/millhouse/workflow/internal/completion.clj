@@ -19,7 +19,8 @@
       (fail! (if (= "checkpoint" role)
                "Cannot complete a checkpoint; use choose!"
                "Cannot complete a defer; use defer!")
-             {:reason :workflow/step-is-defer :run-id run-id :step (query/strand->view step)}))
+             (cond-> {:run-id run-id :step (query/strand->view step)}
+               (= "defer" role) (assoc :reason :workflow/step-is-defer))))
     (when (and (query/attr step :workflow/gate) (not (or actor executor)))
       (fail! "Gate steps require actor or executor provenance"
              {:run-id run-id :step (query/strand->view step)

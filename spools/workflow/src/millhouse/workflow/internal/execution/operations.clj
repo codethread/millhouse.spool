@@ -49,7 +49,11 @@
                       descriptor (get (state/selected rt) (attr-get gate :execution/owner))]
                   (when (attr-get gate :validation/recipe)
                     (refuse! "Validation-marked gates require their frozen validation policy"))
-                  (when-not (and descriptor (= expected-attempt (:attempt-id prior))
+                  (when (contains? request :expected-revision)
+                    (refuse! "Expected revision applies only to the validation retry policy"))
+                  (when-not (and descriptor
+                                 (not (contains? @(:draining (state/state rt)) (attr-get gate :execution/owner)))
+                                 (= expected-attempt (:attempt-id prior))
                                  (= "active" (:state root)) (= "active" (:state gate))
                                  (nil? (attr-get root :execution/freeze))
                                  (= :done (:phase view)) (= :settled (get-in prior [:result :settlement]))

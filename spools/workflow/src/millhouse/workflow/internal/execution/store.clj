@@ -57,6 +57,8 @@
 (defn- row-patch [attempt]
   {:attributes {"kind" "workflow-execution" "execution/token" (:attempt-id attempt)
                 "execution/run" (:run-id attempt) "execution/gate" (:gate-id attempt)
+                "execution/reconcile" (boolean (or (not= :done (:phase (model attempt)))
+                                                   (:desired (model attempt)) (:finalization-pending? attempt)))
                 "execution/data" (data/encode attempt)}})
 
 (defn- gate-patch [attempt]
@@ -115,7 +117,10 @@
     (let [prior (attempt-row rt (attr-get gate :execution/current))
           before (cond-> {(:id root) root (:id gate) gate}
                    prior (assoc (:id prior) prior))]
-      (apply-plan! rt before payload {}))
+      (apply-plan! rt before payload
+                   {:creates (into {} (keep (fn [patch]
+                                              (when (contains? #{:attempt :action} (:ref patch))
+                                                [(:ref patch) (:attributes patch)]))) (:strands payload))}))
     attempt))
 
 (defn save!
@@ -160,7 +165,7 @@
                   attempt)
         committed (advance rt attempt :commit {})
         view (model committed)
-        committed (assoc committed :result (result-envelope committed view))
+        committed (assoc committed :result (result-envelope committed view) :finalization-pending? true)
         success? (= :succeeded (get-in committed [:result :outcome]))
         _ (when (and success? (not active?))
             (throw (ex-info "Inactive attempt cannot publish success" {:attempt-id (:attempt-id attempt)})))

@@ -25,7 +25,9 @@ input creates a settled, never-started failed attempt and current token atomical
 Callbacks execute off the event lane. Nil succeeds; non-JSON values and thrown
 exceptions fail. A common result commits with the ordinary Workflow gate close
 and cascading procedure joins. Root-finalization housekeeping is separately
-reconcilable; it is not part of that atomic close.
+reconcilable through a retained pending marker; it is not part of that atomic
+close. Finished, acknowledged attempts stay inspectable but leave the scheduler's
+reconciliation query.
 
 ```nu
 strand workflow execution RUN --step GATE
@@ -42,6 +44,8 @@ existing frozen-recipe policy through this operation.
 
 Removing or blanking `gate/error` is **not** retry authority. Direct completion,
 raw closure and executor/actor string spoofing cannot complete a managed gate.
+Public burn paths retain managed evidence and its roots; callers cannot forge
+attempt rows or seed execution authority on new strands.
 Removing a descriptor does not remove persisted ownership, including on gates
 that were never ready. Unregistered manual/external waiters are unchanged.
 
@@ -62,7 +66,8 @@ success after durable stop intent becomes cancellation/timeout, not success.
 Runtime handles and threads never enter durable snapshots. Losing a Code handle
 without positive settlement is unknown, not proof that execution stopped. This
 release has no force-settled escape hatch for a lost generation. Drain before
-replacement. Statecharts is the private synchronous decision core, **not** an
+replacement. Activation refuses active legacy Code invocation/error markers;
+there is no snapshot translation or implicit retry during cutover. Statecharts is the private synchronous decision core, **not** an
 effect transaction or an exactly-once side-effect guarantee.
 
 ## Retire before routing away
@@ -94,9 +99,11 @@ slice does not freeze legacy Shell/Agent/queue execution or authorize their cuto
   duplicate/stale events, stop/result ordering, full EDN restoration in fresh
   environments, interpreter errors and malformed interpreter returns. No Weaver.
 - `workflow-execution-test`: one disposable file-backed runtime proves claim,
-  completion and abandonment before-image refusal/no partial write, cascading
-  joins, nearest nested root, unchanged refresh/removal, ordinary manual gates,
-  protected unstarted work, routed retirement and bounded domain-patch cutover.
+  completion and abandonment before-image refusal/no partial write, postcommit
+  root-finalization recovery without callback replay, cascading
+  joins, nearest nested root, unchanged refresh/removal/readoption, ordinary manual gates,
+  protected unstarted work, forged creation/burn refusal, routed retirement and
+  bounded domain-patch cutover with replacement definition/family identity.
 - `executors.code-test`: public JSON/nil success, thrown/interrupted/non-JSON and
   malformed-input failure, corrected explicit retry/replay/conflict; real
   eight-worker saturation, never-accepted stop, frozen deadline and stubborn

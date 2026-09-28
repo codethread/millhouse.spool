@@ -11,7 +11,7 @@
   (runtime/spool-state rt ::state {:version 1}
                        (fn []
                          (let [scheduler (atom nil)]
-                           {:descriptors (atom {}) :locks (atom {})
+                           {:descriptors (atom {}) :draining (atom #{}) :locks (atom {})
                             :environment (chart/environment) :scheduler scheduler
                             :dirty (atom true) :errors (atom {})
                             :close-fn (fn []

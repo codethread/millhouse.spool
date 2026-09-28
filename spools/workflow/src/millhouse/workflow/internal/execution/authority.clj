@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.hooks.alpha :as hooks]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millhouse.workflow.internal.execution.state :as state]))
 
@@ -36,9 +37,50 @@
                                    "workflow/executor-run-id"}
                                  (if (keyword? %) (subs (str %) 1) %)))) keys)))
 
+(defn- execution-key? [key]
+  (str/starts-with? (if (keyword? key) (subs (str key) 1) key) "execution/"))
+
+(defn- validate-created! [ctx row]
+  (let [attrs (:attributes row)
+        descriptor (get (state/selected (current/runtime)) (attr-get row :workflow/gate))
+        expected (some (fn [[ref attributes]]
+                         (when (= (:id row) (get (:batch/refs ctx) ref)) attributes))
+                       (:creates *transaction*))
+        allowed (when descriptor {"execution/owner" (name (:waiter descriptor))
+                                  "execution/revision" (:revision descriptor)})]
+    (if expected
+      (when-not (and (= (count expected) (count attrs))
+                     (every? (fn [[key value]] (= value (attr-get row key))) expected))
+        (refuse! "Execution creation differs from its exact plan" (:id row)))
+      (when (or (= "workflow-execution" (attr-get row :kind))
+                (some (fn [key]
+                        (and (execution-key? key)
+                             (not= (attr-get row key) (attr-get {:attributes allowed} key))))
+                      (keys attrs)))
+        (refuse! "Execution authority cannot be supplied on new strands" (:id row))))))
+
+(defn- managed-descendants? [rt row active-only? after-images]
+  (and (= "root" (attr-get row :workflow/role))
+       (some #(and (attr-get % :execution/owner)
+                   (or (not active-only?) (= "active" (:state (get-in after-images [(:id %) :after] %)))))
+             (:strands (graph/subgraph rt [(:id row)])))))
+
+(defn before-burn
+  "Retain managed gates, attempts and their roots on the public graph burn path."
+  [ctx]
+  (doseq [row (:strand/before ctx)]
+    (when (or (attr-get row :execution/owner)
+              (= "workflow-execution" (attr-get row :kind))
+              (managed-descendants? (current/runtime) row false nil))
+      (refuse! "Managed execution evidence cannot be burned" (:id row))))
+  nil)
+
 (defn before-commit
   "Refuse stale preimages and every unscoped managed authority mutation."
   [ctx]
+  (doseq [row (or (:batch/created ctx)
+                  (when (and (nil? (:strand/before ctx)) (:strand/after ctx)) [(:strand/after ctx)]))]
+    (validate-created! ctx row))
   (let [updates (or (:batch/updated ctx)
                     (when (:strand/before ctx)
                       [{:id (:strand/id ctx) :before (:strand/before ctx) :after (:strand/after ctx)}]))
@@ -51,12 +93,19 @@
             attributes (:attributes patch)
             owner (or (attr-get before :execution/owner)
                       (get (state/selected (current/runtime)) (attr-get before :workflow/gate)))]
+        (when (and (= "workflow-execution" (attr-get after :kind))
+                   (not= "workflow-execution" (attr-get before :kind)))
+          (refuse! "Existing strands cannot be converted into execution attempts" id))
         (doseq [key (protected-keys before after)]
           (when-not (= (attr-get after key)
                        (if (contains? attributes (if (keyword? key) (subs (str key) 1) key))
                          (attr-get {:attributes attributes} key)
                          (attr-get before key)))
             (refuse! "Execution authority fields cannot be changed directly" id)))
+        (when (and (not= (:state before) (:state after))
+                   (managed-descendants? (current/runtime) before true by-id)
+                   (not (contains? (get-in *transaction* [:abandonment :closures]) id)))
+          (refuse! "A root with active managed gates requires exact retirement" id))
         (when (and owner (not= (:state before) (:state after)))
           (when-not (or (and (= "closed" (:state after))
                              (= id (nth (:completion *transaction*) 3 nil))
@@ -78,9 +127,11 @@
                         'millhouse.workflow.internal.execution.authority/normalize-ownership
                         {:order -100})
   (hooks/register-hook! runtime :workflow/execution-authority
-                        #{:batch/apply-before-commit :strand/update-before-commit}
+                        #{:batch/apply-before-commit :strand/update-before-commit :strand/add-before-commit}
                         'millhouse.workflow.internal.execution.authority/before-commit
                         {:order -100})
+  (hooks/register-hook! runtime :workflow/execution-burn #{:strand/burn-before-commit}
+                        'millhouse.workflow.internal.execution.authority/before-burn {:order -100})
   {:runtime runtime})
 
 (defn close! [_]

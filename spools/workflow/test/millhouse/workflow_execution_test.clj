@@ -7,6 +7,7 @@
             [millhouse.workflow.execution :as execution]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.hooks.alpha :as hooks]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver])
@@ -36,16 +37,18 @@
   [ctx]
   (when-let [{:keys [mode id] :as expected} @trap]
     (let [patch (:strand/patch ctx)
-          close? (= "closed" (:state patch))
+          close? (or (= "closed" (:state patch)) (= "closed" (get-in ctx [:strand/after :state])))
           attempt? (= :attempt (:ref patch))
           match? (case mode
                    :claim attempt?
                    :completion (and close? (= "done" (get-in patch [:attributes "execution/phase"])))
                    :abandon (and close? (= id (name (:ref patch))))
+                   :hold-finalization (and close? (or (= id (:strand/id ctx))
+                                                      (= id (some-> patch :ref name))))
                    :hold-completion close?
                    false)]
       (when match?
-        (if (= :hold-completion mode)
+        (if (contains? #{:hold-completion :hold-finalization} mode)
           (throw (ex-info "Hold redelivery after before-image refusal" {}))
           (when (compare-and-set! trap expected (when (= :completion mode) {:mode :hold-completion :id id}))
             (weaver/update! (current/runtime) id {:attributes {"test/drift" (name mode)}}))))))
@@ -55,6 +58,10 @@
   "Continuation for the atomic routed-choice witness."
   (workflow/workflow "Replacement" {:entrypoints #{:continue}}
                      (workflow/step :after "Replacement step" :self)))
+
+(def abort-replacement
+  "Named replacement retains definition identity for subsequent revisions."
+  (workflow/workflow "Abort" (workflow/step :after "Abort" :self)))
 
 (defn- inspect [rt run-id gate]
   (execution/inspect rt {:run-id run-id :step gate}))
@@ -76,13 +83,27 @@
       (reset! trap nil)
       (reset! calls 0)
       (support/activate-spool! rt :workflow 'millhouse.workflow)
-      (hooks/register-hook! rt :test/drift #{:attributes/normalize}
+      (hooks/register-hook! rt :test/drift #{:attributes/normalize :strand/update-before-commit}
                             'millhouse.workflow-execution-test/drift-input {:order 50})
       (let [source (io/file directory "execution-selector.clj")
             selected "(ns test.execution-selector (:require [millhouse.executors.code :as code] [millstrand.api.lifecycle.alpha :as lifecycle]))\n(lifecycle/use-resource! code/code-engine)\n"]
+        (workflow/start! "legacy" (workflow/workflow "Legacy"
+                                                     (workflow/gate :old "Old" :code
+                                                                    :attributes {"code/running" "legacy-token"})) {})
         (spit source selected)
+        (is (= :degraded (get-in (runtime/module! rt :code {:file (.getName source) :after [:workflow]})
+                                 [:modules :code :lifecycle/outcomes :code-engine :status])))
+        (is (zero? @calls))
+        (workflow/complete! "legacy" {:by-identity "test-worker"})
         (is (= :applied (:status (runtime/module! rt :code {:file (.getName source) :after [:workflow]}))))
         (is (thrown? clojure.lang.ExceptionInfo (workflow/register-executor! :code (constantly nil))))
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (weaver/add! rt {:title "Forged attempt" :attributes {"kind" "workflow-execution"}})))
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (workflow/start! "forged" (workflow/workflow "Forged"
+                                                                  (workflow/gate :fake "Fake" :code
+                                                                                 :attributes {"execution/current" "forged-token"})) {})))
+        (is (nil? (workflow/current-root "forged")))
         (testing "ordinary unregistered external gates retain manual completion"
           (workflow/start! "external" (workflow/workflow "External" (workflow/gate :wait "Wait" :external)) {})
           (is (:done (workflow/complete! "external" {:by-identity "test-worker"}))))
@@ -93,6 +114,13 @@
                 retry (request "claim" id (:attempt-id failed) "retry")
                 count-before (count (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {}))]
             (weaver/update! rt id {:attributes {"code/fn" "millhouse.workflow-execution-test/callback"}})
+            (is (thrown? clojure.lang.ExceptionInfo (workflow/burn! (:id (workflow/current-root "claim")))))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (graph/burn-by-ids! rt [(:id (workflow/current-root "claim"))])))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/update! rt (:id (workflow/current-root "claim")) {:state "closed"})))
+            (let [row (first (weaver/list rt [:= [:attr "execution/token"] (:attempt-id failed)] {}))]
+              (is (thrown? clojure.lang.ExceptionInfo (graph/burn-by-ids! rt [(:id row)]))))
             (reset! trap {:mode :claim :id id})
             (is (thrown? clojure.lang.ExceptionInfo (execution/retry! rt retry)))
             (is (= (:attempt-id failed) (:attempt-id (inspect rt "claim" id))))
@@ -173,10 +201,32 @@
                 id (:id (first (:ready ready)))]
             (is (= "inner" (get-in (await-done rt "inner" id) [:result :run-id])))
             (is (= "active" (:state (workflow/current-root "outer"))))))
+        (testing "postcommit root finalization reconciles without replaying the callback"
+          (workflow/start! "finalize" (workflow/workflow "Finalize"
+                                                         (workflow/step :ready "Ready" :self)
+                                                         (gate :check "millhouse.workflow-execution-test/callback" :depends-on [:ready])) {})
+          (let [root-id (:id (workflow/current-root "finalize"))
+                before @calls]
+            (reset! trap {:mode :hold-finalization :id root-id})
+            (let [gate-id (:id (first (:ready (workflow/complete! "finalize"))))
+                  done (await-done rt "finalize" gate-id)]
+              (is (= :succeeded (get-in done [:result :outcome])))
+              (is (get-in done [:cleanup :root-finalization-pending?]))
+              (is (= "closed" (:state (weaver/show rt gate-id))))
+              (is (= "active" (:state (weaver/show rt root-id))))
+              (reset! trap nil)
+              (support/poll-until #(let [view (execution/reconcile! rt {:run-id "finalize" :step gate-id})]
+                                     (when (and (= :confirmed (get-in view [:cleanup :acknowledgement]))
+                                                (not (get-in view [:cleanup :root-finalization-pending?]))) view)))
+              (is (= "closed" (:state (weaver/show rt root-id))))
+              (is (= (inc before) @calls))
+              (is (false? (attr-get (first (weaver/list rt [:= [:attr "execution/token"] (:attempt-id done)] {}))
+                                    :execution/reconcile))))))
         (testing "removing selection does not make unstarted managed gates manual"
-          (workflow/start! "removed" (workflow/workflow "Removed"
-                                                        (workflow/step :wait "Wait" :self)
-                                                        (gate :unstarted "millhouse.workflow-execution-test/callback" :depends-on [:wait])) {})
+          (doseq [run-id ["removed" "readopt"]]
+            (workflow/start! run-id (workflow/workflow "Removed"
+                                                       (workflow/step :wait "Wait" :self)
+                                                       (gate :unstarted "millhouse.workflow-execution-test/callback" :depends-on [:wait])) {} {:family "execution-family"}))
           (spit source "(ns test.execution-selector)\n")
           (is (= :applied (:status (runtime/module! rt :code {:file (.getName source) :after [:workflow]}))))
           (workflow/complete! "removed")
@@ -194,8 +244,14 @@
                 domain (weaver/add! rt {:title "Domain reservation" :attributes {"test/state" "held"}})
                 request {:run-id "removed" :root-id (:id root) :reason "Replace retired work"
                          :by-identity "test-worker" :retirement receipt
-                         :workflow (workflow/workflow "Abort" (workflow/step :after "Abort" :self)) :params {}
+                         :workflow #'abort-replacement :params {}
                          :domain-patches [{:before domain :update {:attributes {"test/state" "released"}}}]}]
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (execution/abandon-run! rt
+                                                 (assoc-in request [:domain-patches 0 :update :attributes "kind"]
+                                                           "workflow-execution"))))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/update! rt (:id domain) {:attributes {"kind" "workflow-execution"}})))
             (weaver/update! rt (:id domain) {:attributes {"test/drift" true}})
             (is (thrown? clojure.lang.ExceptionInfo (execution/abandon-run! rt request)))
             (is (= (:id root) (:id (workflow/current-root "removed"))))
@@ -204,4 +260,13 @@
                                                  (assoc-in request [:domain-patches 0 :before]
                                                            (weaver/show rt (:id domain))))]
               (is (= ["Abort"] (mapv :title (:ready result))))
-              (is (= "released" (attr-get (weaver/show rt (:id domain)) :test/state))))))))))
+              (is (= "millhouse.workflow-execution-test/abort-replacement"
+                     (attr-get (workflow/current-root "removed") :workflow/definition)))
+              (is (= "execution-family" (attr-get (workflow/current-root "removed") :workflow/family)))
+              (is (= "released" (attr-get (weaver/show rt (:id domain)) :test/state))))))
+        (testing "the same descriptor can readopt persisted unstarted ownership"
+          (spit source selected)
+          (is (= :applied (:status (runtime/module! rt :code {:file (.getName source) :after [:workflow]}))))
+          (let [result (workflow/complete! "readopt")
+                id (:id (first (:ready result)))]
+            (is (= :succeeded (get-in (await-done rt "readopt" id) [:result :outcome])))))))))

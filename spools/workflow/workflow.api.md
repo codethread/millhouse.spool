@@ -1184,7 +1184,7 @@ Atomically abandon a frozen, positively retired root and pour its replacement.
   :workflow, :params, and optional :domain-patches. Domain patches are exact
   {:before row :update patch} pairs on existing non-Workflow rows only. No
   callbacks, new domain rows, edges or success authority are accepted.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L117-L145">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L121-L151">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/abandonment-authorized?">`abandonment-authorized?`</a>
 ``` clojure
@@ -1193,7 +1193,7 @@ Atomically abandon a frozen, positively retired root and pour its replacement.
 Function.
 
 Recognize exact non-success closure authority, never success authority.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L152-L155">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L158-L161">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/close!">`close!`</a>
 ``` clojure
@@ -1205,7 +1205,7 @@ Stop admission and persist exact stop intent before removing a descriptor.
 
   Retain managed ownership and attempt evidence. Removal never makes a managed
   gate manually completable or establishes settlement of external work.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L53-L72">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L54-L76">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/completion-authorized?">`completion-authorized?`</a>
 ``` clojure
@@ -1214,7 +1214,7 @@ Stop admission and persist exact stop intent before removing a descriptor.
 Function.
 
 Recognize the kernel's exact success scope; provenance strings grant no authority.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L147-L150">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L153-L156">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/inspect">`inspect`</a>
 ``` clojure
@@ -1226,7 +1226,7 @@ Return one gate's normalized execution view using {:run-id run :step gate}.
 
   Includes frozen request/deadline, current attempt, result, attention and actual
   settlement. An unstarted managed gate remains visible after descriptor removal.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L74-L80">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L78-L84">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/open!">`open!`</a>
 ``` clojure
@@ -1239,7 +1239,7 @@ Select a validated descriptor, protect managed gates, then start reconciliation.
   Reject duplicate and legacy waiter ownership before admission. Callback Vars
   resolve through the runtime classloader. An unchanged lifecycle refresh retains
   this resource; live revision changes require an explicit drain.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L25-L51">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L26-L52">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/quiesce-run!">`quiesce-run!`</a>
 ``` clojure
@@ -1250,7 +1250,7 @@ Function.
 Freeze the current root and request stop; return an exact quiescence receipt.
 
   The freeze covers not-yet-ready managed gates. It is not proof of settlement.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L100-L105">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L104-L109">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/reconcile!">`reconcile!`</a>
 ``` clojure
@@ -1259,7 +1259,7 @@ Freeze the current root and request stop; return an exact quiescence receipt.
 Function.
 
 Observe/deliver the exact current attempt; never authorize another attempt.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L82-L88">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L86-L92">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/resume-run!">`resume-run!`</a>
 ``` clojure
@@ -1268,7 +1268,7 @@ Observe/deliver the exact current attempt; never authorize another attempt.
 Function.
 
 Remove only the exact positively retired freeze; never retry failed gates.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L112-L115">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L116-L119">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/retire!">`retire!`</a>
 ``` clojure
@@ -1277,7 +1277,7 @@ Remove only the exact positively retired freeze; never retry failed gates.
 Function.
 
 Reconcile the exact frozen attempt set; report positive settlement or unknown.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L107-L110">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L111-L114">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/retry!">`retry!`</a>
 ``` clojure
@@ -1291,7 +1291,7 @@ Authorize one new attempt on a settled failed ready gate.
   :by-identity. :dry-run writes nothing. Corrected current input is captured
   once; exact request replay returns its original action even after later edits.
   Conflicting key reuse, unsettled work and validation-policy bypass refuse.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L90-L98">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L94-L102">Source</a></sub></p>
 
 -----
 # <a name="millhouse.workflow.validation">millhouse.workflow.validation</a>

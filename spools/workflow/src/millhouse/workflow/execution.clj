@@ -13,6 +13,7 @@
             [millhouse.workflow.internal.execution.abandon :as abandon]
             [millhouse.workflow.internal.execution.authority :as authority]
             [millhouse.workflow.internal.execution.driver :as driver]
+            [millhouse.workflow.internal.execution.data :as data]
             [millhouse.workflow.internal.execution.operations :as operations]
             [millhouse.workflow.internal.execution.state :as state]
             [millhouse.workflow.internal.execution.store :as store]
@@ -33,7 +34,7 @@
   (let [descriptors (:descriptors (state/state rt))
         waiter (name (:waiter descriptor))]
     (locking descriptors
-      (when (or (get @descriptors waiter) (registry/executor-for rt waiter))
+      (when (or (get @descriptors waiter) (contains? (registry/executor-entries rt) waiter))
         (operations/refuse! "Waiter already has an executor"))
       (doseq [row (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {})
               :let [attempt (store/record row)]
@@ -59,6 +60,8 @@
   (let [descriptors (:descriptors (state/state rt))]
     (locking descriptors
       (when (= descriptor (get @descriptors waiter))
+        (swap! (:draining (state/state rt)) conj waiter)
+        (driver/retain-ownership! rt descriptor)
         (doseq [row (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {})
                 :let [attempt (store/record row)]
                 :when (= (:waiter descriptor) (:executor attempt))]
@@ -68,6 +71,7 @@
                (fn [] (driver/stop-attempt! rt row
                                             (driver/stop-reason :cancelled "Executor removed"))))))
         (swap! descriptors dissoc waiter)
+        (swap! (:draining (state/state rt)) disj waiter)
         (when (empty? @descriptors) (driver/close-scheduler! rt))))
     {:closed waiter}))
 
@@ -124,7 +128,7 @@
   [rt {:keys [run-id root-id reason by-identity retirement workflow params domain-patches] :as request}]
   (when-not (and (every? #{:run-id :root-id :reason :by-identity :retirement :workflow :params :domain-patches}
                          (keys request))
-                 (every? #(and (string? %) (seq %)) [run-id root-id reason by-identity])
+                 (every? data/nonblank? [run-id root-id reason by-identity])
                  (map? params) (or (nil? domain-patches) (vector? domain-patches)))
     (operations/refuse! "Invalid abandonment request"))
   (current/with-runtime rt
@@ -136,8 +140,10 @@
             (operations/refuse! "Abandonment requires the exact retired current root"))
           (let [plan (definitions/plan rt workflow params {:entrypoint :start})
                 payload (compile/compile (:workflow plan) (:params plan)
-                                         {:run-id run-id :context (compile/default-context (:params plan))
-                                          :form :molecule})]
+                                         (merge (select-keys plan [:definition :definition-name])
+                                                {:run-id run-id :context (compile/default-context (:params plan))
+                                                 :family (query/attr root :workflow/family)
+                                                 :form :molecule}))]
             (abandon/apply-route! rt {:old-root root :payload payload} nil
                                   {"identity/by-identity" by-identity "workflow/abandon-reason" reason}
                                   retirement (or domain-patches []))

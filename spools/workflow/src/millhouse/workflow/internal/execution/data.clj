@@ -7,6 +7,7 @@
   "True for finite JSON values; nil is a value, not missing acceptance."
   [x]
   (cond
+    (record? x) false
     (map? x) (and (every? #(or (string? %) (keyword? %)) (keys x))
                   (every? json? (vals x)))
     (vector? x) (every? json? x)
@@ -45,10 +46,11 @@
 (defn error
   "Normalize a failure to bounded JSON diagnostics, never retaining Throwable."
   [code throwable]
-  {:code code
-   :message (subs (or (ex-message throwable) (str throwable))
-                  0 (min 2048 (count (or (ex-message throwable) (str throwable)))))
-   :data {}})
+  (let [message (ex-message throwable)
+        message (if (str/blank? message)
+                  (if throwable (.getName (class throwable)) "Execution failed without exception detail")
+                  message)]
+    {:code code :message (subs message 0 (min 2048 (count message))) :data {}}))
 
 (defn nonblank? [x] (and (string? x) (not (str/blank? x))))
 

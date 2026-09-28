@@ -67,7 +67,10 @@
                      :request-id "repair" :reason "Fix callback" :by-identity "test-worker"}]
           (is (= :failed (get-in failed [:result :outcome])))
           (is (= :settled (get-in failed [:result :settlement])))
-          (when (= "invalid" run-id) (is (false? (:accepted? failed))))
+          (when (= "invalid" run-id)
+            (is (false? (:accepted? failed)))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (execution/retry! rt (assoc retry :expected-revision "unsupported")))))
           (is (thrown? clojure.lang.ExceptionInfo
                        (weaver/update! rt gate-id {:attributes {"gate/error" nil}})))
           (is (thrown? clojure.lang.ExceptionInfo

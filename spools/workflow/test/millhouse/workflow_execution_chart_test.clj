@@ -40,6 +40,11 @@
     (is (contains? (:terminal (chart/view finished)) :value))
     (is (nil? (get-in (chart/view finished) [:terminal :value])))
     (is (= finished (:snapshot (step finished :observed {:observation terminal}))))
+    (let [unknown (:snapshot (step committed :ack-unknown {:error {:code "cleanup" :message "Unavailable" :data {}}}))
+          recovered (step unknown :acknowledged)]
+      (is (= :unknown (:acknowledgement (chart/view unknown))))
+      (is (= :confirmed (get-in recovered [:view :acknowledgement])))
+      (is (nil? (get-in recovered [:view :attention]))))
     (is (= initial (:snapshot (step initial :dispatch {:attempt-id "stale"}))))
     (testing "stop wins until the result batch commits, including retained terminal evidence"
       (doseq [snapshot [accepted terminal]]
@@ -84,3 +89,14 @@
         (is (empty? (:effects decision)))))
     (is (thrown? clojure.lang.ExceptionInfo (data/decode "{:version 99 :memory {}}")))
     (is (thrown? clojure.lang.ExceptionInfo (data/encode {:handle (Object.)})))))
+
+(defrecord JsonRecord [value])
+
+(deftest normalized-errors-and-json-values-fit-the-durable-boundary
+  (is (data/observation? {:status :unknown :reason (data/error "interpreter/error" nil)}))
+  (doseq [message [nil "" (.repeat "x" 20000)]]
+    (let [error (data/error "callback/threw" (ex-info message {:not-retained (Object.)}))]
+      (is (data/observation? {:status :unknown :reason error}))
+      (is (= error (data/decode (data/encode error))))))
+  (is (false? (data/json? (->JsonRecord "plain field"))))
+  (is (data/json? nil)))
