@@ -22,7 +22,7 @@ while (($# > 0)); do
 done
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-core_sha=34f940ddb2e69898554bf76251749715b250ae15
+core_sha=0f1762063b3b7e6fae7576c6025ec14c79cd314a
 
 if [[ -n "$core_release" ]]; then
   [[ -f "$core_release" ]] || { echo "missing core release: $core_release" >&2; exit 1; }

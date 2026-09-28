@@ -1,7 +1,7 @@
 {:paths ["src"]
  :deps {millhouse/auto-run {:local/root "../auto-run"}
         io.millstrand/batteries {:git/url "https://github.com/codethread/millstrand.git"
-                                 :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
+                                 :git/sha "0f1762063b3b7e6fae7576c6025ec14c79cd314a"
                                  :deps/root "spools/batteries"}
         millhouse/workflow {:local/root "../workflow"}
         millhouse/identity {:local/root "../identity"}
@@ -13,13 +13,13 @@
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {io.millstrand/millstrand
                                {:git/url "https://github.com/codethread/millstrand.git"
-                                :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}}
+                                :git/sha "0f1762063b3b7e6fae7576c6025ec14c79cd314a"}}
                   :main-opts ["-m" "millhouse.config-test"]}
            :consumer-smoke
            {:extra-paths ["test"]
             :extra-deps {io.millstrand/millstrand
                          {:git/url "https://github.com/codethread/millstrand.git"
-                          :git/sha "34f940ddb2e69898554bf76251749715b250ae15"}}
+                          :git/sha "0f1762063b3b7e6fae7576c6025ec14c79cd314a"}}
             :main-opts
             ["-m"
              "millhouse.config.shared-landing-consumer-smoke"]}}}

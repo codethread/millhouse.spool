@@ -13,13 +13,14 @@ compiler, authoring, spec, runtime, composition and publication partitions.
   `millstrand.test.alpha/collect-module-forms` to inspect public selections as
   data. This proves neither publication nor startup. See `declared-op` in
   [the Workflow CLI pilot](../spools/workflow/test/millhouse/workflow_cli_test.clj).
-- **Runtime-backed direct contracts:** the adoption draft's
-  `millhouse.test-support/with-embedded-runtime` delegates to the public
+- **Runtime-backed direct contracts:**
+  `millhouse.test-support/with-embedded-runtime` delegates to the adopted public
   `millstrand.test.alpha/run-with-bare-runtime`. It takes the existing callback
   shape `(fn [runtime config-dir-file] ...)`, keeps `:prefix` and `:storage`,
   defaults to file-backed SQLite, owns fresh state and cleanup, and activates no
   modules implicitly. Existing `with-runtime` callers retain this same seam and
-  `activate-spool!` retains its namespace-activation lock.
+  `activate-spool!` retains its namespace-activation lock. The adopted core
+  revision is `0f1762063b3b7e6fae7576c6025ec14c79cd314a`.
 - **Startup/reload/durable reopen:** use upstream `with-weaver-world` directly
   for `:deps-edn`, activation files, `:files`, retained roots, and dependency
   resolution. An explicit `:root` is retained by default; the caller owns
@@ -39,9 +40,9 @@ topology claims; use `with-weaver-world` when those claims also require
 workspace startup or dependency inputs. Unknown local options and unsupported
 storage values fail rather than falling back.
 
-The adoption draft requires a core revision exporting the public bare-runtime
-fixture; its Millstrand pin remains unchanged until the coordinator supplies the
-immutable landed SHA.
+The live Millstrand pins and hardcoded acceptance references adopt
+`0f1762063b3b7e6fae7576c6025ec14c79cd314a`. Historical reports and raw runs retain
+their original pins and provenance.
 
 ## Historical definition-CLI pilot (4zjji)
 

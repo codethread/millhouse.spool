@@ -38,8 +38,8 @@ monorepo. That manifest is a package boundary, not a second workspace.
 ## Dependency and activation boundaries
 
 Internal Git pins are replaced by relative checkout-local dependencies. Each selected package resolves inside its developer or published Git checkout.
-For multiple published roots, use the generated direct dependency closure below. Millstrand remains external, pinned to
-`34f940ddb2e69898554bf76251749715b250ae15`, the Millhouse baseline's upstream.
+For multiple published roots, use the generated direct dependency closure below. Millstrand remains external, pinned to the adopted landed revision
+`0f1762063b3b7e6fae7576c6025ec14c79cd314a`.
 
 Existing production relationships are preserved:
 

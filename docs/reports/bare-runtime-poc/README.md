@@ -135,18 +135,18 @@ launcher; no results are fabricated from them.
 ## Promotion addendum
 
 This dated POC report intentionally retains its original limitation and
-benchmark evidence. After the core fixture is landed and consumers adopt its
-immutable SHA, `millstrand.test.alpha/run-with-bare-runtime` is the supported
-public seam for direct runtime-state tests. It retains closed `:storage` and
-`:name` options, returns an explicit context with `:runtime`, config/data/state
-paths and file-storage `:db-path`, and owns fresh state plus cleanup on success
-or failure.
+benchmark evidence. The adopted core revision is
+`0f1762063b3b7e6fae7576c6025ec14c79cd314a`; its
+`millstrand.test.alpha/run-with-bare-runtime` export is now the supported public
+seam for direct runtime-state tests. It retains closed `:storage` and `:name`
+options, returns an explicit context with `:runtime`, config/data/state paths
+and file-storage `:db-path`, and owns fresh state plus cleanup on success or
+failure.
 
-The promotion contract is intended to remove the POC-only plain-Java and
-Clojure CLI-basis restriction; this branch does not claim that promotion has
-landed. It still does not resolve per-world dependencies: keep
+The adopted revision removes the POC-only plain-Java and Clojure CLI-basis
+restriction. It still does not resolve per-world dependencies: keep
 `run-with-weaver-world` for startup files, workspace dependency resolution, full
 refresh, and durable reopen. Use separate disposable process fixtures for
 process topology, generation adoption, and replacement-process claims. The
-historical tables, raw samples, and old limitation above are unchanged. Pin
-changes wait for the coordinator's immutable landed core SHA.
+historical tables, raw samples, and old limitation above are unchanged; live
+pins and hardcoded acceptance references now use the adopted SHA.

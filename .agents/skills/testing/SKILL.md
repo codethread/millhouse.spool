@@ -17,8 +17,8 @@ The workspace's `test-layering` reviewer checks this boundary; select it with
 
 ```text
 Pure input/output or declaration data? -> Unit/direct authoring test
-Caller-visible API with runtime state? -> Direct runtime test
-Startup, publication, transport, events or reload? -> Embedded Weaver world
+Caller-visible runtime state, module, clock, or event contract? -> Direct runtime test
+Workspace startup, dependency basis, publication/full refresh, transport or reload? -> Embedded Weaver world
 Built CLI/process topology or generation adoption? -> Process E2E
 ```
 
@@ -45,20 +45,21 @@ Use `millstrand.test.alpha` (aliased below as `t`) and blessed
   mutate ambient runtime selection. It supports plain-Java test JVM launches;
   no new Clojure CLI basis requirement is part of this contract.
 - Check the available fixture before choosing it. Use the bare fixture for
-  classpath-visible activation and direct runtime behavior; use the Weaver-world
-  fixture for startup files, workspace dependency resolution, full refresh, and
-  durable reopen. Use separate disposable process fixtures for process topology
-  and replacement-generation claims. Do not invent a constructor or import
-  upstream private test helpers when the consumer's pinned core does not yet
-  export the promoted fixture.
+  classpath-visible activation and direct runtime state, module, clock, and
+  event contracts. Use the Weaver-world fixture for startup files, workspace
+  dependency resolution and basis startup, module publication/full refresh,
+  transport, and durable reopen. Use separate disposable process fixtures for
+  process topology and replacement-generation claims. Do not invent a
+  constructor or import upstream private test helpers.
 
 ### Embedded Weaver worlds
 
 `t/with-weaver-world [ctx opts]`, `t/run-with-weaver-world opts f`, and
 `t/weaver-world-fixture` own startup, shutdown, and disposable workspace cleanup.
 The context exposes `:runtime` and workspace paths. Use this tier for real
-startup/config, module publication, dependency bases, transports, storage
-integration, events, scheduling, and refresh.
+startup/config, workspace dependency bases, module publication/full refresh,
+transports, storage integration, scheduling, and events coupled to those
+workspace operations.
 
 - Declare `:deps-edn`, optional `:deps-local-edn`, `:init-clj`, optional
   `:init-local-clj`, and workspace-relative `:files` when those inputs are the
