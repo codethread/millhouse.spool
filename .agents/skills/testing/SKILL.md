@@ -17,8 +17,8 @@ The workspace's `test-layering` reviewer checks this boundary; select it with
 
 ```text
 Pure input/output or declaration data? -> Unit/direct authoring test
-Caller-visible runtime state, module, clock, or event contract? -> Direct runtime test
-Workspace startup, dependency basis, publication/full refresh, transport or reload? -> Embedded Weaver world
+Runtime state, classpath module publication, clocks, or events? -> Bare runtime
+Workspace startup, dependency basis, activation files, full refresh, or world REPL? -> Weaver world
 Built CLI/process topology or generation adoption? -> Process E2E
 ```
 
@@ -44,22 +44,13 @@ Use `millstrand.test.alpha` (aliased below as `t`) and blessed
   state and cleanup, performs no per-world dependency resolution, and does not
   mutate ambient runtime selection. It supports plain-Java test JVM launches;
   no new Clojure CLI basis requirement is part of this contract.
-- Check the available fixture before choosing it. Use the bare fixture for
-  classpath-visible activation and direct runtime state, module, clock, and
-  event contracts. Use the Weaver-world fixture for startup files, workspace
-  dependency resolution and basis startup, module publication/full refresh,
-  transport, and durable reopen. Use separate disposable process fixtures for
-  process topology and replacement-generation claims. Do not invent a
-  constructor or import upstream private test helpers.
+- Use the bare fixture for classpath-visible activation, module publication, and direct runtime state, clock, and event contracts. Use the Weaver-world fixture for startup files, workspace dependency resolution, activation-file collection, full refresh, transport through `t/repl!`, and durable reopen. Use separate disposable process fixtures for process topology and replacement-generation claims. Do not invent a constructor or import upstream private test helpers.
 
 ### Embedded Weaver worlds
 
 `t/with-weaver-world [ctx opts]`, `t/run-with-weaver-world opts f`, and
 `t/weaver-world-fixture` own startup, shutdown, and disposable workspace cleanup.
-The context exposes `:runtime` and workspace paths. Use this tier for real
-startup/config, workspace dependency bases, module publication/full refresh,
-transports, storage integration, scheduling, and events coupled to those
-workspace operations.
+The context exposes `:runtime` and workspace paths. Use this tier for startup/config, workspace dependency bases, activation-file collection, full refresh, and behavior coupled to those workspace operations. Ordinary module publication, storage, scheduling, and events are real in both runtime tiers.
 
 - Declare `:deps-edn`, optional `:deps-local-edn`, `:init-clj`, optional
   `:init-local-clj`, and workspace-relative `:files` when those inputs are the
@@ -76,7 +67,7 @@ workspace operations.
   connection-topology claims. Use file SQLite when background executors or
   scheduled work can access the database concurrently with the test body; a
   sequential test body does not make those actors serialized. Memory storage
-  still pays world/basis startup.
+  in a Weaver-world fixture still pays world/basis startup.
 - For time, use `t/manual-clock`, `t/set-clock!`, and `t/advance!`.
   `t/await-quiescent!` settles the event lane, not work dispatched off it; join
   that work with its own completion signal or established bounded await helper.
