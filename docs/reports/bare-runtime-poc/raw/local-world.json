@@ -1,0 +1,59 @@
+[
+  {
+    "label": "local-world",
+    "fixture": "world",
+    "sample": 1,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}} :aliases {:test {:main-opts [\"-i\" \"/Users/ct/dev/projects/millhouse.spool__spike--bare-runtime-fixture/docs/reports/bare-runtime-poc/world_fixture_override.clj\" \"-m\" \"millhouse.test-runner\"]}}}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:16:08.672835+00:00",
+    "finished": "2026-09-27T20:17:40.445335+00:00",
+    "elapsed_ms": 91772.259,
+    "exit_code": 0,
+    "log": "raw/local-world-1.log"
+  },
+  {
+    "label": "local-world",
+    "fixture": "world",
+    "sample": 2,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}} :aliases {:test {:main-opts [\"-i\" \"/Users/ct/dev/projects/millhouse.spool__spike--bare-runtime-fixture/docs/reports/bare-runtime-poc/world_fixture_override.clj\" \"-m\" \"millhouse.test-runner\"]}}}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:17:40.446277+00:00",
+    "finished": "2026-09-27T20:19:09.543179+00:00",
+    "elapsed_ms": 89088.444,
+    "exit_code": 0,
+    "log": "raw/local-world-2.log"
+  },
+  {
+    "label": "local-world",
+    "fixture": "world",
+    "sample": 3,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}} :aliases {:test {:main-opts [\"-i\" \"/Users/ct/dev/projects/millhouse.spool__spike--bare-runtime-fixture/docs/reports/bare-runtime-poc/world_fixture_override.clj\" \"-m\" \"millhouse.test-runner\"]}}}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:19:09.544059+00:00",
+    "finished": "2026-09-27T20:20:39.198970+00:00",
+    "elapsed_ms": 89654.01,
+    "exit_code": 0,
+    "log": "raw/local-world-3.log"
+  }
+]

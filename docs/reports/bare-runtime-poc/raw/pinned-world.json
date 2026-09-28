@@ -1,0 +1,56 @@
+[
+  {
+    "label": "pinned-world",
+    "fixture": "world",
+    "sample": 1,
+    "command": [
+      "clojure",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": null,
+    "started": "2026-09-27T20:05:47Z",
+    "finished": "2026-09-27T20:07:22Z",
+    "elapsed_ms": 94810,
+    "exit_code": 0,
+    "log": "raw/pinned-world-1.log",
+    "timing_source": "/usr/bin/time -p real"
+  },
+  {
+    "label": "pinned-world",
+    "fixture": "world",
+    "sample": 2,
+    "command": [
+      "clojure",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": null,
+    "started": "2026-09-27T20:07:22Z",
+    "finished": "2026-09-27T20:08:58Z",
+    "elapsed_ms": 95320,
+    "exit_code": 0,
+    "log": "raw/pinned-world-2.log",
+    "timing_source": "/usr/bin/time -p real"
+  },
+  {
+    "label": "pinned-world",
+    "fixture": "world",
+    "sample": 3,
+    "command": [
+      "clojure",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": null,
+    "started": "2026-09-27T20:08:58Z",
+    "finished": "2026-09-27T20:10:44Z",
+    "elapsed_ms": 106810,
+    "exit_code": 0,
+    "log": "raw/pinned-world-3.log",
+    "timing_source": "/usr/bin/time -p real"
+  }
+]

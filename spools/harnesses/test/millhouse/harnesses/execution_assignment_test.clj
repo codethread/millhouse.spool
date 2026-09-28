@@ -9,7 +9,7 @@
 
 (def ^:private millstrand-sha
   "The Millstrand revision required by the external acceptance world."
-  "34f940ddb2e69898554bf76251749715b250ae15")
+  "0f1762063b3b7e6fae7576c6025ec14c79cd314a")
 
 (def ^:private fixture-module
   "(ns me.execution-assignment-fixture

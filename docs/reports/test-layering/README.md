@@ -99,3 +99,19 @@ Feature completion remains owned by the independent delivery finisher after exac
 ## Durable evidence
 
 Task `45jfm` retains the exact temporary probe (`coin4`), failed original output (`xdr4j`), three green root outputs (`aphoi`, `jpouw`, `lan98`) and complete metrics (`yjh5p`). Task `mx4e8` retains full quality output (`4e9o4`), focused root/Harnesses results (`6zqrm`, `r14q1`) and the failed unprepared Harnesses launcher (`vsqu2`, diagnosis `wif56`). Read any note with `strand show NOTE_ID`; profiling baseline is `u2ga5`. The final feature/PR records exact report HEAD, independent review and finisher handoff separately.
+
+## Promotion addendum
+
+The supported-API follow-up described above is addressed by the adopted core
+revision `0f1762063b3b7e6fae7576c6025ec14c79cd314a`, which exports the public
+`millstrand.test.alpha/run-with-bare-runtime` fixture. It accepts only `:storage`
+and `:name`, supplies explicit runtime and config/data/state paths (and
+file-storage `:db-path`), and owns fresh state and cleanup. It does not resolve
+dependencies per world or mutate ambient runtime selection, and it supports
+plain-Java test JVMs without a new Clojure CLI basis requirement.
+
+The historical measurements and pinned limitation above remain unchanged. Keep
+Weaver-world fixtures for startup, dependency resolution, refresh, durable
+reopen, and transport claims. Use separate disposable process fixtures for
+process topology and replacement-generation claims. Live pins and hardcoded
+acceptance references now use the adopted SHA.

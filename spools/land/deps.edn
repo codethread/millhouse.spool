@@ -2,7 +2,7 @@
  :deps
  {io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
-   :git/sha "34f940ddb2e69898554bf76251749715b250ae15"
+   :git/sha "0f1762063b3b7e6fae7576c6025ec14c79cd314a"
    :deps/root "."}
   millhouse/kanban {:local/root "../kanban"}
   millhouse/workflow {:local/root "../workflow"}}

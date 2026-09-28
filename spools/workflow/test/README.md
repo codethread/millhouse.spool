@@ -86,8 +86,26 @@ causal speedup estimate: one removed world cannot explain it, and these are
 single runs on a shared host. No meaningful suite speedup is promised.
 
 The only fixture saving claimed here is one authoring world. Namespace splitting
-is an ownership/discovery improvement, not a fixture-cost reduction. The
-[supported fixture limitation](../../../test/README.md#pinned-api-limitation)
-remains: runtime contracts still need embedded worlds because no supported cheap
-bare-runtime constructor is available. Stateful fixture reduction belongs to the
-subsequent runtime and publication cards.
+is an ownership/discovery improvement, not a fixture-cost reduction. At the time
+of this measurement, the pinned core had no supported cheap bare-runtime
+constructor, so runtime contracts still used embedded worlds. The adopted public
+fixture now owns the direct runtime tier; stateful fixture reduction does not
+change the workspace and process evidence boundaries described below.
+
+## Promotion addendum
+
+The limitation above describes the earlier pinned core. The adopted core revision
+`0f1762063b3b7e6fae7576c6025ec14c79cd314a` exports
+`millstrand.test.alpha/run-with-bare-runtime`; use that public fixture for direct
+runtime state, module, clock, and event contracts plus classpath-visible module
+activation. It retains `:storage` and `:name`, supplies explicit runtime and
+config/data/state paths (plus file-storage `:db-path`), and owns fresh state and
+cleanup. It does not resolve per-world dependencies or mutate ambient runtime
+selection, and it supports plain-Java test JVMs without a new CLI-basis
+requirement.
+
+Keep `run-with-weaver-world` for startup files, workspace dependency resolution,
+full refresh, durable reopen, and transport claims. Use separate disposable
+process fixtures for process topology, generation adoption, and replacement-
+process claims. The historical measurements above are unchanged; live pins and
+hardcoded acceptance references now use the adopted SHA.

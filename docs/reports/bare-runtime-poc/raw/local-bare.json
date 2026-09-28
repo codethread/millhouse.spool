@@ -1,0 +1,59 @@
+[
+  {
+    "label": "local-bare",
+    "fixture": "bare",
+    "sample": 1,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:13:14.582450+00:00",
+    "finished": "2026-09-27T20:13:19.879165+00:00",
+    "elapsed_ms": 5296.415,
+    "exit_code": 0,
+    "log": "raw/local-bare-1.log"
+  },
+  {
+    "label": "local-bare",
+    "fixture": "bare",
+    "sample": 2,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:13:19.879723+00:00",
+    "finished": "2026-09-27T20:13:25.188741+00:00",
+    "elapsed_ms": 5308.997,
+    "exit_code": 0,
+    "log": "raw/local-bare-2.log"
+  },
+  {
+    "label": "local-bare",
+    "fixture": "bare",
+    "sample": 3,
+    "command": [
+      "clojure",
+      "-Sdeps",
+      "{:deps {io.millstrand/millstrand {:local/root \"/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture\"}}}",
+      "-M:test",
+      "millhouse.workflow-runtime-test",
+      "millhouse.test-support-test"
+    ],
+    "core_root": "/Users/ct/dev/projects/skein-src__spike--bare-runtime-fixture",
+    "started": "2026-09-27T20:13:25.189469+00:00",
+    "finished": "2026-09-27T20:13:30.443717+00:00",
+    "elapsed_ms": 5254.213,
+    "exit_code": 0,
+    "log": "raw/local-bare-3.log"
+  }
+]
