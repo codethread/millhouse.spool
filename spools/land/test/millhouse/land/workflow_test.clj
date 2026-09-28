@@ -307,7 +307,7 @@
     (let [instruction (get-in (definition-step definition :finish-card)
                               [:attributes "workflow/instruction"])]
       (is (re-find #"workflow execution" instruction))
-      (is (re-find #"workflow retry" instruction))
+      (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN" instruction))
       (is (re-find #"Never clear gate/error" instruction)))
     (is (nil? (definition-step definition :quality)))
     (is (= [:pull-main] (:depends-on (definition-step definition :release-turn))))

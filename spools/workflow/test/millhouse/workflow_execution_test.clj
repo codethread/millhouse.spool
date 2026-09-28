@@ -8,6 +8,7 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver])
@@ -119,6 +120,10 @@
                          (graph/burn-by-ids! rt [(:id (workflow/current-root "claim"))])))
             (is (thrown? clojure.lang.ExceptionInfo
                          (weaver/update! rt (:id (workflow/current-root "claim")) {:state "closed"})))
+            (let [root-id (:id (workflow/current-root "claim"))]
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (batch/apply! rt {:refs {:root root-id} :strands [] :edges [] :burn [:root]})))
+              (is (= root-id (:id (workflow/current-root "claim")))))
             (let [row (first (weaver/list rt [:= [:attr "execution/token"] (:attempt-id failed)] {}))]
               (is (thrown? clojure.lang.ExceptionInfo (graph/burn-by-ids! rt [(:id row)]))))
             (reset! trap {:mode :claim :id id})

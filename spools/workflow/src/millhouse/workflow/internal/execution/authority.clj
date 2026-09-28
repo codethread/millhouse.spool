@@ -118,7 +118,8 @@
           (refuse! "Execution attempts belong to the common driver" id))))
     (doseq [{:keys [id before]} (:batch/burned ctx)]
       (when (or (attr-get before :execution/owner)
-                (= "workflow-execution" (attr-get before :kind)))
+                (= "workflow-execution" (attr-get before :kind))
+                (managed-descendants? (current/runtime) before false nil))
         (refuse! "Managed execution evidence cannot be burned" id))))
   nil)
 

@@ -1015,3 +1015,33 @@
         (is (= "Protected work" (:title (first (workflow/ready "second")))))
         (finally
           (queue/close-handler! {:runtime rt}))))))
+
+(deftest managed-code-refuses-legacy-withdrawal-without-releasing-the-turn
+  ;; Actual Code selection and queue writes share a file-backed transactional
+  ;; world. No Shell executor or external landing command is activated.
+  (with-runtime
+    (fn [rt _]
+      (test-support/activate-spool! rt :workflow 'millhouse.workflow)
+      (test-support/activate-spool! rt :managed-code 'millhouse.test-modules.code-executor :after [:workflow])
+      (start-land-merge-run! "managed-withdrawal")
+      (let [entry (queue/join! rt "managed-withdrawal")
+            root-id (:id (workflow/current-root "managed-withdrawal"))]
+        (install-guard! rt)
+        (try
+          (queue/grant! rt "managed-withdrawal")
+          (let [before (weaver/show rt (:id entry))
+                lock (:lock (queue/status rt))
+                code-gate (first (filter #(= "code" (attr-get % :workflow/gate))
+                                         (:strands (graph/subgraph rt [root-id]))))
+                failure (try (queue/withdraw! rt (:id entry) "Needs full managed retirement")
+                             nil
+                             (catch clojure.lang.ExceptionInfo error (ex-data error)))]
+            (is (= "code" (attr-get code-gate :execution/owner)))
+            (is (nil? (attr-get code-gate :execution/current)))
+            (is (= :workflow/execution-protected (get-in failure [:exception/data :reason])))
+            (is (= before (weaver/show rt (:id entry))))
+            (is (= lock (:lock (queue/status rt))))
+            (is (:holds-lock (queue/status rt (:id entry))))
+            (is (= root-id (:id (workflow/current-root "managed-withdrawal"))))
+            (is (= "active" (:state (weaver/show rt (:id code-gate))))))
+          (finally (close-guard! rt)))))))

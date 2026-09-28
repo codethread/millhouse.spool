@@ -107,10 +107,10 @@
                   "
                     This card update is automatic. On failure, inspect the exact
                     attempt with workflow execution RUN --step GATE and repair
-                    the cause. After positive settlement, use workflow retry
-                    with --expected-attempt TOKEN, a new --request-id KEY,
-                    --reason TEXT and --by-identity ACTOR. Never clear gate/error
-                    or manually complete a managed Code gate.
+                    the cause. After positive settlement, invoke:
+                    `workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
+                    Use a fresh request key. Never clear gate/error or manually
+                    complete a managed Code gate.
                   " {})))
 
 (defn shell-gate

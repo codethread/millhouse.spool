@@ -31,8 +31,8 @@
 
      Managed Code gates use workflow execution RUN --step GATE for inspection.
      After repairing the cause and confirming a settled failed attempt, use
-     workflow retry with --expected-attempt TOKEN, a new --request-id KEY,
-     --reason TEXT and --by-identity ACTOR. Never clear their gate/error or use
+     `workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
+     with a fresh request key. Never clear their gate/error or use
      shell custody fields as Code settlement evidence.
 
      Escalate to the recovery coordinator only for uncertain subprocess/merge

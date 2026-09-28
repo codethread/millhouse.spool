@@ -108,6 +108,9 @@ slice does not freeze legacy Shell/Agent/queue execution or authorize their cuto
   malformed-input failure, corrected explicit retry/replay/conflict; real
   eight-worker saturation, never-accepted stop, frozen deadline and stubborn
   callback settlement. Manual clock and latches establish the boundaries.
+- `land.merge-queue-test`: a real Land merge graph with Code selected proves
+  legacy withdrawal refuses while retaining its reservation, lock and unstarted
+  managed gate. It does not claim cross-backend retirement integration.
 
 The former Code scanner, root traversal, scalar token/result machinery, stalled
 query/predicate and interruption-auto-retry tests are removed. Generic transitions
