@@ -41,9 +41,9 @@
 
 (defn- update-observation! [rt row attempt observation]
   (when-not (= observation (:observation (store/model attempt)))
-    (store/save! rt row (store/advance rt attempt
-                                       (if (= :busy (:status observation)) :busy :observed)
-                                       {:observation observation}))))
+    (store/save-observation! rt row (store/advance rt attempt
+                                                   (if (= :busy (:status observation)) :busy :observed)
+                                                   {:observation observation}))))
 
 (defn stop-attempt! [rt row reason]
   (let [attempt (store/record row)]

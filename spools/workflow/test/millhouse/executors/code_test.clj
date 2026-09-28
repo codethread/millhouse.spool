@@ -127,6 +127,16 @@
                            (assoc-in [:steps 0 :attributes "code/timeout-secs"] timeout))]
     (:id (first (:ready (workflow/start! run-id definition {}))))))
 
+(defn- await-busy [rt run-id gate-id]
+  ;; All eight callable latches remain held. Join a bounded public driver turn
+  ;; for this exact attempt, rather than infer its admission from another gate.
+  (support/poll-until
+   #(when (:attempt-id (view rt run-id gate-id))
+      (let [v (execution/reconcile! rt {:run-id run-id :step gate-id})]
+        (when (and (= :starting (:phase v)) (false? (:accepted? v))
+                   (false? (:dispatch-uncertain? v))) v)))
+   {:on-timeout #(throw (ex-info "Attempt did not reach busy admission" (view rt run-id gate-id)))}))
+
 (deftest occupied-workers-busy-stop-and-fixed-deadline
   (with-code
     (fn [rt]
@@ -142,14 +152,15 @@
           (doseq [i (range 8)] (latch! (get-in @controls [i :entered])))
           (let [stopped (start-code! "busy-stop" "millhouse.executors.code-test/count-value" {:id "stop"} 30)
                 eventual (start-code! "eventual" "millhouse.executors.code-test/count-value" {:id "eventual"} 30)
-                busy (support/poll-until #(let [v (view rt "eventual" eventual)]
-                                            (when (and (:attempt-id v) (false? (:accepted? v))
-                                                       (false? (:dispatch-uncertain? v))) v)))
+                stopped-busy (await-busy rt "busy-stop" stopped)
+                busy (await-busy rt "eventual" eventual)
                 freeze (execution/quiesce-run! rt "busy-stop" "Stop before capacity")]
             (is (= :settled (:status (support/poll-until
                                       #(let [receipt (execution/retire! rt freeze)]
                                          (when (= :settled (:status receipt)) receipt))))))
-            (is (= :cancelled (get-in (await-done rt "busy-stop" stopped) [:result :outcome])))
+            (let [done (await-done rt "busy-stop" stopped)]
+              (is (= (:attempt-id stopped-busy) (:attempt-id done)))
+              (is (= :cancelled (get-in done [:result :outcome]))))
             (is (nil? (get @calls "stop")))
             (t/advance! rt (Duration/ofSeconds 2))
             (latch! (get-in @controls [0 :interrupted]))

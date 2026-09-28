@@ -126,6 +126,20 @@
     (apply-plan! rt (cond-> {(:id row) row (:id root) root} current? (assoc (:id gate) gate)) payload {})
     attempt))
 
+(defn save-observation!
+  "Fence the original attempt image and transactional current-token image.
+
+  Recording an observation does not depend on mutable request-source metadata.
+  Merge only its phase projection; never rewrite ownership, clear gate errors,
+  recapture inputs, or grant completion authority. Attempt conflicts still refuse."
+  [rt row attempt]
+  (apply-plan! rt {(:id row) row}
+               {:refs {:attempt (:id row) :gate (:gate-id attempt)}
+                :strands [(assoc (row-patch attempt) :ref :attempt)
+                          {:ref :gate :attributes {"execution/phase" (name (:phase (model attempt)))}}]}
+               {:current {(:gate-id attempt) (:attempt-id attempt)}})
+  attempt)
+
 (defn advance
   [rt attempt name event]
   (let [decision (chart/decide (:environment (state/state rt)) (:snapshot attempt)

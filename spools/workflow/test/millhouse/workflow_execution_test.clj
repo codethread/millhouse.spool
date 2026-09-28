@@ -1,6 +1,7 @@
 (ns millhouse.workflow-execution-test
   "One file-backed transaction/lifecycle witness for the common execution kernel."
   (:require [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
             [millhouse.test-support :as support]
             [millhouse.workflow :as workflow]
@@ -45,6 +46,9 @@
                    :completion (and close? (= "done" (get-in patch [:attributes "execution/phase"])))
                    :abandon (and close? (= id (some-> patch :ref name)))
                    :topology (and close? (= id (some-> patch :ref name)))
+                   :observation (and (= "starting" (get-in patch [:attributes "execution/phase"]))
+                                     (:dispatch-uncertain? (execution/inspect (current/runtime)
+                                                                              {:run-id (:run-id expected) :step id})))
                    :hold-finalization (and close? (or (= id (:strand/id ctx))
                                                       (= id (some-> patch :ref name))))
                    :hold-completion close?
@@ -56,11 +60,13 @@
             ;; A separate actor must not inherit the outer transaction's dynamic
             ;; authority. This writer commits before the planned batch starts.
             (let [rt (current/runtime)
+                  _ (when-let [captured (:captured expected)]
+                      (deliver captured (execution/inspect rt {:run-id (:run-id expected) :step id})))
                   write (FutureTask.
                          ^Callable
                          (fn []
                            (current/with-runtime rt
-                             (if-let [payload (:edge-payload expected)]
+                             (if-let [payload (:writer-batch expected)]
                                (batch/apply! rt payload)
                                (weaver/update! rt id {:attributes {"test/drift" (name mode)}})))))
                   actor (Thread. write "execution-test-writer")]
@@ -70,6 +76,28 @@
                      (.interrupt actor)
                      (.join actor (long (support/await-budget-ms)))))))))))
   {:hook/value (:hook/value ctx)})
+
+(s/def ::busy-request map?)
+(s/def ::busy-result any?)
+
+(defn busy-request "Capture input for the metadata-fence witness." [{:keys [gate]}]
+  {:value (attr-get gate :test/value) :busy-proof/timeout-secs 30})
+
+(defn busy-start "Reject admission without accepting work." [_ _] {:status :busy})
+
+(defn busy-observe "Do not invent settlement for an absent accepted handle." [_ _]
+  {:status :unknown :reason {:code "test/no-handle" :message "No accepted handle" :data {}}})
+
+(defn busy-acknowledge "Acknowledge a settled test observation." [_ _] {:status :acknowledged})
+
+(def busy-descriptor
+  "A no-capacity adapter: this witness owns storage, not Code's physical pool."
+  {:waiter :busy-proof :revision "test/v1"
+   :request 'millhouse.workflow-execution-test/busy-request :request-spec ::busy-request :result-spec ::busy-result
+   :start 'millhouse.workflow-execution-test/busy-start
+   :observe 'millhouse.workflow-execution-test/busy-observe
+   :stop 'millhouse.workflow-execution-test/busy-observe
+   :acknowledge 'millhouse.workflow-execution-test/busy-acknowledge})
 
 (def replacement
   "Continuation for the atomic routed-choice witness."
@@ -187,6 +215,39 @@
               (is (= :succeeded (get-in (await-done rt "completion" id) [:result :outcome])))
               (is (= (inc before) @calls))
               (is (= "Next" (:title (first (workflow/ready "completion"))))))))
+        (testing "observation facts do not depend on mutable request-source metadata"
+          (let [resource (execution/open! rt busy-descriptor)]
+            (try
+              (workflow/start! "busy-metadata"
+                               (workflow/workflow "Busy metadata"
+                                                  (workflow/step :wait "Wait" :self)
+                                                  (workflow/gate :pending "Pending" :busy-proof :depends-on [:wait]
+                                                                 :attributes {"test/value" "original"})) {})
+              (let [root-id (:id (workflow/current-root "busy-metadata"))
+                    gate-id (:id (first (filter #(= "busy-proof" (attr-get % :workflow/gate))
+                                                (:strands (graph/subgraph rt [root-id])))))
+                    captured (promise)]
+                (reset! trap {:mode :observation :id gate-id :run-id "busy-metadata" :captured captured
+                              :writer-batch {:refs {:gate gate-id :root root-id}
+                                             :strands [{:ref :gate :attributes {"test/value" "edited"}}
+                                                       {:ref :root :attributes {"test/metadata" "edited"}}]}})
+                (workflow/complete! "busy-metadata")
+                (let [before (deref captured (support/await-budget-ms) nil)
+                      after (support/poll-until
+                             #(let [v (execution/reconcile! rt {:run-id "busy-metadata" :step gate-id})]
+                                (when (and (:attempt-id v) (false? (:dispatch-uncertain? v))) v))
+                             {:on-timeout #(throw (ex-info "Known busy response was lost" (inspect rt "busy-metadata" gate-id)))})]
+                  (is (some? before))
+                  (is (= "edited" (attr-get (weaver/show rt gate-id) :test/value)))
+                  (is (= "edited" (attr-get (weaver/show rt root-id) :test/metadata)))
+                  (is (= "original" (get-in after [:request :value])))
+                  (is (= (select-keys before [:attempt-id :request :deadline])
+                         (select-keys after [:attempt-id :request :deadline])))
+                  (is (false? (:accepted? after)))
+                  (let [freeze (execution/quiesce-run! rt "busy-metadata" "Stop an unaccepted attempt")]
+                    (is (= :settled (:status (execution/retire! rt freeze))))
+                    (is (= :cancelled (get-in (await-done rt "busy-metadata" gate-id) [:result :outcome]))))))
+              (finally (reset! trap nil) (execution/close! rt resource)))))
         (testing "unchanged selection, protected unstarted gates, freeze and atomic routed cutover"
           (reset! entered (CountDownLatch. 1))
           (reset! release (CountDownLatch. 1))
@@ -263,7 +324,7 @@
                     request {:run-id "edge-fence" :root-id root-id :reason "Fence topology"
                              :by-identity "test-worker" :retirement receipt
                              :workflow #'abort-replacement :params {}}]
-                (reset! trap {:mode :topology :id root-id :edge-payload edge})
+                (reset! trap {:mode :topology :id root-id :writer-batch edge})
                 (is (thrown? clojure.lang.ExceptionInfo (execution/abandon-run! rt request)))
                 (is (= rows (mapv #(weaver/show rt %) [root-id gate-id inner])))
                 (is (= #{root-id inner}

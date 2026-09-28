@@ -91,6 +91,10 @@
     (doseq [[id expected] (:before *transaction*)]
       (when-not (= expected (:before (get by-id id)))
         (refuse! "Execution transaction before-image changed or was not fenced" id)))
+    (doseq [[id token] (:current *transaction*)]
+      (let [participant (get by-id id)]
+        (when-not (and participant (= token (attr-get (:before participant) :execution/current)))
+          (refuse! "Observation current-attempt fence changed or was omitted" id))))
     (doseq [{:keys [id before after]} updates]
       (let [patch (get-in *transaction* [:writes id])
             attributes (:attributes patch)

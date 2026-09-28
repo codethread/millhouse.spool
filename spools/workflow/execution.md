@@ -29,6 +29,12 @@ reconcilable through a retained pending marker; it is not part of that atomic
 close. Finished, acknowledged attempts stay inspectable but leave the scheduler's
 reconciliation query.
 
+Observation recording fences the complete attempt image and exact current gate
+token, merging only its phase projection. Unrelated gate/root metadata edits do
+not discard a known busy response or rewrite frozen input. Claims, dispatch
+intent, stop/control changes and terminal delivery retain their full-image
+fences. Recording an observation is not completion authority.
+
 ```nu
 strand workflow execution RUN --step GATE
 strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id repair-1 --reason 'Corrected input' --by-identity ACTOR
@@ -103,7 +109,8 @@ slice does not freeze legacy Shell/Agent/queue execution or authorize their cuto
   duplicate/stale events, stop/result ordering, full EDN restoration in fresh
   environments, interpreter errors and malformed interpreter returns. No Weaver.
 - `workflow-execution-test`: one disposable file-backed runtime proves claim,
-  completion and abandonment before-image refusal/no partial write, postcommit
+  completion and abandonment before-image refusal/no partial write, observation
+  persistence across independent gate/root metadata writes, postcommit
   root-finalization recovery without callback replay, cascading
   joins, nearest-root authority (including a separate edge-only writer), unchanged
   refresh/removal/readoption, ordinary manual gates, protected unstarted work,
