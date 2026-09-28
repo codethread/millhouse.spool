@@ -1284,65 +1284,70 @@
   the reconciler does not invent a replacement attempt or acknowledge evidence
   it cannot correlate.
 
+  Bind the explicit lifecycle runtime for retained-attempt mutations, including
+  pooled startup before any ambient runtime has been published.
+
   Deferred admission schedules one runtime-owned retry reader, stops at worker
   shutdown, and never relaunches processes."
   [{:keys [runtime] :as context}]
-  (let [desired (:desired context)
-        actual (:actual context)
-        deferred? (deferred-custody-read? actual)
-        actual (custody-facts actual)
-        by-key (group-by :key actual)
-        desired-keys (set (keep :attempt-id desired))
-        results (if deferred?
-                  (mapv (fn [attempt]
-                          {:attempt-id (:attempt-id attempt)
-                           :deferred true})
-                        desired)
-                  (mapv (fn [attempt]
-                          (let [facts (get by-key (:attempt-id attempt))]
-                            (cond
-                              (nil? (:attempt-id attempt))
-                              {:gate-id (:gate-id attempt) :ignored true}
+  (current/with-runtime runtime
+    (binding [*runtime* runtime]
+      (let [desired (:desired context)
+            actual (:actual context)
+            deferred? (deferred-custody-read? actual)
+            actual (custody-facts actual)
+            by-key (group-by :key actual)
+            desired-keys (set (keep :attempt-id desired))
+            results (if deferred?
+                      (mapv (fn [attempt]
+                              {:attempt-id (:attempt-id attempt)
+                               :deferred true})
+                            desired)
+                      (mapv (fn [attempt]
+                              (let [facts (get by-key (:attempt-id attempt))]
+                                (cond
+                                  (nil? (:attempt-id attempt))
+                                  {:gate-id (:gate-id attempt) :ignored true}
 
-                              (empty? facts)
-                              (if (= "closed" (:state attempt))
-                                #_{:clj-kondo/ignore [:locking-suspicious-lock]}
-                                #_{:splint/disable [lint/locking-object]}
-                                (if (locking (scan-monitor)
-                                      (clear-attempt! (:gate-id attempt)
-                                                      (:attempt-id attempt)
-                                                      (:custody-handle attempt)))
-                                  {:attempt-id (:attempt-id attempt)
-                                   :recovered :closed-without-custody-fact}
-                                  {:attempt-id (:attempt-id attempt)
-                                   :stale true})
-                                (owner-local-failure!
-                                 attempt
-                                 (str "missing shell custody fact for attempt "
-                                      (:attempt-id attempt))))
+                                  (empty? facts)
+                                  (if (= "closed" (:state attempt))
+                                    #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+                                    #_{:splint/disable [lint/locking-object]}
+                                    (if (locking (scan-monitor)
+                                          (clear-attempt! (:gate-id attempt)
+                                                          (:attempt-id attempt)
+                                                          (:custody-handle attempt)))
+                                      {:attempt-id (:attempt-id attempt)
+                                       :recovered :closed-without-custody-fact}
+                                      {:attempt-id (:attempt-id attempt)
+                                       :stale true})
+                                    (owner-local-failure!
+                                     attempt
+                                     (str "missing shell custody fact for attempt "
+                                          (:attempt-id attempt))))
 
-                              (> (count facts) 1)
-                              (owner-local-failure!
-                               attempt
-                               (str "multiple shell custody facts for attempt "
-                                    (:attempt-id attempt)))
+                                  (> (count facts) 1)
+                                  (owner-local-failure!
+                                   attempt
+                                   (str "multiple shell custody facts for attempt "
+                                        (:attempt-id attempt)))
 
-                              :else
-                              (reconcile-fact! runtime attempt (first facts)))))
-                        desired))
-        orphan-errors (if deferred?
-                        []
-                        (mapv (fn [fact]
-                                {:attempt-id (:key fact)
-                                 :handle (:handle fact)
-                                 :error "shell custody fact has no matching durable attempt"})
-                              (remove #(contains? desired-keys (:key %)) actual)))]
-    (when (and deferred? (seq desired))
-      (resume-deferred-reconciliation! runtime))
-    {:reconciled :shell-attempts
-     :status (if deferred? :deferred :applied)
-     :attempts results
-     :errors (vec (concat (filter :error results) orphan-errors))}))
+                                  :else
+                                  (reconcile-fact! runtime attempt (first facts)))))
+                            desired))
+            orphan-errors (if deferred?
+                            []
+                            (mapv (fn [fact]
+                                    {:attempt-id (:key fact)
+                                     :handle (:handle fact)
+                                     :error "shell custody fact has no matching durable attempt"})
+                                  (remove #(contains? desired-keys (:key %)) actual)))]
+        (when (and deferred? (seq desired))
+          (resume-deferred-reconciliation! runtime))
+        {:reconciled :shell-attempts
+         :status (if deferred? :deferred :applied)
+         :attempts results
+         :errors (vec (concat (filter :error results) orphan-errors))}))))
 
 (defn remove-shell-attempts!
   "Report removal of the shell reconciliation effect without guessing cleanup."
