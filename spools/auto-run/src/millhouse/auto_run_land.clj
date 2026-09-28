@@ -24,9 +24,16 @@
      material changes, push, then retry the SAME failed gate after its subprocess
      is terminal and shell/running, shell/attempt-id and shell/custody-handle are
      absent. Use workflow retry-validation for an opted-in validation/recipe;
-     otherwise remove only gate/error. The executor must validate the final HEAD.
+     for an ordinary shell gate, remove only gate/error. The executor must
+     validate the final HEAD.
      Keep the FIFO reservation. These repairs need no new approval or replacement
      worker. The worker must not take back an accepted finisher's custody.
+
+     Managed Code gates use workflow execution RUN --step GATE for inspection.
+     After repairing the cause and confirming a settled failed attempt, use
+     workflow retry with --expected-attempt TOKEN, a new --request-id KEY,
+     --reason TEXT and --by-identity ACTOR. Never clear their gate/error or use
+     shell custody fields as Code settlement evidence.
 
      Escalate to the recovery coordinator only for uncertain subprocess/merge
      settlement, mismatched worker/finisher identity or receipts, unknown resource

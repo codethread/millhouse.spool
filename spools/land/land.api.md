@@ -341,7 +341,7 @@ Resolve the canonical checkout while the feature worktree still exists.
 
   The resulting path is frozen into cleanup gates, so their working directory
   survives removal of the feature worktree.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L8-L20">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L9-L21">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/card-gate">`card-gate`</a>
 ``` clojure
@@ -350,7 +350,7 @@ Resolve the canonical checkout while the feature worktree still exists.
 Function.
 
 Build a short, retryable card bookkeeping gate.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L98-L105">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L99-L114">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-cleanup-argv">`land-cleanup-argv`</a>
 ``` clojure
@@ -362,7 +362,7 @@ Freeze cleanup and obtain its expected branch HEAD from the merged PR.
 
   A rebase may have changed HEAD after the continuation was poured. The merged
   PR retains that identity even when a previous cleanup removed the worktree.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L86-L96">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L87-L97">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-cleanup-script">`land-cleanup-script`</a>
 
@@ -370,7 +370,7 @@ Freeze cleanup and obtain its expected branch HEAD from the merged PR.
 
 
 Clean up the landed feature branch and worktree.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L82-L84">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L83-L85">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-merge-script">`land-merge-script`</a>
 
@@ -378,7 +378,7 @@ Clean up the landed feature branch and worktree.
 
 
 Idempotently ready and squash-merge the feature PR.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L64-L66">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L65-L67">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-pull-main-script">`land-pull-main-script`</a>
 
@@ -389,7 +389,7 @@ Fast-forward the canonical main checkout to origin/main.
 
   This stays inline as the small-script exemplar: eight lines of shell and no
   data-shaping logic do not earn a separate file.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L68-L80">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L69-L81">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-quality-gate-script">`land-quality-gate-script`</a>
 
@@ -397,7 +397,7 @@ Fast-forward the canonical main checkout to origin/main.
 
 
 POSIX script that validates and runs the target repository's quality contract.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L42-L44">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L43-L45">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/non-blank-string?">`non-blank-string?`</a>
 ``` clojure
@@ -406,7 +406,7 @@ POSIX script that validates and runs the target repository's quality contract.
 Function.
 
 Return true when v is a non-blank string.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L22-L25">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L23-L26">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/pr-checks-argv">`pr-checks-argv`</a>
 ``` clojure
@@ -424,7 +424,7 @@ Return argv for the shared PR checks gate.
   then fails specifically if the rollup is still empty. After a successful
   checks wait, the gate revalidates PR, local, and pushed heads against the
   original frozen commit.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L50-L62">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L51-L63">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/script">`script`</a>
 ``` clojure
@@ -433,7 +433,7 @@ Return argv for the shared PR checks gate.
 Function.
 
 Return the frozen source of a named workspace script.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L27-L35">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L28-L36">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/sh-gate">`sh-gate`</a>
 ``` clojure
@@ -442,7 +442,7 @@ Return the frozen source of a named workspace script.
 Function.
 
 Return shell argv that runs script with name as `$0` and args as positionals.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L37-L40">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L38-L41">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/shell-gate">`shell-gate`</a>
 ``` clojure
@@ -451,4 +451,4 @@ Return shell argv that runs script with name as `$0` and args as positionals.
 Function.
 
 Build a shell gate whose request is frozen with the worktree context.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L107-L115">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L116-L124">Source</a></sub></p>

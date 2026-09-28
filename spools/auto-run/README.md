@@ -42,7 +42,10 @@ unknown failures require intervention. This is agent guidance, not an automated
 log classifier. It requires durable failure evidence, settled shell custody and
 fresh quality/CI at the repaired revision. `failure-policy` retains the separate
 explicit recovery boundary for handoff and landing; repair authority cannot bypass
-executor results, recipe refusals, finisher custody or queue ownership.
+executor results, recipe refusals, finisher custody or queue ownership. Managed
+Code verification failures instead use the common `workflow execution` inspection
+and explicit `workflow retry` contract; Shell custody fields and error deletion
+cannot establish Code settlement or authorize its retry.
 
 `auto-run register-worker` is coordinator-only policy for explicitly authorized
 recovery, not another launch or an authorization mechanism. It requires the

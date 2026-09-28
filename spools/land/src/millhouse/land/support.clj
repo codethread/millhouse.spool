@@ -3,7 +3,8 @@
   (:require [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.string :as str]
-            [millhouse.workflow :as workflow]))
+            [millhouse.workflow :as workflow]
+            [millstrand.api.format.alpha :as format]))
 
 (defn canonical-worktree
   "Resolve the canonical checkout while the feature worktree still exists.
@@ -102,7 +103,15 @@
                  :depends-on dependencies
                  :attributes {"code/fn" callable
                               "code/params" #(select-keys % [:card])}
-                 "This card update is automatic. On failure, fix the cause and clear gate/error to retry."))
+                 (format/prose
+                  "
+                    This card update is automatic. On failure, inspect the exact
+                    attempt with workflow execution RUN --step GATE and repair
+                    the cause. After positive settlement, use workflow retry
+                    with --expected-attempt TOKEN, a new --request-id KEY,
+                    --reason TEXT and --by-identity ACTOR. Never clear gate/error
+                    or manually complete a managed Code gate.
+                  " {})))
 
 (defn shell-gate
   "Build a shell gate whose request is frozen with the worktree context."
