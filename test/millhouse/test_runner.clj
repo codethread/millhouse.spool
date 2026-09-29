@@ -50,13 +50,16 @@
 
   Workflow runtime proofs temporarily redefine batch/apply!, weaver/ready and
   workflow/attention. Keep those global substitutions away from the other
-  Workflow partitions and every parallel runtime consumer."
+  Workflow partitions and every parallel runtime consumer. Shell and withdrawal
+  proofs substitute the shared Mill process API and batch hooks as well."
   #{'millhouse.auto-review-test
     'millhouse.auto-run-test
     'millhouse.consumer-test
     'millhouse.executors.code-test
+    'millhouse.executors.shell-test
     'millhouse.kanban-test
     'millhouse.land.merge-queue-test
+    'millhouse.land.withdrawal-test
     'millhouse.land.workflow-test
     'millhouse.millstrand-workflows-test
     'millhouse.workflow-runtime-test})

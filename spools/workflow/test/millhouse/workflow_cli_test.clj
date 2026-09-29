@@ -382,7 +382,8 @@
   ;; The gate-authoring read: every registered waiter in order, each carrying
   ;; its stall predicate and — where the executor declares a request spec — the
   ;; projected contract with the exact attribute keys an author writes.
-  (with-cli-runtime
+  ;; Shell activation starts a concurrent DB-reading scanner.
+  (test-support/with-runtime
     (fn [rt _]
       (activate-cli! rt)
       (test-support/activate-spool! rt :millhouse/shell 'millhouse.test-modules.shell-executor

@@ -24,7 +24,7 @@
                 :positionals [{:name :entry-id :required? true :spec :millhouse.land.merge-queue/non-blank}]}
     "repair" {:doc "Resume and explicitly retry reversible preparation."
               :hook-class :mutating :deadline-class :unbounded
-              :flags {:kind {:type :string :required? true
+              :flags {:kind {:type :string :required? true :spec :millhouse.land.merge-queue/repair-kind
                              :doc "preparation."}
                       :by-identity {:type :string :required? true :spec :millhouse.land.merge-queue/non-blank
                                     :doc "Trusted actor performing the repair."}

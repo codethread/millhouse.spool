@@ -184,17 +184,17 @@
                  (or (not (contains? request :episode-ref)) (data/nonblank? (:episode-ref request)))
                  (or (not (contains? request :dry-run)) (boolean? (:dry-run request))))
     (refuse! "Invalid validation retry request"))
-  (let [prior-action (some-> (first (weaver/list rt
-                                                 [:and [:= [:attr "execution/action-run"] run-id]
-                                                  [:= [:attr "execution/action-key"] request-id]] {}))
-                             (attr-get :execution/action) data/decode)
-        gate (select-gate rt request)]
-    (when-not (attr-get gate :validation/recipe)
-      (refuse! "Gate did not opt into a validation recipe"))
-    (try
+  (try
+    (let [prior-action (some-> (first (weaver/list rt
+                                                   [:and [:= [:attr "execution/action-run"] run-id]
+                                                    [:= [:attr "execution/action-key"] request-id]] {}))
+                               (attr-get :execution/action) data/decode)
+          gate (select-gate rt request)]
+      (when-not (attr-get gate :validation/recipe)
+        (refuse! "Gate did not opt into a validation recipe"))
       (let [result (retry! rt (assoc request :expected-attempt
                                      (or (get-in prior-action [:request :expected-attempt])
                                          (attr-get gate :execution/current))))]
-        (assoc result :state (name (:status result))))
-      (catch clojure.lang.ExceptionInfo error
-        {:state "refused" :reasons [(ex-message error)]}))))
+        (assoc result :state (name (:status result)))))
+    (catch clojure.lang.ExceptionInfo error
+      {:state "refused" :reasons [(ex-message error)]})))

@@ -426,7 +426,7 @@
     (is (not (contains? flags :by)))
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"Unknown flag --by"
-         (cli/parse args ["repair" "run-1" "--kind" "skipped-turn"
+         (cli/parse args ["repair" "run-1" "--kind" "preparation"
                           "--by" "operator" "--reason" "evidence"
                           "--evidence" "{}"])))))
 

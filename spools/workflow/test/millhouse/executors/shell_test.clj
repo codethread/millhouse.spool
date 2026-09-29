@@ -129,7 +129,12 @@
           (is (= "output" (get-in result [:value :output])))
           (is (= (if (zero? code) :succeeded :failed) (:outcome result)))
           (is (= :settled (:settlement result)))))
-      (is (= ["After"] (mapv :title (workflow/ready "success")))))))
+      (is (= ["After"] (mapv :title (workflow/ready "success"))))
+      (let [result (workflow/retry-validation! {:run-id "failure" :step (:gate-id (view rt "failure"))
+                                                :request-id "unmarked" :expected-revision "candidate"
+                                                :reason "Not opted in" :by-identity "fixture-owner"})]
+        (is (= "refused" (:state result)))
+        (is (seq (:reasons result)))))))
 
 (deftest adapter-request-correlation-output-and-exact-stop
   (let [stdout (temp-file ".stdout")
@@ -277,6 +282,8 @@
             (await-eventually #(:result (view rt "drift"))))
           (is (= "Validation revision changed" (get-in (view rt "drift") [:result :error :message])))
           (is (= :failed (get-in (view rt "drift") [:result :outcome])))
+          (is (= {:outcome :succeeded :value {:exit-code 0 :output ""} :error nil}
+                 (get-in (view rt "drift") [:result :evidence "backend-result"])))
           (is (= "active" (:state (shell-gate-strand rt "drift"))))
           (workflow/start! "never"
                            (workflow/workflow "Never accepted"
@@ -327,3 +334,11 @@
               (is (= old-gate (weaver/show rt gate-id)))
               (is (= replacement (workflow/current-root "retired")))
               (is (= ["Abort"] (mapv :title (workflow/ready "retired")))))))))))
+
+(deftest legacy-shell-cutover-requires-drain
+  ;; The refusal precedes engine startup, so all DB access is serialized.
+  (with-embedded-runtime {:storage :sqlite-memory}
+    (fn [rt _]
+      (weaver/add! rt {:title "Legacy Shell" :attributes {"workflow/gate" "shell" "shell/attempt-id" "legacy"}})
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Drain legacy Shell execution"
+                            (shell/open-shell-engine! {:runtime rt}))))))

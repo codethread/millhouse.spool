@@ -21,6 +21,7 @@
             [millstrand.api.weaver.alpha :as weaver]))
 
 (s/def ::non-blank (s/and string? (complement str/blank?)))
+(s/def ::repair-kind #{"preparation"})
 (s/def ::timeout-secs (s/and int? (complement neg?)))
 (defn- require-unfrozen-root! [runtime run-id]
   (let [{:keys [root freeze]} (execution/run-view runtime run-id)]
@@ -275,11 +276,13 @@
                {:root (:id root) :gate (:id gate)})))))
 
 (defn- retire-run! [runtime run-id reason]
-  (let [freeze (execution/quiesce-run! runtime run-id reason)
-        receipt (execution/retire! runtime freeze)]
-    (when-not (= :settled (:status receipt))
-      (fail! "Run retirement is unknown; retain the frozen reservation" {:retirement receipt}))
-    receipt))
+  (let [freeze (execution/quiesce-run! runtime run-id reason)]
+    (poll-until! (runtime/clock runtime)
+                 {:timeout-ms 10000 :poll-ms 100
+                  :check #(execution/retire! runtime freeze)
+                  :pred->result #(when (= :settled (:status %)) %)
+                  :on-timeout #(fail! "Run retirement is unknown; retain the frozen reservation"
+                                      {:retirement %})})))
 
 (defn withdraw!
   "Retire before taking the queue lock, then atomically abandon into abort.
@@ -347,7 +350,7 @@
   (current/with-runtime runtime
     (let [receipt (retire-run! runtime run-id reason)
           {:keys [root-id gate-id expected-attempt request-id]} evidence]
-      ;; No execution calls occur under the queue lock. Domain ownership is
+      ;; No execution mutations occur under the queue lock. Domain ownership is
       ;; checked here; exact receipt/root/token checks repeat at resume/retry.
       (with-guard runtime
         (fn []
@@ -357,6 +360,7 @@
             (when-not (and entry (= root-id (:id root)) (= root-id (attr-get entry :queue/root))
                            (some #(= gate-id (:id %)) (run-strands root))
                            (= "shell" (attr-get gate :workflow/gate))
+                           (= expected-attempt (:attempt-id (execution/inspect runtime {:run-id run-id :step gate-id})))
                            (not (attr-get gate :land/irreversible)) (= "active" (:state gate)))
               (fail! "Repair requires this reservation's active reversible Shell gate" {:evidence evidence}))
             (require-unattempted-irreversible! root receipt))))
