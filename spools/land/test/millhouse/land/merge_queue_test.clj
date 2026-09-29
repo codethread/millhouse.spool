@@ -1,6 +1,8 @@
 (ns millhouse.land.merge-queue-test
   "Exercise queue behavior through public operations in disposable runtimes."
   (:require [clojure.data.json :as json]
+            [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millhouse.executors.shell :as shell]
             [millhouse.land.merge-queue :as queue]
@@ -18,11 +20,31 @@
   (:import [java.io File]
            [java.util.concurrent CountDownLatch Executor Executors TimeUnit]))
 
+(s/def ::branch (s/and string? (complement str/blank?)))
+(s/def ::reason (s/and string? (complement str/blank?)))
+(s/def ::abort-params (s/keys :req-un [::branch ::reason]))
+
+(workflow/defworkflow abort-fixture
+  "Compile repository-owned abort bookkeeping for queue tests."
+  {:entrypoints #{:continue} :param-spec ::abort-params}
+  (workflow/workflow
+   "Abort fixture"
+   {:attributes {"workflow/family" "land"
+                 "land/stage" "abort"
+                 "land/abort-reason" (fn [{:keys [reason]}] reason)}}
+   (workflow/step :record "Pause unfinished work" :self)))
+
+(def ^:private fixture-abort-definition
+  "Fully qualified repository abort workflow used by queue fixtures."
+  "millhouse.land.merge-queue-test/abort-fixture")
+
 (defn- start-run! [id]
   (workflow/start!
    id
    (workflow/workflow
-    "Landing fixture" {:attributes {"workflow/family" "land"}}
+    "Landing fixture"
+    {:attributes {"workflow/family" "land"
+                  "land/abort-definition" fixture-abort-definition}}
     (workflow/gate :turn "Await turn" :merge-turn)
     (workflow/step :work "Protected work" :self :depends-on [:turn])
     (workflow/gate :release "Release turn" :merge-release :depends-on [:work])
@@ -39,8 +61,9 @@
    (workflow/workflow
     "Landing repair fixture"
     {:attributes {"workflow/family" "land"
-                  "land/version" 3
-                  "land/stage" "merge"}}
+                  "land/version" 4
+                  "land/stage" "merge"
+                  "land/abort-definition" fixture-abort-definition}}
     (workflow/gate :turn "Await turn" :merge-turn)
     (workflow/gate :prepare "Prepare merge" :shell
                    :depends-on [:turn]
@@ -62,15 +85,7 @@
 
 (defn- start-land-merge-run!
   [id]
-  (workflow/start!
-   id
-   @(requiring-resolve 'millhouse.land/land-merge)
-   {:feature id
-    :branch id
-    :worktree (System/getProperty "user.dir")
-    :subject (str "Land " id)
-    :body (str "Land " id)
-    :pr-number 42}))
+  (start-repair-run! id))
 
 (defn- ready-gate
   [run-id waiter]

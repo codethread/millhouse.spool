@@ -7,14 +7,14 @@ Millhouse revision you selected, with `:deps/root "spools/config"`; see
 
 ## Activation
 
-Register the shared agent and landing surface before consumer-specific configuration:
+Register shared agents and landing infrastructure before consumer-specific configuration:
 
 ```clojure
 (require '[millhouse.config.bootstrap :as config])
 (config/register! runtime)
 ```
 
-`register!` owns ordering for the Harnesses providers and command surface, the shared aliases and reviewer lenses, and the shared Millhouse landing workflow. It deliberately does not activate the asynchronous Workflow `:agent` executor. Register repository-specific aliases, flags, and workflows next, then activate the executor last:
+`register!` owns ordering for the Harnesses providers and command surface, shared aliases and reviewer lenses, and the landing queue infrastructure. It deliberately does not register a landing workflow or activate the asynchronous Workflow `:agent` executor. Register the repository's own `land` definition alongside its other aliases, flags, and workflows, then activate the executor last:
 
 ```clojure
 (config/register-executor! runtime [:consumer/aliases
@@ -25,7 +25,7 @@ The optional second argument adds explicit `:after` edges for consumer modules t
 
 The stable catalog module ids, in order, are `:millhouse/identity`, `:millhouse/workflow`, `:millhouse/kanban`, `:millhouse/harnesses`, `:millhouse/config-agents`, `:millhouse/config-reviewers`, and `:millhouse/land`. Kanban activates before Harnesses because assignment prompts consume Kanban's current-ownership projections. Repository-specific workflows are not activated by the catalog bootstrap.
 
-Consumers that need landing without the Millhouse agent catalog can depend on the independent `millhouse/land` root and register `millhouse.land.spool` after Millhouse Workflow and Kanban. The root does not depend on Harnesses provider code; its reviewer seat is ordinary workflow data, and the consumer supplies the `:agent` executor.
+Consumers that need landing without the Millhouse agent catalog can depend on the independent `millhouse/land` root and register `millhouse.land.spool` after Millhouse Workflow and Kanban. That module supplies queue executors, operations, queries, and resources only. The consumer must register its own landing workflow and any `:agent` executor required by its review policy.
 
 The preferred role aliases are `grunt`, `luna`, `oracle`, `reviewer`, and `tui`. `grunt` prefers the `deepseek` (`deepseek-flash`) seat and falls back to `luna`; the `seat/allow-china` flag defaults true and makes every DeepSeek-powered seat unavailable when set false. Shared reviewer lenses select `grunt` first while retaining their existing role fallbacks. The delegated- coordination aliases `coordinator`, `sub-coordinator`, and `sub-coordinator-sol` are not elected by the catalog while they remain under test. The bounded `sub-coordinator` intentionally remains Luna-first because it is a dedicated coordination role with a provider-neutral runbook and explicit Terra fallback, not a mechanical implementation seat. Register the two sub-coordinator aliases on demand through the additive seams in `millhouse.config.sub-coordinator`. The bounded `sub-coordinator` carries its complete runbook as supported alias system guidance. See the [rollout procedure](../../docs/processes/sub-coordinator-rollout.md) for its Codex handoff, Terra/high fallback, and additive live-registration proof without runtime mutation.
 
@@ -41,7 +41,7 @@ strand workflow show land
 strand help merge-queue
 ```
 
-The rollout smoke evaluates actual consumer `.millstrand/deps.edn`, `.millstrand/init.clj`, and referenced workspace files in disposable in-memory worlds. It applies local dependency overrides only inside those worlds and checks module activation, the queue command, mandatory basic review, and all three landing definitions:
+The rollout smoke evaluates actual consumer `.millstrand/deps.edn`, `.millstrand/init.clj`, and referenced workspace files in disposable in-memory worlds. It applies local dependency overrides only inside those worlds and checks infrastructure activation, the queue command, and each repository's own visible `land` definition:
 
 ```text
 cd spools/config

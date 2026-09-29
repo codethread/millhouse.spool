@@ -49,15 +49,15 @@ silently retired.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
 - Never stop the mill; only the user may stop it.
 - Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
-  shared `land` for quality, one basic review, FIFO merge, card completion, and
-  branch/worktree cleanup.
+  Millhouse's repository-owned `land` for quality, one basic review, FIFO merge,
+  card completion, and branch/worktree cleanup.
 
 ## Automatic assignments
 
 - Read [the auto-run policy](docs/auto-run.md) and drive the exact workflow run
   created by the dispatcher; do not create a replacement run.
 - `auto-human-review` stops at its human checkpoint. `auto-full-land` hands
-  shared landing to an independent finisher before sign-off; the worker must not
+  repository landing to an independent finisher before sign-off; the worker must not
   approve sign-off, merge, remove its worktree, or finish the card.
 - Follow Codethread's canonical agent blocker contract; repository policy adds
   only the full-land custody boundaries.

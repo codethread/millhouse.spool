@@ -5,6 +5,7 @@ pr_number=${1-}
 subject=${2-}
 body=${3-}
 branch=${4-}
+merge_method=${5-}
 
 die() {
   printf '%s\n' "land merge: $*" >&2
@@ -12,7 +13,13 @@ die() {
 }
 
 [ -n "$pr_number" ] && [ -n "$subject" ] && [ -n "$body" ] && [ -n "$branch" ] \
-  || die "usage: land-merge PR_NUMBER SUBJECT BODY BRANCH"
+  && [ -n "$merge_method" ] \
+  || die "usage: land-merge PR_NUMBER SUBJECT BODY BRANCH MERGE_METHOD"
+case "$merge_method" in
+  squash) merge_flag=--squash ;;
+  merge) merge_flag=--merge ;;
+  *) die "merge method must be squash or merge; found: $merge_method" ;;
+esac
 git check-ref-format --branch "$branch" >/dev/null 2>&1 \
   || die "invalid expected PR head branch: $branch"
 [ "$branch" != main ] || die "feature branch must not be main"
@@ -81,7 +88,7 @@ if ! gh pr ready "$pr_number"; then
   fi
 fi
 
-gh pr merge "$pr_number" --squash --subject "$subject" --body "$body" \
+gh pr merge "$pr_number" "$merge_flag" --subject "$subject" --body "$body" \
   --match-head-commit "$head"
 
 state_after_merge=$(gh pr view "$pr_number" --json state --jq .state) \

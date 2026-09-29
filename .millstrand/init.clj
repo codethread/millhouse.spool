@@ -12,9 +12,9 @@
 (runtime/module! runtime :millstrand/spools-batteries
                  {:ns 'millstrand.spools.batteries})
 
-;; Register shared identity, Workflow, Harnesses, Kanban, Land, aliases, and
-;; reviewers before repository-specific policy. Executor activation remains
-;; deliberately last.
+;; Register shared identity, Workflow, Harnesses, Kanban, landing queue
+;; infrastructure, aliases, and reviewers before repository-specific policy.
+;; Executor activation remains deliberately last.
 (config/register! runtime)
 
 (runtime/module! runtime :millhouse/workspace-reviewers
@@ -26,6 +26,13 @@
 (runtime/module! runtime :millhouse/workflow-all
                  {:ns 'millhouse.workflow.spool
                   :after [:millhouse/workflow]
+                  :required? true})
+
+;; --- Repository landing policy ---------------------------------------------
+(runtime/module! runtime :millhouse/workspace-land
+                 {:file "me/land.clj"
+                  :after [:millhouse/land
+                          :millhouse/workflow-all]
                   :required? true})
 
 ;; --- Local Kanban + Devflow adapter ----------------------------------------
@@ -59,7 +66,8 @@
 ;; --- Repository automatic delivery policy ---------------------------------
 (runtime/module! runtime :millhouse/workspace-auto-run-workflows
                  {:file "me/auto_run_workflows.clj"
-                  :after [:millhouse/workflow-all]
+                  :after [:millhouse/workflow-all
+                          :millhouse/workspace-land]
                   :required? true})
 (runtime/module! runtime :millhouse/workspace-auto-run
                  {:file "me/auto_run.clj"
@@ -72,6 +80,7 @@
 (config/register-executor!
  runtime [:millhouse/workspace-reviewers
           :millhouse/workflow-all
+          :millhouse/workspace-land
           :devflow
           :devflow/kanban-adapter
           :millhouse/config

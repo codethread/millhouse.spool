@@ -117,7 +117,7 @@ monorepo root is not a Pi package or Codex marketplace. See the Harnesses README
 
 CI runs the full root gate (isolated package checks plus composition) and the
 published-revision/native-install smoke. Local focused targets are package-aware;
-shared Land remains the only merge path, with independent review and FIFO turn.
+each repository owns its landing graph over shared FIFO infrastructure.
 Full suites use the shared lock; all workspace-backed fixtures are disposable.
 
 ## Board transition and active-work inventory
@@ -150,7 +150,7 @@ Do not silently close old work or run two active implementations of it.
 1. Record snapshots, active work, layout, dependency graph and authorization.
 2. Copy tracked package source; integrate paths, package checks, docs and skills.
 3. Verify package tests, disposable workspace composition and published candidate
-   installation. Obtain independent review and merge through shared Land.
+   installation. Obtain independent review and merge through Millhouse's local Land.
 4. Direct **new development** to Millhouse. Old repositories stay present as
    provenance and active-runtime handoff records; no archive/delete is performed.
 5. External consumer owners may explicitly update their pins and native plugin

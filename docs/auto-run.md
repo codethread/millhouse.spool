@@ -39,7 +39,7 @@ status; inspect its exact Harnesses run separately.
 
 ## Quality lock ownership
 
-Both automatic delivery and shared Land invoke `.millstrand/land-quality.sh`.
+Both automatic delivery and Millhouse's local Land invoke `.millstrand/land-quality.sh`.
 That script owns `/tmp/millstrand-test.lock` through `scripts/with-test-lock.sh`.
 The helper makes at most ten `flock -w 180` acquisition attempts, reporting each
 wait, then runs `make quality` once while retaining the acquired descriptor.

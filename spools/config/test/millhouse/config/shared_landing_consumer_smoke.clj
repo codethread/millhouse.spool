@@ -1,5 +1,5 @@
 (ns millhouse.config.shared-landing-consumer-smoke
-  "Exercise local shared landing source through consumer workspace configuration.
+  "Exercise shared landing infrastructure and repository-owned policy.
 
   Every consumer runs in a disposable Weaver world. The fixture preserves its
   checked-in init and workspace files while replacing published coordinates
@@ -89,16 +89,14 @@
          (require-smoke! (contains? op-names "merge-queue")
                          "merge-queue operation is not visible"
                          {:consumer consumer-path :operations op-names})
-         (require-smoke! (every? workflow-names ["review" "land"])
-                         "shared review and land workflows are not listed"
+         (require-smoke! (contains? workflow-names "land")
+                         "repository-owned land workflow is not listed"
                          {:consumer consumer-path :workflows workflow-names})
-         (doseq [workflow-name ["review" "land"]]
-           (require-smoke!
-            (= workflow-name
-               (:name (weaver/op! runtime 'workflow ["show" workflow-name])))
-            "Shared workflow is not visible"
-            {:consumer consumer-path :workflow workflow-name}))
-         (println "shared landing local-source smoke: clean"
+         (require-smoke!
+          (= "land" (:name (weaver/op! runtime 'workflow ["show" "land"])))
+          "Repository land workflow is not visible"
+          {:consumer consumer-path :workflow "land"})
+         (println "repository landing local-source smoke: clean"
                   consumer-path))))))
 
 (defn -main

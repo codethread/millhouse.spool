@@ -1,46 +1,5 @@
 
 -----
-# <a name="millhouse.land">millhouse.land</a>
-
-
-Reusable one-seat review and serialized landing workflow definitions.
-
-
-
-
-## <a name="millhouse.land/land">`land`</a>
-
-
-
-
-Review and merge work through sign-off and a durable FIFO turn.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L244-L292">Source</a></sub></p>
-
-## <a name="millhouse.land/land-abort">`land-abort`</a>
-
-
-
-
-Record an aborted landing and leave the work available for follow-up.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L162-L182">Source</a></sub></p>
-
-## <a name="millhouse.land/land-merge">`land-merge`</a>
-
-
-
-
-Land approved work in FIFO order.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L184-L242">Source</a></sub></p>
-
-## <a name="millhouse.land/review">`review`</a>
-
-
-
-
-Run one configured review agent, then require coordinator P1/P2 resolution.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L101-L160">Source</a></sub></p>
-
------
 # <a name="millhouse.land.card-actions">millhouse.land.card-actions</a>
 
 
@@ -137,7 +96,7 @@ Strict FIFO landing turns, driven by short workflow queue gates.
 Function.
 
 Wait for a reservation to hold the turn or close; timeout preserves its place.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L328-L338">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L327-L337">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/close-completion-guard!">`close-completion-guard!`</a>
 ``` clojure
@@ -146,7 +105,7 @@ Wait for a reservation to hold the turn or close; timeout preserves its place.
 Function.
 
 Remove the queue-gate completion guard after the scanner is stopped.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L952-L956">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L964-L968">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/close-handler!">`close-handler!`</a>
 ``` clojure
@@ -155,7 +114,7 @@ Remove the queue-gate completion guard after the scanner is stopped.
 Function.
 
 Remove the module's queue scanner; durable reservations remain.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L968-L972">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L980-L984">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/grant!">`grant!`</a>
 ``` clojure
@@ -167,7 +126,7 @@ Grant the head run's turn and close its queue gate without blocking a worker.
 
   Failure after lock creation retains the lock and reservation for retry in
   place. A non-head run simply remains waiting.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L207-L240">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L206-L239">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/join!">`join!`</a>
 ``` clojure
@@ -176,7 +135,7 @@ Grant the head run's turn and close its queue gate without blocking a worker.
 Function.
 
 Reserve a run's FIFO position at its merge-turn gate; repeat calls retain it.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L178-L197">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L177-L196">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/merge-queue">`merge-queue`</a>
 ``` clojure
@@ -185,7 +144,7 @@ Reserve a run's FIFO position at its merge-turn gate; repeat calls retain it.
 Function.
 
 Own strict FIFO reservations; ordinary landing progression uses workflow verbs.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L871-L886">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L883-L898">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/merge-release-stalled?">`merge-release-stalled?`</a>
 ``` clojure
@@ -194,7 +153,7 @@ Own strict FIFO reservations; ordinary landing progression uses workflow verbs.
 Function.
 
 Release the completed merge turn automatically before housekeeping.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L912-L916">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L924-L928">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/merge-turn-stalled?">`merge-turn-stalled?`</a>
 ``` clojure
@@ -203,7 +162,7 @@ Release the completed merge turn automatically before housekeeping.
 Function.
 
 Wait for automatic FIFO admission and acquisition; failed gates expose their error.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L906-L910">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L918-L922">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/on-event">`on-event`</a>
 ``` clojure
@@ -212,7 +171,7 @@ Wait for automatic FIFO admission and acquisition; failed gates expose their err
 Function.
 
 Reconsider queue gates after graph mutations.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L937-L940">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L949-L952">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/open-completion-guard!">`open-completion-guard!`</a>
 ``` clojure
@@ -221,7 +180,7 @@ Reconsider queue gates after graph mutations.
 Function.
 
 Install the queue-gate completion guard before any queue scan can run.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L942-L950">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L954-L962">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/open-handler!">`open-handler!`</a>
 ``` clojure
@@ -230,7 +189,7 @@ Install the queue-gate completion guard before any queue scan can run.
 Function.
 
 Register queue scanning and recover pending queue gates on activation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L958-L966">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L970-L978">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/queue-completion-guard">`queue-completion-guard`</a>
 
@@ -238,7 +197,7 @@ Register queue scanning and recover pending queue gates on activation.
 
 
 Protect Land queue gates before persisted work is scanned.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L974-L977">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L986-L989">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/queue-gate-completion-guard">`queue-gate-completion-guard`</a>
 ``` clojure
@@ -250,7 +209,7 @@ Reject closure of Land queue gates unless the current Land operation authorized 
 
   Gate kind is read only from each update's pre-image. Outcome attributes and
   actor attribution therefore cannot hide or authorize a protected close.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L56-L72">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L55-L71">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/queue-handler">`queue-handler`</a>
 
@@ -258,7 +217,7 @@ Reject closure of Land queue gates unless the current Land operation authorized 
 
 
 Drive durable FIFO queue gates on graph changes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L979-L983">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L991-L995">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/release!">`release!`</a>
 ``` clojure
@@ -270,7 +229,7 @@ Close a completed turn's reservation and lock before closing its release gate.
 
   The queue writes share one batch. If workflow completion fails afterwards,
   retry recognizes the closed reservation and never releases another run's lock.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L242-L289">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L241-L288">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/repair!">`repair!`</a>
 ``` clojure
@@ -286,7 +245,7 @@ Repair one explicitly evidenced pre-guard skipped Land queue gate.
   restore an ownership-blocked frontier. Every request
   records actor, reason, graph ids, and evidence; mismatches fail without queue
   settlement. Repeating the exact request is idempotent.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L813-L834">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L825-L846">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/scan!">`scan!`</a>
 ``` clojure
@@ -295,7 +254,7 @@ Repair one explicitly evidenced pre-guard skipped Land queue gate.
 Function.
 
 Advance ready queue gates using short serialized mutations, never a worker wait.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L918-L935">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L930-L947">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/status">`status`</a>
 ``` clojure
@@ -305,7 +264,7 @@ Advance ready queue gates using short serialized mutations, never a worker wait.
 Function.
 
 Report active FIFO order or one reservation, with current workflow evidence.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L311-L326">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L310-L325">Source</a></sub></p>
 
 ## <a name="millhouse.land.merge-queue/withdraw!">`withdraw!`</a>
 ``` clojure
@@ -320,7 +279,7 @@ Stop a named landing and atomically replace it with abort bookkeeping.
   reconciliation instead: cancelling a local client cannot undo a remote merge.
   A failed withdrawal keeps the reservation and lock, with shell gates frozen
   for inspection. Repair and retry those gates to resume the original landing.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L379-L427">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/merge_queue.clj#L391-L439">Source</a></sub></p>
 
 -----
 # <a name="millhouse.land.support">millhouse.land.support</a>
@@ -377,7 +336,7 @@ Clean up the landed feature branch and worktree.
 
 
 
-Idempotently ready and squash-merge the feature PR.
+Idempotently merge the feature PR using the repository-selected method.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L65-L67">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-pull-main-script">`land-pull-main-script`</a>

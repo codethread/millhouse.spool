@@ -96,7 +96,7 @@
   [fixture env]
   (run-script (:worktree fixture)
               "land-prepare.sh"
-              [branch (quality-source)]
+              [branch "rebase" (quality-source)]
               env))
 
 (defn- marker
@@ -430,6 +430,28 @@
       (finally
         (test-support/delete-tree! (:root fixture))))))
 
+(deftest preserve-policy-refuses-to-rewrite-an-outdated-candidate
+  (let [fixture (fixture)
+        env (quality-env fixture)
+        candidate (:feature-head fixture)]
+    (try
+      (assert-success (run-script (:worktree fixture) "land-quality-gate.sh"
+                                  [branch] env))
+      (write-file! (:canonical fixture) "main.txt" "main moved\n" false)
+      (commit! (:canonical fixture) "main change")
+      (test-support/run-git! (:canonical fixture) "push" "origin" "main")
+      (let [result (run-script (:worktree fixture) "land-prepare.sh"
+                               [branch "preserve" (quality-source)] env)]
+        (is (not (zero? (:exit result))))
+        (is (str/includes? (:output result)
+                           "candidate-preserving landing requires a new validated candidate"))
+        (is (= candidate
+               (str/trim (test-support/run-git! (:worktree fixture)
+                                                "rev-parse" "HEAD"))))
+        (is (= 1 (quality-runs fixture))))
+      (finally
+        (test-support/delete-tree! (:root fixture))))))
+
 (deftest failed-quality-removes-any-cached-pass
   (let [fixture (fixture)
         env (quality-env fixture)]
@@ -493,23 +515,23 @@
                         "PATH" (str (.getPath fake-bin) java.io.File/pathSeparator
                                     (System/getenv "PATH"))})
             result (run-script (:worktree fixture) "land-merge.sh"
-                               ["42" "subject" "body" branch] env)]
+                               ["42" "subject" "body" branch "squash"] env)]
         (is (not (zero? (:exit result)))
             "merge must fail before quality has produced a marker")
         (is (not (str/includes? (slurp gh-log) "pr merge")))
         (assert-success (run-script (:worktree fixture) "land-quality-gate.sh"
                                     [branch] env))
         (let [wrong-base (run-script (:worktree fixture) "land-merge.sh"
-                                     ["42" "subject" "body" branch]
+                                     ["42" "subject" "body" branch "squash"]
                                      (assoc env "GH_TEST_BASE" "release"))]
           (is (not (zero? (:exit wrong-base))))
           (is (str/includes? (:output wrong-base) "base is release; expected main"))
           (is (not (str/includes? (slurp gh-log) "pr merge"))))
         (assert-success (run-script (:worktree fixture) "land-merge.sh"
-                                    ["42" "subject" "body" branch] env))
+                                    ["42" "subject" "body" branch "squash"] env))
         (is (str/includes? (slurp gh-log) "--json isDraft")
             "an already-ready PR is accepted when gh pr ready declines the conversion")
-        (is (str/includes? (slurp gh-log) "pr merge"))
+        (is (str/includes? (slurp gh-log) "pr merge 42 --squash"))
         (is (= "MERGED\n" (slurp gh-state)))
         ;; A real squash merge advances main to a commit that is not an
         ;; ancestor of the old feature HEAD. MERGED retry must validate PR and
@@ -518,12 +540,12 @@
         (commit! (:canonical fixture) "squash merge result")
         (test-support/run-git! (:canonical fixture) "push" "origin" "main")
         (assert-success (run-script (:worktree fixture) "land-merge.sh"
-                                    ["42" "subject" "body" branch] env))
+                                    ["42" "subject" "body" branch "squash"] env))
         (is (= 1 (count (filter #(str/includes? % "pr merge")
                                 (str/split-lines (slurp gh-log)))))
             "a merged PR retry must not invoke gh pr merge again")
         (let [wrong-head (run-script (:worktree fixture) "land-merge.sh"
-                                     ["42" "subject" "body" "feature/other"] env)]
+                                     ["42" "subject" "body" "feature/other" "squash"] env)]
           (is (not (zero? (:exit wrong-head))))
           (is (str/includes? (:output wrong-head)
                              "expected feature/other"))))
@@ -579,7 +601,7 @@
                                     [branch] base-env))
         (let [{:keys [exit output]}
               (run-script (:worktree fixture) "land-merge.sh"
-                          ["42" "subject" "body" branch]
+                          ["42" "subject" "body" branch "squash"]
                           (assoc base-env "GH_TEST_FAIL_STATE_READ" "1"))]
           (is (not (zero? exit)) output)
           (is (str/includes? output "cannot verify PR 42 state after merge"))
@@ -588,7 +610,7 @@
         (spit gh-state "OPEN\n")
         (let [{:keys [exit output]}
               (run-script (:worktree fixture) "land-merge.sh"
-                          ["42" "subject" "body" branch]
+                          ["42" "subject" "body" branch "squash"]
                           (assoc base-env "GH_TEST_MERGE_STATE" "OPEN"))]
           (is (not (zero? exit)) output)
           (is (str/includes? output "without reaching MERGED"))

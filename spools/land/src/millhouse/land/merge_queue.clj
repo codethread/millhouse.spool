@@ -5,7 +5,6 @@
             [clojure.string :as str]
             [millhouse.workflow :as workflow]
             [millhouse.executors.shell :as shell]
-            [millhouse.land :as land]
             [millhouse.workflow.internal.guard :as workflow-guard]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.current.alpha :as current]
@@ -341,12 +340,25 @@
   (:strands (graph/subgraph (current/runtime) [(:id root)] {:type "parent-of"})))
 
 (defn- abort-payload [root run-id reason]
-  (let [params (assoc (attr-get root :workflow/context) :reason reason)]
-    (when-not (s/valid? ::land/land-abort-params params)
-      (fail! "Landing context cannot continue into abort" {:run-id run-id :context params}))
-    (workflow/compile land/land-abort params
-                      {:run-id run-id :family "land" :context params
-                       :definition 'millhouse.land/land-abort})))
+  (let [params (assoc (attr-get root :workflow/context) :reason reason)
+        definition-ref (attr-get root :land/abort-definition)]
+    (when-not (s/valid? ::non-blank definition-ref)
+      (fail! "Landing root does not declare its repository abort workflow"
+             {:run-id run-id :root (:id root)}))
+    (let [definition-symbol (symbol definition-ref)
+          definition-var
+          (try
+            (requiring-resolve definition-symbol)
+            (catch Exception cause
+              (fail! "Repository abort workflow cannot be resolved"
+                     {:run-id run-id :definition definition-ref
+                      :cause (.getMessage cause)})))]
+      (when-not definition-var
+        (fail! "Repository abort workflow cannot be resolved"
+               {:run-id run-id :definition definition-ref}))
+      (workflow/compile @definition-var params
+                        {:run-id run-id :family "land" :context params
+                         :definition definition-symbol}))))
 
 (defn- close-and-abort! [runtime run-id entry lock root payload reason]
   (let [closeable (filter #(and (= "active" (:state %))

@@ -26,7 +26,7 @@ and [migration, provenance, and board handoff](docs/consolidation.md).
 | [Workflow](spools/workflow/README.md) | `millhouse/workflow` | Workflow engine, CLI, executors, and reusable workflows |
 | [Identity](spools/identity/README.md) | `millhouse/identity` | Native-session identity and provenance |
 | [Kanban](spools/kanban/README.md) | `millhouse/kanban` | Work board, ownership, tasks, and dependency readiness |
-| [Land](spools/land/README.md) | `millhouse/land` | Review, exact-HEAD quality, FIFO merge and cleanup |
+| [Land](spools/land/README.md) | `millhouse/land` | FIFO queue, exact-HEAD validation, merge, and cleanup primitives for repository-owned workflows |
 | [Chime](spools/chime/README.md) | `millhouse/chime` | Experimental workspace-owned notification rules |
 | [Cron](spools/cron/README.md) | `millhouse/cron` | Experimental durable interval jobs |
 
@@ -80,8 +80,9 @@ Weaver.
 ## Development and delivery
 
 Use the Millhouse board with component labels (`harnesses`, `devflow`, `config`,
-or the existing spool name). New development and shared Land run here; old
-repositories and boards retain their history and outstanding runtime work.
+or the existing spool name). New development and Millhouse's repository-owned
+Land run here; old repositories and boards retain their history and outstanding
+runtime work.
 See [AGENTS.md](AGENTS.md) and [shared processes](docs/README.md).
 
 Each spool and `.millstrand` is an independent tools.deps project. Configure
@@ -126,7 +127,7 @@ with the previous tip, and manual dispatch accepts a base and full-run switch.
 Dispatch resolves branch names from the fetched `origin/` refs in its detached
 checkout; SHAs and tags also work.
 Only selected test/package jobs run; distribution smoke runs when components
-are affected. Static/docs checks remain repository-wide. Shared Land and
+are affected. Static/docs checks remain repository-wide. Millhouse Land and
 auto-run use `.millstrand/land-quality.sh`, which calls `make quality` and owns
 the test lock. It accepts Make overrides such as `TEST_BASE=feature/parent` or
 `TEST_FULL=1`; do not wrap that script in another lock.

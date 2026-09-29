@@ -2,16 +2,21 @@
 set -eu
 
 branch=${1-}
-quality_script=${2-}
+update_policy=${2-}
+quality_script=${3-}
 
 die() {
   printf '%s\n' "land prepare: $*" >&2
   exit 1
 }
 
-[ -n "$branch" ] || die "expected BRANCH and frozen QUALITY_GATE_SCRIPT"
+[ -n "$branch" ] || die "expected BRANCH UPDATE_POLICY and frozen QUALITY_GATE_SCRIPT"
+case "$update_policy" in
+  rebase|preserve) ;;
+  *) die "update policy must be rebase or preserve; found: $update_policy" ;;
+esac
 [ -n "$quality_script" ] \
-  || die "expected the frozen quality gate source as the second argument"
+  || die "expected the frozen quality gate source as the third argument"
 git check-ref-format --branch "$branch" >/dev/null 2>&1 \
   || die "invalid feature branch name: $branch"
 [ "$branch" != main ] || die "feature branch must not be main"
@@ -42,6 +47,8 @@ observed_remote_head=$(git rev-parse "refs/remotes/origin/$branch") \
 
 if git merge-base --is-ancestor origin/main HEAD; then
   rebased=false
+elif [ "$update_policy" = preserve ]; then
+  die "$branch does not contain origin/main; candidate-preserving landing requires a new validated candidate"
 else
   printf '%s\n' "land prepare: rebasing $branch onto origin/main"
   git rebase origin/main \

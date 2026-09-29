@@ -34,9 +34,9 @@
     millhouse.executors.shell-test
     millhouse.kanban-test
     millhouse.identity-test
+    millhouse.land.card-actions-test
     millhouse.land.merge-queue-test
-    millhouse.land.scripts-test
-    millhouse.land.workflow-test])
+    millhouse.land.scripts-test])
 
 (def serial-namespaces
   "Namespaces proven to require a JVM-global serial island.
@@ -55,7 +55,6 @@
     'millhouse.executors.code-test
     'millhouse.kanban-test
     'millhouse.land.merge-queue-test
-    'millhouse.land.workflow-test
     'millhouse.millstrand-workflows-test
     'millhouse.workflow-runtime-test})
 

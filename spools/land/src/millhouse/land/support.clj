@@ -63,7 +63,7 @@
   (sh-gate pr-checks-script "pr-checks" policy branch "120" "5"))
 
 (def land-merge-script
-  "Idempotently ready and squash-merge the feature PR."
+  "Idempotently merge the feature PR using the repository-selected method."
   (script "land-merge.sh"))
 
 (def land-pull-main-script
