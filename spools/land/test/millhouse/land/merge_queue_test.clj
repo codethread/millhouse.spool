@@ -6,6 +6,7 @@
             [clojure.test :refer [deftest is testing]]
             [millhouse.executors.shell :as shell]
             [millhouse.land.merge-queue :as queue]
+            [millhouse.land.support :as support]
             [millhouse.workflow :as workflow]
             [millstrand.api.cli.alpha :as cli]
             [millstrand.api.current.alpha :as current]
@@ -85,7 +86,34 @@
 
 (defn- start-land-merge-run!
   [id]
-  (start-repair-run! id))
+  (workflow/start!
+   id
+   (workflow/workflow
+    "Repository landing fixture"
+    {:attributes {"workflow/family" "land"
+                  "land/version" 4
+                  "land/stage" "merge"
+                  "land/abort-definition" fixture-abort-definition}}
+    (workflow/gate :turn "Await turn" :merge-turn)
+    (workflow/gate :prepare "Prepare merge" :shell
+                   :depends-on [:turn]
+                   :attributes {"shell/argv" ["sh" "-c" "prepare" "land-prepare"]})
+    (workflow/gate :merge "Merge PR" :shell
+                   :depends-on [:prepare]
+                   :attributes {"shell/argv" ["sh" "-c" "merge" "land-merge"
+                                              "42" "Subject" "Body" id]
+                                "land/irreversible" true})
+    (workflow/gate :pull "Pull main" :shell
+                   :depends-on [:merge]
+                   :attributes {"shell/argv" ["sh" "-c" "pull" "land-pull"]})
+    (workflow/gate :release "Release turn" :merge-release
+                   :depends-on [:pull])
+    (workflow/gate :cleanup "Cleanup" :shell
+                   :depends-on [:release]
+                   :attributes {"shell/argv" ["sh" "-c" "cleanup" "land-cleanup"]})
+    (support/card-gate :finish-card "Finish card" [:cleanup]
+                       "millhouse.land.card-actions/finish-card!"))
+   {:branch id :pr-number 42}))
 
 (defn- ready-gate
   [run-id waiter]
