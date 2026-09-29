@@ -1,8 +1,14 @@
 (require '[millhouse.config.bootstrap :as config]
+         '[millhouse.workflow.cli :as workflow-cli]
          '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
 
 (def runtime (current/runtime))
+
+;; Operation publication validates glossary references before lifecycle seeds
+;; run. Seed these process-lifetime entries up front; the owning module repeats
+;; this idempotently when its lifecycle opens.
+(workflow-cli/seed-workflow-glossary! {:runtime runtime})
 
 ;; Batteries is an ordinary workspace dependency. The declaration carries a
 ;; source target and world policy only: the module's contribution is
