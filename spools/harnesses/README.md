@@ -38,6 +38,16 @@ The marketplace exposes the `millstrand-identity` plugin package. Enable
 `millstrand-identity@harnesses`; the plugin owns only `SessionStart` and
 `SubagentStart`, and dialogue capture and other harness UI remain separate.
 
+For Claude Code, add the same directory as a plugin marketplace:
+
+```text
+claude plugin marketplace add /absolute/path/to/millhouse.spool/spools/harnesses
+claude plugin install millstrand-identity@harnesses
+```
+
+The Claude plugin owns only `SessionStart` and registers direct sessions; managed
+Claude runs keep their launch-prompt identity.
+
 Run `pnpm check:plugins` for Pi unit/preflight checks, Codex 0.154.0 CLI
 conformance, and formatting. Native identity startup does not select a managed
 guidance transport or require capability admission; ordinary task and policy

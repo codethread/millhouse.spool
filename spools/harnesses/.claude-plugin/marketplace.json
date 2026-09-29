@@ -1,0 +1,11 @@
+{
+  "name": "harnesses",
+  "owner": { "name": "codethread" },
+  "plugins": [
+    {
+      "name": "millstrand-identity",
+      "source": "./plugins/millstrand-identity",
+      "description": "Native Claude Code identity data adapter for Millstrand."
+    }
+  ]
+}

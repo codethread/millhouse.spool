@@ -62,7 +62,9 @@
   Codex callers fence the exact managed invocation with `:run-reference`
   `RUN_ID:INVOCATION` and supply the observed model. Pi callers correlate with
   `:run-id` against the pinned native session and may carry the native fork
-  parent header. Direct registrations have no alias or process custody; an
+  parent header. Claude callers register direct sessions only; managed Claude
+  runs carry identity in their launch prompt. Direct registrations have no alias
+  or process custody; an
   observed unavailable effort is persisted as `harness/observed-effort=unknown`,
   never a launch option."
   [rt request]
@@ -70,7 +72,9 @@
     "codex" (native-session/register!
              rt (dissoc request :run-id :parent-native-session-id))
     "pi" (native-registration/register! rt (dissoc request :run-reference))
-    (fail! "Native startup requires a codex or pi harness"
+    "claude" (native-session/register!
+              rt (dissoc request :run-id :run-reference :parent-native-session-id))
+    (fail! "Native startup requires a codex, claude or pi harness"
            {:harness (:harness request)})))
 
 (defn run

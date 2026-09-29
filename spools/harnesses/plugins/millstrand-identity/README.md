@@ -3,7 +3,7 @@
 Harnesses owns native identity data and run registration. It does not own a
 consumer's prompt layout or UI.
 
-Both adapters require canonical Git project discovery and a `.millstrand`
+All adapters require canonical Git project discovery and a `.millstrand`
 directory at the Git common root. Without Git, Millstrand is inert—even when
 `.millstrand` exists in the launch directory. Inherited workspace settings and
 managed run references never bypass this gate. A linked worktree uses its main
@@ -109,3 +109,22 @@ parent's run reference. Ordinary task/policy/alias appends remain on normal laun
 paths. No Codex bootstrap/guidance transport, reservation or legacy fallback
 remains. Duplicate injectors and startup failures stop before model work when the
 hook runs. Source installation and runtime activation are separate operations.
+
+## Claude Code
+
+Add the Millhouse `spools/harnesses` directory as a Claude plugin marketplace,
+then install `millstrand-identity@harnesses`. The packaged SessionStart hook uses
+the same canonical Git workspace gate as Codex and awaits:
+
+```text
+strand --workspace CANONICAL_WORKSPACE --cwd SESSION_CWD \
+  agent native-startup claude ACTUAL_SESSION_ID --model MODEL
+```
+
+Claude registrations are always direct external runs. Managed Claude launches
+already pin identity through `--append-system-prompt`, so the hook does nothing
+when `MILLSTRAND_RUN_ID` is present. Claude omits the model from some
+SessionStart payloads; the hook then records `harness/observed-model=unknown`.
+The canonical instruction and workspace are returned as `additionalContext` on
+every startup, resume, clear and compact. Startup failures inside a project stop
+the session. Subagents are not bound.

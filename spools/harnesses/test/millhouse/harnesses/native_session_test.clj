@@ -44,6 +44,23 @@
                      :harness/invocation :harness/settled :harness/process-handle]]
           (is (nil? (get-in result [:attrs key])) (str key)))))))
 
+(deftest claude-registers-direct-sessions-without-managed-correlation
+  (fixture/with-managed-world
+    (fn [ctx]
+      (let [result
+            (fixture/eval-world
+             ctx '(let [request {:harness "claude" :native-session-id "claude-direct"
+                                 :cwd "/tmp/claude" :model "claude-model"
+                                 :run-reference "ignored:reference"}
+                        first (harnesses/register-native-session! rt request)
+                        replay (harnesses/register-native-session! rt request)]
+                    {:same (= (:run-id first) (:run-id replay))
+                     :attrs (:attributes (weaver/show rt (:run-id first)))}))]
+        (is (:same result))
+        (is (= "claude" (get-in result [:attrs :harness/harness])))
+        (is (= "external" (get-in result [:attrs :harness/ownership])))
+        (is (= "claude-model" (get-in result [:attrs :harness/observed-model])))))))
+
 (deftest managed-startup-fences-invocation-and-preserves-native-continuity
   (fixture/with-managed-world
     (fn [ctx]
