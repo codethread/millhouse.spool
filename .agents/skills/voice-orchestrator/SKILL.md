@@ -8,7 +8,7 @@ description: Orchestrate Millstrand boards, agents, and auto-runs. Use only when
 Bootstrap a voice-led, multi-repository coordination session. Use the user's current authorization and each target repository's instructions.
 
 1. Discover with `mill weaver list | jq 'map({name, config_dir})'` and use `name` for cross-workspace operation (or fallback to `config_dir` if name is absent) using `--workspace <name>`. Plant work on its owning board, not the hub's board for convenience.
-2. Read that repository's AGENTS.md, then targeted live `strand help`, `prime`, and `about`. Installed help wins over these examples. Read [sources and workspaces](references/sources.md) when locating implementations.
+2. Read that repository's AGENTS.md, then targeted live `strand help`, `prime`, and `about`. Installed help wins over these examples. Read [workspaces of note](#workspaces-of-note) when locating implementations.
 3. Inspect board, feature notes/tasks, dependencies, dispatch receipts and actual agent runs. Explain what is active, reviewing/landing, ready, blocked, and next in the downstream feature chain. Do not equate lane, receipt, or process exit with successful delivery.
 4. Choose the smallest next action:
 
