@@ -6,17 +6,26 @@ set -u
 request_timeout=3s
 
 if ! command -v jq >/dev/null 2>&1; then
-	printf '%s\n' '{"continue":true,"systemMessage":"Millstrand identity startup failed before binding; this session is unbound."}'
+	printf '%s%s%s\n' \
+		'{"systemMessage":"Millstrand identity startup failed before binding; this session is unbound.",' \
+		'"hookSpecificOutput":{"hookEventName":"SessionStart",' \
+		'"additionalContext":"Millstrand identity startup failed before binding; this session is unbound."}}'
 	exit 0
 fi
 
-failure() {
+unbound() {
 	local message=$1
-	jq -cn --arg message "$message" '{continue: false, stopReason: $message, systemMessage: $message}'
+	jq -cn --arg message "$message" '{
+		systemMessage: $message,
+		hookSpecificOutput: {
+			hookEventName: "SessionStart",
+			additionalContext: $message
+		}
+	}'
 }
 
 payload=$(cat) || {
-	failure "Millstrand identity startup could not read the Claude hook payload; this session is unbound."
+	unbound "Millstrand identity startup could not read the Claude hook payload; this session is unbound."
 	exit 0
 }
 if ! jq -e '
@@ -25,7 +34,7 @@ if ! jq -e '
 	(.session_id | type == "string" and length > 0) and
 	(.cwd | type == "string" and length > 0)
 ' >/dev/null 2>&1 <<<"$payload"; then
-	failure "Millstrand identity startup received an invalid SessionStart payload; this session is unbound."
+	unbound "Millstrand identity startup received an invalid SessionStart payload; this session is unbound."
 	exit 0
 fi
 
@@ -44,12 +53,12 @@ workspace=$(cd -P "$workspace" && pwd) || exit 0
 
 strand_bin=${MILLSTRAND_CLAUDE_STRAND_BIN:-strand}
 if ! command -v "$strand_bin" >/dev/null 2>&1; then
-	failure "Millstrand identity startup cannot find Strand; this session is unbound."
+	unbound "Millstrand identity startup cannot find Strand; this session is unbound."
 	exit 0
 fi
 
 stderr_file=$(mktemp "${TMPDIR:-/tmp}/claude-millstrand-identity.XXXXXX") || {
-	failure "Millstrand identity startup could not allocate diagnostic storage; this session is unbound."
+	unbound "Millstrand identity startup could not allocate diagnostic storage; this session is unbound."
 	exit 0
 }
 trap 'rm -f "$stderr_file"' EXIT
@@ -67,7 +76,7 @@ response=$(env -u MILLSTRAND_AGENT_ID -u MILLSTRAND_RUN_ID -u MILLSTRAND_RUN_REF
 status=$?
 if ((status != 0)); then
 	diagnostic=$(LC_ALL=C head -c 80 "$stderr_file" | tr '\n\r\t' '   ')
-	failure "Millstrand identity startup is unavailable (exit $status): $diagnostic. This session is unbound."
+	unbound "Millstrand identity startup is unavailable (exit $status): $diagnostic. This session is unbound."
 	exit 0
 fi
 
@@ -78,7 +87,7 @@ if ! context=$(jq -er '
 		(.instruction | type == "string" and length > 0)
 	) | .instruction
 ' <<<"$response" 2>/dev/null); then
-	failure "Millstrand identity startup returned an invalid response; this session is unbound."
+	unbound "Millstrand identity startup returned an invalid response; this session is unbound."
 	exit 0
 fi
 

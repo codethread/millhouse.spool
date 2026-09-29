@@ -121,14 +121,19 @@ strand --workspace CANONICAL_WORKSPACE --cwd SESSION_CWD \
   agent native-startup claude ACTUAL_SESSION_ID --model MODEL
 ```
 
-Claude follows the Codex contract. Managed launches pass only
-`MILLSTRAND_RUN_REFERENCE=RUN_ID:INVOCATION`, and Harnesses no longer appends an
-identity prompt; direct sessions register an external run. A managed Claude run
-whose startup never registers fails as bootstrap. Runs published before this
-contract keep their launch-bound identity and settle as before; resuming one
-recovers the same identity through native startup.
+Claude follows the Codex registration and context contract. Managed launches
+pass only `MILLSTRAND_RUN_REFERENCE=RUN_ID:INVOCATION`, and Harnesses no longer
+appends an identity prompt; direct sessions register an external run. A managed
+Claude run whose startup never registers fails as bootstrap. Runs published
+before this contract keep their launch-bound identity and settle as before;
+resuming one recovers the same identity through native startup.
 
 Claude omits the model from some SessionStart payloads; the hook then records
 `harness/observed-model=unknown`. The canonical instruction and workspace are
 returned as `additionalContext` on every startup, resume, clear and compact.
-Startup failures inside a project stop the session. Subagents are not bound.
+
+Claude's SessionStart hook supports context only and cannot block the session.
+Registration failures therefore return the same explicit unbound warning as
+both a user-visible system message and model-visible `additionalContext`; a
+direct session continues unbound. Managed runs still fail bootstrap at
+settlement when registration never appears. Subagents are not bound.

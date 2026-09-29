@@ -23,7 +23,7 @@
   "scripts": {
     "format:plugins": "prettier --write package.json .agents/plugins/marketplace.json .claude-plugin/marketplace.json plugins/millstrand-identity scripts/managed-guidance-preflight.mjs scripts/managed-guidance-preflight.test.ts",
     "format:plugins:check": "prettier --check package.json .agents/plugins/marketplace.json .claude-plugin/marketplace.json plugins/millstrand-identity scripts/managed-guidance-preflight.mjs scripts/managed-guidance-preflight.test.ts",
-    "test:plugins": "vitest run plugins/millstrand-identity/pi scripts/managed-guidance-preflight.test.ts",
+    "test:plugins": "vitest run plugins/millstrand-identity/pi plugins/millstrand-identity/claude scripts/managed-guidance-preflight.test.ts",
     "test:codex-hooks": "pnpm test:codex-hooks:cleanup && node ./plugins/millstrand-identity/.codex-plugin/conformance/run.mjs",
     "test:codex-hooks:cleanup": "node ./plugins/millstrand-identity/.codex-plugin/conformance/signal-cleanup.mjs",
     "test:codex-hooks:live": "bash ./plugins/millstrand-identity/.codex-plugin/conformance/live-identity.sh",
