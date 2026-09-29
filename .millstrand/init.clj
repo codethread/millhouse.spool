@@ -63,6 +63,16 @@
                           :devflow/kanban-adapter]
                   :required? true})
 
+;; --- Repository attention policy ------------------------------------------
+;; Chime evaluates workspace rules; init.local.clj binds personal delivery.
+(runtime/module! runtime :millhouse/chime
+                 {:ns 'millhouse.chime
+                  :required? true})
+(runtime/module! runtime :millhouse/workspace-attention
+                 {:file "me/notifications/attention.clj"
+                  :after [:millhouse/chime]
+                  :required? true})
+
 ;; --- Repository automatic delivery policy ---------------------------------
 (runtime/module! runtime :millhouse/workspace-auto-run-workflows
                  {:file "me/auto_run_workflows.clj"
@@ -84,4 +94,5 @@
           :devflow
           :devflow/kanban-adapter
           :millhouse/config
+          :millhouse/workspace-attention
           :millhouse/workspace-auto-run])

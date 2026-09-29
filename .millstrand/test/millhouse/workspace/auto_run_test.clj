@@ -6,11 +6,13 @@
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-land :as autonomous]
+            [millhouse.chime :as chime]
             [millhouse.harnesses :as harnesses]
             [millhouse.harnesses.reviewers :as reviewers]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t]))
@@ -25,7 +27,8 @@
                                        %))})
      :init-clj (slurp "init.clj")
      :files (into {} (for [path ["me/land.clj" "me/auto_run_workflows.clj"
-                                 "me/auto_run.clj" "me/agents/reviewers.clj"]]
+                                 "me/auto_run.clj" "me/agents/reviewers.clj"
+                                 "me/notifications/attention.clj"]]
                        [path (slurp path)]))}))
 
 (defn- role-step [strands role]
@@ -40,6 +43,65 @@
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "workspace publishes policy-aligned attention rules"
+        (is (= #{:auto-run-failed :ticket-needs-attention}
+               (set (map :key (current/with-runtime rt (chime/rules))))))
+        (let [auto-run-rule (runtime/resolve-var
+                             rt 'me.notifications.attention/auto-run-failed-rule)
+              attention-rule (runtime/resolve-var
+                              rt 'me.notifications.attention/ticket-needs-attention-rule)
+              failed-run {:id "run-1"
+                          :title "Feature worker"
+                          :state "active"
+                          :attributes
+                          {:harness/run "true"
+                           :harness/status "failed"
+                           :harness/substatus "execution"
+                           :harness/target "card-1"
+                           :harness/exit-code 1
+                           :harness/error "quality failed"
+                           :harness/context
+                           {"assignment/policy" "auto-run-workflow"}}}
+              attention-ticket {:id "card-1"
+                                :title "Blocked feature"
+                                :state "active"
+                                :attributes
+                                {:kanban/card "true"
+                                 :kanban/lane "in_review"
+                                 :auto-run/agent-evidence "evidence-1"}}]
+          (is (= {:title "Auto-run failed: Feature worker"
+                  :body (str "Auto-run run-1 failed.\n"
+                             "Target: card-1\n"
+                             "Failure class: execution\n"
+                             "Exit code: 1\n"
+                             "Error: quality failed\n"
+                             "Inspect with `strand agent show run-1`.")}
+                 (auto-run-rule {:strand failed-run})))
+          (is (nil? (auto-run-rule
+                     {:strand (assoc-in failed-run
+                                        [:attributes :harness/context]
+                                        {"assignment/policy" "review"})})))
+          (is (= {:title "Auto-run failed: Landing finisher"
+                  :body (str "Auto-run finisher-1 failed.\n"
+                             "Inspect with `strand agent show finisher-1`.")}
+                 (auto-run-rule
+                  {:strand {:id "finisher-1"
+                            :title "Landing finisher"
+                            :state "active"
+                            :attributes
+                            {:harness/run "true"
+                             :harness/status "failed"
+                             :harness/request-id
+                             "auto-land-finisher/target-1"}}})))
+          (is (= {:title "Ticket needs attention: Blocked feature"
+                  :body (str "Ticket card-1 is waiting for you in the in_review lane.\n"
+                             "Evidence: evidence-1\n"
+                             "Inspect with `strand kanban card card-1`.")}
+                 (attention-rule {:strand attention-ticket})))
+          (is (nil? (attention-rule
+                     {:strand (assoc-in attention-ticket
+                                        [:attributes :kanban/lane]
+                                        "claimed")})))))
       (testing "checked-in basis publishes the complete CLI surface"
         (let [aliases (set (map :name (weaver/op! rt 'agent ["list"])))
               reviewers (weaver/op! rt 'agent ["reviewers"])
