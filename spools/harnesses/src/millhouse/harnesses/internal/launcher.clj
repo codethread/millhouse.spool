@@ -2,6 +2,7 @@
   "Host-TTY launcher materialization for interactive harness runs."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [millhouse.harnesses.internal.managed-startup :as managed]
             [millhouse.harnesses.internal.native-environment :as native-env]
             [millhouse.harnesses.native-session :as native-session]
             [millstrand.api.spool.alpha :refer [attr-get fail!]])
@@ -41,7 +42,7 @@
   [runtime run argv env]
   (let [file (io/file (launcher-dir runtime) (str (:id run) ".sh"))
         workspace (workspace runtime)
-        codex? (= "codex" (attr-get run :harness/harness))
+        reference? (managed/run-reference-harness? (attr-get run :harness/harness))
         managed-exec? (contains? #{"codex" "pi"}
                                  (attr-get run :harness/harness))
         provider-exports (->> env
@@ -58,10 +59,10 @@
                       "\"$MILLSTRAND_INVOCATION\"\n"
                       "fi\n"))
                provider-exports
-               (when codex? native-reference-sentinel)
+               (when reference? native-reference-sentinel)
                "export MILLSTRAND_RUN_ID=" (sh-quote (:id run)) "\n"
                (cond
-                 codex?
+                 reference?
                  "unset MILLSTRAND_AGENT_ID MILLSTRAND_MANAGED_BOOTSTRAP MILLSTRAND_MANAGED_GUIDANCE\n"
                  (not= "pi" (attr-get run :harness/harness))
                  (str "export MILLSTRAND_AGENT_ID="

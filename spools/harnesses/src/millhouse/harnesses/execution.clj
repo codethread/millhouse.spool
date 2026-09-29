@@ -9,6 +9,7 @@
             [millhouse.harnesses.internal.guidance :as guidance]
             [millhouse.harnesses.internal.launcher :as launcher]
             [millhouse.harnesses.internal.lifecycle :as life]
+            [millhouse.harnesses.internal.managed-startup :as managed]
             [millhouse.harnesses.internal.publication :as publication]
             [millhouse.harnesses.internal.process-custody :as custody]
             [millhouse.harnesses.reconciliation :as reconciliation]
@@ -154,7 +155,7 @@
            {:keys [strand invocation]}
            (harness/begin-attempt! rt id owner-attributes)]
        (try
-         (when (= "codex" (attr-get strand :harness/harness))
+         (when (managed/run-reference-harness? (attr-get strand :harness/harness))
            (launcher/arm-native! rt strand))
          (when (guidance/native? strand)
            (schedule-guidance-deadline! rt strand))

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Bind direct Claude Code sessions to Millstrand identities and return the
-# canonical identity instruction as SessionStart additional context.
+# Bind Claude Code sessions to Millstrand identities and return the canonical
+# identity instruction as SessionStart additional context.
 set -u
 
 request_timeout=3s
@@ -14,9 +14,6 @@ failure() {
 	local message=$1
 	jq -cn --arg message "$message" '{continue: false, stopReason: $message, systemMessage: $message}'
 }
-
-# Managed Claude runs already carry their identity in the launch prompt.
-[[ -z "${MILLSTRAND_RUN_ID:-}" ]] || exit 0
 
 payload=$(cat) || {
 	failure "Millstrand identity startup could not read the Claude hook payload; this session is unbound."
@@ -57,9 +54,16 @@ stderr_file=$(mktemp "${TMPDIR:-/tmp}/claude-millstrand-identity.XXXXXX") || {
 }
 trap 'rm -f "$stderr_file"' EXIT
 
-response=$(env -u MILLSTRAND_AGENT_ID -u MILLSTRAND_RUN_REFERENCE -u MILLSTRAND_WORKSPACE \
+# Managed launches pass only their run reference; direct sessions register an
+# external run.
+args=(agent native-startup claude "$session_id" --model "$model")
+if [[ -n "${MILLSTRAND_RUN_REFERENCE:-}" ]]; then
+	args+=(--run-reference "$MILLSTRAND_RUN_REFERENCE")
+fi
+response=$(env -u MILLSTRAND_AGENT_ID -u MILLSTRAND_RUN_ID -u MILLSTRAND_RUN_REFERENCE \
+	-u MILLSTRAND_WORKSPACE \
 	"$strand_bin" --workspace "$workspace" --cwd "$cwd" --timeout "$request_timeout" \
-	agent native-startup claude "$session_id" --model "$model" 2>"$stderr_file")
+	"${args[@]}" 2>"$stderr_file")
 status=$?
 if ((status != 0)); then
 	diagnostic=$(LC_ALL=C head -c 80 "$stderr_file" | tr '\n\r\t' '   ')

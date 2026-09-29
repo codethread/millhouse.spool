@@ -136,11 +136,12 @@
           (if (contains? request :requested-session-id)
             requested-session-id
             session-id)]
-      (when (= "codex" (attr-get predecessor :harness/harness))
-        (when-not (and (= harness "codex")
+      (when (managed/run-reference-harness? (attr-get predecessor :harness/harness))
+        (when-not (and (= harness (attr-get predecessor :harness/harness))
                        (= requested-session-id (attr-get predecessor :harness/session-id))
-                       (= "native-startup" (attr-get predecessor :harness/native-attachment-source)))
-          (fail! "Codex continuation requires its registered native provider and session"
+                       (or (= "native-startup" (attr-get predecessor :harness/native-attachment-source))
+                           (managed/launch-bound? predecessor)))
+          (fail! "Native continuation requires its registered native provider and session"
                  {:predecessor resumes})))
       (when (= "pi" (attr-get predecessor :harness/harness))
         (when-not (and (= "pi" harness)
@@ -221,7 +222,8 @@
                {:attributes {:identity/id identity-id
                              :identity/prompt (:prompt identity-binding)
                              :harness/publication-phase "bound"
-                             :harness/native-attached (when (= "codex" harness) "false")}})
+                             :harness/native-attached
+                             (when (managed/run-reference-harness? harness) "false")}})
             _ (publication/check-interrupted!)
             guidance-patch
             (guidance/publication-patch
@@ -320,7 +322,8 @@
   (let [old-attrs (:attributes run)
         old-generated (registry/normalize-overlay (attr-get run :harness/generated))
         old-overrides (registry/normalize-overlay (attr-get run :harness/overrides))
-        identity-id (when-not (= "codex" concrete)
+        identity-id (when-not (and (managed/run-reference-harness? concrete)
+                                   (not (managed/launch-bound? run)))
                       (or (:identity identity-binding)
                           (attr-get run :identity/id)))
         literal-extra-argv?

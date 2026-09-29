@@ -84,14 +84,14 @@
   "Build Mill custody input with run correlation and maintenance identity."
   [rt run {:keys [argv env stdin]}]
   {:argv (case (attr-get run :harness/harness)
-           "codex" (into ["/usr/bin/env" "-u" "MILLSTRAND_AGENT_ID"
-                          "-u" "MILLSTRAND_MANAGED_BOOTSTRAP"
-                          "-u" "MILLSTRAND_MANAGED_GUIDANCE"] argv)
+           ("claude" "codex") (into ["/usr/bin/env" "-u" "MILLSTRAND_AGENT_ID"
+                                     "-u" "MILLSTRAND_MANAGED_BOOTSTRAP"
+                                     "-u" "MILLSTRAND_MANAGED_GUIDANCE"] argv)
            "pi" (native-env/scrub-command argv)
            argv)
    :cwd (attr-get run :harness/cwd)
    :env (case (attr-get run :harness/harness)
-          "codex"
+          ("claude" "codex")
           (-> (or env {})
               (dissoc "MILLSTRAND_AGENT_ID"
                       "MILLSTRAND_MANAGED_BOOTSTRAP"

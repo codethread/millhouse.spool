@@ -42,14 +42,15 @@
                {:id id
                 :expected (attr-get run :harness/invocation)
                 :actual invocation}))
-      (let [managed? (managed/managed-harness?
-                      (attr-get run :harness/harness))
+      (let [managed? (managed/native-run? run)
             attached? (= "true" (attr-get run :harness/native-attached))
             session-id (if attached?
                          (attr-get run :harness/session-id)
                          (or (:session-id outcome)
                              (attr-get run :harness/session-id)))
-            native-mismatch? (and (= "codex" (attr-get run :harness/harness))
+            native-mismatch? (and (managed/run-reference-harness?
+                                   (attr-get run :harness/harness))
+                                  managed?
                                   (or (not= invocation
                                             (attr-get run :harness/native-attachment-invocation))
                                       (and (:session-id outcome)
@@ -70,7 +71,7 @@
                          :harness/session-usable (if usable? "true" "false")
                          :harness/error
                          (or (when native-mismatch?
-                               "Codex native startup missing or inconsistent with the current invocation")
+                               "Native startup missing or inconsistent with the current invocation")
                              (attr-get run :harness/error)
                              (when (= :failed (:status outcome))
                                (or (:error outcome)

@@ -86,7 +86,7 @@
      :deadline-class :standard
      :flags {:model {:type :string :doc "Actual host model; required for claude and codex."}
              :thinking-level {:type :string :doc "Observed reasoning effort, when available."}
-             :run-reference {:type :string :doc "Managed codex run ID:invocation reference."}
+             :run-reference {:type :string :doc "Managed claude or codex run ID:invocation reference."}
              :run-id {:type :string :doc "Existing managed pi run correlation."}
              :parent-identity {:type :string :doc "Resolved native parent identity."}
              :parent-native-session-id {:type :string

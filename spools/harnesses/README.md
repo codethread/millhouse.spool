@@ -45,8 +45,8 @@ claude plugin marketplace add /absolute/path/to/millhouse.spool/spools/harnesses
 claude plugin install millstrand-identity@harnesses
 ```
 
-The Claude plugin owns only `SessionStart` and registers direct sessions; managed
-Claude runs keep their launch-prompt identity.
+The Claude plugin owns only `SessionStart`. Managed Claude runs require it, as
+managed Codex runs require the Codex plugin.
 
 Run `pnpm check:plugins` for Pi unit/preflight checks, Codex 0.154.0 CLI
 conformance, and formatting. Native identity startup does not select a managed

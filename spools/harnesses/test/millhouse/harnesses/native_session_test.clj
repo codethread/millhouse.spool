@@ -1,7 +1,17 @@
 (ns millhouse.harnesses.native-session-test
   "Native identity registration and managed Codex lifecycle contracts."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojure.walk :as walk]
             [millhouse.harnesses.managed-startup-test :as fixture]))
+
+(def ^:private reference-harnesses
+  "Providers whose native startup is fenced by a run reference."
+  ["codex" "claude"])
+
+(defn- for-harness
+  "Rewrite a Codex-shaped world form for `harness`."
+  [harness form]
+  (walk/postwalk-replace {:codex (keyword harness) "codex" harness} form))
 
 (def setup
   "Load the native registration boundary in an isolated world."
@@ -44,14 +54,13 @@
                      :harness/invocation :harness/settled :harness/process-handle]]
           (is (nil? (get-in result [:attrs key])) (str key)))))))
 
-(deftest claude-registers-direct-sessions-without-managed-correlation
+(deftest claude-registers-direct-sessions-through-native-startup
   (fixture/with-managed-world
     (fn [ctx]
       (let [result
             (fixture/eval-world
              ctx '(let [request {:harness "claude" :native-session-id "claude-direct"
-                                 :cwd "/tmp/claude" :model "claude-model"
-                                 :run-reference "ignored:reference"}
+                                 :cwd "/tmp/claude" :model "claude-model"}
                         first (harnesses/register-native-session! rt request)
                         replay (harnesses/register-native-session! rt request)]
                     {:same (= (:run-id first) (:run-id replay))
@@ -61,94 +70,139 @@
         (is (= "external" (get-in result [:attrs :harness/ownership])))
         (is (= "claude-model" (get-in result [:attrs :harness/observed-model])))))))
 
-(deftest managed-startup-fences-invocation-and-preserves-native-continuity
+(deftest launch-bound-claude-runs-settle-and-resume-into-native-startup
   (fixture/with-managed-world
     (fn [ctx]
       (let [result
             (fixture/eval-world
              ctx (list 'do setup
                        '(let [run (harnesses/create!
-                                   rt {:harness :codex :mode :interactive :cwd "/tmp/managed"
-                                       :attributes {:harness/effort "low"}
-                                       :append-system-prompt "Frozen policy."})
-                              before-count (count (filter identity/identity? (weaver/list rt)))
+                                   rt {:harness :claude :mode :interactive :cwd "/tmp/legacy"})
+                              bound (identity/bind! rt {:harness "claude"
+                                                        :native-session-id "legacy-session"
+                                                        :run-id (:id run)})
+                              _ (weaver/update! rt (:id run)
+                                                {:attributes {:identity/id (:identity bound)
+                                                              :identity/prompt (:prompt bound)
+                                                              :harness/session-id "legacy-session"
+                                                              :harness/native-attached nil}})
                               started (harnesses/begin-attempt! rt (:id run))
-                              request {:harness "codex" :native-session-id "real-thread"
-                                       :cwd "/tmp/managed" :model "host-model"
-                                       :run-reference (native/reference (:strand started))}
-                              stale (failure #(native/register! rt (assoc request :run-reference
-                                                                          (str (:id run) ":stale"))))
-                              wrong-cwd (failure #(native/register! rt (assoc request :cwd "/elsewhere")))
-                              attached (native/register! rt request)
-                              replay (native/register! rt request)
                               finished (harnesses/finish!
                                         rt (:id run) {:status :done :exit-code 0
+                                                      :session-usable true
                                                       :invocation (:invocation started)})
-                              rejected-transport (failure #(harnesses/resume!
-                                                            rt (:id run) {:guidance-transport "legacy"}))
                               resumed (harnesses/resume! rt (:id run) {})
                               next-start (harnesses/begin-attempt! rt (:id resumed))
-                              next-request (assoc request :run-reference
-                                                  (native/reference (:strand next-start)))
-                              wrong-session (failure #(native/register!
-                                                       rt (assoc next-request :native-session-id "other")))
-                              next-bound (native/register! rt next-request)]
-                          {:rejected-transport rejected-transport
-                           :before-count before-count :before-identity (attr run :identity/id)
-                           :stale stale :wrong-cwd wrong-cwd :wrong-session wrong-session
-                           :same (= (:identity attached) (:identity replay) (:identity next-bound))
-                           :effort (:observed-effort attached)
-                           :session (attr finished :harness/session-id)
-                           :settled (attr finished :harness/settled)
-                           :usable (attr finished :harness/session-usable)
-                           :appends (attr resumed :harness/appended-system-prompts)
-                           :performed (targets (identity/current rt (:identity attached)) "performed")})))]
-        (is (:rejected-transport result))
-        (is (zero? (:before-count result)))
-        (is (nil? (:before-identity result)))
-        (is (:stale result))
-        (is (:wrong-cwd result))
-        (is (:wrong-session result))
-        (is (:same result))
-        (is (= "low" (:effort result)))
-        (is (= "real-thread" (:session result)))
-        (is (= "true" (:settled result) (:usable result)))
-        (is (= ["Frozen policy."] (:appends result)))
-        (is (= 2 (count (:performed result))))))))
+                              attached (native/register!
+                                        rt {:harness "claude" :native-session-id "legacy-session"
+                                            :cwd "/tmp/legacy" :model "claude-model"
+                                            :run-reference (native/reference (:strand next-start))})]
+                          {:finished (:attributes finished)
+                           :legacy (:identity bound)
+                           :resumed-prompt (attr resumed :identity/prompt)
+                           :attached (:identity attached)})))]
+        (is (= "true" (get-in result [:finished :harness/settled])
+               (get-in result [:finished :harness/session-usable])))
+        (is (not= "bootstrap" (get-in result [:finished :harness/substatus])))
+        (is (nil? (:resumed-prompt result)))
+        (is (= (:legacy result) (:attached result)))))))
+
+(deftest managed-startup-fences-invocation-and-preserves-native-continuity
+  (doseq [harness reference-harnesses]
+    (testing harness
+      (fixture/with-managed-world
+        (fn [ctx]
+          (let [result
+                (fixture/eval-world
+                 ctx (list 'do setup
+                           (for-harness
+                            harness
+                            '(let [run (harnesses/create!
+                                        rt {:harness :codex :mode :interactive :cwd "/tmp/managed"
+                                            :attributes {:harness/effort "low"}
+                                            :append-system-prompt "Frozen policy."})
+                                   before-count (count (filter identity/identity? (weaver/list rt)))
+                                   started (harnesses/begin-attempt! rt (:id run))
+                                   request {:harness "codex" :native-session-id "real-thread"
+                                            :cwd "/tmp/managed" :model "host-model"
+                                            :run-reference (native/reference (:strand started))}
+                                   stale (failure #(native/register! rt (assoc request :run-reference
+                                                                               (str (:id run) ":stale"))))
+                                   wrong-cwd (failure #(native/register! rt (assoc request :cwd "/elsewhere")))
+                                   attached (native/register! rt request)
+                                   replay (native/register! rt request)
+                                   finished (harnesses/finish!
+                                             rt (:id run) {:status :done :exit-code 0
+                                                           :invocation (:invocation started)})
+                                   rejected-transport (failure #(harnesses/resume!
+                                                                 rt (:id run) {:guidance-transport "legacy"}))
+                                   resumed (harnesses/resume! rt (:id run) {})
+                                   next-start (harnesses/begin-attempt! rt (:id resumed))
+                                   next-request (assoc request :run-reference
+                                                       (native/reference (:strand next-start)))
+                                   wrong-session (failure #(native/register!
+                                                            rt (assoc next-request :native-session-id "other")))
+                                   next-bound (native/register! rt next-request)]
+                               {:rejected-transport rejected-transport
+                                :before-count before-count :before-identity (attr run :identity/id)
+                                :stale stale :wrong-cwd wrong-cwd :wrong-session wrong-session
+                                :same (= (:identity attached) (:identity replay) (:identity next-bound))
+                                :effort (:observed-effort attached)
+                                :session (attr finished :harness/session-id)
+                                :settled (attr finished :harness/settled)
+                                :usable (attr finished :harness/session-usable)
+                                :appends (attr resumed :harness/appended-system-prompts)
+                                :performed (targets (identity/current rt (:identity attached)) "performed")}))))]
+            (is (:rejected-transport result))
+            (is (zero? (:before-count result)))
+            (is (nil? (:before-identity result)))
+            (is (:stale result))
+            (is (:wrong-cwd result))
+            (is (:wrong-session result))
+            (is (:same result))
+            (is (= "low" (:effort result)))
+            (is (= "real-thread" (:session result)))
+            (is (= "true" (:settled result) (:usable result)))
+            (is (= ["Frozen policy."] (:appends result)))
+            (is (= 2 (count (:performed result))))))))))
 
 (deftest missing-startup-is-a-settled-bootstrap-failure-not-integration-success
-  (fixture/with-managed-world
-    (fn [ctx]
-      (let [result
-            (fixture/eval-world
-             ctx (list 'do setup
-                       '(let [run (harnesses/create! rt {:harness :codex :prompt "task" :cwd "/tmp"})
-                              started (harnesses/begin-attempt! rt (:id run))
-                              finished (harnesses/finish!
-                                        rt (:id run) {:status :done :exit-code 0 :result "answer"
-                                                      :session-id "stdout-thread" :session-usable true
-                                                      :invocation (:invocation started)})
-                              rejected-transport (failure #(harnesses/retry!
-                                                            rt (:id run) {:guidance-transport "legacy"}))
-                              retried (harnesses/retry! rt (:id run) {})
-                              next-start (harnesses/begin-attempt! rt (:id run))
-                              stale (failure #(native/register!
-                                               rt {:harness "codex" :model "model" :cwd "/tmp"
-                                                   :native-session-id "old-thread"
-                                                   :run-reference (native/reference (:strand started))}))]
-                          {:rejected-transport rejected-transport
-                           :finished (:attributes finished) :stale stale
-                           :retry-identity (attr retried :identity/id)
-                           :new-invocation (not= (:invocation started) (:invocation next-start))})))]
-        (is (:rejected-transport result))
-        (is (= "failed" (get-in result [:finished :harness/status])))
-        (is (= "bootstrap" (get-in result [:finished :harness/substatus])))
-        (is (= "true" (get-in result [:finished :harness/settled])))
-        (is (= "false" (get-in result [:finished :harness/session-usable])))
-        (is (nil? (get-in result [:finished :identity/id])))
-        (is (nil? (:retry-identity result)))
-        (is (:stale result))
-        (is (:new-invocation result))))))
+  (doseq [harness reference-harnesses]
+    (testing harness
+      (fixture/with-managed-world
+        (fn [ctx]
+          (let [result
+                (fixture/eval-world
+                 ctx (list 'do setup
+                           (for-harness
+                            harness
+                            '(let [run (harnesses/create! rt {:harness :codex :prompt "task" :cwd "/tmp"})
+                                   started (harnesses/begin-attempt! rt (:id run))
+                                   finished (harnesses/finish!
+                                             rt (:id run) {:status :done :exit-code 0 :result "answer"
+                                                           :session-id "stdout-thread" :session-usable true
+                                                           :invocation (:invocation started)})
+                                   rejected-transport (failure #(harnesses/retry!
+                                                                 rt (:id run) {:guidance-transport "legacy"}))
+                                   retried (harnesses/retry! rt (:id run) {})
+                                   next-start (harnesses/begin-attempt! rt (:id run))
+                                   stale (failure #(native/register!
+                                                    rt {:harness "codex" :model "model" :cwd "/tmp"
+                                                        :native-session-id "old-thread"
+                                                        :run-reference (native/reference (:strand started))}))]
+                               {:rejected-transport rejected-transport
+                                :finished (:attributes finished) :stale stale
+                                :retry-identity (attr retried :identity/id)
+                                :new-invocation (not= (:invocation started) (:invocation next-start))}))))]
+            (is (:rejected-transport result))
+            (is (= "failed" (get-in result [:finished :harness/status])))
+            (is (= "bootstrap" (get-in result [:finished :harness/substatus])))
+            (is (= "true" (get-in result [:finished :harness/settled])))
+            (is (= "false" (get-in result [:finished :harness/session-usable])))
+            (is (nil? (get-in result [:finished :identity/id])))
+            (is (nil? (:retry-identity result)))
+            (is (:stale result))
+            (is (:new-invocation result))))))))
 
 (deftest publication-targets-launch-correlation-and-atomic-provenance
   (fixture/with-managed-world

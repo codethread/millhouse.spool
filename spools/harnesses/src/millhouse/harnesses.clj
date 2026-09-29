@@ -59,21 +59,18 @@
 (defn register-native-session!
   "Register an actual native session, optionally attaching its managed run.
 
-  Codex callers fence the exact managed invocation with `:run-reference`
-  `RUN_ID:INVOCATION` and supply the observed model. Pi callers correlate with
-  `:run-id` against the pinned native session and may carry the native fork
-  parent header. Claude callers register direct sessions only; managed Claude
-  runs carry identity in their launch prompt. Direct registrations have no alias
-  or process custody; an
+  Claude and Codex callers fence the exact managed invocation with
+  `:run-reference` `RUN_ID:INVOCATION` and supply the observed model. Pi callers
+  correlate with `:run-id` against the pinned native session and may carry the
+  native fork parent header. Direct registrations have no alias or process
+  custody; an
   observed unavailable effort is persisted as `harness/observed-effort=unknown`,
   never a launch option."
   [rt request]
   (case (:harness request)
-    "codex" (native-session/register!
-             rt (dissoc request :run-id :parent-native-session-id))
+    ("claude" "codex") (native-session/register!
+                        rt (dissoc request :run-id :parent-native-session-id))
     "pi" (native-registration/register! rt (dissoc request :run-reference))
-    "claude" (native-session/register!
-              rt (dissoc request :run-id :run-reference :parent-native-session-id))
     (fail! "Native startup requires a codex, claude or pi harness"
            {:harness (:harness request)})))
 
@@ -293,7 +290,9 @@
                 (native-registration/completion run (assoc outcome :status status))
                 (guidance-receipts/completion run (assoc outcome :status status)))
               outcome (:outcome guidance-completion)
-              native-failure? (and (= "codex" (attr-get run :harness/harness))
+              native-failure? (and (managed/run-reference-harness?
+                                    (attr-get run :harness/harness))
+                                   (managed/native-run? run)
                                    (life/invocation run)
                                    (or (not= (life/invocation run)
                                              (attr-get run :harness/native-attachment-invocation))
@@ -302,7 +301,7 @@
                                                   (attr-get run :harness/session-id)))))
               outcome (if native-failure?
                         (assoc outcome :status :failed :session-usable false
-                               :error "Codex native startup missing or inconsistent with the current invocation")
+                               :error "Native startup missing or inconsistent with the current invocation")
                         outcome)
               status (:status outcome)
               exit-code (:exit-code outcome)
@@ -331,16 +330,14 @@
                            (or session-id (attr-get run :harness/session-id)))
               evidence (or evidence
                            (life/settlement-evidence {:exit-code exit-code}))
-              _ (when (and (managed/managed-harness?
-                            (attr-get run :harness/harness))
+              _ (when (and (managed/native-run? run)
                            (true? session-usable)
                            (not attached?))
                   (fail! "Managed session evidence was not attached to the run"
                          {:id id :session-id session-id}))
               usable? (or (and attached? (true? session-usable))
                           (and attached? (= :done status) (zero? exit-code))
-                          (and (not (managed/managed-harness?
-                                     (attr-get run :harness/harness)))
+                          (and (not (managed/native-run? run))
                                (true? session-usable)))
               patch (life/terminal-patch run status
                                          (cond-> evidence native-failure?
