@@ -143,7 +143,7 @@
                 :output {:stdout-ref (str stdout) :stderr-ref (str stderr)}}
         calls (atom [])
         context {:attempt-id "attempt" :request {:shell/argv ["printf" "literal | argv"] :shell/cwd "/tmp"}}]
-    (spit stdout (apply str (repeat 20000 "o")))
+    (spit stdout (str/join (repeat 20000 "o")))
     (spit stderr "stderr-tail")
     (with-redefs [process/launch! (fn [& args] (swap! calls conj args) record)
                   process/list-owned (fn [& _] [record])]

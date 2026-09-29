@@ -44,7 +44,7 @@
       (batch/apply! runtime payload))))
 
 (defn- with-gate-authorization [runtime _run-id gate-ids f]
-  (binding [authority/*gate-ids* (set (map #(vector runtime %) gate-ids))] (f)))
+  (binding [authority/*gate-ids* (set (for [gate-id gate-ids] [runtime gate-id]))] (f)))
 
 (defn- with-guard [rt f]
   (let [config-dir (get-in rt [:metadata :config-dir])
