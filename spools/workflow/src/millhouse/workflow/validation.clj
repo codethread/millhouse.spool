@@ -1,6 +1,8 @@
 (ns millhouse.workflow.validation
   "Opt-in validation recipes. Consumers install configuration from a lifecycle resource."
   (:require [clojure.string :as str]
+            [millhouse.workflow.internal.execution.authority :as authority]
+            [millhouse.workflow.internal.execution.roots :as roots]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.runtime.alpha :as runtime]
@@ -29,34 +31,26 @@
 (def ^:private frozen-keys
   [:validation/recipe :validation/params :validation/config :validation/request])
 
-(def ^:dynamic *before-images*
-  "Transaction-scoped expected rows for the guarded retry operation."
-  nil)
-
-(def ^:dynamic *completion*
-  "Executor-owned exact gate/attempt pair during terminal success."
-  nil)
-
 (defn before-commit
-  "Fence retries against transaction pre-images and protect frozen recipe data."
+  "Protect frozen recipes and recognize only exact common execution authority."
   [ctx]
   (doseq [{:keys [id before after]} (or (:batch/updated ctx)
-                                        [{:id (:strand/id ctx)
-                                          :before (:strand/before ctx)
+                                        [{:id (:strand/id ctx) :before (:strand/before ctx)
                                           :after (:strand/after ctx)}])]
-    (when-let [expected (get *before-images* id)]
-      (when-not (= expected before)
-        (fail! "Validation retry before-image changed"
-               {:reason :workflow/validation-stale :gate id})))
     (when (attr-get before :validation/recipe)
       (when-not (= (mapv #(attr-get before %) frozen-keys)
                    (mapv #(attr-get after %) frozen-keys))
         (fail! "Validation recipe and request are frozen"
                {:reason :workflow/validation-frozen :gate id}))
-      (when (and (not= "closed" (:state before)) (= "closed" (:state after))
-                 (not= *completion* [id (attr-get before :shell/attempt-id)]))
-        (fail! "Validation success belongs to the shell executor"
-               {:reason :workflow/validation-executor-owned :gate id}))))
+      (when (and (not= "closed" (:state before)) (= "closed" (:state after)))
+        (let [rt (current/runtime)
+              root (roots/nearest-root rt before)
+              run-id (attr-get root :workflow/run-id)]
+          (when-not (or (authority/completion-authorized? rt run-id (:id root) id
+                                                          (attr-get before :execution/current))
+                        (authority/abandonment-authorized? rt run-id (:id root) id))
+            (fail! "Validation completion belongs to common execution"
+                   {:reason :workflow/validation-executor-owned :gate id}))))))
   nil)
 
 (defn open!
@@ -149,3 +143,16 @@
       (if (and expected (not= expected (:revision result)))
         (assoc result :decision :refuse :reason "Validation revision changed")
         result))))
+
+(defn check-attempt
+  "Inspect the frozen validation input at launch or commit; normalize refusal.
+
+  The revision is retained on the attempt, never in backend-specific gate fields."
+  [rt stage attempt]
+  (when (attr-get (get-in attempt [:input :gate]) :validation/recipe)
+    (try
+      (inspect rt stage (:run-id attempt) (get-in attempt [:input :gate])
+               (:validation-revision attempt) (:previous-result attempt))
+      (catch Throwable error
+        {:decision :unknown :reason (str "Validation inspection failed: " (ex-message error))
+         :evidence []}))))

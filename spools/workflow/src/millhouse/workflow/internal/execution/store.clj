@@ -5,12 +5,14 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
+            [millhouse.workflow.validation :as validation]
             [millhouse.workflow.internal.completion :as completion]
             [millhouse.workflow.internal.execution.authority :as authority]
             [millhouse.workflow.internal.execution.chart :as chart]
             [millhouse.workflow.internal.execution.data :as data]
             [millhouse.workflow.internal.execution.state :as state]
-            [millhouse.workflow.internal.routing :as routing])
+            [millhouse.workflow.internal.routing :as routing]
+            [millhouse.workflow.internal.query :as query])
   (:import [java.time Instant]
            [java.util UUID]))
 
@@ -116,7 +118,8 @@
   [rt row attempt]
   (let [gate (weaver/show rt (:gate-id attempt))
         root (weaver/show rt (:root-id attempt))
-        current? (= (:attempt-id attempt) (attr-get gate :execution/current))
+        current? (and (= "active" (:state gate)) (= "active" (:state root))
+                      (= (:attempt-id attempt) (attr-get gate :execution/current)))
         payload {:refs {:attempt (:id row) :root (:id root)}
                  :strands [(assoc (row-patch attempt) :ref :attempt)
                            {:ref :root :attributes {}}]}
@@ -126,6 +129,14 @@
     (apply-plan! rt (cond-> {(:id row) row (:id root) root} current? (assoc (:id gate) gate)) payload {})
     attempt))
 
+(defn save-cleanup!
+  "Fence only retained attempt cleanup; never write a gate or replacement root."
+  [rt row attempt]
+  (apply-plan! rt {(:id row) row}
+               {:refs {:attempt (:id row)}
+                :strands [(assoc (row-patch attempt) :ref :attempt)]} {})
+  attempt)
+
 (defn save-observation!
   "Fence the original attempt image and transactional current-token image.
 
@@ -133,11 +144,18 @@
   Merge only its phase projection; never rewrite ownership, clear gate errors,
   recapture inputs, or grant completion authority. Attempt conflicts still refuse."
   [rt row attempt]
-  (apply-plan! rt {(:id row) row}
-               {:refs {:attempt (:id row) :gate (:gate-id attempt)}
-                :strands [(assoc (row-patch attempt) :ref :attempt)
-                          {:ref :gate :attributes {"execution/phase" (name (:phase (model attempt)))}}]}
-               {:current {(:gate-id attempt) (:attempt-id attempt)}})
+  (let [gate (weaver/show rt (:gate-id attempt))
+        root (weaver/show rt (:root-id attempt))
+        current? (and (= "active" (:state gate)) (= "active" (:state root))
+                      (= (:attempt-id attempt) (attr-get gate :execution/current)))
+        payload {:refs {:attempt (:id row)}
+                 :strands [(assoc (row-patch attempt) :ref :attempt)]}]
+    (apply-plan! rt {(:id row) row}
+                 (cond-> payload
+                   current? (assoc-in [:refs :gate] (:id gate))
+                   current? (update :strands conj
+                                    {:ref :gate :attributes {"execution/phase" (name (:phase (model attempt)))}}))
+                 (when current? {:current {(:gate-id attempt) (:attempt-id attempt)}})))
   attempt)
 
 (defn advance
@@ -148,9 +166,13 @@
       (:invalid? decision) (assoc :attention (get-in decision [:view :attention])))))
 
 (defn result-envelope [attempt view]
-  (merge (select-keys attempt [:executor :executor-revision :run-id :root-id :gate-id :attempt-id])
+  (merge (select-keys attempt [:executor :executor-revision :run-id :root-id :gate-id :attempt-id :validation-revision])
          (select-keys (:terminal view) [:outcome :value :error :evidence :settlement])
-         (select-keys view [:created-at :committed-at :acknowledgement])))
+         (select-keys view [:created-at :committed-at :acknowledgement])
+         (when (and (= :terminal (get-in view [:observation :status]))
+                    (not= (get-in view [:terminal :outcome]) (get-in view [:observation :outcome])))
+           {:evidence (assoc (get-in view [:terminal :evidence])
+                             "backend-result" (select-keys (:observation view) [:outcome :value :error]))})))
 
 (defn deliver!
   "Commit attempt result and ordinary Workflow completion in one conditional batch."
@@ -164,6 +186,13 @@
                   (advance rt attempt :stop {:reason {:outcome :cancelled
                                                       :error {:code "execution/frozen"
                                                               :message "Run frozen" :data {}}}})
+                  attempt)
+        inspection (when (= :succeeded (get-in (model attempt) [:terminal :outcome]))
+                     (validation/check-attempt rt :complete attempt))
+        attempt (if (and inspection (not= :allow (:decision inspection)))
+                  (advance rt attempt :stop {:reason {:outcome :failed
+                                                      :error {:code "validation/completion-refused"
+                                                              :message (:reason inspection) :data {}}}})
                   attempt)
         committed (advance rt attempt :commit {})
         view (model committed)
@@ -190,5 +219,6 @@
                      (vals (:refs payload)))]
     (apply-plan! rt rows payload
                  (when success? {:completion [rt (:run-id attempt) (:id root) (:id gate) (:attempt-id attempt)]}))
-    (routing/close-run-if-done! rt (:run-id attempt))
+    (when (= (:root-id attempt) (:id (query/current-root-with-rt rt (:run-id attempt))))
+      (routing/close-run-if-done! rt (:run-id attempt)))
     committed))

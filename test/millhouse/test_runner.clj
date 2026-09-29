@@ -32,9 +32,11 @@
     millhouse.e2e.cron.lifecycle-test
     millhouse.executors.code-test
     millhouse.executors.shell-test
+    millhouse.executors.shell-replacement-test
     millhouse.kanban-test
     millhouse.identity-test
     millhouse.land.merge-queue-test
+    millhouse.land.withdrawal-test
     millhouse.land.scripts-test
     millhouse.land.workflow-test])
 

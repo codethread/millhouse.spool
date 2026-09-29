@@ -21,23 +21,19 @@
 
      The independent finisher owns scoped rebase conflicts and defects caused
      by the candidate. Record the failure, repair it, obtain focused review for
-     material changes, push, then retry the SAME failed gate after its subprocess
-     is terminal and shell/running, shell/attempt-id and shell/custody-handle are
-     absent. Use workflow retry-validation for an opted-in validation/recipe;
-     for an ordinary shell gate, remove only gate/error. The executor must
-     validate the final HEAD.
-     Keep the FIFO reservation. These repairs need no new approval or replacement
-     worker. The worker must not take back an accepted finisher's custody.
-
-     Managed Code gates use workflow execution RUN --step GATE for inspection.
-     After repairing the cause and confirming a settled failed attempt, invoke:
+     material changes, push, then inspect workflow execution RUN --step GATE.
+     Require the current failed attempt to be positively settled. For a
+     validation/recipe gate, use workflow retry-validation with its expected
+     revision; never bypass a refusal. For ordinary Shell and Code gates:
 
      ```nu
      strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
      ```
 
-     Use a fresh request key. Never clear their gate/error or use
-     shell custody fields as Code settlement evidence.
+     Use a fresh request key. Never clear gate/error or infer settlement from
+     missing handles. The executor must validate the final HEAD. Keep the FIFO
+     reservation. Repairs need no replacement worker or custody change; the
+     worker must not take back an accepted finisher's custody.
 
      Escalate to the recovery coordinator only for uncertain subprocess/merge
      settlement, mismatched worker/finisher identity or receipts, unknown resource
@@ -86,14 +82,15 @@
      revision and record its successful result before retrying CI. Earlier
      quality or review evidence does not validate a changed revision.
 
-     Re-read the existing workflow frontier and failed gate. Require pre-review
-     validation, no accepted review or finisher, a terminal failed shell attempt,
-     and no shell/running, shell/attempt-id or shell/custody-handle. Never clear
-     live or uncertain custody. For a validation/recipe gate, inspect and use
-     workflow retry-validation; never bypass its refusal. For an ordinary shell
-     validation gate, remove only gate/error with a JSON null attribute patch
-     after recording the evidence. The executor must run the check again; never
-     complete a gate manually, reopen passed steps or replace the workflow.
+     Re-read the existing workflow frontier and inspect workflow execution
+     RUN --step GATE. Require pre-review validation, no accepted review or
+     finisher, and a positively settled failed attempt. Never infer settlement
+     from missing handles. For a validation/recipe gate, use workflow
+     retry-validation with the expected revision; never bypass its refusal.
+     For an ordinary Shell or Code gate, use workflow retry with the exact
+     expected-attempt, fresh request-id, reason and by-identity. Never clear
+     gate/error. The executor must run the check again; never complete a gate
+     manually, reopen passed steps or replace the workflow.
 
      Continue review and autonomous landing only after quality and CI pass for
      the repaired exact HEAD. This authority does not cover handoff

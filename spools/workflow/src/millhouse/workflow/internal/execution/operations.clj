@@ -3,6 +3,7 @@
   (:require [millstrand.api.graph.alpha :as graph]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
+            [millhouse.workflow.validation :as validation]
             [millhouse.workflow.internal.execution.data :as data]
             [millhouse.workflow.internal.execution.driver :as driver]
             [millhouse.workflow.internal.execution.state :as state]
@@ -24,9 +25,10 @@
 (defn retry! [rt request]
   (let [{:keys [run-id step expected-attempt request-id reason by-identity dry-run]} request]
     (when-not (and (every? #{:run-id :step :expected-attempt :request-id :reason :by-identity
-                             :expected-revision :dry-run} (keys request))
+                             :expected-revision :dry-run :episode-ref} (keys request))
                    (every? data/nonblank? [run-id step expected-attempt request-id reason by-identity])
-                   (or (not (contains? request :dry-run)) (boolean? dry-run)))
+                   (or (not (contains? request :dry-run)) (boolean? dry-run))
+                   (or (not (contains? request :episode-ref)) (data/nonblank? (:episode-ref request))))
       (refuse! "Retry requires run, step, expected-attempt, request-id, reason and by-identity"))
     (state/with-run!
       rt run-id
@@ -48,10 +50,11 @@
                       prior (store/current-attempt rt gate)
                       view (when prior (store/model prior))
                       descriptor (get (state/selected rt) (attr-get gate :execution/owner))]
-                  (when (attr-get gate :validation/recipe)
-                    (refuse! "Validation-marked gates require their frozen validation policy"))
-                  (when (contains? request :expected-revision)
-                    (refuse! "Expected revision applies only to the validation retry policy"))
+                  (if (attr-get gate :validation/recipe)
+                    (when-not (data/nonblank? (:expected-revision request))
+                      (refuse! "Validation-marked gates require an expected revision"))
+                    (when (contains? request :expected-revision)
+                      (refuse! "Expected revision applies only to the validation retry policy")))
                   (when-not (and descriptor
                                  (not (contains? @(:draining (state/state rt)) (attr-get gate :execution/owner)))
                                  (= expected-attempt (:attempt-id prior))
@@ -61,9 +64,15 @@
                                  (not= :succeeded (get-in prior [:result :outcome])))
                     (refuse! "Retry requires the current settled failed attempt on an active unfrozen gate"))
                   (query/resolve-ready-step rt run-id {:step step})
-                  (let [attempt (store/prepare-attempt rt descriptor root gate)
+                  (let [inspection (when (attr-get gate :validation/recipe)
+                                     (validation/inspect rt :retry run-id gate (:expected-revision request) (:result prior)))
+                        _ (when (and inspection (not= :allow (:decision inspection)))
+                            (refuse! (:reason inspection)))
+                        attempt (cond-> (store/prepare-attempt rt descriptor root gate)
+                                  inspection (assoc :validation-revision (:revision inspection)
+                                                    :previous-result (:result prior)))
                         action {:request payload :attempt-id (:attempt-id attempt)
-                                :previous-attempt expected-attempt :frozen-request (:request attempt)}]
+                                :previous-attempt expected-attempt :previous-result (:result prior) :frozen-request (:request attempt)}]
                     (if dry-run
                       {:status :eligible :action action}
                       (do (store/claim! rt root gate attempt action)
@@ -124,6 +133,13 @@
                 _ (when-not (= (:attempts receipt)
                                (into {} (map (fn [gate] [(:id gate) (attr-get gate :execution/current)])) gates))
                     (refuse! "Frozen root's gate membership or current attempts changed"))
+                history (filterv #(= (:id root) (:root-id (store/record %)))
+                                 (weaver/list rt [:and [:= [:attr "kind"] "workflow-execution"]
+                                                  [:= [:attr "execution/run"] (:run-id receipt)]] {}))
+                started-gates (set (keep (fn [row]
+                                           (let [attempt (store/record row)
+                                                 view (store/model attempt)]
+                                             (when (or (:accepted? view) (:uncertain? view)) (:gate-id attempt)))) history))
                 attempts (mapv (fn [[gate-id token]]
                                  (let [attempt (when token (store/record (store/attempt-row rt token)))
                                        view (when attempt (store/model attempt))]
@@ -132,15 +148,14 @@
                                                         (and (= :done (:phase view))
                                                              (= :settled (get-in attempt [:result :settlement]))))
                                                   :settled :unknown)
-                                    :may-have-started? (boolean (or (:accepted? view) (:uncertain? view)))}))
+                                    :may-have-started? (contains? started-gates gate-id)}))
                                (:attempts receipt))
                 result {:freeze receipt :attempts attempts
                         :status (if (every? #(= :settled (:settlement %)) attempts) :settled :unknown)}]
             (when (and (= :settled (:status result)) (not= result (retirement root)))
               (store/apply-plan!
                rt (into {(:id root) root} (map (juxt :id identity))
-                        (concat gates (keep (fn [{:keys [attempt-id]}]
-                                              (when attempt-id (store/attempt-row rt attempt-id))) attempts)))
+                        (concat gates history))
                {:refs {:root (:id root)}
                 :strands [{:ref :root :attributes {"execution/retirement" (data/encode result)}}]} {}))
             result))))))
@@ -160,3 +175,26 @@
                                {:refs {:root (:id root)}
                                 :strands [{:ref :root :attributes {"execution/freeze" nil "execution/retirement" nil}}]} {})
             {:status :resumed :root-id (:id root)}))))))
+
+(defn retry-validation!
+  "Translate the retained recipe retry request into the common attempt path."
+  [rt {:keys [run-id request-id] :as request}]
+  (when-not (and (every? #{:run-id :step :request-id :expected-revision :reason :by-identity :dry-run :episode-ref} (keys request))
+                 (every? #(data/nonblank? (get request %)) [:run-id :step :request-id :expected-revision :reason :by-identity])
+                 (or (not (contains? request :episode-ref)) (data/nonblank? (:episode-ref request)))
+                 (or (not (contains? request :dry-run)) (boolean? (:dry-run request))))
+    (refuse! "Invalid validation retry request"))
+  (let [prior-action (some-> (first (weaver/list rt
+                                                 [:and [:= [:attr "execution/action-run"] run-id]
+                                                  [:= [:attr "execution/action-key"] request-id]] {}))
+                             (attr-get :execution/action) data/decode)
+        gate (select-gate rt request)]
+    (when-not (attr-get gate :validation/recipe)
+      (refuse! "Gate did not opt into a validation recipe"))
+    (try
+      (let [result (retry! rt (assoc request :expected-attempt
+                                     (or (get-in prior-action [:request :expected-attempt])
+                                         (attr-get gate :execution/current))))]
+        (assoc result :state (name (:status result))))
+      (catch clojure.lang.ExceptionInfo error
+        {:state "refused" :reasons [(ex-message error)]}))))

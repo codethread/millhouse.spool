@@ -398,8 +398,7 @@
         (testing "a declared executor projects its gate-request contract"
           (let [item (by-waiter "shell")
                 request (:request item)]
-            (is (= "millhouse.executors.shell/shell-stalled?"
-                   (:stall-predicate item)))
+            (is (= "execution" (:driver item)))
             (is (= "millhouse.executors.shell/request" (:spec request)))
             (is (= ["shell/argv"]
                    (mapv #(get % "key") (get-in request [:contract "required"])))

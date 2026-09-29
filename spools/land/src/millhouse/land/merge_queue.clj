@@ -4,9 +4,10 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.workflow :as workflow]
-            [millhouse.executors.shell :as shell]
+            [millhouse.workflow.execution :as execution]
             [millhouse.land :as land]
-            [millhouse.workflow.internal.guard :as workflow-guard]
+            [millhouse.land.internal.queue-authority :as authority]
+            [millhouse.land.internal.queue-cli :as queue-cli]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.events.alpha :as events]
@@ -21,67 +22,28 @@
 
 (s/def ::non-blank (s/and string? (complement str/blank?)))
 (s/def ::timeout-secs (s/and int? (complement neg?)))
-(s/def ::sha (s/and ::non-blank #(boolean (re-matches #"(?i)[0-9a-f]{40}" %))))
-(s/def ::root-id ::non-blank)
-(s/def ::gate-id ::non-blank)
-(s/def ::entry-id ::non-blank)
-(s/def ::lock-id ::non-blank)
-(s/def ::pr-number pos-int?)
-(s/def ::pr-state #{"MERGED"})
-(s/def ::base-branch #{"main"})
-(s/def ::pr-head ::sha)
-(s/def ::merge-commit ::sha)
-(s/def ::canonical-main ::sha)
-(s/def ::irreversible-work #{"not-started"})
-(s/def ::turn-evidence
-  (s/keys :req-un [::root-id ::gate-id ::irreversible-work]))
-(s/def ::release-evidence
-  (s/keys :req-un [::root-id ::gate-id ::entry-id ::lock-id ::pr-number
-                   ::pr-state ::base-branch ::pr-head ::merge-commit
-                   ::canonical-main]))
+(defn- require-unfrozen-root! [runtime run-id]
+  (let [{:keys [root freeze]} (execution/run-view runtime run-id)]
+    (when (or (nil? root) freeze)
+      (fail! "Queue activity requires an active unfrozen root" {:run-id run-id}))
+    root))
 
-(def ^:private protected-queue-gates #{"merge-turn" "merge-release"})
+(defn- fenced-batch! [runtime before payload]
+  (let [payload (reduce (fn [p [id _]]
+                          (if (some #{id} (vals (:refs p))) p
+                              (-> p (assoc-in [:refs (keyword id)] id)
+                                  (update :strands conj {:ref (keyword id) :attributes {}})))) payload before)]
+    (binding [authority/*before-images* before
+              authority/*writes* (into {} (keep (fn [patch]
+                                                  (when-let [id (get (:refs payload) (:ref patch))] [id patch])))
+                                       (:strands payload))
+              authority/*creates* (into {} (keep (fn [patch]
+                                                   (when-not (get (:refs payload) (:ref patch)) [(:ref patch) patch])))
+                                        (:strands payload))]
+      (batch/apply! runtime payload))))
 
-(def ^:private authorization-state-key
-  ::queue-gate-authorization)
-
-(defn- authorization-slot
-  [runtime]
-  (runtime/spool-state runtime authorization-state-key #(ThreadLocal.)))
-
-(defn- authorized-gate-close?
-  [runtime gate-id]
-  (contains? (:gate-ids (.get ^ThreadLocal (authorization-slot runtime))) gate-id))
-
-(defn queue-gate-completion-guard
-  "Reject closure of Land queue gates unless the current Land operation authorized it.
-
-  Gate kind is read only from each update's pre-image. Outcome attributes and
-  actor attribution therefore cannot hide or authorize a protected close."
-  [ctx]
-  (let [runtime (current/runtime)]
-    (doseq [{:keys [id before after]} (:batch/updated ctx)
-            :let [gate (attr-get before :workflow/gate)]
-            :when (and (= "active" (:state before))
-                       (= "closed" (:state after))
-                       (contains? protected-queue-gates gate))]
-      (when-not (authorized-gate-close? runtime id)
-        (throw (ex-info "Land queue gates are completed only by their queue executor"
-                        {:code "land/queue-gate-completion-forbidden"
-                         :gate-id id
-                         :gate gate}))))))
-
-(defn- with-gate-authorization
-  [runtime run-id gate-ids f]
-  (let [slot ^ThreadLocal (authorization-slot runtime)
-        previous (.get slot)]
-    (.set slot {:run-id run-id :gate-ids (set gate-ids)})
-    (try
-      (f)
-      (finally
-        (if (some? previous)
-          (.set slot previous)
-          (.remove slot))))))
+(defn- with-gate-authorization [runtime _run-id gate-ids f]
+  (binding [authority/*gate-ids* (set (map #(vector runtime %) gate-ids))] (f)))
 
 (defn- with-guard [rt f]
   (let [config-dir (get-in rt [:metadata :config-dir])
@@ -163,12 +125,6 @@
 (defn- gate-for [run-id waiter]
   (first (filter #(= waiter (:gate %)) (workflow/ready run-id))))
 
-(defn- patch! [patches]
-  (batch/apply! (current/runtime)
-                {:refs (into {} (map (fn [[id _]] [(keyword id) id])) patches)
-                 :strands (mapv (fn [[id patch]] (assoc patch :ref (keyword id))) patches)
-                 :edges []}))
-
 (defn- next-sequence []
   (let [numbers (map #(attr-get % :queue/sequence) (rows "merge-queue-entry" false))]
     (when-not (every? nat-int? numbers)
@@ -176,25 +132,22 @@
     (inc (reduce max -1 numbers))))
 
 (defn join!
-  "Reserve a run's FIFO position at its merge-turn gate; repeat calls retain it."
+  "Reserve an unfrozen run's FIFO position; repeats retain its reservation."
   [runtime run-id]
-  (with-guard
-    runtime
+  (with-guard runtime
     (fn []
-      (or (entry-for run-id)
-          (let [root (workflow/current-root run-id)
-                gate (gate-for run-id "merge-turn")]
-            (when-not (and root gate)
-              (fail! "Join the merge queue at the merge-turn gate" {:run-id run-id}))
-            (weaver/add!
-             (current/runtime)
-             {:title (str "Merge queue: " run-id)
-              :attributes {:kind "merge-queue-entry"
-                           :land/run-id run-id
-                           :queue/root (:id root)
-                           :queue/gate (:id gate)
-                           :queue/sequence (next-sequence)
-                           :queue/queued-at (str (runtime/now (current/runtime)))}}))))))
+      (let [root (require-unfrozen-root! runtime run-id)]
+        (or (entry-for run-id)
+            (let [gate (gate-for run-id "merge-turn")]
+              (when-not gate
+                (fail! "Join the merge queue at the merge-turn gate" {:run-id run-id}))
+              (fenced-batch! runtime {(:id root) root}
+                             {:refs {} :strands [{:ref :entry :title (str "Merge queue: " run-id)
+                                                  :attributes {:kind "merge-queue-entry" :land/run-id run-id
+                                                               :queue/root (:id root) :queue/gate (:id gate)
+                                                               :queue/sequence (next-sequence)
+                                                               :queue/queued-at (str (runtime/now runtime))}}]})
+              (entry-for run-id)))))))
 
 (defn- completion-attributes
   [kind run-id gate entry lock]
@@ -204,89 +157,62 @@
    "queue/entry" (:id entry)
    "queue/lock" (:id lock)})
 
-(defn grant!
-  "Grant the head run's turn and close its queue gate without blocking a worker.
+(defn- complete-queue! [runtime run-id root gate entry lock kind]
+  (let [fresh (require-unfrozen-root! runtime run-id)]
+    (when-not (= (:id root) (:id fresh))
+      (fail! "Queue root changed before completion" {:run-id run-id}))
+    (with-gate-authorization runtime run-id [(:id gate)]
+      #(binding [authority/*before-images* {(:id fresh) fresh}]
+         (workflow/complete! run-id {:step (:id gate) :executor (if (= "grant" kind) "merge-turn" "merge-release")
+                                     :context {}
+                                     :attributes (completion-attributes kind run-id gate entry lock)})))))
 
-  Failure after lock creation retains the lock and reservation for retry in
-  place. A non-head run simply remains waiting."
+(defn grant!
+  "Grant the FIFO head, fencing the public root image in each transaction."
   [runtime run-id]
-  (with-guard
-    runtime
+  (with-guard runtime
     (fn []
-      (workflow-guard/with-run!
-        runtime run-id
-        (fn []
-          (let [entry (entry-for run-id)
-                gate (gate-for run-id "merge-turn")
-                current-lock (lock-row)]
-            (when (and entry gate
-                       (= (:id entry) (:id (first (entries))))
-                       (not (attr-get entry :queue/withdraw-reason))
-                       (or (nil? current-lock)
-                           (= run-id (attr-get current-lock :land/run-id))))
-              (let [lock (or current-lock
-                             (weaver/add! (current/runtime)
-                                          {:title (str "Merge lock: " run-id)
-                                           :attributes {:kind "merge-lock"
-                                                        :land/run-id run-id
-                                                        :queue/entry (:id entry)}}))]
-                (with-gate-authorization
-                  runtime run-id [(:id gate)]
-                  #(workflow/complete!
-                    run-id
-                    {:step (:id gate)
-                     :executor "merge-turn"
-                     :attributes
-                     (completion-attributes "grant" run-id gate entry lock)}))))))))))
+      (let [root (require-unfrozen-root! runtime run-id)
+            entry (entry-for run-id)
+            gate (gate-for run-id "merge-turn")
+            current-lock (lock-row)]
+        (when (and entry gate (= (:id entry) (:id (first (entries))))
+                   (not (attr-get entry :queue/withdraw-reason))
+                   (or (nil? current-lock) (= run-id (attr-get current-lock :land/run-id))))
+          (when-not current-lock
+            (fenced-batch! runtime {(:id root) root (:id entry) entry}
+                           {:refs {} :strands [{:ref :lock :title (str "Merge lock: " run-id)
+                                                :attributes {:kind "merge-lock" :land/run-id run-id
+                                                             :queue/entry (:id entry)}}]}))
+          (complete-queue! runtime run-id root gate entry (lock-row) "grant"))))))
 
 (defn release!
-  "Close a completed turn's reservation and lock before closing its release gate.
-
-  The queue writes share one batch. If workflow completion fails afterwards,
-  retry recognizes the closed reservation and never releases another run's lock."
+  "Release only this exact reservation/lock; freeze prevents further mutation."
   [runtime run-id]
-  (with-guard
-    runtime
+  (with-guard runtime
     (fn []
-      (workflow-guard/with-run!
-        runtime run-id
-        (fn []
-          (when-let [gate (gate-for run-id "merge-release")]
-            (let [[entry lock]
-                  (if-let [active-entry (entry-for run-id)]
-                    (let [active-lock (lock-row)]
-                      (when-not (and (= run-id (some-> active-lock
-                                                       (attr-get :land/run-id)))
-                                     (= (:id active-entry)
-                                        (some-> active-lock (attr-get :queue/entry))))
-                        (fail! "Releasing a merge turn requires its own lock"
-                               {:run-id run-id :entry (:id active-entry)}))
-                      (when (attr-get active-entry :queue/withdraw-reason)
-                        (fail! "Withdrawal is pending for this turn"
-                               {:entry (:id active-entry)}))
-                      (patch! {(:id active-entry)
-                               {:state "closed"
-                                :attributes {:queue/outcome "merged"
-                                             :queue/released-at
-                                             (str (runtime/now (current/runtime)))}}
-                               (:id active-lock) {:state "closed"}})
-                      [active-entry active-lock])
-                    (let [completed (or (completed-entry-for run-id)
-                                        (fail! "No completed merge reservation for release retry"
-                                               {:run-id run-id}))
-                          recorded-lock
-                          (or (unique-lock-for-entry run-id (:id completed))
-                              (fail! "Completed reservation has no recorded lock"
-                                     {:run-id run-id :entry (:id completed)}))]
-                      [completed recorded-lock]))]
-              (with-gate-authorization
-                runtime run-id [(:id gate)]
-                #(workflow/complete!
-                  run-id
-                  {:step (:id gate)
-                   :executor "merge-release"
-                   :attributes
-                   (completion-attributes "release" run-id gate entry lock)})))))))))
+      (let [root (require-unfrozen-root! runtime run-id)]
+        (when-let [gate (gate-for run-id "merge-release")]
+          (let [[entry lock]
+                (if-let [entry (entry-for run-id)]
+                  (let [lock (lock-row)]
+                    (when-not (and (= run-id (attr-get lock :land/run-id))
+                                   (= (:id entry) (attr-get lock :queue/entry))
+                                   (nil? (attr-get entry :queue/withdraw-reason)))
+                      (fail! "Releasing a merge turn requires its own lock" {:run-id run-id}))
+                    (fenced-batch! runtime {(:id root) root (:id entry) entry (:id lock) lock}
+                                   {:refs {:entry (:id entry) :lock (:id lock)}
+                                    :strands [{:ref :entry :state "closed"
+                                               :attributes {:queue/outcome "merged"
+                                                            :queue/released-at (str (runtime/now runtime))}}
+                                              {:ref :lock :state "closed"}]})
+                    [entry lock])
+                  (let [entry (or (completed-entry-for run-id)
+                                  (fail! "No completed reservation for release retry" {:run-id run-id}))
+                        lock (or (unique-lock-for-entry run-id (:id entry))
+                                 (fail! "Completed reservation has no recorded lock" {:run-id run-id}))]
+                    [entry lock]))]
+            (complete-queue! runtime run-id root gate entry lock "release")))))))
 
 (defn- entry-view [entry lock]
   (let [run-id (attr-get entry :land/run-id)
@@ -340,534 +266,109 @@
 (defn- run-strands [root]
   (:strands (graph/subgraph (current/runtime) [(:id root)] {:type "parent-of"})))
 
-(defn- abort-payload [root run-id reason]
-  (let [params (assoc (attr-get root :workflow/context) :reason reason)]
-    (when-not (s/valid? ::land/land-abort-params params)
-      (fail! "Landing context cannot continue into abort" {:run-id run-id :context params}))
-    (workflow/compile land/land-abort params
-                      {:run-id run-id :family "land" :context params
-                       :definition 'millhouse.land/land-abort})))
+(defn- require-unattempted-irreversible! [root receipt]
+  (let [attempted (set (keep #(when (:may-have-started? %) (:gate-id %)) (:attempts receipt)))]
+    (doseq [gate (run-strands root)
+            :when (true? (attr-get gate :land/irreversible))]
+      (when (or (= "closed" (:state gate)) (contains? attempted (:id gate)))
+        (fail! "Merge may already have been submitted; reconcile and resume this turn"
+               {:root (:id root) :gate (:id gate)})))))
 
-(defn- close-and-abort! [runtime run-id entry lock root payload reason]
-  (let [closeable (filter #(and (= "active" (:state %))
-                                (contains? #{"root" "step" "checkpoint" "defer" "procedure"}
-                                           (attr-get % :workflow/role)))
-                          (run-strands root))
-        protected (keep #(when (contains? protected-queue-gates
-                                          (attr-get % :workflow/gate))
-                           (:id %))
-                        closeable)
-        patches (into {(:id entry) {:state "closed"
-                                    :attributes {:queue/outcome "withdrawn"
-                                                 :queue/withdraw-reason reason
-                                                 :queue/released-at
-                                                 (str (runtime/now (current/runtime)))}}}
-                      (map (fn [strand] [(:id strand) {:state "closed"}])) closeable)
-        patches (cond-> patches
-                  lock (assoc (:id lock) {:state "closed"}))]
-    (with-gate-authorization
-      runtime run-id protected
-      #(batch/apply! (current/runtime)
-                     {:refs (into {} (map (fn [[id _]] [(keyword id) id])) patches)
-                      :strands (into
-                                (mapv (fn [[id patch]]
-                                        (assoc patch :ref (keyword id)))
-                                      patches)
-                                (:strands payload))
-                      :edges (:edges payload)}))))
+(defn- retire-run! [runtime run-id reason]
+  (let [freeze (execution/quiesce-run! runtime run-id reason)
+        receipt (execution/retire! runtime freeze)]
+    (when-not (= :settled (:status receipt))
+      (fail! "Run retirement is unknown; retain the frozen reservation" {:retirement receipt}))
+    receipt))
 
 (defn withdraw!
-  "Stop a named landing and atomically replace it with abort bookkeeping.
+  "Retire before taking the queue lock, then atomically abandon into abort.
 
-  Any trusted agent may withdraw; no owner restriction or timeout eviction.
-  Shell quiescence precedes release. A started irreversible gate requires
-  reconciliation instead: cancelling a local client cannot undo a remote merge.
-  A failed withdrawal keeps the reservation and lock, with shell gates frozen
-  for inspection. Repair and retry those gates to resume the original landing."
-  [runtime id reason]
-  (when-not (s/valid? ::non-blank reason)
-    (fail! "Withdrawal requires a non-blank reason" {:entry id}))
-  (with-guard
-    runtime
-    (fn []
-      (let [entry (require-entry id)
-            run-id (attr-get entry :land/run-id)]
-        (if (= "closed" (:state entry))
-          (when-not (= "withdrawn" (attr-get entry :queue/outcome))
-            (fail! "A completed merge cannot be withdrawn" {:entry id}))
-          (let [root (workflow/current-root run-id)]
-            (when-not (and root (= (:id root) (attr-get entry :queue/root)))
-              (fail! "Queue reservation no longer identifies the current root" {:entry id}))
-            (let [stopped (shell/quiesce-run! run-id reason)
-                  attempted (into #{} (keep #(when (:attempted? %) (:gate-id %)))
-                                  (:gates stopped))]
-              (workflow-guard/with-run!
-                runtime run-id
-                (fn []
-                  (let [entry (require-entry id)
-                        root (workflow/current-root run-id)
-                        lock (lock-row)
-                        own-lock (when (= run-id (some-> lock (attr-get :land/run-id)))
-                                   lock)]
-                    (when-not (and root (= (:id root) (attr-get entry :queue/root)))
-                      (fail! "Queue reservation no longer identifies the current root"
-                             {:entry id}))
-                    (when-let [gate
-                               (first
-                                (filter #(and (true? (attr-get % :land/irreversible))
-                                              (or (= "closed" (:state %))
-                                                  (some? (attr-get % :shell/output))
-                                                  (some? (attr-get % :shell/exit-code))
-                                                  (contains? attempted (:id %))))
-                                        (run-strands root)))]
-                      (fail! "Merge may already have been submitted; reconcile and resume this turn"
-                             {:entry id :gate (:id gate) :run-id run-id}))
-                    (close-and-abort! runtime run-id entry own-lock root
-                                      (abort-payload root run-id reason) reason)))))))
-        (status runtime id)))))
-
-(defn- exact-keys?
-  [expected value]
-  (= expected (set (keys value))))
-
-(defn- require-evidence!
-  [kind evidence]
-  (let [[spec keys] (case kind
-                      :skipped-turn
-                      [::turn-evidence #{:root-id :gate-id :irreversible-work}]
-
-                      :skipped-release
-                      [::release-evidence
-                       #{:root-id :gate-id :entry-id :lock-id :pr-number
-                         :pr-state :base-branch :pr-head :merge-commit
-                         :canonical-main}]
-
-                      (fail! "Unknown merge queue repair kind"
-                             {:kind kind
-                              :allowed [:skipped-turn :skipped-release]}))]
-    (when-not (and (s/valid? spec evidence) (exact-keys? keys evidence))
-      (fail! "Merge queue repair evidence is invalid"
-             {:kind kind :evidence evidence :spec spec
-              :expected-keys keys :explain (s/explain-str spec evidence)}))
-    (when (and (= :skipped-release kind)
-               (not= (:merge-commit evidence) (:canonical-main evidence)))
-      (fail! "Canonical main evidence does not identify the exact merge commit"
-             {:merge-commit (:merge-commit evidence)
-              :canonical-main (:canonical-main evidence)}))
-    evidence))
-
-(defn- require-repair-request!
-  [{:keys [kind by-identity reason evidence] :as request}]
-  (when-not (exact-keys? #{:kind :by-identity :reason :evidence} request)
-    (fail! "Merge queue repair request has unknown or missing keys"
-           {:keys (set (keys request))
-            :expected #{:kind :by-identity :reason :evidence}}))
-  (when-not (s/valid? ::non-blank by-identity)
-    (fail! "Merge queue repair requires a non-blank actor" {:by-identity by-identity}))
-  (when-not (s/valid? ::non-blank reason)
-    (fail! "Merge queue repair requires a non-blank reason" {:reason reason}))
-  (assoc request :evidence (require-evidence! kind evidence)))
-
-(defn- require-recorded-root
-  [runtime run-id root-id]
-  (let [root (try
-               (weaver/show runtime root-id)
-               (catch Exception _
-                 (fail! "Recorded landing root is missing"
-                        {:run-id run-id :root-id root-id})))]
-    (when-not (and (contains? #{"active" "closed"} (:state root))
-                   (= "root" (attr-get root :workflow/role))
-                   (= "land" (attr-get root :workflow/family))
-                   (= "merge" (attr-get root :land/stage))
-                   (= run-id (attr-get root :workflow/run-id)))
-      (fail! "Repair evidence does not identify the recorded landing root"
-             {:run-id run-id :root-id root-id
-              :role (attr-get root :workflow/role)
-              :family (attr-get root :workflow/family)
-              :stage (attr-get root :land/stage)
-              :recorded-run-id (attr-get root :workflow/run-id)}))
-    root))
-
-(defn- exact-gate
-  [strands waiter gate-id]
-  (let [matches (filterv #(= waiter (attr-get % :workflow/gate)) strands)]
-    (when-not (= 1 (count matches))
-      (fail! "Landing root has ambiguous queue gate ownership"
-             {:gate waiter :expected gate-id :matches (mapv :id matches)}))
-    (let [gate (first matches)]
-      (when-not (= gate-id (:id gate))
-        (fail! "Repair evidence names the wrong queue gate"
-               {:gate waiter :expected (:id gate) :actual gate-id}))
-      gate)))
-
-(defn- repair-attributes
-  [kind by-identity reason evidence]
-  {"land/repair-kind" (name kind)
-   "identity/by-identity" by-identity
-   "land/repair-reason" reason
-   "land/repair-evidence" evidence
-   "land/repaired-at" (str (runtime/now (current/runtime)))})
-
-(defn- prior-repair
-  [strand]
-  (when-let [kind (attr-get strand :land/repair-kind)]
-    {:kind (keyword kind)
-     :by-identity (attr-get strand :identity/by-identity)
-     :reason (attr-get strand :land/repair-reason)
-     :evidence (attr-get strand :land/repair-evidence)}))
-
-(defn- idempotent-repair?
-  [strand request]
-  (when-let [recorded (prior-repair strand)]
-    (when-not (= request recorded)
-      (fail! "Merge queue repair does not match the recorded repair"
-             {:strand (:id strand) :recorded recorded :requested request}))
-    true))
-
-(defn- repair-result
-  [kind run-id root-id gate-id entry-id]
-  {:repair (name kind)
-   :run-id run-id
-   :root-id root-id
-   :gate-id gate-id
-   :entry-id entry-id})
-
-(defn- shell-strands
-  [strands]
-  (filterv #(= "shell" (attr-get % :workflow/gate)) strands))
-
-(defn- irreversible-gate
-  [strands]
-  (let [matches (filterv #(true? (attr-get % :land/irreversible)) strands)]
-    (when-not (= 1 (count matches))
-      (fail! "Landing root has ambiguous irreversible work"
-             {:gates (mapv :id matches)}))
-    (first matches)))
-
-(defn- irreversible-attempt?
-  [gate attempted]
-  (or (= "closed" (:state gate))
-      (some? (attr-get gate :shell/output))
-      (some? (attr-get gate :shell/exit-code))
-      (contains? attempted (:id gate))))
-
-(defn- require-unattempted-irreversible!
-  [run-id gate attempted]
-  (when (irreversible-attempt? gate attempted)
-    (fail! "Irreversible merge work may have started; retain the fenced turn"
-           {:run-id run-id :gate-id (:id gate)
-            :attempted (contains? attempted (:id gate))}))
-  gate)
-
-(defn- dependency-target
-  [runtime strands from-id label]
-  (let [ids (->> (:edges (graph/subgraph runtime [from-id] {:type "depends-on"}))
-                 (filter #(and (= "depends-on" (:edge_type %))
-                               (= from-id (:from_strand_id %))))
-                 (map :to_strand_id)
-                 distinct
-                 vec)]
-    (when-not (= 1 (count ids))
-      (fail! "Landing repair dependency is ambiguous"
-             {:step from-id :dependency label :matches ids}))
-    (or (get strands (first ids))
-        (fail! "Landing repair dependency is outside the recorded root"
-               {:step from-id :dependency label :target (first ids)}))))
-
-(defn- require-ownership-barrier!
-  [runtime strands turn irreversible]
-  (let [strands-by-id (into {} (map (juxt :id identity)) strands)
-        barrier (dependency-target runtime strands-by-id (:id irreversible)
-                                   "pre-irreversible")
-        turn-dependency (dependency-target runtime strands-by-id (:id barrier)
-                                           "merge-turn")]
-    (when-not (and (= "shell" (attr-get barrier :workflow/gate))
-                   (not (true? (attr-get barrier :land/irreversible)))
-                   (contains? #{"active" "closed"} (:state barrier))
-                   (= (:id turn) (:id turn-dependency)))
-      (fail! "Landing repair cannot restore an ownership-blocked frontier"
-             {:turn (:id turn)
-              :irreversible (:id irreversible)
-              :barrier (:id barrier)
-              :barrier-state (:state barrier)
-              :barrier-gate (attr-get barrier :workflow/gate)
-              :barrier-irreversible (attr-get barrier :land/irreversible)
-              :barrier-dependency (:id turn-dependency)}))
-    barrier))
-
-(defn- rewound-shell-attributes
-  [prior-error]
-  {:gate/error prior-error
-   :workflow/executor nil
-   :workflow/executor-run-id nil
-   :shell/running nil
-   :shell/attempt-id nil
-   :shell/custody-handle nil
-   :shell/timeout-deadline nil
-   :shell/timeout-intent nil
-   :shell/exit-code nil
-   :shell/output nil})
-
-(defn- require-skipped-turn-state!
-  [runtime run-id {:keys [root-id gate-id]}]
-  (let [root (require-recorded-root runtime run-id root-id)
-        strands (run-strands root)
-        gate (exact-gate strands "merge-turn" gate-id)
-        entry (unique-reservation run-id (reservations-for run-id))]
-    (when-not (= "active" (:state root))
-      (fail! "Skipped-turn repair requires the recorded root to remain active"
-             {:run-id run-id :root-id root-id :state (:state root)}))
-    (when-not (= root-id (:id (workflow/current-root run-id)))
-      (fail! "Skipped-turn repair root is not the run's current root"
-             {:run-id run-id :root-id root-id}))
-    (when-not (= "closed" (:state gate))
-      (fail! "Skipped-turn repair requires a closed merge-turn gate"
-             {:run-id run-id :gate-id gate-id :state (:state gate)}))
-    (when (attr-get gate :land/queue-completion)
-      (fail! "Merge turn has recorded authorized completion"
-             {:run-id run-id :gate-id gate-id
-              :completion (attr-get gate :land/queue-completion)}))
-    (when (and entry (not= "active" (:state entry)))
-      (fail! "Skipped turn has a terminal queue reservation"
-             {:run-id run-id :entry (:id entry) :state (:state entry)}))
-    (when (and entry
-               (or (not= root-id (attr-get entry :queue/root))
-                   (not= gate-id (attr-get entry :queue/gate))))
-      (fail! "Queue reservation does not identify the skipped turn"
-             {:run-id run-id :entry (:id entry)
-              :root (attr-get entry :queue/root)
-              :gate (attr-get entry :queue/gate)}))
-    {:root root :strands strands :gate gate :entry entry}))
-
-(defn- repair-skipped-turn!
-  [runtime run-id {:keys [kind by-identity reason evidence] :as request}]
-  (let [{:keys [root-id gate-id]} evidence
-        root (require-recorded-root runtime run-id root-id)
-        initial-strands (run-strands root)
-        gate (exact-gate initial-strands "merge-turn" gate-id)]
-    (if (idempotent-repair? gate request)
-      (let [entry (unique-reservation run-id (reservations-for run-id))]
-        (repair-result kind run-id root-id gate-id (:id entry)))
-      (let [{:keys [strands]} (require-skipped-turn-state! runtime run-id evidence)
-            prior-errors (into {}
-                               (map (juxt :id #(attr-get % :gate/error)))
-                               (shell-strands strands))
-            stopped (shell/quiesce-run! run-id (str "Skipped-turn repair: " reason))
-            attempted (into #{}
-                            (keep #(when (:attempted? %) (:gate-id %)))
-                            (:gates stopped))
-            irreversible (weaver/show runtime (:id (irreversible-gate strands)))]
-        (require-unattempted-irreversible! run-id irreversible attempted)
-        (shell/retire-quiesced-attempts! runtime stopped)
-        (workflow-guard/with-run!
-          runtime run-id
-          (fn []
-            (let [{:keys [strands gate entry]}
-                  (require-skipped-turn-state! runtime run-id evidence)
-                  shells (shell-strands strands)
-                  irreversible (irreversible-gate strands)
-                  ownership-barrier
-                  (require-ownership-barrier! runtime strands gate irreversible)]
-              (require-unattempted-irreversible! run-id irreversible attempted)
-              (let [gate-ref (keyword gate-id)
-                    shell-patches
-                    (mapv (fn [shell]
-                            (if (= (:id ownership-barrier) (:id shell))
-                              (cond->
-                               {:ref (keyword (:id shell))
-                                :attributes
-                                (rewound-shell-attributes
-                                 (get prior-errors (:id shell)))}
-                                (= "closed" (:state shell)) (assoc :state "active"))
-                              {:ref (keyword (:id shell))
-                               :attributes
-                               {:gate/error (get prior-errors (:id shell))}}))
-                          shells)
-                    attributes (repair-attributes kind by-identity reason evidence)
-                    refs (into {gate-ref gate-id}
-                               (map (fn [shell]
-                                      [(keyword (:id shell)) (:id shell)]))
-                               shells)
-                    repair-strands (into [{:ref gate-ref :state "active"
-                                           :attributes attributes}]
-                                         shell-patches)
-                    payload (if entry
-                              {:refs refs :strands repair-strands}
-                              {:refs refs
-                               :strands
-                               (conj repair-strands
-                                     {:ref :repair-entry
-                                      :title (str "Merge queue: " run-id)
-                                      :attributes
-                                      {:kind "merge-queue-entry"
-                                       :land/run-id run-id
-                                       :queue/root root-id
-                                       :queue/gate gate-id
-                                       :queue/sequence (next-sequence)
-                                       :queue/queued-at
-                                       (str (runtime/now (current/runtime)))}})})]
-                (batch/apply! runtime payload)
-                (let [repaired-entry (or entry (entry-for run-id))]
-                  (repair-result kind run-id root-id gate-id
-                                 (:id repaired-entry)))))))))))
-
-(defn- require-successful-shell!
-  [gate label]
-  (let [exit-code (attr-get gate :shell/exit-code)]
-    (when-not (and (= "closed" (:state gate))
-                   (some? exit-code)
-                   (zero? exit-code)
-                   (nil? (attr-get gate :gate/error)))
-      (fail! "Landing repair lacks a successful recorded shell gate"
-             {:gate (:id gate) :label label :state (:state gate)
-              :exit-code exit-code
-              :error (attr-get gate :gate/error)}))
-    gate))
-
-(defn- prepared-head
-  [prepare branch]
-  (let [output (attr-get prepare :shell/output)
-        pattern (re-pattern
-                 (str "(?m)^land prepare: validated "
-                      (java.util.regex.Pattern/quote branch)
-                      " at ([0-9a-fA-F]{40})$"))]
-    (or (some->> output (re-find pattern) second)
-        (fail! "Prepare gate does not record the exact validated branch HEAD"
-               {:gate (:id prepare) :branch branch :output output}))))
-
-(defn- require-release-evidence!
-  [runtime root subgraph release evidence]
-  (let [strands (into {} (map (juxt :id identity)) (:strands subgraph))
-        pull (dependency-target runtime strands (:id release) "pull-main")
-        merge-gate (dependency-target runtime strands (:id pull) "merge-pr")
-        prepare (dependency-target runtime strands (:id merge-gate) "prepare-merge")
-        context (attr-get root :workflow/context)
-        branch (:branch context)
-        pr-number (:pr-number context)
-        argv (attr-get merge-gate :shell/argv)]
-    (require-successful-shell! prepare "prepare-merge")
-    (require-successful-shell! merge-gate "merge-pr")
-    (require-successful-shell! pull "pull-main")
-    (when-not (true? (attr-get merge-gate :land/irreversible))
-      (fail! "Recorded merge gate is not the irreversible landing gate"
-             {:gate (:id merge-gate)}))
-    (when-not (and (= pr-number (:pr-number evidence))
-                   (= (str pr-number) (nth argv 4 nil))
-                   (= branch (last argv)))
-      (fail! "Repair PR evidence does not match the recorded landing"
-             {:recorded-pr pr-number :evidence-pr (:pr-number evidence)
-              :recorded-branch branch :merge-argv argv}))
-    (when-not (= (:pr-head evidence) (prepared-head prepare branch))
-      (fail! "Repair PR head does not match the validated landing HEAD"
-             {:evidence-head (:pr-head evidence)
-              :validated-head (prepared-head prepare branch)}))))
-
-(defn- repair-skipped-release!
-  [runtime run-id {:keys [kind by-identity reason evidence] :as request}]
-  (let [{:keys [root-id gate-id entry-id lock-id]} evidence
-        entry (require-entry entry-id)]
-    (if (idempotent-repair? entry request)
-      (repair-result kind run-id root-id gate-id entry-id)
-      (let [root (require-recorded-root runtime run-id root-id)
-            subgraph (graph/subgraph runtime [root-id] {:type "parent-of"})
-            release (exact-gate (:strands subgraph) "merge-release" gate-id)
-            reservations (reservations-for run-id)
-            reservation (unique-reservation run-id reservations)
-            lock (lock-row)]
-        (when-not (and (= entry-id (:id reservation))
-                       (= "active" (:state entry))
-                       (= run-id (attr-get entry :land/run-id))
-                       (= root-id (attr-get entry :queue/root)))
-          (fail! "Repair entry does not identify the active recorded reservation"
-                 {:run-id run-id :entry entry-id :reservation (:id reservation)
-                  :state (:state entry) :root (attr-get entry :queue/root)}))
-        (when-not (and lock
-                       (= lock-id (:id lock))
-                       (= run-id (attr-get lock :land/run-id))
-                       (= entry-id (attr-get lock :queue/entry)))
-          (fail! "Repair lock does not identify the reservation's active owner"
-                 {:run-id run-id :entry entry-id :lock lock-id
-                  :active-lock (some-> lock :id)
-                  :active-owner (some-> lock (attr-get :land/run-id))}))
-        (when-let [active-root (workflow/current-root run-id)]
-          (when-not (= root-id (:id active-root))
-            (fail! "Another root is active for the repaired run"
-                   {:run-id run-id :expected root-id :active (:id active-root)})))
-        (when-not (= "closed" (:state release))
-          (fail! "Skipped-release repair requires a closed merge-release gate"
-                 {:run-id run-id :gate-id gate-id :state (:state release)}))
-        (when (attr-get release :land/queue-completion)
-          (fail! "Merge release has recorded authorized completion"
-                 {:run-id run-id :gate-id gate-id
-                  :completion (attr-get release :land/queue-completion)}))
-        (require-release-evidence! runtime root subgraph release evidence)
-        (patch! {entry-id {:state "closed"
-                           :attributes
-                           (merge {:queue/outcome "merged"
-                                   :queue/released-at
-                                   (str (runtime/now (current/runtime)))}
-                                  (repair-attributes kind by-identity reason evidence))}
-                 lock-id {:state "closed"}})
-        (repair-result kind run-id root-id gate-id entry-id)))))
+  Irreversible may-have-started evidence refuses even after local settlement.
+  The final conditional batch fences root, retirement, attempts and domain rows."
+  [runtime id reason by-identity]
+  (when-not (every? #(s/valid? ::non-blank %) [reason by-identity])
+    (fail! "Withdrawal requires a non-blank reason and actor" {:entry id}))
+  (current/with-runtime runtime
+    (let [entry (require-entry id)
+          run-id (attr-get entry :land/run-id)]
+      (if (= "closed" (:state entry))
+        (do (when-not (= "withdrawn" (attr-get entry :queue/outcome))
+              (fail! "A completed merge cannot be withdrawn" {:entry id}))
+            (status runtime id))
+        (let [receipt (retire-run! runtime run-id reason)]
+          (with-guard
+            runtime
+            (fn []
+              (let [current-entry (require-entry id)
+                    root (workflow/current-root run-id)
+                    lock (lock-row)
+                    own-lock (when (= run-id (some-> lock (attr-get :land/run-id))) lock)
+                    params (assoc (attr-get root :workflow/context) :reason reason)]
+                (when-not (and (= entry current-entry) (= "active" (:state current-entry))
+                               (= (:id root) (attr-get entry :queue/root))
+                               (= (:id root) (get-in receipt [:freeze :root-id])))
+                  (fail! "Reservation or root changed during retirement" {:entry id}))
+                (when (and own-lock (not= id (attr-get own-lock :queue/entry)))
+                  (fail! "Lock does not belong to the exact reservation" {:entry id}))
+                (require-unattempted-irreversible! root receipt)
+                (when-not (s/valid? ::land/land-abort-params params)
+                  (fail! "Landing context cannot continue into abort" {:run-id run-id}))
+                (let [patches (cond-> [{:before entry
+                                        :update {:state "closed"
+                                                 :attributes {:queue/outcome "withdrawn"
+                                                              :queue/withdraw-reason reason
+                                                              :queue/released-at (str (runtime/now runtime))}}}]
+                                own-lock (conj {:before own-lock :update {:state "closed"}}))]
+                  (binding [authority/*writes* (into {} (map (fn [{:keys [before update]}] [(:id before) update])) patches)
+                            authority/*before-images* (into {(:id root) root}
+                                                            (map (juxt :id identity))
+                                                            (filter #(true? (attr-get % :land/irreversible)) (run-strands root)))]
+                    (with-gate-authorization
+                      runtime run-id (map :id (run-strands root))
+                      #(execution/abandon-run!
+                        runtime {:run-id run-id :root-id (:id root) :reason reason
+                                 :by-identity by-identity :retirement receipt
+                                 :workflow #'land/land-abort :params params :domain-patches patches}))))
+                (status runtime id)))))))))
 
 (defn repair!
-  "Repair one explicitly evidenced pre-guard skipped Land queue gate.
+  "Resume and explicitly retry failed reversible preparation, retaining its turn.
 
-  Supported kinds are `:skipped-turn` before possible irreversible work and
-  `:skipped-release` after exact successful merge/main evidence. Turn repair
-  retires quiesced preparation custody and rewinds reversible preparation to
-  restore an ownership-blocked frontier. Every request
-  records actor, reason, graph ids, and evidence; mismatches fail without queue
-  settlement. Repeating the exact request is idempotent."
-  [runtime run-id request]
-  (when-not (s/valid? ::non-blank run-id)
-    (fail! "Merge queue repair requires a non-blank run id" {:run-id run-id}))
-  (let [{:keys [kind] :as request} (require-repair-request! request)]
-    (with-guard
-      runtime
-      #(case kind
-         :skipped-turn (repair-skipped-turn! runtime run-id request)
-         :skipped-release
-         (workflow-guard/with-run!
-           runtime run-id
-           (fn []
-             (repair-skipped-release! runtime run-id request)))))))
-
-(def ^:private queue-args
-  {:op "merge-queue"
-   :doc "Inspect or explicitly withdraw strict FIFO landing reservations."
-   :subcommands
-   {"join" {:doc "Reserve a run at its merge-turn gate; repeats retain its place."
-            :hook-class :mutating :deadline-class :standard
-            :positionals [{:name :run-id :required? true :spec ::non-blank}]}
-    "status" {:doc "Show queue order or one entry with workflow progress."
-              :hook-class :read :deadline-class :standard
-              :positionals [{:name :entry-id :spec ::non-blank}]}
-    "await" {:doc "Wait for a reserved turn; timeout never dequeues it."
-             :hook-class :read :deadline-class :unbounded
-             :flags {:timeout-secs {:type :int :spec ::timeout-secs
-                                    :doc "Seconds to wait; defaults to 300."}}
-             :positionals [{:name :entry-id :required? true :spec ::non-blank}]}
-    "withdraw" {:doc "Stop a named landing and release its turn with an explicit reason."
-                :hook-class :mutating :deadline-class :unbounded
-                :flags {:reason {:type :string :required? true :spec ::non-blank}}
-                :positionals [{:name :entry-id :required? true :spec ::non-blank}]}
-    "repair" {:doc "Repair one explicitly evidenced pre-guard skipped queue gate."
-              :hook-class :mutating :deadline-class :unbounded
-              :flags {:kind {:type :string :required? true
-                             :doc "skipped-turn or skipped-release."}
-                      :by-identity {:type :string :required? true :spec ::non-blank
-                                    :doc "Trusted actor performing the repair."}
-                      :reason {:type :string :required? true :spec ::non-blank}
-                      :evidence {:type :string :parse :json :required? true
-                                 :doc "Exact JSON evidence for the selected repair kind."}}
-              :positionals [{:name :run-id :required? true :spec ::non-blank}]}}})
+  Historical skipped-gate rewind is unsupported; resolve it under old loaded
+  code before cutover. This operation neither rewinds graphs nor infers merges."
+  [runtime run-id {:keys [kind by-identity reason evidence] :as request}]
+  (when-not (and (= #{:kind :by-identity :reason :evidence} (set (keys request)))
+                 (= :preparation kind) (every? #(s/valid? ::non-blank %) [run-id by-identity reason])
+                 (= #{:root-id :gate-id :expected-attempt :request-id} (set (keys evidence)))
+                 (every? #(s/valid? ::non-blank %) (vals evidence)))
+    (fail! "Repair requires preparation with exact root, gate, attempt and request IDs; legacy rewind must precede cutover"
+           {:request request}))
+  (current/with-runtime runtime
+    (let [receipt (retire-run! runtime run-id reason)
+          {:keys [root-id gate-id expected-attempt request-id]} evidence]
+      ;; No execution calls occur under the queue lock. Domain ownership is
+      ;; checked here; exact receipt/root/token checks repeat at resume/retry.
+      (with-guard runtime
+        (fn []
+          (let [root (workflow/current-root run-id)
+                entry (entry-for run-id)
+                gate (weaver/show runtime gate-id)]
+            (when-not (and entry (= root-id (:id root)) (= root-id (attr-get entry :queue/root))
+                           (some #(= gate-id (:id %)) (run-strands root))
+                           (= "shell" (attr-get gate :workflow/gate))
+                           (not (attr-get gate :land/irreversible)) (= "active" (:state gate)))
+              (fail! "Repair requires this reservation's active reversible Shell gate" {:evidence evidence}))
+            (require-unattempted-irreversible! root receipt))))
+      (execution/resume-run! runtime run-id receipt)
+      (execution/retry! runtime {:run-id run-id :step gate-id :expected-attempt expected-attempt
+                                 :request-id request-id :reason reason :by-identity by-identity}))))
 
 (millstrand/defop merge-queue
   "Own strict FIFO reservations; ordinary landing progression uses workflow verbs."
-  {:arg-spec queue-args
+  {:arg-spec queue-cli/arguments
    :returns {:subcommands (into {} (map (fn [name] [name {:type :map :extra :json}]))
-                                (keys (:subcommands queue-args)))}
+                                (keys (:subcommands queue-cli/arguments)))}
    :prime (format-alpha/prose
            "
              Sign-off joins the queue automatically. Use workflow ready and await
@@ -876,13 +377,12 @@
              for a repeatable wait. Timeout never moves a reservation.
 
              Any trusted agent may withdraw another run with merge-queue withdraw
-             ENTRY --reason REASON. Withdrawal stops merge work before releasing
+             ENTRY --reason REASON --by-identity ACTOR. Withdrawal stops merge work before releasing
              the turn. There is no automatic eviction or second merge approval.
 
-             Use merge-queue repair only for an evidenced gate skipped before the
-             Land completion guard was active. Read the Land cookbook first. Repair
-             requires kind, actor, reason, and the exact JSON evidence shape; any
-             mismatch or uncertainty retains or fences the turn for reconciliation.
+             Use merge-queue repair --kind preparation for settled reversible work.
+             Supply actor, reason, and exact root, gate, attempt and request IDs.
+             Historical skipped-gate repair must happen before execution cutover.
            " {})}
   [ctx]
   (let [runtime (:op/runtime ctx)
@@ -892,7 +392,7 @@
       "join" {:entry (join! runtime run-id)}
       "status" (if entry-id (status runtime entry-id) (status runtime))
       "await" (await-turn runtime entry-id (or timeout-secs 300))
-      "withdraw" (withdraw! runtime entry-id reason)
+      "withdraw" (withdraw! runtime entry-id reason by-identity)
       "repair" (repair! runtime run-id
                         {:kind (keyword kind)
                          :by-identity by-identity
@@ -922,16 +422,22 @@
     (doseq [root (workflow/active-runs "land")
             :let [run-id (attr-get root :workflow/run-id)]
             gate (workflow/ready run-id)
-            :when (and (contains? #{"merge-turn" "merge-release"} (:gate gate))
+            :when (and (nil? (:freeze (execution/run-view runtime run-id)))
+                       (contains? #{"merge-turn" "merge-release"} (:gate gate))
                        (nil? (gate-error gate)))]
       (try
         (case (:gate gate)
           "merge-turn" (do (join! runtime run-id) (grant! runtime run-id))
           "merge-release" (release! runtime run-id))
         (catch Exception e
-          (weaver/update! (current/runtime) (:id gate)
-                          {:attributes {:gate/error (str (ex-message e)
-                                                         (some->> (ex-data e) (str " ")))}}))))
+          (when-let [current-root (:root (execution/run-view runtime run-id))]
+            (when (and (= (:id root) (:id current-root))
+                       (nil? (:freeze (execution/run-view runtime run-id))))
+              (try
+                (fenced-batch! runtime {(:id current-root) current-root}
+                               {:refs {:gate (:id gate)}
+                                :strands [{:ref :gate :attributes {:gate/error (str (ex-message e) (some->> (ex-data e) (str " ")))}}]})
+                (catch clojure.lang.ExceptionInfo _ nil)))))))
     {:scanned true}))
 
 (defn on-event
@@ -943,8 +449,8 @@
   "Install the queue-gate completion guard before any queue scan can run."
   [{:keys [runtime]}]
   (hooks/register-hook!
-   runtime :land/queue-gate-completion #{:batch/apply-before-commit}
-   'millhouse.land.merge-queue/queue-gate-completion-guard
+   runtime :land/queue-gate-completion #{:batch/apply-before-commit :strand/update-before-commit :strand/add-before-commit}
+   'millhouse.land.internal.queue-authority/before-commit
    {:order -100
     :doc "Require Land-scoped authority to close merge-turn and merge-release."})
   {:registered :land/queue-gate-completion})

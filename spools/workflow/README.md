@@ -45,17 +45,12 @@ Activate `app.workflow-cli` after `:workflow/engine`. Add `millhouse/workflow` t
 ```clojure
 (ns app.shell-executor
   (:require [millhouse.executors.shell :as shell]
-            [millhouse.workflow :as workflow]
-            [millstrand.api.lifecycle.alpha :as lifecycle]
-            [millstrand.api.millstrand.alpha :as millstrand]))
+            [millstrand.api.lifecycle.alpha :as lifecycle]))
 
-(workflow/use-executor! shell/shell-stalled?)
-(millstrand/use-query! shell/stalled-shell-gates)
-(lifecycle/use-resource! shell/shell-pool shell/shell-handler)
-(lifecycle/use-reconcile! shell/shell-attempts)
+(lifecycle/use-resource! shell/shell-engine)
 ```
 
-Code uses the common execution lifecycle rather than a legacy stall declaration.
+Shell and Code use the common execution lifecycle rather than a legacy stall declaration.
 Select only `(lifecycle/use-resource! code/code-engine)` from a module requiring
 `millhouse.executors.code`. Its ordinary `code/executor` descriptor is inert.
 Do not select a legacy driver for the same waiter. See [managed execution](execution.md)
@@ -88,7 +83,7 @@ For workspaces that want the complete shipped surface, activate the bundled sele
    :after [:workflow/engine]})
 ```
 
-`millhouse.workflow.spool` selects the CLI, both executors, their queries and lifecycle declarations, and `publish-spool-kondo`. It is a convenience entry point, not a requirement.
+`millhouse.workflow.spool` selects the CLI, both executor resources, lifecycle declarations, and `publish-spool-kondo`. It is a convenience entry point, not a requirement.
 
 ## Author workflow data
 

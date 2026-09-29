@@ -27,9 +27,5 @@
     millhouse.workflow/use-workflow!
     millhouse.workflow/use-executor!
     millhouse.executors.code/code-engine
-    millhouse.executors.shell/shell-stalled?
-    millhouse.executors.shell/stalled-shell-gates
-    millhouse.executors.shell/shell-pool
-    millhouse.executors.shell/shell-handler
-    millhouse.executors.shell/shell-attempts
+    millhouse.executors.shell/shell-engine
     millhouse.millstrand-workflows/publish-spool-kondo]}}}

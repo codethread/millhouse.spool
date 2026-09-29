@@ -14,5 +14,6 @@
    :main-opts
    ["-m" "millhouse.test-runner"
     "millhouse.land.merge-queue-test"
+    "millhouse.land.withdrawal-test"
     "millhouse.land.scripts-test"
     "millhouse.land.workflow-test"]}}}

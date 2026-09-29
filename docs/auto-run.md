@@ -93,27 +93,24 @@ uncertain causes remain blockers. Follow the shared
 the diagnosis and exact requested intervention. Do not rerun unchanged failures
 hoping for green, weaken assertions or raise production limits to hide failure.
 
-Only retry the existing pre-review validation gate after its failed shell attempt
-is terminal and its running/attempt/custody attributes are absent. An opted-in
-`validation/recipe` gate uses `workflow retry-validation`; never bypass a refusal.
-For an ordinary shell gate, a JSON null patch removes only `gate/error` after
-recording the failure. Never complete executor gates manually or repour the run.
+Inspect the failed gate with `workflow execution RUN --step GATE`. Require a
+positively settled failed attempt. For an opted-in `validation/recipe`, use the
+retained `workflow retry-validation` entrypoint with its expected revision;
+never bypass a refusal. Ordinary Shell and Code gates use:
+
+```nu
+strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
+```
+
+Use a fresh request key. Never clear `gate/error`, infer settlement from missing
+handles, manually complete executor gates or repour the run. Preserve unknown
+acknowledgement bookkeeping even when known settlement permits explicit retry.
 
 After handoff, the independent finisher owns scoped rebase conflicts and defects
-caused by the candidate. Record the exact gate, failed commit and output, repair
+caused by the candidate. Record the exact gate, failed commit and output; repair
 the cause, obtain focused review for material changes, push, then retry the same
-gate after subprocess settlement and removal of live shell custody. Use
-`workflow retry-validation` for an opted-in recipe; for an ordinary shell gate,
-remove only `gate/error`. The executor validates the final HEAD. Keep the FIFO reservation.
-These repairs require neither another approval nor a replacement worker.
-
-Managed Code gates, including worker verification and Land card bookkeeping,
-use the common execution contract rather than Shell custody or error deletion.
-Before or after handoff, inspect `workflow execution RUN --step GATE`, repair
-the cause, and require a settled failed attempt. Then use
-`workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
-with a fresh request key. Never clear their `gate/error`, infer Code settlement
-from Shell fields, or bypass the existing worker/finisher custody boundary.
+gate using this common contract. The executor validates the final HEAD. Retain
+the FIFO reservation and the existing worker/finisher custody boundary.
 
 Escalate to the recovery coordinator only for uncertain subprocess or merge
 settlement, mismatched custody/receipts, unknown resource ownership, failures

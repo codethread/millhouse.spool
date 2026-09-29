@@ -48,16 +48,15 @@ Each target repository must own an executable `.millstrand/land-quality.sh`. It 
 
 Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. Before sign-off, remove scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners; cleanup that must wait for merge belongs in that hook. Successful cleanup automatically finishes the optional card, including a pending queue waiter. There is no post-merge agent bookkeeping gate. No Millstrand warm-REPL behavior is hardcoded.
 
-Code bookkeeping gates use [managed Workflow execution](../workflow/execution.md).
-Inspect their current attempt with `workflow execution`, then explicitly authorize
-one settled failed attempt with `workflow retry`; deleting `gate/error` is not
-Code retry authority. The existing Shell and queue repair paths are unchanged.
+Code and Shell gates use [managed Workflow execution](../workflow/execution.md).
+Inspect `workflow execution`, then explicitly authorize a settled failed attempt
+with `workflow retry`; deleting `gate/error` is not retry authority. Recipe-marked
+Shell gates retain the delegated `retry-validation` entrypoint.
 
-Roots containing managed Code work now require exact freeze/positive-retirement
-receipts before routed abandonment. The legacy Land withdrawal operation does
-not yet compose that receipt and refuses rather than silently orphaning Code.
-Cross-backend operational freeze and Land withdrawal integration belong to the
-Shell conversion; do not bypass either the Workflow or queue guards in the interim.
+Withdrawal retires managed work before acquiring the queue lock. It then fences
+exact root, reservation, freeze and retirement evidence in the atomic abandonment
+batch. It never claims successful execution for skipped old work. An irreversible
+gate that may have started refuses withdrawal, even after local cancellation.
 
 ## Activation
 
@@ -98,6 +97,11 @@ The dependency coordinate makes source available but does not activate modules. 
 
 Queue entries use `kind=merge-queue-entry` and retain `land/run-id`, `queue/root`, `queue/gate`, `queue/sequence`, and `queue/queued-at`. Terminal entries add `queue/outcome`, `queue/released-at`, and, for withdrawal, `queue/withdraw-reason`. The one active `kind=merge-lock` row records `land/run-id` and `queue/entry`.
 
-Any trusted agent may withdraw a reservation with an explicit reason. Withdrawal first freezes and quiesces shell work, then atomically closes only that run and replaces it with `land-abort`. Once an irreversible merge gate has started or has evidence of an attempt, withdrawal fails loudly and requires reconciliation; a completed merge can never be relabeled as aborted.
+Any trusted agent may withdraw a reservation with an explicit reason. Withdrawal first freezes and retires managed work, then atomically closes only that run and replaces it with `land-abort`. Once an irreversible merge gate has started or has evidence of an attempt, withdrawal fails loudly and requires reconciliation; a completed merge can never be relabeled as aborted.
 
-Pre-guard skipped gates are repaired only through `merge-queue repair`, with an actor, reason, exact graph IDs, and bounded evidence. A skipped turn can be restored only while its recorded Land merge root is active and shell quiescence proves the irreversible gate was not attempted. Its reservation and sequence are preserved; an unreserved run receives a normal new tail position. If out-of-turn preparation already completed or was in flight, repair first reconciles and acknowledges settled cancellation custody, then rewinds that reversible gate and its stale shell outcome so delayed terminal reconciliation cannot refence it and the irreversible merge remains blocked until normal grant and fresh preparation. A skipped release can settle only its own reservation and lock after the recorded prepare, merge, and pull-main gates prove success and supplied exact PR/merge/canonical-main evidence agrees. An active or retained closed root is supported. Missing roots, ownership ambiguity, mismatched IDs/evidence, and uncertain merge submission refuse loudly and leave the turn retained or fenced. Exact repeated repairs are idempotent and never release a successor's lock. See the cookbook repair runbook for evidence shapes.
+Historical skipped-turn/release rewind must be resolved under old loaded code
+before cutover; it is not supported by the managed model. For new data,
+`merge-queue repair --kind preparation` retains the reservation, positively
+retires the exact freeze, resumes and explicitly retries the reversible gate.
+It never removes raw fences, reopens gates or infers remote merge success.
+See the cookbook for exact evidence and actor fields.
