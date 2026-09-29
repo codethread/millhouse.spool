@@ -53,6 +53,11 @@ Inspect `workflow execution`, then explicitly authorize a settled failed attempt
 with `workflow retry`; deleting `gate/error` is not retry authority. Recipe-marked
 Shell gates retain the delegated `retry-validation` entrypoint.
 
+Queue gates (`merge-turn` and `merge-release`) remain scanner-owned. Repair the
+cause, then clear only that queue gate's `gate/error` to re-arm it. Managed retry
+and preparation repair do not apply to queue gates. Keep the reservation and
+respect any run freeze.
+
 Withdrawal retires managed work before acquiring the queue lock. It then fences
 exact root, reservation, freeze and retirement evidence in the atomic abandonment
 batch. It never claims successful execution for skipped old work. An irreversible

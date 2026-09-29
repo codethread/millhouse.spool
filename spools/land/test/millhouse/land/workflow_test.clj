@@ -309,6 +309,11 @@
       (is (re-find #"workflow execution" instruction))
       (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN" instruction))
       (is (re-find #"Never clear gate/error" instruction)))
+    (doseq [gate [:prepare-merge :merge-pr :pull-main :remove-branch-worktree]]
+      (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN"
+                   (get-in (definition-step definition gate) [:attributes "workflow/instruction"]))))
+    (is (re-find #"clear gate/error"
+                 (get-in (definition-step definition :release-turn) [:attributes "workflow/instruction"])))
     (is (nil? (definition-step definition :quality)))
     (is (= [:pull-main] (:depends-on (definition-step definition :release-turn))))
     (is (= [:release-turn]

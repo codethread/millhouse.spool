@@ -30,10 +30,16 @@
      strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
      ```
 
-     Use a fresh request key. Never clear gate/error or infer settlement from
-     missing handles. The executor must validate the final HEAD. Keep the FIFO
+     Use a fresh request key. Never clear gate/error on managed Code/Shell gates
+     or infer settlement from missing handles. The executor must validate the
+     final HEAD. Keep the FIFO
      reservation. Repairs need no replacement worker or custody change; the
      worker must not take back an accepted finisher's custody.
+
+     Queue gates (merge-turn and merge-release) remain scanner-owned. Repair the
+     cause and clear only that queue gate's gate/error to re-arm it. Neither
+     workflow retry nor preparation repair applies to queue gates. Retain the
+     reservation and do not bypass a frozen run.
 
      Escalate to the recovery coordinator only for uncertain subprocess/merge
      settlement, mismatched worker/finisher identity or receipts, unknown resource

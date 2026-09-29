@@ -102,9 +102,15 @@ never bypass a refusal. Ordinary Shell and Code gates use:
 strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
 ```
 
-Use a fresh request key. Never clear `gate/error`, infer settlement from missing
-handles, manually complete executor gates or repour the run. Preserve unknown
-acknowledgement bookkeeping even when known settlement permits explicit retry.
+Use a fresh request key. Never clear `gate/error` on managed Code/Shell gates,
+infer settlement from missing handles, manually complete executor gates or repour
+the run. Preserve unknown acknowledgement bookkeeping even when known settlement
+permits explicit retry.
+
+Queue gates (`merge-turn` and `merge-release`) still belong to the queue scanner,
+not managed execution. Repair the cause and clear only that queue gate's
+`gate/error` to re-arm it. Neither `workflow retry` nor preparation repair applies
+to queue gates; retain the reservation and do not bypass a frozen run.
 
 After handoff, the independent finisher owns scoped rebase conflicts and defects
 caused by the candidate. Record the exact gate, failed commit and output; repair
