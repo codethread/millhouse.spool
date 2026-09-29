@@ -134,7 +134,9 @@
                \"Shell replacement\"
                (workflow/gate :check \"Run shell check\" :shell
                  :attributes {\"test/run-id\" \"shell-replacement\"
-                              \"shell/argv\" [\"sh\" \"-c\" \"IFS= read -r release < "
+                              \"shell/argv\" [\"sh\" \"-c\" \"printf launch >> "
+       release-fifo
+       ".launches; IFS= read -r release < "
        release-fifo
        "; printf shell-ok\"]})
                (workflow/step :after \"After\" :self :depends-on [:check]))
@@ -249,7 +251,9 @@
                 (is (= "closed" (get-in after [:gate :state])))
                 (is (= "shell" (get-in after [:gate :attributes :workflow/executor])))
                 (is (nil? (get-in after [:gate :attributes :identity/by-identity])))
-                (is (= "shell-ok" (get-in after [:execution :result :value :output]))))))))
+                (is (= "shell-ok" (get-in after [:execution :result :value :output])))
+                (is (= "launch" (slurp (str release-fifo ".launches")))
+                    "the command started only once across Weaver replacement"))))))
       (finally
         (when (and @mill-process (.isAlive ^Process @mill-process))
           (try

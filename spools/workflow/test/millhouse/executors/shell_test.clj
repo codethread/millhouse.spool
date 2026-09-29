@@ -9,6 +9,7 @@
             [millhouse.workflow.validation :as validation]
             [millhouse.test-support :as test-support :refer [with-embedded-runtime]]
             [millstrand.api.process.alpha :as process]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.weaver.alpha :as weaver])
   (:import [java.io File]))
 
@@ -231,6 +232,20 @@
                          (execution/retry! rt (-> request (dissoc :expected-revision)
                                                   (assoc :expected-attempt (:attempt-id prior))))))
             (spit candidate "repaired")
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/update! rt gate-id {:attributes {"validation/params" {"candidate" "replacement"}}})))
+            (weaver/update! rt gate-id {:attributes {"shell/argv" ["true"]}})
+            (is (= "refused" (:state (workflow/retry-validation! request))))
+            (weaver/update! rt gate-id {:attributes {"shell/argv" (get-in prior [:request :shell/argv])}})
+            (let [apply-batch batch/apply!]
+              (with-redefs [batch/apply! (fn [runtime payload & args]
+                                           (when (some #(= "repair" (get-in % [:attributes "execution/action-key"]))
+                                                       (:strands payload))
+                                             (weaver/update! runtime gate-id {:attributes {"test/concurrent-edit" true}}))
+                                           (apply apply-batch runtime payload args))]
+                (is (= "refused" (:state (workflow/retry-validation! request)))))
+              (is (= (:attempt-id prior) (:attempt-id (view rt "validation"))))
+              (is (empty? (weaver/list rt [:= [:attr "execution/action-key"] "repair"] {}))))
             (is (= "eligible" (:state (workflow/retry-validation! (assoc request :dry-run true)))))
             (let [accepted (workflow/retry-validation! request)]
               (is (= "accepted" (:state accepted)))
