@@ -10,7 +10,7 @@ operating procedures.
 ## Processes
 
 - [Clojure lint and editor configuration](processes/kondo-and-lsp.md): macro exports, dependency imports, Make commands, and clojure-lsp verification.
-- [Shared review and landing](processes/shared-landing.md): Kanban/worktree discipline, review evidence, FIFO landing, consumer activation, and rollout verification.
+- [Repository-owned review and landing](processes/shared-landing.md): local workflow policy over shared FIFO infrastructure, review evidence, activation, and rollout verification.
 - [Planner/coordinator protocol](processes/millstrand-sub-coordinator-runbook.md): Sol preparation, Luna ready-work execution, Kanban acceptance and cold starts.
 - [Working handoff briefs](processes/coordinator-handoff.md): acknowledged headed launch, canonical CWD, harness-specific wait policies and bounded repair examples.
 - [Sub-coordinator alias rollout](processes/sub-coordinator-rollout.md): bounded role guidance, Codex handoff and fallback, additive live registration, frozen-setting proof, and runtime-owner safety.

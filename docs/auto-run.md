@@ -39,7 +39,7 @@ status; inspect its exact Harnesses run separately.
 
 ## Quality lock ownership
 
-Both automatic delivery and shared Land invoke `.millstrand/land-quality.sh`.
+Both automatic delivery and Millhouse's local Land invoke `.millstrand/land-quality.sh`.
 That script owns `/tmp/millstrand-test.lock` through `scripts/with-test-lock.sh`.
 The helper makes at most ten `flock -w 180` acquisition attempts, reporting each
 wait, then runs `make quality` once while retaining the acquired descriptor.
@@ -66,7 +66,7 @@ test-lock acquisition does not clear that failure or authorize queue withdrawal.
 
 The assigned worker claims the supplied card and drives the dispatcher-created
 workflow. Human-review workers never approve their own checkpoint. Full-land
-workers never approve shared-land sign-off themselves: they record the exact
+workers never approve repository-land sign-off themselves: they record the exact
 PR/head, run IDs, branch/worktree, and owned resources, then accept the tracked
 finisher against the step marked `auto-run/role=finisher`, never the worker's own
 step. Record `auto-run/worker-run-id` and `auto-run/finisher-run-id` on that target

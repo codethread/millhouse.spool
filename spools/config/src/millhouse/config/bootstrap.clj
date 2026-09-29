@@ -1,5 +1,5 @@
 (ns millhouse.config.bootstrap
-  "Register the shared Millhouse agent and landing module stack.
+  "Register shared Millhouse agents and landing infrastructure.
 
   Consumers call `register!` before their workspace-specific modules, then call
   `register-executor!` after every alias, flag, and workflow module is present.
@@ -8,7 +8,7 @@
             [millstrand.api.spool.alpha :refer [fail!]]))
 
 (def module-definitions
-  "Ordered modules that implement shared agents, reviewers, and landing."
+  "Ordered modules for shared agents, reviewers, and landing infrastructure."
   [[:millhouse/identity
     {:ns 'millhouse.identity
      :required? true}]
@@ -62,7 +62,7 @@
   {:registered (mapv first module-definitions)})
 
 (defn register!
-  "Register shared agents, reviewers, and landing without the executor.
+  "Register shared agents, reviewers, and landing infrastructure.
 
   Return the ordered module ids after every registration succeeds. Repeated
   calls are safe because Millstrand module registration is idempotent for an

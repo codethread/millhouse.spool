@@ -24,8 +24,8 @@
                                        (assoc % :local/root (.getCanonicalPath (io/file root)))
                                        %))})
      :init-clj (slurp "init.clj")
-     :files (into {} (for [path ["me/auto_run_workflows.clj" "me/auto_run.clj"
-                                 "me/agents/reviewers.clj"]]
+     :files (into {} (for [path ["me/land.clj" "me/auto_run_workflows.clj"
+                                 "me/auto_run.clj" "me/agents/reviewers.clj"]]
                        [path (slurp path)]))}))
 
 (defn- role-step [strands role]
@@ -52,6 +52,25 @@
           (is (every? workflows ["auto-full-land" "auto-human-review" "land"]))
           (is (contains? operations "auto-run"))
           (is (contains? operations "merge-queue"))))
+      (testing "the repository owns its squash landing policy"
+        (let [{:keys [prepare-policy merge-tail abort-definition]}
+              (t/repl!
+               ctx
+               '(let [definition @(requiring-resolve
+                                   'millhouse.workspace.land/land-merge)
+                      steps (into {} (map (juxt :id identity)) (:steps definition))
+                      prepare-argv ((get-in steps [:prepare-merge :attributes "shell/argv"])
+                                    {:branch "feature/fixture"})
+                      merge-argv ((get-in steps [:merge-pr :attributes "shell/argv"])
+                                  {:pr-number 42 :subject "Subject" :body "Body"
+                                   :branch "feature/fixture"})]
+                  {:prepare-policy (nth prepare-argv (- (count prepare-argv) 2))
+                   :merge-tail (subvec merge-argv (- (count merge-argv) 2))
+                   :abort-definition
+                   (get-in definition [:attributes "land/abort-definition"])}))]
+          (is (= "rebase" prepare-policy))
+          (is (= ["feature/fixture" "squash"] merge-tail))
+          (is (= "millhouse.workspace.land/land-abort" abort-definition))))
       (testing "workspace policy adds its lens without replacing shared reviewers"
         (let [catalog (into {} (map (juxt :name identity)) (reviewers/reviewers rt))
               lens (get catalog "test-layering")]

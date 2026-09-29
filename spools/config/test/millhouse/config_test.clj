@@ -12,6 +12,7 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get]]
+            [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t]))
 
 (def ^:private project-root (.getCanonicalPath (io/file "../..")))
@@ -155,10 +156,11 @@
           (is (some #{"spools/*/src/**"}
                     (:glob (some #(when (= "source-form" (:name %)) %)
                                  catalog))))))
-      (testing "landing is active while executor activation stays deferred"
+      (testing "landing infrastructure is active while policy remains repository-owned"
         (current/with-runtime rt
-          (is (some? (workflow/workflow-definition :review)))
-          (is (some? (workflow/workflow-definition :land)))
+          (is (not (contains? (workflow/workflows) :review)))
+          (is (not (contains? (workflow/workflows) :land)))
+          (is (some #(= "merge-queue" (:name %)) (weaver/ops rt)))
           (is (not (contains? (set (keys (workflow/executors))) :agent))))))))
 
 (deftest live-sub-coordinator-registration-is-additive

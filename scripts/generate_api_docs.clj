@@ -26,8 +26,7 @@
     :outfile "spools/cron/cron.api.md"}
    {:source "spools/identity/src/millhouse/identity.clj"
     :outfile "spools/identity/identity.api.md"}
-   {:source ["spools/land/src/millhouse/land.clj"
-             "spools/land/src/millhouse/land/card_actions.clj"
+   {:source ["spools/land/src/millhouse/land/card_actions.clj"
              "spools/land/src/millhouse/land/merge_queue.clj"
              "spools/land/src/millhouse/land/support.clj"]
     :outfile "spools/land/land.api.md"}

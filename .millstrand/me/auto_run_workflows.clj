@@ -120,6 +120,6 @@
   (delivery false))
 
 (workflow/defworkflow! auto-full-land
-  "Prepare and review the change, then hand shared landing to a canonical-root grunt."
+  "Prepare and review the change, then hand Millhouse landing to a canonical-root grunt."
   {:entrypoints #{:start} :param-spec ::params}
   (delivery true))

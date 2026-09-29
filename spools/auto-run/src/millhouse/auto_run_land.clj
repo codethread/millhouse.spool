@@ -1,13 +1,18 @@
 (ns millhouse.auto-run-land
   "Recorded autonomous landing phases with one persistent finisher target."
   (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [millhouse.auto-run :as auto-run]
-            [millhouse.land :as land]
             [millhouse.workflow :as workflow]
             [millstrand.api.format.alpha :as format]))
 
+(s/def ::text (s/and string? (complement str/blank?)))
+(s/def ::card ::text)
+(s/def ::feature ::text)
+(s/def ::branch ::text)
+(s/def ::worktree ::text)
 (s/def ::params
-  (s/keys :req-un [::land/card ::land/feature ::land/branch ::land/worktree]))
+  (s/keys :req-un [::card ::feature ::branch ::worktree]))
 
 (defn failure-policy
   "Render the handoff and landing stop rules, after delivery validation."
@@ -129,7 +134,7 @@
        This route requires existing explicit user authorization for autonomous
        landing. You own review, not merge or worktree removal. Inspect `strand
        workflow show land` and `strand prime merge-queue`. Start or reuse the
-       exact shared Land run `land-auto-{card}` with card {card}, feature {card},
+       exact repository Land run `land-auto-{card}` with card {card}, feature {card},
        branch {branch} and worktree {worktree}; never replace an existing run.
 
        Drive resolve-pr and mandatory basic review. Adjudicate findings and record
@@ -321,8 +326,8 @@
        uncertain resources on failure. Before stopping on a reported failure,
        re-read this Land run and the exact PR: a historical queue blocker may
        already be resolved. Clear resolved auto-run blockers with auto-run-unblock
-       and retain the evidence in the card notes. Shared cleanup runs the tracked
-       repository cleanup hook, removes the branch/worktree, then finishes the
+       and retain the evidence in the card notes. Repository Land runs the tracked
+       cleanup hook, removes the branch/worktree, then finishes the
        card automatically, including a pending queue waiter. No agent mutation
        is needed between successful cleanup and card completion.
 
@@ -331,5 +336,5 @@
        complete THIS observation step with its evidence. Then close the same
        finisher custody anchor, not a new agent target. Bookkeeping failure after
        successful landing must not reopen landed work or cause a duplicate merge.
-       Never delete resources outside the shared cleanup contract.
+       Never delete resources outside the repository cleanup contract.
      "))))

@@ -1,5 +1,5 @@
-(ns millhouse.land
-  "Reusable one-seat review and serialized landing workflow definitions."
+(ns millhouse.workspace.land
+  "Millhouse's one-seat review and squash landing policy."
   (:require [clojure.spec.alpha :as s]
             [millhouse.land.support :as support]
             [millhouse.workflow :as workflow]
@@ -64,8 +64,9 @@
 
 (defn- stage [name]
   {:attributes {"workflow/family" "land"
-                "land/version" 3
-                "land/stage" name}})
+                "land/version" 4
+                "land/stage" name
+                "land/abort-definition" "millhouse.workspace.land/land-abort"}})
 
 (def ^:private retry-instruction
   (format-alpha/prose
@@ -98,7 +99,7 @@
      records the result.
    " {:reviewer reviewer :branch branch :worktree worktree}))
 
-(workflow/defworkflow review
+(workflow/defworkflow! review
   "Run one configured review agent, then require coordinator P1/P2 resolution."
   {:entrypoints #{:start :call}
    :param-spec ::review-params
@@ -159,7 +160,7 @@
         exact range and findings here. Do not reopen or repour the original gate.
       " {})})))
 
-(workflow/defworkflow land-abort
+(workflow/defworkflow! land-abort
   "Record an aborted landing and leave the work available for follow-up."
   {:entrypoints #{:continue} :param-spec ::land-abort-params :defaults {}}
   (workflow/workflow
@@ -181,7 +182,7 @@
                      claimed only while an agent is actively repairing the work.
                    " {}))))
 
-(workflow/defworkflow land-merge
+(workflow/defworkflow! land-merge
   "Land approved work in FIFO order."
   {:entrypoints #{:continue} :param-spec ::land-merge-params :defaults {}}
   (workflow/workflow
@@ -208,14 +209,15 @@
                        [:take-turn]
                        (fn [{:keys [branch]}]
                          (support/sh-gate (support/script "land-prepare.sh")
-                                          "land-prepare" branch
+                                          "land-prepare" branch "rebase"
                                           support/land-quality-gate-script))
                        5400 retry-instruction)
    (update (support/shell-gate
             :merge-pr "Squash-merge the validated PR" [:prepare-merge]
             (fn [{:keys [pr-number subject body branch]}]
               (support/sh-gate support/land-merge-script
-                               "land-merge" (str pr-number) subject body branch))
+                               "land-merge" (str pr-number) subject body branch
+                               "squash"))
             300 retry-instruction)
            :attributes assoc "land/irreversible" true)
    (support/shell-gate :pull-main "Fast-forward canonical main" [:merge-pr]
@@ -241,8 +243,8 @@
    (support/card-gate :finish-card "Finish the optional kanban card" [:remove-branch-worktree]
                       "millhouse.land.card-actions/finish-card!")))
 
-(workflow/defworkflow land
-  "Review and merge work through sign-off and a durable FIFO turn."
+(workflow/defworkflow! land
+  "Review and squash-merge Millhouse work through a durable FIFO turn."
   {:entrypoints #{:start}
    :param-spec ::land-params
    :defaults {:reviewer "reviewer"}

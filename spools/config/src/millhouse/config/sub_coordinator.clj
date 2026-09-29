@@ -197,7 +197,7 @@
       affected quality and review. Do not substitute optional review for
       required review or broaden work after required acceptance.
 
-      Follow the shared Land workflow, preserve every gate and strict FIFO
+      Follow the target repository's Land workflow, preserving every gate and strict FIFO
       order and verify the merged commit. Reuse applicable exact-candidate
       acceptance rather than duplicating broad reviews; changed candidates need
       the required fresh review and quality through the existing workflow.
