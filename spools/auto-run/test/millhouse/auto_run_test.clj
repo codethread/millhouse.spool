@@ -752,3 +752,9 @@
   (doseq [text ["{\"kind\":\"pool_full\"}"
                 "{\"kind\":\"ready\",\"worktree_path\":\"/tmp/f\",\"branch\":\"main\"}"]]
     (is (thrown? clojure.lang.ExceptionInfo (worktree/ready-result text "auto/abc")))))
+
+(deftest failure-guidance-distinguishes-code-from-legacy-shell-custody
+  (let [guidance (autonomous/failure-policy "card")]
+    (is (re-find #"workflow execution RUN --step GATE" guidance))
+    (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN" guidance))
+    (is (re-find #"ordinary shell gate, remove only gate/error" guidance))))

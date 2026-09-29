@@ -276,12 +276,13 @@
   declared spec that no longer resolves fails loudly (`workflow/spec-missing`)
   rather than reading as an executor with no contract."
   [rt]
-  (mapv (fn [[waiter {:keys [stalled? request-spec]}]]
+  (mapv (fn [[waiter {:keys [stalled? request-spec revision driver]}]]
           (require-shape! :millhouse.workflow/executor-view
                           (cond-> {:waiter waiter
                                    :stall-predicate (some-> stalled? str)}
                             request-spec
-                            (assoc :request (executor-request-view request-spec)))
+                            (assoc :request (executor-request-view request-spec))
+                            driver (assoc :driver driver :revision revision))
                           :workflow/executor-view-invalid
                           "Workflow executor view is invalid"
                           {:waiter waiter}))

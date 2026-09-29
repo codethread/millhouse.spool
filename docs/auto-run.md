@@ -103,9 +103,17 @@ After handoff, the independent finisher owns scoped rebase conflicts and defects
 caused by the candidate. Record the exact gate, failed commit and output, repair
 the cause, obtain focused review for material changes, push, then retry the same
 gate after subprocess settlement and removal of live shell custody. Use
-`workflow retry-validation` for an opted-in recipe; otherwise remove only
-`gate/error`. The executor validates the final HEAD. Keep the FIFO reservation.
+`workflow retry-validation` for an opted-in recipe; for an ordinary shell gate,
+remove only `gate/error`. The executor validates the final HEAD. Keep the FIFO reservation.
 These repairs require neither another approval nor a replacement worker.
+
+Managed Code gates, including worker verification and Land card bookkeeping,
+use the common execution contract rather than Shell custody or error deletion.
+Before or after handoff, inspect `workflow execution RUN --step GATE`, repair
+the cause, and require a settled failed attempt. Then use
+`workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
+with a fresh request key. Never clear their `gate/error`, infer Code settlement
+from Shell fields, or bypass the existing worker/finisher custody boundary.
 
 Escalate to the recovery coordinator only for uncertain subprocess or merge
 settlement, mismatched custody/receipts, unknown resource ownership, failures

@@ -1,6 +1,9 @@
 {:paths ["src" "resources"]
  :deps
- {io.millstrand/millstrand
+ {com.fulcrologic/statecharts
+  {:git/url "https://github.com/fulcrologic/statecharts.git"
+   :git/sha "e59fa99fcdd789e8e4f3810a6ff0e333d0a0e92a"}
+  io.millstrand/millstrand
   {:git/url "https://github.com/codethread/millstrand.git"
    :git/sha "0f1762063b3b7e6fae7576c6025ec14c79cd314a"
    :deps/root "."}}
@@ -11,6 +14,8 @@
    :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
    :main-opts
    ["-m" "millhouse.test-runner"
+    "millhouse.workflow-execution-test"
+    "millhouse.workflow-execution-chart-test"
     "millhouse.workflow-test"
     "millhouse.workflow-authoring-test"
     "millhouse.workflow-spec-test"

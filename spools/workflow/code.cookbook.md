@@ -57,26 +57,31 @@ side channel.
 bad input. The code gate is still ready with `gate/error`, so verification and
 publishing must remain blocked until a coordinator repairs the cause.
 
-**Composition.** Discover the gate through the named query, fix the function
-or poured request, then remove `gate/error` with a nil attribute patch. The next
-graph scan retries the code gate and only then releases the dependent shell
-gate.
+**Composition.** Inspect the current attempt, fix the callback or request, then
+explicitly authorize one new attempt. Deleting `gate/error` is forbidden.
 
 ```clojure
-(require '[millstrand.api.current.alpha :as current]
+(require '[millhouse.workflow.execution :as execution]
          '[millstrand.api.weaver.alpha :as weaver])
 
-(def runtime (current/runtime))
+(def failed (execution/inspect runtime {:run-id "release-42" :step gate-id}))
 
-(weaver/list-query runtime 'stalled-code-gates {})
-
-;; After fixing `my.release/write-manifest` or the request data:
+;; Correct ordinary request data, then explicitly retry the settled failure.
 (weaver/update! runtime gate-id
-               {:attributes {"gate/error" nil}})
+  {:attributes {"code/params" {"path" "target/release.manifest"
+                               "contents" "release-42\n"}}})
+(execution/retry! runtime
+  {:run-id "release-42" :step gate-id :expected-attempt (:attempt-id failed)
+   :request-id "manifest-repair-1" :reason "Corrected manifest input"
+   :by-identity "release-coordinator"})
 ```
 
-**Why this shape.** The named query is the coordinator's durable discovery
-surface, while the nil patch is the explicit retry signal. A blank string is
-still present data and leaves the gate stalled. The code executor resolves the
-current Var on retry, so a repaired definition can recover an already-poured
-gate without rewriting its parameters.
+Exact request replay returns the original action, not another attempt. A changed
+payload using the same key refuses. The new attempt freezes corrected input and
+resolves the callable through the runtime classloader when accepted. Nil is a
+successful value in the common result envelope, not a missing result.
+
+See [managed execution](execution.md) for the eight-worker busy-admission policy,
+deadlines that include capacity waiting, stop versus actual settlement, and
+retirement required before routed abandonment. Neither timeout nor interruption
+automatically retries a gate.

@@ -48,6 +48,17 @@ Each target repository must own an executable `.millstrand/land-quality.sh`. It 
 
 Cleanup validates the canonical `main` checkout, feature worktree, local branch, and remote branch against the merged PR's exact head before deleting anything. A repository that must stop owned processes may additionally commit an executable `.millstrand/land-cleanup.sh`; the cleanup script invokes that explicit hook before removing the worktree and verifies that it leaves the exact HEAD clean. Before sign-off, remove scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners; cleanup that must wait for merge belongs in that hook. Successful cleanup automatically finishes the optional card, including a pending queue waiter. There is no post-merge agent bookkeeping gate. No Millstrand warm-REPL behavior is hardcoded.
 
+Code bookkeeping gates use [managed Workflow execution](../workflow/execution.md).
+Inspect their current attempt with `workflow execution`, then explicitly authorize
+one settled failed attempt with `workflow retry`; deleting `gate/error` is not
+Code retry authority. The existing Shell and queue repair paths are unchanged.
+
+Roots containing managed Code work now require exact freeze/positive-retirement
+receipts before routed abandonment. The legacy Land withdrawal operation does
+not yet compose that receipt and refuses rather than silently orphaning Code.
+Cross-backend operational freeze and Land withdrawal integration belong to the
+Shell conversion; do not bypass either the Workflow or queue guards in the interim.
+
 ## Activation
 
 Add the Land coordinate. Its root depends on the sibling Workflow and Kanban roots:

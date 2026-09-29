@@ -3,101 +3,93 @@
 # <a name="millhouse.executors.code">millhouse.executors.code</a>
 
 
-Fulfil workflow `:code` gates by invoking trusted Clojure functions.
+Code adapter for the shared Workflow execution lifecycle.
 
-  The executor resolves a gate's fully qualified `code/fn` through the runtime
-  spool classloader, invokes it with the poured `code/params` map on a bounded
-  worker pool, and owns the gate's terminal transition. Successful non-nil
-  returns are recorded as `code/result`; exceptions and timeouts stamp
-  `gate/error`. Claim tokens prevent an abandoned invocation from publishing a
-  late result. There is no process isolation: a resolved function runs with
-  the weaver's ambient Clojure authority and owns any subprocesses it starts.
-
-  Event scans dispatch only ready gates whose nearest `parent-of` workflow root
-  is active and carries `workflow/run-id`; orphan gates and gates beneath
-  closed or replaced nearest roots are ignored.
+  Trusted callbacks occupy one of eight zero-queue workers until they actually
+  return. Interruption requests stop, not settlement. Nil succeeds; non-JSON
+  results fail. Lost local handles are unknown and never authorize a new launch.
 
 
 
 
-## <a name="millhouse.executors.code/close-code-engine!">`close-code-engine!`</a>
+## <a name="millhouse.executors.code/acknowledge!">`acknowledge!`</a>
 ``` clojure
-(close-code-engine! ctx)
+(acknowledge! rt {:keys [attempt-id]})
 ```
 Function.
 
-Close code executor resources and unregister its event handler.
+Forget positively settled local evidence after the common result is durable.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L109-L118">Source</a></sub></p>
 
-  This lifecycle callback removes `:code/engine` and shuts down the worker and
-  timeout pools owned by the matching open operation. `::close-context` and
-  `::close-result` validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L151-L162">Source</a></sub></p>
+## <a name="millhouse.executors.code/close-code-engine!">`close-code-engine!`</a>
+``` clojure
+(close-code-engine! {:keys [runtime resource]})
+```
+Function.
+
+Persist stop intent before interrupting workers; retain unconfirmed handles.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L159-L164">Source</a></sub></p>
 
 ## <a name="millhouse.executors.code/code-engine">`code-engine`</a>
 
 
 
 
-Own the code executor's event handler and worker resources.
+Select the common Code lifecycle and own its eight invocation workers.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L166-L169">Source</a></sub></p>
 
-  Opening this module resource registers the `:code` workflow executor; closing
-  it unregisters graph scanning and stops both executor pools.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L164-L170">Source</a></sub></p>
+## <a name="millhouse.executors.code/executor">`executor`</a>
 
-## <a name="millhouse.executors.code/code-stalled?">`code-stalled?`</a>
+
+
+
+Inert Code descriptor. Select code-engine to activate this driver.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L120-L125">Source</a></sub></p>
+
+## <a name="millhouse.executors.code/observe!">`observe!`</a>
 ``` clojure
-(code-stalled? gate-view)
+(observe! rt {:keys [attempt-id]})
 ```
 Function.
 
-Return durable stall detail for a ready `:code` gate view, or nil.
-
-  A gate view is a map containing its string `:id`. The result is
-  `{:gate id :error detail}` when the current gate is ready and carries
-  `gate/error`; otherwise the result is nil. This predicate is the executor's
-  coordinator-facing attention surface. `::gate-view` and `::stall-detail`
-  validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L97-L111">Source</a></sub></p>
-
-## <a name="millhouse.executors.code/on-event">`on-event`</a>
-``` clojure
-(on-event _event)
-```
-Function.
-
-Scan for ready `:code` gates after a graph mutation.
-
-  Dispatch requires the nearest `parent-of` workflow root to be active and to
-  carry `workflow/run-id`; orphan gates and gates beneath closed or replaced
-  nearest roots are ignored.
-
-  This function is registered as the `:code/engine` event handler by the
-  `code-engine` lifecycle resource. The scan is also performed during resource
-  opening, so durable gates that were already ready are reconciled immediately.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L84-L95">Source</a></sub></p>
+Observe the exact local invocation; absence is never positive settlement.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L47-L53">Source</a></sub></p>
 
 ## <a name="millhouse.executors.code/open-code-engine!">`open-code-engine!`</a>
 ``` clojure
-(open-code-engine! ctx)
+(open-code-engine! {:keys [runtime]})
 ```
 Function.
 
-Open the code executor handler and worker resources.
+Open the bounded backend and select its common lifecycle descriptor.
 
-  This lifecycle callback registers the `:code/engine` graph handler, creates
-  the bounded worker and timeout pools, scans existing ready gates, and returns
-  the engine handle owned by `code-engine`. `::open-context` and
-  `::engine-handle` validate its input and result shapes.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L133-L149">Source</a></sub></p>
+  Refuse active legacy invocation/error markers rather than translating them or
+  treating a missing local handle as settlement. Drain before this cutover.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L136-L157">Source</a></sub></p>
 
-## <a name="millhouse.executors.code/stalled-code-gates">`stalled-code-gates`</a>
+## <a name="millhouse.executors.code/request">`request`</a>
+``` clojure
+(request {:keys [gate]})
+```
+Function.
 
+Project the captured gate image without rereading live graph inputs.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L25-L30">Source</a></sub></p>
 
+## <a name="millhouse.executors.code/start!">`start!`</a>
+``` clojure
+(start! rt {:keys [attempt-id], :as context})
+```
+Function.
 
+Offer one invocation to the eight-worker pool; explicit busy means no acceptance.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L81-L98">Source</a></sub></p>
 
-Return active code gates carrying a durable `gate/error` stamp.
+## <a name="millhouse.executors.code/stop!">`stop!`</a>
+``` clojure
+(stop! rt {:keys [attempt-id], :as context})
+```
+Function.
 
-  Use this named query to find code gates that a coordinator can inspect and
-  deliberately re-arm by removing `gate/error` after fixing the request or
-  resolved function.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L113-L122">Source</a></sub></p>
+Interrupt this exact worker without claiming that the callable has settled.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/executors/code.clj#L100-L107">Source</a></sub></p>

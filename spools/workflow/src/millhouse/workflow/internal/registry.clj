@@ -24,6 +24,9 @@
   values live in a separate runtime-owned resource map; the declarative kind
   stays symbols-only."
   (:require [clojure.spec.alpha :as s]
+            [millhouse.workflow.internal.execution.state :as execution-state]
+            [millhouse.workflow.internal.execution.view :as execution-view]
+            [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.registry.alpha :as registry]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [fail!]]))
@@ -74,7 +77,9 @@
       'millhouse.workflow.internal.definitions/validate-candidates!})
     (registry/declare-kind! {:id executor-kind
                              :entry-spec ::executor-entry
-                             :binding-moment :gate-evaluation})))
+                             :binding-moment :gate-evaluation
+                             :candidate-validator
+                             'millhouse.workflow.internal.execution.state/validate-legacy-candidates!})))
 
 (defn registry-handle
   "Return `rt`'s workflow registry handle, materializing it on first use.
@@ -172,6 +177,7 @@
   [rt waiter entry]
   (let [handle (registry-handle rt)
         key (waiter-key waiter)]
+    (execution-state/validate-legacy-candidates! {:runtime rt :entries {key entry}})
     (swap! (executor-fns rt) dissoc key)
     (registry/replace-owner! handle executor-kind repl-owner
                              (direct-partition handle executor-kind key entry))
@@ -190,6 +196,7 @@
                                 [:partitions executor-kind repl-owner :entries]
                                 {})
                         key)]
+    (execution-state/validate-legacy-candidates! {:runtime rt :entries {key pred}})
     (registry/replace-owner! handle executor-kind repl-owner
                              {:layer :direct :entries entries
                               :overrides (set (keys entries))})
@@ -264,7 +271,10 @@
   loudly rather than reading as an absent executor."
   [rt waiter]
   (let [key (waiter-key waiter)]
-    (or (get @(executor-fns rt) key)
+    (or (when (or (get (execution-state/selected rt) key)
+                  (seq (weaver/list rt [:= [:attr "execution/owner"] key] {})))
+          (fn [item] (execution-view/stalled rt item)))
+        (get @(executor-fns rt) key)
         (when-let [entry (get (registry/effective (registry-handle rt) executor-kind) key)]
           (resolve-stalled! rt key entry)))))
 
@@ -275,7 +285,9 @@
   loudly on a symbol that no longer resolves; raw function values shadow a
   same-waiter declaration."
   [rt]
-  (merge (into {}
+  (merge (into {} (map (fn [[waiter _]] [waiter (executor-for rt waiter)]))
+               (execution-state/selected rt))
+         (into {}
                (map (fn [[key entry]] [key (resolve-stalled! rt key entry)]))
                (registry/effective (registry-handle rt) executor-kind))
          @(executor-fns rt)))
@@ -287,7 +299,11 @@
   `:request-spec`; a raw direct/REPL function value appears with a nil symbol,
   because a bare function carries no declaration to report."
   [rt]
-  (merge (into {}
+  (merge (into {} (map (fn [[key descriptor]]
+                         [key {:stalled? nil :request-spec (:request-spec descriptor)
+                               :revision (:revision descriptor) :driver "execution"}]))
+               (execution-state/selected rt))
+         (into {}
                (map (fn [[key entry]]
                       [key {:stalled? (entry-stalled-symbol entry)
                             :request-spec (entry-request-spec entry)}]))
