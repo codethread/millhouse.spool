@@ -1,63 +1,110 @@
-# Shared review and landing
+# Repository-owned review and landing
 
-Every ecosystem repository lands through the reusable `millhouse/land` root. The root owns the `review`, `land`, `land-merge`, and `land-abort` workflows and the `merge-queue` operation. Repositories own their quality command and any optional post-land cleanup.
+Each ecosystem repository owns its `land` workflow in its `.millstrand`
+workspace. Shared Millhouse Land supplies only low-level FIFO queue, exact-HEAD
+validation, merge, cleanup, query, and card-action primitives. A repository's
+workflow is the readable source of truth for review depth, merge history,
+release preservation, and cleanup timing.
 
 ## Working contract
 
-1. Claim a Kanban feature card with its branch and worktree. Never make feature changes on `main`.
-2. Iterate with the repository's quality command. The executable `.millstrand/land-quality.sh` is the authoritative landing gate.
-3. Drive `land` with the parameters documented by `strand workflow show land`. Do not merge or push `main` manually.
-4. The shared review path runs one configured agent seat and records an immutable reviewed HEAD plus explicit P1/P2 resolution. A repository may run richer review, but normal landing cannot omit the shared evidence.
-5. Approved work joins the durable FIFO queue. The queue retains a failed turn for repair rather than allowing another landing to overtake it.
-6. After a successful merge, landing updates canonical `main`, releases the queue turn, and removes the feature branch and worktree. The executor then finishes the optional card, including a card left pending during queue waiting. No agent step separates successful cleanup from card completion. Verify the workflow is done and the card is closed with outcome `done` before returning. Failed or aborted work remains available for follow-up unless cleanup already completed.
+1. Claim a Kanban feature with its branch and worktree. Never make feature
+   changes on `main`.
+2. Iterate with the repository's quality command. Executable
+   `.millstrand/land-quality.sh` is the authoritative landing gate.
+3. Inspect `strand workflow show land` in the target workspace. Do not assume
+   another repository's parameters, checkpoints, or merge method.
+4. Drive that repository's `land`; do not merge or push `main` manually.
+5. The repository records its required review evidence before sign-off. Richer
+   or release-specific review belongs in that local graph, not a shared switch.
+6. Approved work joins the shared durable FIFO queue. A failed turn remains in
+   place for repair rather than allowing another landing to overtake it.
+7. After merge, repository policy updates canonical `main`, releases the turn,
+   and owns cleanup and card completion.
 
-Inspect queue state with `strand merge-queue status`. Use the operation's live help for await and withdrawal syntax. Withdrawal must stop owned shell work and must refuse a turn whose merge may already have been submitted.
+Inspect queue state with `strand merge-queue status`. Use live help for await and
+withdrawal syntax. Withdrawal stops owned shell work and refuses a turn whose
+merge may already have been submitted.
 
-A failed predecessor belongs to its recovery owner. Record that dependency and notify the owner once, then keep awaiting the same Land run; do not treat it as your own failure or stop owning the downstream delivery. Re-read the frontier after every wait because executors can merge and remove the worktree without another agent turn. Queue release and an empty queue do not prove resource cleanup or card completion.
+A failed predecessor belongs to its recovery owner. Record that dependency and
+notify the owner once, then keep awaiting the same Land run. Re-read the frontier
+after every wait because executors may merge and remove the worktree without
+another agent turn. Queue release alone does not prove cleanup or completion.
 
-Keep the board truthful: use `pending` while solely waiting for another card or when stopping without an active successor, `claimed` when agent work resumes, and `in_review` only for a specific human action recorded on the card. Preserve failure evidence and reservations. A recovery coordinator must inspect both Land and its enclosing delivery workflow; resuming execution is incomplete until an accepted owner is responsible for cleanup and final bookkeeping.
+Keep the board truthful: use `pending` while solely waiting for another card or
+when stopping without an active successor, `claimed` while agent work continues,
+and `in_review` only for a specific human action recorded on the card.
 
-Supplemental review requires a live, dedicated review target. A native reviewer continuation retains its original target, so resuming a reviewer whose gate is already closed cannot launch. Preserve that completed review and arrange a separate active review task; record the immutable range and findings at the existing resolution checkpoint. Never reopen a completed executor gate merely to obtain follow-up review.
+Before sign-off, remove owned scratch files and stop owned processes by exact PID
+or session name. Repository cleanup that must wait until after merge belongs in
+tracked executable `.millstrand/land-cleanup.sh`. Hook failure retains resources
+and prevents completion.
 
-Before sign-off, remove owned scratch files and stop owned processes by exact PID or session name. Record retained resources and their owners. Put cleanup that must wait until after merge in the tracked executable `.millstrand/land-cleanup.sh`; the cleanup executor runs it before branch/worktree removal. Hook failure retains resources and prevents card completion. Aborting automatically moves claimed work to pending, leaves pending work pending, and preserves an explicit human-review lane. Starting review resumes pending work as claimed. An abort does not claim a repair successor.
+## Repository policy examples
+
+Millhouse and Millstrand UI use local one-seat review and squash landing.
+Millstrand uses a local merge-commit policy and refuses queue-time rebasing so
+validated release and formula commits retain their identities. These choices are
+independent even though all three use the same FIFO infrastructure.
+
+A local queue-compatible merge continuation declares:
+
+- `workflow/family=land` and `land/stage=merge`;
+- its fully qualified local `land/abort-definition`;
+- `merge-turn` before preparation and irreversible work;
+- `merge-release` after canonical `main` is verified and before housekeeping.
+
+The abort definition declares `:continue`. Withdrawal passes it the landing
+context plus `:reason`, merges its defaults underneath those params, and requires
+the result to satisfy its parameter spec before changing the queue.
+
+The Land package README documents the shared primitive contract. Repository
+instructions and tests document the chosen composition.
 
 ## Bootstrap consumption
 
-The recommended consumer uses the shared Codethread bootstrap:
+The recommended consumer uses the shared config bootstrap:
 
 ```clojure
 (require '[millhouse.config.bootstrap :as config])
 
 (config/register! runtime)
-;; Register repository-specific modules here.
-(config/register-executor! runtime [:consumer/modules])
+;; Register repository-specific aliases, workflows, and the local land module.
+(config/register-executor! runtime [:consumer/modules :consumer/land])
 ```
 
-`register!` activates Identity and Workflow, then Kanban, the ownership-aware Harnesses surface, shared aliases and reviewers, and `:millhouse/land`. The bootstrap leaves the sole shared `:agent` executor until the explicit final call so restored review gates cannot run before consumer policy has reconciled. Consumers must not register the land module or agent executor a second time.
+`register!` activates Identity, Workflow, Kanban, Harnesses, shared aliases and
+reviewers, and landing infrastructure. It does not register a `land` workflow.
+The sole shared `:agent` executor remains last so restored gates cannot run before
+consumer policy is reconciled.
 
-A consumer that does not want Codethread's agent catalog can depend directly on the independent `millhouse/land` root and register `millhouse.land.spool` after Millhouse Workflow and Kanban. The landing root has no Harnesses provider dependency; that consumer supplies the `:agent` executor and configured reviewer seat used by the review gate.
+A consumer that does not want the shared agent catalog can depend directly on
+`millhouse/land`, activate `millhouse.land.spool` after Workflow and Kanban, and
+register its own workflow and required executors.
 
-Published dependencies use immutable Git SHAs. Consolidated Millhouse packages use declared relative local roots within the same revision; external consumers pin that revision by Git SHA. Do not check old sibling-checkout overrides into external consumer workspaces.
+Published dependencies use immutable Git SHAs. Consolidated Millhouse packages
+use declared relative local roots within the same revision; external consumers
+pin that revision by Git SHA.
 
 ## Repository quality scripts
 
-Each repository keeps an executable `.millstrand/land-quality.sh`:
+Each repository keeps executable `.millstrand/land-quality.sh`:
 
-- UI repositories run their package-manager quality gate, such as `pnpm quality`.
-- Clojure spool repositories run the actual aggregate Make target when one exists; otherwise the script composes the repository's documented test and static-analysis commands.
-- The script starts from the repository root and runs `git diff --check` before behavior gates.
+- UI repositories run their package quality gate, such as `pnpm quality`.
+- Clojure repositories run their aggregate gate where one exists.
+- The script starts at the repository root and runs `git diff --check` before
+  behavior gates.
 
-The shared workflow invokes this file. Generic landing code must not guess a repository's language, Make targets, warm processes, or generated resources.
+Shared code never guesses a repository's language, Make target, warm process, or
+generated resources.
 
 ## Verification
 
-Before publishing a consumer pin, verify the actual checked-in workspace in a disposable world. Config's `:consumer-smoke` alias accepts the Millhouse checkout followed by one or more consumer checkouts and checks:
+Before publishing a consumer pin, verify its checked-in workspace in a disposable
+world. The consumer smoke checks landing infrastructure, `merge-queue`, and the
+repository-owned `land` definition selected by that workspace.
 
-- `:millhouse/land` activated successfully;
-- `merge-queue` is a registered operation;
-- `review` and `land` are listed;
-- `review` and `land` can be shown.
-
-Use `scripts/verify-distribution.sh SHA [CONSUMER...]` for remote package resolution and isolated plugin installation; local source smoke is not published-distribution evidence.
-
-After reviewed branches reach `main`, runtime owners may separately authorize a coordinated activation window. Never restart a Weaver without explicit user sign-off. Verify `strand help merge-queue`, `strand workflow list`, and `strand workflow show land` against every live workspace. Disposable smoke is not a substitute for that final pin and restart check.
+After changes reach `main`, runtime owners may separately authorize an activation
+window. Never restart a Weaver without explicit user sign-off. Verify
+`strand help merge-queue` and `strand workflow show land` against each live
+workspace after its pin is adopted.

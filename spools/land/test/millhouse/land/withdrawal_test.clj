@@ -12,11 +12,26 @@
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]))
 
+(workflow/defworkflow abort-fixture
+  "Compile repository-owned abort bookkeeping for withdrawal tests."
+  {:entrypoints #{:continue}}
+  (workflow/workflow
+   "Abort fixture"
+   {:attributes {"workflow/family" "land"
+                 "land/stage" "abort"
+                 "land/abort-reason" (fn [{:keys [reason]}] reason)}}
+   (workflow/step :record "Pause unfinished work" :self)))
+
+(def ^:private landing-attributes
+  "Root attributes required by repository-owned landing fixtures."
+  {"workflow/family" "land"
+   "land/abort-definition" "millhouse.land.withdrawal-test/abort-fixture"})
+
 (defn- start! [rt]
   (support/activate-spool! rt :workflow 'millhouse.workflow)
   (queue/open-completion-guard! {:runtime rt})
   (workflow/start! "race"
-                   (workflow/workflow "Withdrawal race" {:attributes {"workflow/family" "land"}}
+                   (workflow/workflow "Withdrawal race" {:attributes landing-attributes}
                                       (workflow/gate :turn "Turn" :merge-turn)
                                       (workflow/step :work "Work" :self :depends-on [:turn]))
                    {:branch "race"})
@@ -107,7 +122,7 @@
           rt directory
           (fn []
             (workflow/start! "live"
-                             (workflow/workflow "May have submitted" {:attributes {"workflow/family" "land"}}
+                             (workflow/workflow "May have submitted" {:attributes landing-attributes}
                                                 (workflow/gate :turn "Turn" :merge-turn)
                                                 (workflow/gate :merge "Merge" :shell :depends-on [:turn]
                                                                :attributes {"shell/argv" ["submit"] "land/irreversible" irreversible?}))
@@ -137,7 +152,7 @@
         rt directory
         (fn []
           (workflow/start! "repair"
-                           (workflow/workflow "Repair preparation" {:attributes {"workflow/family" "land"}}
+                           (workflow/workflow "Repair preparation" {:attributes landing-attributes}
                                               (workflow/gate :turn "Turn" :merge-turn)
                                               (workflow/gate :prepare "Prepare merge" :shell :depends-on [:turn]
                                                              :attributes {"shell/argv" ["fail"]}))
@@ -159,10 +174,20 @@
                            (queue/repair! rt "repair" (assoc-in request [:evidence :expected-attempt] "stale"))))
               (is (= (:attempt-id prior) (:attempt-id (execution/inspect rt selector))))
               (is (some? (:freeze (execution/run-view rt "repair"))))
-              (let [result (queue/repair! rt "repair" request)]
+              (let [result (queue/repair! rt "repair" request)
+                    fresh-attempt (get-in result [:action :attempt-id])]
                 (is (= :accepted (:status result)))
-                (is (not= (:attempt-id prior) (get-in result [:action :attempt-id])))
-                (is (= (get-in result [:action :attempt-id]) (:attempt-id (execution/inspect rt selector)))))
+                (is (not= (:attempt-id prior) fresh-attempt))
+                (is (= fresh-attempt (:attempt-id (execution/inspect rt selector))))
+                (is (= :failed
+                       (get-in
+                        (support/poll-until
+                         #(let [view (execution/inspect rt selector)]
+                            (when (and (= fresh-attempt (:attempt-id view))
+                                       (:result view))
+                              view))
+                         {:timeout-ms 10000})
+                        [:result :outcome]))))
               (is (= reservation (select-keys (queue/status rt (:id entry)) [:id :sequence :holds-lock])))
               (is (nil? (:freeze (execution/run-view rt "repair")))))))))))
 

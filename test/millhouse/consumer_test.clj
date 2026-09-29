@@ -40,7 +40,7 @@
         :after [:consumer/workflow-providers :consumer/kanban]
         :required? true}))")
 
-(deftest land-only-consumer-resolves-and-activates-transitive-siblings
+(deftest land-infrastructure-consumer-resolves-and-activates-transitive-siblings
   (test-alpha/with-weaver-world
     [ctx {:deps-edn (land-only-consumer-deps-edn)
           :init-clj land-only-init}]
@@ -54,8 +54,9 @@
               (let [rt (current/runtime)]
                 {:workflows (set (keys (workflow/workflows)))
                  :op-names (set (map :name (weaver/ops rt)))})))]
-      (is (contains? workflows :land))
-      (is (contains? workflows :review))
+      (is (not (contains? workflows :land))
+          "Landing policy belongs to the consumer repository")
+      (is (not (contains? workflows :review)))
       (is (contains? op-names "merge-queue")))))
 
 (def ^:private portable-consumer-source

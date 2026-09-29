@@ -5,7 +5,7 @@
             [clojure.string :as str]
             [millhouse.workflow :as workflow]
             [millhouse.workflow.execution :as execution]
-            [millhouse.land :as land]
+            [millhouse.land.internal.queue-abort :as queue-abort]
             [millhouse.land.internal.queue-authority :as authority]
             [millhouse.land.internal.queue-cli :as queue-cli]
             [millstrand.api.batch.alpha :as batch]
@@ -307,7 +307,8 @@
                     root (workflow/current-root run-id)
                     lock (lock-row)
                     own-lock (when (= run-id (some-> lock (attr-get :land/run-id))) lock)
-                    params (assoc (attr-get root :workflow/context) :reason reason)]
+                    params (assoc (attr-get root :workflow/context) :reason reason)
+                    abort (queue-abort/resolve-workflow! root run-id params)]
                 (when-not (and (= entry current-entry) (= "active" (:state current-entry))
                                (= (:id root) (attr-get entry :queue/root))
                                (= (:id root) (get-in receipt [:freeze :root-id])))
@@ -315,8 +316,6 @@
                 (when (and own-lock (not= id (attr-get own-lock :queue/entry)))
                   (fail! "Lock does not belong to the exact reservation" {:entry id}))
                 (require-unattempted-irreversible! root receipt)
-                (when-not (s/valid? ::land/land-abort-params params)
-                  (fail! "Landing context cannot continue into abort" {:run-id run-id}))
                 (let [patches (cond-> [{:before entry
                                         :update {:state "closed"
                                                  :attributes {:queue/outcome "withdrawn"
@@ -332,7 +331,8 @@
                       #(execution/abandon-run!
                         runtime {:run-id run-id :root-id (:id root) :reason reason
                                  :by-identity by-identity :retirement receipt
-                                 :workflow #'land/land-abort :params params :domain-patches patches}))))
+                                 :workflow (:workflow abort) :params (:params abort)
+                                 :domain-patches patches}))))
                 (status runtime id)))))))))
 
 (defn repair!

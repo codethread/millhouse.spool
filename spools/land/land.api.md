@@ -1,46 +1,5 @@
 
 -----
-# <a name="millhouse.land">millhouse.land</a>
-
-
-Reusable one-seat review and serialized landing workflow definitions.
-
-
-
-
-## <a name="millhouse.land/land">`land`</a>
-
-
-
-
-Review and merge work through sign-off and a durable FIFO turn.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L261-L309">Source</a></sub></p>
-
-## <a name="millhouse.land/land-abort">`land-abort`</a>
-
-
-
-
-Record an aborted landing and leave the work available for follow-up.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L177-L197">Source</a></sub></p>
-
-## <a name="millhouse.land/land-merge">`land-merge`</a>
-
-
-
-
-Land approved work in FIFO order.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L199-L259">Source</a></sub></p>
-
-## <a name="millhouse.land/review">`review`</a>
-
-
-
-
-Run one configured review agent, then require coordinator P1/P2 resolution.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land.clj#L111-L175">Source</a></sub></p>
-
------
 # <a name="millhouse.land.card-actions">millhouse.land.card-actions</a>
 
 
@@ -352,7 +311,7 @@ Clean up the landed feature branch and worktree.
 
 
 
-Idempotently ready and squash-merge the feature PR.
+Idempotently merge the feature PR using the repository-selected method.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/land/src/millhouse/land/support.clj#L65-L67">Source</a></sub></p>
 
 ## <a name="millhouse.land.support/land-pull-main-script">`land-pull-main-script`</a>

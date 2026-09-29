@@ -1,31 +1,87 @@
 (ns millhouse.land.merge-queue-test
   "Exercise queue behavior through public operations in disposable runtimes."
   (:require [clojure.data.json :as json]
+            [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [millhouse.workflow.execution :as execution]
             [millhouse.land.merge-queue :as queue]
+            [millhouse.land.support :as support]
             [millhouse.workflow :as workflow]
+            [millhouse.workflow.execution :as execution]
             [millstrand.api.cli.alpha :as cli]
             [millstrand.api.current.alpha :as current]
-            [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
+            [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support :refer [with-runtime]]
             [millstrand.test.alpha :as test-alpha])
   (:import [java.util.concurrent CountDownLatch TimeUnit]))
 
-(defn- start-run! [id]
-  (workflow/start!
-   id
-   (workflow/workflow
-    "Landing fixture" {:attributes {"workflow/family" "land"}}
-    (workflow/gate :turn "Await turn" :merge-turn)
-    (workflow/step :work "Protected work" :self :depends-on [:turn])
-    (workflow/gate :release "Release turn" :merge-release :depends-on [:work])
-    (workflow/step :tidy "Housekeeping" :self :depends-on [:release]))
-   {:branch id}))
+(s/def ::branch (s/and string? (complement str/blank?)))
+(s/def ::reason (s/and string? (complement str/blank?)))
+(s/def ::abort-note (s/and string? (complement str/blank?)))
+(s/def ::abort-params (s/keys :req-un [::branch ::reason]))
+(s/def ::default-abort-params
+  (s/keys :req-un [::branch ::reason ::abort-note]))
+
+(workflow/defworkflow abort-fixture
+  "Compile repository-owned abort bookkeeping for queue tests."
+  {:entrypoints #{:continue} :param-spec ::abort-params}
+  (workflow/workflow
+   "Abort fixture"
+   {:attributes {"workflow/family" "land"
+                 "land/stage" "abort"
+                 "land/abort-reason" (fn [{:keys [reason]}] reason)}}
+   (workflow/step :record "Pause unfinished work" :self)))
+
+(workflow/defworkflow abort-default-fixture
+  "Compile repository abort defaults for queue tests."
+  {:entrypoints #{:continue}
+   :param-spec ::default-abort-params
+   :defaults {:abort-note "defaulted"}}
+  (workflow/workflow
+   "Abort default fixture"
+   {:attributes {"workflow/family" "land"
+                 "land/stage" "abort"
+                 "land/abort-note" (fn [{:keys [abort-note]}] abort-note)}}
+   (workflow/step :record "Pause defaulted work" :self)))
+
+(workflow/defworkflow abort-start-only-fixture
+  "Compile an invalid start-only abort target for queue tests."
+  {:entrypoints #{:start} :param-spec ::abort-params}
+  (workflow/workflow
+   "Start-only abort fixture"
+   (workflow/step :record "Pause start-only work" :self)))
+
+(def ^:private fixture-abort-definition
+  "Fully qualified repository abort workflow used by queue fixtures."
+  "millhouse.land.merge-queue-test/abort-fixture")
+
+(def ^:private default-abort-definition
+  "Fully qualified repository abort workflow with a required default."
+  "millhouse.land.merge-queue-test/abort-default-fixture")
+
+(def ^:private start-only-abort-definition
+  "Fully qualified abort workflow missing the continuation entrypoint."
+  "millhouse.land.merge-queue-test/abort-start-only-fixture")
+
+(defn- start-run!
+  ([id]
+   (start-run! id fixture-abort-definition {}))
+  ([id abort-definition context]
+   (workflow/start!
+    id
+    (workflow/workflow
+     "Landing fixture"
+     {:attributes {"workflow/family" "land"
+                   "land/abort-definition" abort-definition}}
+     (workflow/gate :turn "Await turn" :merge-turn)
+     (workflow/step :work "Protected work" :self :depends-on [:turn])
+     (workflow/gate :release "Release turn" :merge-release :depends-on [:work])
+     (workflow/step :tidy "Housekeeping" :self :depends-on [:release]))
+    (merge {:branch id} context))))
 
 (defn- start-repair-run!
   [id]
@@ -34,8 +90,9 @@
    (workflow/workflow
     "Landing repair fixture"
     {:attributes {"workflow/family" "land"
-                  "land/version" 3
-                  "land/stage" "merge"}}
+                  "land/version" 4
+                  "land/stage" "merge"
+                  "land/abort-definition" fixture-abort-definition}}
     (workflow/gate :turn "Await turn" :merge-turn)
     (workflow/gate :prepare "Prepare merge" :shell
                    :depends-on [:turn]
@@ -43,7 +100,7 @@
     (workflow/gate :merge "Merge PR" :shell
                    :depends-on [:prepare]
                    :attributes {"shell/argv" ["sh" "-c" "merge" "land-merge"
-                                              "42" "Subject" "Body" id]
+                                              "42" "Subject" "Body" id "squash"]
                                 "land/irreversible" true})
     (workflow/gate :pull "Pull main" :shell
                    :depends-on [:merge]
@@ -59,13 +116,32 @@
   [id]
   (workflow/start!
    id
-   @(requiring-resolve 'millhouse.land/land-merge)
-   {:feature id
-    :branch id
-    :worktree (System/getProperty "user.dir")
-    :subject (str "Land " id)
-    :body (str "Land " id)
-    :pr-number 42}))
+   (workflow/workflow
+    "Repository landing fixture"
+    {:attributes {"workflow/family" "land"
+                  "land/version" 4
+                  "land/stage" "merge"
+                  "land/abort-definition" fixture-abort-definition}}
+    (workflow/gate :turn "Await turn" :merge-turn)
+    (workflow/gate :prepare "Prepare merge" :shell
+                   :depends-on [:turn]
+                   :attributes {"shell/argv" ["sh" "-c" "prepare" "land-prepare"]})
+    (workflow/gate :merge "Merge PR" :shell
+                   :depends-on [:prepare]
+                   :attributes {"shell/argv" ["sh" "-c" "merge" "land-merge"
+                                              "42" "Subject" "Body" id "squash"]
+                                "land/irreversible" true})
+    (workflow/gate :pull "Pull main" :shell
+                   :depends-on [:merge]
+                   :attributes {"shell/argv" ["sh" "-c" "pull" "land-pull"]})
+    (workflow/gate :release "Release turn" :merge-release
+                   :depends-on [:pull])
+    (workflow/gate :cleanup "Cleanup" :shell
+                   :depends-on [:release]
+                   :attributes {"shell/argv" ["sh" "-c" "cleanup" "land-cleanup"]})
+    (support/card-gate :finish-card "Finish card" [:cleanup]
+                       "millhouse.land.card-actions/finish-card!"))
+   {:branch id :pr-number 42}))
 
 (defn- ready-gate
   [run-id waiter]
@@ -359,6 +435,36 @@
         (is (= "Scope changed" (attr-get (workflow/current-root "second") :land/abort-reason)))
         (is (= "Pause unfinished work" (:title (first (workflow/ready "second")))))
         (is (= "withdrawn" (:outcome (queue/withdraw! rt (:id entry) "Repeated request" "fixture-owner"))))))))
+
+(deftest repository-abort-applies-defaults-and-rejects-invalid-context
+  (with-runtime
+    (fn [rt _]
+      (start-run! "defaulted-abort" default-abort-definition {})
+      (let [entry (queue/join! rt "defaulted-abort")]
+        (queue/withdraw! rt (:id entry) "Use repository defaults" "fixture-owner")
+        (is (= "defaulted"
+               (attr-get (workflow/current-root "defaulted-abort")
+                         :land/abort-note))))
+      (start-run! "invalid-abort" default-abort-definition {:abort-note ""})
+      (let [entry (queue/join! rt "invalid-abort")
+            root (workflow/current-root "invalid-abort")]
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"rejected landing context"
+             (queue/withdraw! rt (:id entry) "Reject invalid params" "fixture-owner")))
+        (is (= "active" (:state (weaver/show rt (:id entry)))))
+        (is (= (:id root) (:id (workflow/current-root "invalid-abort"))))))))
+
+(deftest repository-abort-requires-the-continuation-entrypoint
+  (with-runtime
+    (fn [rt _]
+      (start-run! "start-only-abort" start-only-abort-definition {})
+      (let [entry (queue/join! rt "start-only-abort")
+            root (workflow/current-root "start-only-abort")]
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"does not declare continue entry"
+             (queue/withdraw! rt (:id entry) "Reject start-only abort" "fixture-owner")))
+        (is (= "active" (:state (weaver/show rt (:id entry)))))
+        (is (= (:id root) (:id (workflow/current-root "start-only-abort"))))))))
 
 (deftest failed-abort-cutover-keeps-the-turn-until-a-successful-retry
   (with-runtime
