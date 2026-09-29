@@ -7,7 +7,7 @@ description: Orchestrate Millstrand boards, agents, and auto-runs. Use only when
 
 Bootstrap a voice-led, multi-repository coordination session. Use the user's current authorization and each target repository's instructions.
 
-1. Discover with `mill weaver list`; confirm the owning repository's absolute `.millstrand` path before mutations. Keep the current session cwd: put `--workspace /absolute/repo/.millstrand` before every cross-workspace operation. Plant work on its owning board, not the hub's board for convenience.
+1. Discover with `mill weaver list | jq 'map({name, config_dir})'` and use `name` for cross-workspace operation (or fallback to `config_dir` if name is absent) using `--workspace <name>`. Plant work on its owning board, not the hub's board for convenience.
 2. Read that repository's AGENTS.md, then targeted live `strand help`, `prime`, and `about`. Installed help wins over these examples. Read [sources and workspaces](references/sources.md) when locating implementations.
 3. Inspect board, feature notes/tasks, dependencies, dispatch receipts and actual agent runs. Explain what is active, reviewing/landing, ready, blocked, and next in the downstream feature chain. Do not equate lane, receipt, or process exit with successful delivery.
 4. Choose the smallest next action:
@@ -56,3 +56,25 @@ Walk epic → features; inspect each relevant card's notes, tasks and dependency
 Local conversation subagents are an ephemeral, read-only scratch team for board walks, status, source lookups, audits, comparisons and second opinions while the user keeps talking. Use tracked Strand agents for implementation, durable investigation, browser testing and delivery: work that must remain card-linked, attributable, resumable and visible after this chat. Promote substantive findings to cards instead of continuing invisible work.
 
 Record decisions, rejected approaches, blockers, validation and handoffs on the feature/epic; detailed execution logs belong on tasks. Use bounded event/query waits, not a worker whose only job is polling another worker. Return at a human checkpoint with the exact ask and review package; never approve it yourself.
+
+## Workspaces of note
+
+### Millstrand project
+
+| Topic             | Name         | Investigate here                                                                 |
+| ----------------- | ------------ | -------------------------------------------------------------------------------- |
+| Millstrand        | millstrand   | CLI, Weaver, storage, activation; docs/reference.md                              |
+| Millhouse         | millhouse    | Kanban, identity, workflow, land, merge queue, auto-run; spools/*/README.md      |
+| Harnesses         | millhouse    | Agents, seats, assignments, run lifecycle, providers; spools/harnesses/README.md |
+| Codethread config | millhouse    | Shared config and auto-run consumer policy                                       |
+| Devflow           | millhouse    | Feature-delivery workflows and optional Kanban adapter                           |
+| Millstrand UI     | millhouse-ui | Dashboard and repository delivery policy; docs/auto-run.md                       |
+
+### Millstrand consumers
+
+These projects should be updated after changes to millstrand/millhouse apis and config
+
+| Name   | Investigate here                         |
+| ------ | ---------------------------------------- |
+| notes  | personal notes repo and home automations |
+| agents | agent tooling and skills repo            |
