@@ -66,7 +66,7 @@ test-lock acquisition does not clear that failure or authorize queue withdrawal.
 
 The assigned worker claims the supplied card and drives the dispatcher-created
 workflow. Human-review workers never approve their own checkpoint. Full-land
-workers never approve shared-land sign-off themselves: they record the exact
+workers never approve repository-land sign-off themselves: they record the exact
 PR/head, run IDs, branch/worktree, and owned resources, then accept the tracked
 finisher against the step marked `auto-run/role=finisher`, never the worker's own
 step. Record `auto-run/worker-run-id` and `auto-run/finisher-run-id` on that target

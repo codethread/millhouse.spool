@@ -528,6 +528,11 @@
           (is (str/includes? (:output wrong-base) "base is release; expected main"))
           (is (not (str/includes? (slurp gh-log) "pr merge"))))
         (assert-success (run-script (:worktree fixture) "land-merge.sh"
+                                    ["42" "subject" "body" branch "merge"] env))
+        (is (str/includes? (slurp gh-log) "pr merge 42 --merge"))
+        (spit gh-state "OPEN\n")
+        (spit gh-log "")
+        (assert-success (run-script (:worktree fixture) "land-merge.sh"
                                     ["42" "subject" "body" branch "squash"] env))
         (is (str/includes? (slurp gh-log) "--json isDraft")
             "an already-ready PR is accepted when gh pr ready declines the conversion")

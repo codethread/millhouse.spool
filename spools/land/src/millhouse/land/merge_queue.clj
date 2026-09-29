@@ -356,9 +356,19 @@
       (when-not definition-var
         (fail! "Repository abort workflow cannot be resolved"
                {:run-id run-id :definition definition-ref}))
-      (workflow/compile @definition-var params
-                        {:run-id run-id :family "land" :context params
-                         :definition definition-symbol}))))
+      (let [{:keys [defaults entrypoints param-spec] :as definition} @definition-var
+            params (merge defaults params)]
+        (when-not (contains? entrypoints :continue)
+          (fail! "Repository abort workflow does not declare continue entry"
+                 {:run-id run-id :definition definition-ref
+                  :entrypoints entrypoints}))
+        (when (and param-spec (not (s/valid? param-spec params)))
+          (fail! "Repository abort workflow rejected landing context"
+                 {:run-id run-id :definition definition-ref
+                  :spec param-spec :explain (s/explain-data param-spec params)}))
+        (workflow/compile definition params
+                          {:run-id run-id :family "land" :context params
+                           :definition definition-symbol})))))
 
 (defn- close-and-abort! [runtime run-id entry lock root payload reason]
   (let [closeable (filter #(and (= "active" (:state %))
@@ -747,6 +757,12 @@
         (fail! "Prepare gate does not record the exact validated branch HEAD"
                {:gate (:id prepare) :branch branch :output output}))))
 
+(defn- recorded-merge-branch
+  [argv]
+  (if (contains? #{"squash" "merge"} (last argv))
+    (nth argv (- (count argv) 2) nil)
+    (last argv)))
+
 (defn- require-release-evidence!
   [runtime root subgraph release evidence]
   (let [strands (into {} (map (juxt :id identity)) (:strands subgraph))
@@ -765,7 +781,7 @@
              {:gate (:id merge-gate)}))
     (when-not (and (= pr-number (:pr-number evidence))
                    (= (str pr-number) (nth argv 4 nil))
-                   (= branch (last argv)))
+                   (= branch (recorded-merge-branch argv)))
       (fail! "Repair PR evidence does not match the recorded landing"
              {:recorded-pr pr-number :evidence-pr (:pr-number evidence)
               :recorded-branch branch :merge-argv argv}))
