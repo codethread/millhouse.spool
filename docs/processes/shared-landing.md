@@ -54,6 +54,10 @@ A local queue-compatible merge continuation declares:
 - `merge-turn` before preparation and irreversible work;
 - `merge-release` after canonical `main` is verified and before housekeeping.
 
+The abort definition declares `:continue`. Withdrawal passes it the landing
+context plus `:reason`, merges its defaults underneath those params, and requires
+the result to satisfy its parameter spec before changing the queue.
+
 The Land package README documents the shared primitive contract. Repository
 instructions and tests document the chosen composition.
 

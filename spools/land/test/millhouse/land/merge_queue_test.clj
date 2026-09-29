@@ -49,6 +49,13 @@
                  "land/abort-note" (fn [{:keys [abort-note]}] abort-note)}}
    (workflow/step :record "Pause defaulted work" :self)))
 
+(workflow/defworkflow abort-start-only-fixture
+  "Compile an invalid start-only abort target for queue tests."
+  {:entrypoints #{:start} :param-spec ::abort-params}
+  (workflow/workflow
+   "Start-only abort fixture"
+   (workflow/step :record "Pause start-only work" :self)))
+
 (def ^:private fixture-abort-definition
   "Fully qualified repository abort workflow used by queue fixtures."
   "millhouse.land.merge-queue-test/abort-fixture")
@@ -56,6 +63,10 @@
 (def ^:private default-abort-definition
   "Fully qualified repository abort workflow with a required default."
   "millhouse.land.merge-queue-test/abort-default-fixture")
+
+(def ^:private start-only-abort-definition
+  "Fully qualified abort workflow missing the continuation entrypoint."
+  "millhouse.land.merge-queue-test/abort-start-only-fixture")
 
 (defn- start-run!
   ([id]
@@ -497,6 +508,18 @@
              (queue/withdraw! rt (:id entry) "Reject invalid params")))
         (is (= "active" (:state (weaver/show rt (:id entry)))))
         (is (= (:id root) (:id (workflow/current-root "invalid-abort"))))))))
+
+(deftest repository-abort-requires-the-continuation-entrypoint
+  (with-runtime
+    (fn [rt _]
+      (start-run! "start-only-abort" start-only-abort-definition {})
+      (let [entry (queue/join! rt "start-only-abort")
+            root (workflow/current-root "start-only-abort")]
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"does not declare continue entry"
+             (queue/withdraw! rt (:id entry) "Reject start-only abort")))
+        (is (= "active" (:state (weaver/show rt (:id entry)))))
+        (is (= (:id root) (:id (workflow/current-root "start-only-abort"))))))))
 
 (deftest failed-abort-cutover-keeps-the-turn-until-a-successful-retry
   (with-runtime

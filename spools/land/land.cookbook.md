@@ -33,8 +33,10 @@ strand merge-queue withdraw ENTRY_ID --reason "Scope changed"
 
 Withdrawal is allowed for any trusted agent; there is no timeout eviction or
 owner-only restriction. It stops shell work before releasing the turn and
-continues into the repository's declared abort workflow. If the irreversible
-gate may already have submitted the merge, withdrawal refuses to guess. Reconcile
+continues into the repository's declared `:continue` abort workflow. The landing
+context plus `:reason`, with abort defaults underneath, must satisfy that
+workflow's parameter spec before queue state changes. If the irreversible gate
+may already have submitted the merge, withdrawal refuses to guess. Reconcile
 the pull request and resume the retained turn instead.
 
 ## Repair a pre-guard skipped queue gate

@@ -32,8 +32,11 @@ composition and policy. A queue-compatible merge continuation must:
 6. run repository cleanup and card completion according to local policy.
 
 `land/abort-definition` lets safe queue withdrawal compile the repository's own
-abort continuation. The infrastructure never chooses review requirements,
-checkpoint wording, merge history, or card completion policy.
+abort continuation. That definition must declare the `:continue` entrypoint. It
+receives the landing context plus `:reason`; its `:defaults` merge underneath
+those params, and the complete map must satisfy its `:param-spec` before the
+queue changes. The infrastructure never chooses review requirements, checkpoint
+wording, merge history, or card completion policy.
 
 Preparation accepts one explicit branch-update policy:
 
