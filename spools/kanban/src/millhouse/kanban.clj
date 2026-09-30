@@ -815,6 +815,15 @@
       (assoc :by-identity (attr-value strand :identity/by-identity))
       (attr-value strand note-kind-attr) (assoc :kind (attr-value strand note-kind-attr)))))
 
+(defn- note-order-key
+  "Return a note's chronological timestamp and stable tie-breakers.
+
+  Instant strings vary in fractional precision and cannot be sorted as text."
+  [strand]
+  [(some-> (attr-value strand :note/at) Instant/parse)
+   (:created_at strand)
+   (:id strand)])
+
 (defn- latest-notes-by-target
   "Return {target-strand-id compact-newest-note} for the given strand ids.
 
@@ -825,7 +834,7 @@
     (let [edges (graph/incoming-edges rt ids "notes")
           target-by-note (into {} (map (juxt :from_strand_id :to_strand_id)) edges)]
       (->> (graph/strands-by-ids rt (vec (keys target-by-note)))
-           (sort-by (juxt #(attr-value % :note/at) :created_at :id))
+           (sort-by note-order-key)
            (reduce (fn [m note]
                      (assoc m (target-by-note (:id note)) (compact-note note)))
                    {})))
@@ -1093,7 +1102,7 @@
   [rt card]
   (let [note-ids (mapv :from_strand_id (graph/incoming-edges rt [(:id card)] "notes"))
         notes (->> (graph/strands-by-ids rt note-ids)
-                   (sort-by (juxt #(attr-value % :note/at) :created_at :id))
+                   (sort-by note-order-key)
                    reverse
                    vec)
         {:keys [strands]} (graph/subgraph rt [(:id card)] {:type "parent-of"})
