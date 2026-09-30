@@ -10,7 +10,7 @@
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
             [millstrand.api.weaver.alpha :as weaver]))
 
-(s/def ::harness #{"codex" "pi"})
+(s/def ::harness #{"claude" "codex" "pi"})
 (s/def ::text (s/and string? (complement str/blank?)))
 (s/def ::native-session-id ::text)
 (s/def ::cwd ::text)

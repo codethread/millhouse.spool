@@ -9,6 +9,7 @@
 		"skipLibCheck": true
 	},
 	"include": [
+		"plugins/millstrand-identity/claude/**/*.ts",
 		"plugins/millstrand-identity/pi/**/*.ts",
 		"scripts/**/*.ts"
 	]

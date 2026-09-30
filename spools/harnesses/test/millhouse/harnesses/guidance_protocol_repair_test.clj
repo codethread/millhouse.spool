@@ -8,16 +8,15 @@
             [millhouse.harnesses.providers.pi :as pi]))
 
 (deftest native-providers-reject-every-explicit-transport
-  (doseq [harness ["codex" "pi"]]
+  (doseq [harness ["claude" "codex" "pi"]]
     (is (nil? (guidance/select! nil {:harness harness})))
     (doseq [transport ["launch" "legacy" "native-v1" "" "invalid"]]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"transport selection is unsupported"
            (guidance/select! nil {:harness harness :requested transport})))))
-  (doseq [harness ["claude" "cursor"]
-          transport [nil "legacy"]]
-    (is (nil? (guidance/select! nil {:harness harness :requested transport})))))
+  (doseq [transport [nil "legacy"]]
+    (is (nil? (guidance/select! nil {:harness "cursor" :requested transport})))))
 
 (deftest public-cli-exposes-explicit-transport-and-receipts
   (doseq [command ["run" "retry" "resume"]]

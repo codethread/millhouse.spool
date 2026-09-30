@@ -1,0 +1,6 @@
+{
+  "name": "millstrand-identity",
+  "version": "0.1.0",
+  "description": "Native Claude Code identity data adapter for Millstrand.",
+  "hooks": "./.claude-plugin/hooks/hooks.json"
+}

@@ -8,7 +8,8 @@
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.identity :as identity]
             [millhouse.kanban :as kanban]
-            [millstrand.test.alpha :as t]))
+            [millstrand.test.alpha :as t])
+  (:import [java.time Duration Instant]))
 
 (defn- public-value [var-sym]
   (some-> (ns-resolve 'millhouse.kanban var-sym) var-get))
@@ -943,6 +944,24 @@
                 bare (some #(when (= bare-id (:id %)) %)
                            (:tasks (op! rt "task" "list" feature-id)))]
             (is (not (contains? bare :latest-note)))))))))
+
+(deftest kanban-orders-notes-with-mixed-timestamp-precision
+  (t/run-with-bare-runtime
+   {:storage :sqlite-memory}
+   (fn [{:keys [runtime]}]
+     (let [feature-id (get-in (kanban/add! runtime "Note ordering" {}) [:card :id])
+           task-id (get-in (kanban/task-add! runtime feature-id "Task notes" {}) [:task :id])]
+       (t/set-clock! runtime (t/manual-clock (Instant/parse "2026-09-30T12:00:00.123Z")))
+       (kanban/note! runtime feature-id "Older card note" {})
+       (kanban/note! runtime task-id "Older task note" {})
+       (t/advance! runtime (Duration/ofNanos 1000))
+       (kanban/note! runtime feature-id "Newer card note" {})
+       (kanban/note! runtime task-id "Newer task note" {})
+       (let [card (kanban/card-view runtime feature-id)]
+         (is (= ["Newer card note" "Older card note"] (mapv :note (:notes card))))
+         (is (= "Newer task note" (get-in card [:tasks 0 :latest-note :note]))))
+       (is (= "Newer task note"
+              (get-in (kanban/task-list runtime feature-id) [:tasks 0 :latest-note :note])))))))
 
 (deftest kanban-views-clip-long-note-bodies
   (with-kanban
