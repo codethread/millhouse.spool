@@ -1,6 +1,6 @@
 # Managed gate execution
 
-Code uses the Workflow-owned execution lifecycle. Shell, Agent and queue waiters
+Code and Shell use the Workflow-owned execution lifecycle. Agent and queue waiters
 remain on their existing drivers until their respective conversions. Requiring a
 provider is inert; select only its lifecycle resource:
 
@@ -79,7 +79,7 @@ effect transaction or an exactly-once side-effect guarantee.
 ## Retire before routing away
 
 A routed choice that would abandon managed gates refuses without partial mutation.
-The Clojure API supplies the Code path for explicit retirement:
+The Clojure API supplies explicit retirement for managed work:
 
 ```clojure
 (require '[millhouse.workflow.execution :as execution])
@@ -100,8 +100,29 @@ retirement receipt and removes only that freeze; it retries nothing.
 replacement atomically. Its optional domain patches are data-only exact
 before-image/update pairs on existing non-Workflow rows, never callbacks, creates,
 edges or success patches. Success authority and abandonment authority are distinct.
-The Shell slice owns cross-backend freeze and Land withdrawal integration; this
-slice does not freeze legacy Shell/Agent/queue execution or authorize their cutover.
+Land withdraws only after this retirement, outside its queue lock. It then
+revalidates and atomically releases its exact reservation/lock and abandons into
+abort. May-have-started irreversible work refuses even after local cancellation.
+Legacy queue join/grant/release transactions fence this public root image before
+their separate adapter conversion. Agent remains on its own driver; source
+cutover is not permission to abandon unknown legacy execution.
+
+## Retained Shell processes
+
+Select `shell/shell-engine`. The adapter projects shell-free argv and cwd, then
+uses Mill's stable owner/attempt key. A lost launch response is observed by that
+same key; missing custody or a new Mill lifetime stays unknown, never relaunched.
+The original attempt deadline survives replacement. Exit 124 is an ordinary
+failure, not a timeout signal. Cancellation requires positive settlement.
+
+Inspection exposes `:reference`, common `:result`, and acknowledgement uncertainty.
+Shell result values contain `:exit-code` and a 16 KiB stdout-then-stderr `:output`
+tail. When stop or revision policy overrides the backend outcome, the original
+value remains under result evidence `backend-result`. Terminal data commits before
+acknowledgement. A lost acknowledgement response permits a settled failed retry
+without relabeling old cleanup as confirmed; old attempts own their own cleanup.
+Planned runtime shutdown detaches observation without stopping Mill commands.
+Module removal instead records stop intent, retaining unknown work.
 
 ## Proof ownership
 
@@ -120,11 +141,15 @@ slice does not freeze legacy Shell/Agent/queue execution or authorize their cuto
   malformed-input failure, corrected explicit retry/replay/conflict; real
   eight-worker saturation, never-accepted stop, frozen deadline and stubborn
   callback settlement. Manual clock and latches establish the boundaries.
-- `land.merge-queue-test`: a real Land merge graph with Code selected proves
-  legacy withdrawal refuses while retaining its reservation, lock and unstarted
-  managed gate. It does not claim cross-backend retirement integration.
+- `executors.shell-test`: short real commands with simulated custody prove adapter
+  mapping, lost launch response, commit-before-ack, unknown stop and revision policy.
+- `executors.shell-replacement-test`: a built disposable Mill and actual Weaver
+  replacement retain the same attempt/handle and reach the next frontier.
+- `land.merge-queue-test` and `land.withdrawal-test`: FIFO/domain protection,
+  retirement/abort, deterministic freeze-versus-grant and no partial stale cutover.
 
 The former Code scanner, root traversal, scalar token/result machinery, stalled
 query/predicate and interruption-auto-retry tests are removed. Generic transitions
 now belong to the common chart/store proofs rather than another Code matrix.
-No process replacement, OS process-tree cancellation or live activation is claimed.
+Only the dedicated replacement test claims real process custody. No OS process-tree
+internals or live activation are tested.

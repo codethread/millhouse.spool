@@ -13,13 +13,9 @@
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]))
 
-(workflow/use-executor! shell/shell-stalled?)
-
-(millstrand/use-query! shell/stalled-shell-gates)
 (millstrand/use-op! cli/workflow)
 
-(lifecycle/use-resource! code/code-engine shell/shell-pool shell/shell-handler)
-(lifecycle/use-reconcile! shell/shell-attempts)
+(lifecycle/use-resource! code/code-engine shell/shell-engine)
 (lifecycle/use-seed! cli/workflow-glossary-seed)
 
 (workflow/use-workflow! workflows/publish-spool-kondo)

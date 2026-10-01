@@ -15,4 +15,5 @@
    ["-m" "millhouse.test-runner"
     "millhouse.land.card-actions-test"
     "millhouse.land.merge-queue-test"
+    "millhouse.land.withdrawal-test"
     "millhouse.land.scripts-test"]}}}

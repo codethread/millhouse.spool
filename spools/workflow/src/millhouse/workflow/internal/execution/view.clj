@@ -16,7 +16,7 @@
         selected (get (state/selected rt) (attr-get gate :execution/owner))]
     {:gate-id (:id gate) :owner (attr-get gate :execution/owner)
      :attempt-id (:attempt-id attempt) :request (:request attempt)
-     :deadline (:deadline attempt) :phase (or (:phase view) :unstarted)
+     :reference (:reference view) :deadline (:deadline attempt) :phase (or (:phase view) :unstarted)
      :accepted? (:accepted? view) :dispatch-uncertain? (:uncertain? view)
      :stop-reason (:stop-reason view) :result (:result attempt)
      :cleanup {:acknowledgement (:acknowledgement view)

@@ -55,25 +55,31 @@
   "Stop admission and persist exact stop intent before removing a descriptor.
 
   Retain managed ownership and attempt evidence. Removal never makes a managed
-  gate manually completable or establishes settlement of external work."
-  [rt {:keys [waiter descriptor]}]
-  (let [descriptors (:descriptors (state/state rt))]
-    (locking descriptors
-      (when (= descriptor (get @descriptors waiter))
-        (swap! (:draining (state/state rt)) conj waiter)
-        (driver/retain-ownership! rt descriptor)
-        (doseq [row (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {})
-                :let [attempt (store/record row)]
-                :when (= (:waiter descriptor) (:executor attempt))]
-          (state/with-run!
-            rt (:run-id attempt)
-            #(guard/with-run! rt (:run-id attempt)
-               (fn [] (driver/stop-attempt! rt row
-                                            (driver/stop-reason :cancelled "Executor removed"))))))
-        (swap! descriptors dissoc waiter)
-        (swap! (:draining (state/state rt)) disj waiter)
-        (when (empty? @descriptors) (driver/close-scheduler! rt))))
-    {:closed waiter}))
+  gate manually completable or establishes settlement of external work.
+
+  Lifecycle adapters may pass :runtime-stop as the third argument to detach
+  observation while retaining external custody for planned generation adoption.
+  Omitting the phase uses ordinary module-removal stop intent."
+  ([rt handle] (close! rt handle :remove))
+  ([rt {:keys [waiter descriptor]} phase]
+   (let [descriptors (:descriptors (state/state rt))]
+     (locking descriptors
+       (when (= descriptor (get @descriptors waiter))
+         (swap! (:draining (state/state rt)) conj waiter)
+         (driver/retain-ownership! rt descriptor)
+         (doseq [row (when-not (= :runtime-stop phase)
+                       (weaver/list rt [:= [:attr "kind"] "workflow-execution"] {}))
+                 :let [attempt (store/record row)]
+                 :when (= (:waiter descriptor) (:executor attempt))]
+           (state/with-run!
+             rt (:run-id attempt)
+             #(guard/with-run! rt (:run-id attempt)
+                (fn [] (driver/stop-attempt! rt row
+                                             (driver/stop-reason :cancelled "Executor removed"))))))
+         (swap! descriptors dissoc waiter)
+         (swap! (:draining (state/state rt)) disj waiter)
+         (when (empty? @descriptors) (driver/close-scheduler! rt))))
+     {:closed waiter})))
 
 (defn inspect
   "Return one gate's normalized execution view using {:run-id run :step gate}.
@@ -82,6 +88,15 @@
   settlement. An unstarted managed gate remains visible after descriptor removal."
   [rt selector]
   (view/gate-view rt (operations/select-gate rt selector)))
+
+(defn run-view
+  "Return the current root image, freeze and retirement for conditional domain writes.
+
+  The :root is an exact public batch before-image, not an execution lock.
+  Domain transactions must fence it in their final batch, not only preflight."
+  [rt run-id]
+  (when-let [root (query/current-root-with-rt rt run-id)]
+    {:root root :freeze (operations/freeze root) :retirement (operations/retirement root)}))
 
 (defn reconcile!
   "Observe/deliver the exact current attempt; never authorize another attempt."
@@ -100,6 +115,11 @@
   Conflicting key reuse, unsettled work and validation-policy bypass refuse."
   [rt request]
   (current/with-runtime rt (operations/retry! rt request)))
+
+(defn retry-validation!
+  "Delegate the retained validation entrypoint to common retry authorization."
+  [rt request]
+  (current/with-runtime rt (operations/retry-validation! rt request)))
 
 (defn quiesce-run!
   "Freeze the current root and request stop; return an exact quiescence receipt.

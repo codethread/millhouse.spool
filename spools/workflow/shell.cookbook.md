@@ -65,10 +65,21 @@ then join them with a step that depends on all checks.
 ```
 
 **Why this shape.** The checks are independent graph work and can run on the
-shell executor's worker pool concurrently. The publish step becomes ready only
+Mill-owned process custody concurrently. The publish step becomes ready only
 when both checks close; a failed check remains a visible gate stall instead of
 being mistaken for a successful build.
 
 See the [workflow cookbook](../workflow/workflow.cookbook.md) for general gate
 composition and the [API reference](./shell.api.md) for precise failure
 inspection and recovery.
+
+## Inspect and retry
+
+```nu
+strand workflow execution RUN --step GATE
+strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id repair-1 --reason 'Repaired request' --by-identity ACTOR
+```
+
+Require a positively settled failed attempt. Removing `gate/error` is not retry
+permission. Recipe-marked gates still use the delegated `retry-validation`
+entrypoint with an expected revision until its planned public CLI replacement.

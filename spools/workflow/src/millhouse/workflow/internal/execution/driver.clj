@@ -5,6 +5,7 @@
             [millstrand.api.events.alpha :as events]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
+            [millhouse.workflow.validation :as validation]
             [millhouse.workflow.internal.execution.data :as data]
             [millhouse.workflow.internal.execution.state :as state]
             [millhouse.workflow.internal.execution.store :as store]
@@ -79,8 +80,9 @@
 
         (= :done (:phase view))
         (if (:finalization-pending? attempt)
-          (do (routing/close-run-if-done! rt (:run-id attempt))
-              (store/save! rt row (dissoc attempt :finalization-pending?))
+          (do (when (= (:root-id attempt) (:id (query/current-root-with-rt rt (:run-id attempt))))
+                (routing/close-run-if-done! rt (:run-id attempt)))
+              (store/save-cleanup! rt row (dissoc attempt :finalization-pending?))
               nil)
           (when (= :acknowledge (:desired view)) (effect :acknowledge attempt row)))
 
@@ -88,9 +90,18 @@
 
         (and (= :starting (:phase view)) (not (:uncertain? view)) (not (:accepted? view)) active?)
         (when (some #(= (:id gate) (:id %)) (query/ready-with-rt rt (:run-id attempt) {}))
-          (let [dispatched (store/advance rt attempt :dispatch {})]
+          (let [inspection (validation/check-attempt rt :launch attempt)
+                refused? (and inspection (not= :allow (:decision inspection)))
+                candidate (cond-> attempt inspection (assoc :validation-revision (:revision inspection)))
+                dispatched (if refused?
+                             (store/advance rt candidate :invalid
+                                            {:observation {:status :terminal :outcome :failed :settlement :settled
+                                                           :value nil :error {:code "validation/launch-refused"
+                                                                              :message (:reason inspection) :data {}}
+                                                           :evidence {"never-started" true}}})
+                             (store/advance rt candidate :dispatch {}))]
             (store/save! rt row dispatched)
-            (when-not (:attention dispatched)
+            (when-not (or refused? (:attention dispatched))
               (effect :start dispatched (store/attempt-row rt (:attempt-id attempt))))))
 
         (#{:starting :running} (:phase view)) (effect :observe attempt row)))))
@@ -125,8 +136,8 @@
               (fn []
                 (if (= :acknowledge operation)
                   (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
-                    (store/save! rt row
-                                 (assoc updated :result (store/result-envelope updated (store/model updated)))))
+                    (store/save-cleanup! rt row
+                                         (assoc updated :result (store/result-envelope updated (store/model updated)))))
                   (update-observation! rt row attempt response))))))))
     (swap! (:errors (state/state rt)) dissoc [:attempt (attr-get row :execution/token)])
     nil))
@@ -172,7 +183,7 @@
       (swap! (:errors (state/state rt)) assoc gate-id (data/error "execution/driver" error)))))
 
 (defn scan!
-  "Drive selected waiters only; legacy Shell/Agent/queue remain source-owned."
+  "Drive selected waiters only; legacy Agent/queue remain source-owned."
   [rt]
   (current/with-runtime rt
     (when (compare-and-set! (:dirty (state/state rt)) true false)

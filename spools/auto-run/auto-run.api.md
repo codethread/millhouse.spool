@@ -166,7 +166,7 @@ Recorded autonomous landing phases with one persistent finisher target.
 
 
 Review, freeze and release one independent finisher through recorded phases.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L124-L340">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L127-L343">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-land/failure-policy">`failure-policy`</a>
 ``` clojure
@@ -175,7 +175,7 @@ Review, freeze and release one independent finisher through recorded phases.
 Function.
 
 Render the handoff and landing stop rules, after delivery validation.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L17-L64">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L17-L66">Source</a></sub></p>
 
 ## <a name="millhouse.auto-run-land/validation-failure-policy">`validation-failure-policy`</a>
 ``` clojure
@@ -187,7 +187,7 @@ Render agent repair authority for implementation and pre-review validation.
 
   Diagnosis belongs to the assigned agent. This guidance grants scoped repair,
   not permission to bypass executor results or handoff and landing custody.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L66-L108">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-run/src/millhouse/auto_run_land.clj#L68-L111">Source</a></sub></p>
 
 -----
 # <a name="millhouse.auto-run-recovery">millhouse.auto-run-recovery</a>

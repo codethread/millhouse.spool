@@ -67,16 +67,22 @@ Automatic delivery workflows should build CI gates with
 `"allow-empty"` and the expected branch. Both policies validate the exact open,
 ready PR identity before and after check waiting.
 
-Code bookkeeping gates use [managed Workflow execution](../workflow/execution.md).
-Inspect their current attempt with `workflow execution`, then explicitly authorize
-one settled failed attempt with `workflow retry`; deleting `gate/error` is not
-Code retry authority. The existing Shell and queue repair paths are unchanged.
+Code and Shell gates use
+[managed Workflow execution](../workflow/execution.md). Inspect the current
+attempt with `workflow execution`, then explicitly authorize one settled failed
+attempt with `workflow retry`; deleting `gate/error` is not retry authority.
+Recipe-marked Shell gates retain the delegated `retry-validation` entrypoint.
 
-Roots containing managed Code work now require exact freeze/positive-retirement
-receipts before routed abandonment. The legacy Land withdrawal operation does
-not yet compose that receipt and refuses rather than silently orphaning Code.
-Cross-backend operational freeze and Land withdrawal integration belong to the
-Shell conversion; do not bypass either the Workflow or queue guards in the interim.
+Queue gates (`merge-turn` and `merge-release`) remain scanner-owned. Repair the
+cause, then clear only that queue gate's `gate/error` to re-arm it. Managed retry
+and preparation repair do not apply to queue gates. Keep the reservation and
+respect any run freeze.
+
+Withdrawal retires managed work before acquiring the queue lock. It then fences
+the exact root, reservation, freeze, retirement evidence, and repository abort
+workflow in one atomic abandonment batch. It never claims successful execution
+for skipped old work. An irreversible gate that may have started refuses
+withdrawal, even after local cancellation.
 
 ## Activation
 
@@ -119,3 +125,12 @@ A repository may also provide executable `.millstrand/land-cleanup.sh`. The
 cleanup helper invokes it in the feature worktree before removal and requires it
 to leave the exact HEAD clean. Cleanup is idempotent and refuses mismatched,
 dirty, or ambiguously owned resources.
+
+## Durable repair
+
+Historical skipped-turn or skipped-release rewind must be resolved under the old
+loaded code before managed execution cutover. For current data,
+`merge-queue repair --kind preparation` retains the reservation, positively
+retires the exact freeze, resumes the run, and explicitly retries the reversible
+gate. It never removes raw fences, reopens gates, or infers remote merge success.
+See the cookbook for the exact evidence and actor fields.

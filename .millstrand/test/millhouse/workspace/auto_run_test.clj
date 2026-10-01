@@ -115,7 +115,8 @@
           (is (contains? operations "auto-run"))
           (is (contains? operations "merge-queue"))))
       (testing "the repository owns its squash landing policy"
-        (let [{:keys [prepare-policy merge-tail abort-definition]}
+        (let [{:keys [prepare-policy merge-tail abort-definition
+                      retry-instructions release-instruction]}
               (t/repl!
                ctx
                '(let [definition @(requiring-resolve
@@ -129,10 +130,22 @@
                   {:prepare-policy (nth prepare-argv (- (count prepare-argv) 2))
                    :merge-tail (subvec merge-argv (- (count merge-argv) 2))
                    :abort-definition
-                   (get-in definition [:attributes "land/abort-definition"])}))]
+                   (get-in definition [:attributes "land/abort-definition"])
+                   :retry-instructions
+                   (mapv #(get-in steps [% :attributes "workflow/instruction"])
+                         [:prepare-merge :merge-pr :pull-main
+                          :remove-branch-worktree])
+                   :release-instruction
+                   (get-in steps [:release-turn :attributes
+                                  "workflow/instruction"])}))]
           (is (= "rebase" prepare-policy))
           (is (= ["feature/fixture" "squash"] merge-tail))
-          (is (= "millhouse.workspace.land/land-abort" abort-definition))))
+          (is (= "millhouse.workspace.land/land-abort" abort-definition))
+          (is (every? #(re-find
+                        #"workflow retry RUN --step GATE --expected-attempt TOKEN"
+                        %)
+                      retry-instructions))
+          (is (re-find #"clear gate/error" release-instruction))))
       (testing "workspace policy adds its lens without replacing shared reviewers"
         (let [catalog (into {} (map (juxt :name identity)) (reviewers/reviewers rt))
               lens (get catalog "test-layering")]

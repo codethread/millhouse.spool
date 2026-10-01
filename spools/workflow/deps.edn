@@ -26,4 +26,5 @@
     "millhouse.workflow-run-cli-test"
     "millhouse.executors.code-test"
     "millhouse.executors.shell-test"
+    "millhouse.executors.shell-replacement-test"
     "millhouse.millstrand-workflows-test"]}}}

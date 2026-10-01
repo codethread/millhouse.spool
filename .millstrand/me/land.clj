@@ -71,8 +71,18 @@
 (def ^:private retry-instruction
   (format-alpha/prose
    "
-     Inspect the failed gate's output, repair the cause, then clear `gate/error`
-     to retry. Keep the FIFO turn and merge lock; do not requeue at the back.
+     Inspect the failed attempt with `strand workflow execution RUN --step GATE`.
+     Repair the cause, then explicitly retry after positive settlement:
+
+     ```nu
+     strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
+     ```
+
+     Use a fresh request key. For recipe-marked validation, use workflow
+     retry-validation with the expected candidate revision instead. Never clear
+     gate/error to re-arm managed Shell work or manually assert success.
+
+     Keep this run's existing FIFO turn and merge lock; do not requeue at the back.
      Obtain focused review for material repairs. Request a user decision only
      when repair changes the authorized scope or ownership. Before a merge has
      been submitted, withdraw safely if that decision requires changing the plan.
@@ -120,7 +130,12 @@
     (fn [{:keys [branch]}]
       (support/sh-gate support/land-quality-gate-script "review-quality" branch))
     5400
-    "Commit and push the clean branch. Fix failed checks, then clear gate/error to retry.")
+    (format-alpha/prose
+     "
+       Commit and push the clean branch before validation.
+
+       {retry}
+     " {:retry retry-instruction}))
    (workflow/gate
     :review-agent "Run the one-seat code review" :agent
     :depends-on [:review-quality]
@@ -202,7 +217,8 @@
                      frontier after each wait and continue through housekeeping.
 
                      Any trusted agent may withdraw with `strand merge-queue withdraw
-                     <entry-id> --reason <reason>`. Withdrawal stops shell work first;
+                     <entry-id> --reason <reason> --by-identity <actor>`.
+                     Withdrawal freezes and settles Shell work first;
                      a possibly submitted merge requires reconciliation instead.
                    " {}))
    (support/shell-gate :prepare-merge "Update the branch and validate its final HEAD"
@@ -237,9 +253,10 @@
                   (format-alpha/prose
                    "
                      Cleanup is automatic and repeatable after worktree removal.
-                     On failure, repair the cause and clear `gate/error` to retry.
                      The next landing may be running; leave its resources alone.
-                   " {}))
+
+                     {retry}
+                   " {:retry retry-instruction}))
    (support/card-gate :finish-card "Finish the optional kanban card" [:remove-branch-worktree]
                       "millhouse.land.card-actions/finish-card!")))
 

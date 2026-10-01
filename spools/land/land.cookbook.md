@@ -21,50 +21,40 @@ strand merge-queue status ENTRY_ID
 strand --timeout 60s merge-queue await ENTRY_ID --timeout-secs 40
 ```
 
-Await timeout is data and never removes or moves a reservation. Repair a failed
-head in place and remove its `gate/error` only after the failed executor attempt
-has settled.
+Await timeout is data and never removes or moves a reservation. Inspect managed
+work through common execution and authorize retries explicitly. Clear
+`gate/error` only for scanner-owned queue gates after repairing their cause.
 
 ## Withdraw safely
 
 ```text
-strand merge-queue withdraw ENTRY_ID --reason "Scope changed"
+strand merge-queue withdraw ENTRY_ID --reason "Scope changed" --by-identity ACTOR
 ```
 
 Withdrawal is allowed for any trusted agent; there is no timeout eviction or
-owner-only restriction. It stops shell work before releasing the turn and
+owner-only restriction. It retires managed work before releasing the turn and
 continues into the repository's declared `:continue` abort workflow. The landing
 context plus `:reason`, with abort defaults underneath, must satisfy that
 workflow's parameter spec before queue state changes. If the irreversible gate
 may already have submitted the merge, withdrawal refuses to guess. Reconcile
 the pull request and resume the retained turn instead.
 
-## Repair a pre-guard skipped queue gate
+## Repair reversible preparation
 
-Use repair only for corruption created before the completion guard was active.
-Do not use it as a generic retry or queue override. Collect the exact persisted
-root, gate, reservation, and lock IDs. Supply a non-blank actor and reason; the
-complete evidence object is retained.
+Historical skipped-gate rewind belongs to old-code preflight before cutover.
+Never raw-clear execution fences or reopen managed gates. For a failed reversible
+preparation, inspect its settled attempt and repair the request or candidate:
 
-For a skipped `merge-turn`, prove no irreversible merge attempt is possible:
-
-```text
-strand merge-queue repair RUN_ID --kind skipped-turn --by-identity OPERATOR --reason "Pre-guard turn was skipped before merge work" --evidence '{"root-id":"ROOT_ID","gate-id":"TURN_GATE_ID","irreversible-work":"not-started"}'
+```nu
+strand workflow execution RUN --step GATE
+strand merge-queue repair RUN --kind preparation --by-identity ACTOR --reason 'Repaired preparation' --evidence '{"root-id":"ROOT","gate-id":"GATE","expected-attempt":"TOKEN","request-id":"repair-1"}'
 ```
 
-Repair quiesces active shell gates, preserves an existing reservation and
-sequence, and restores the frontier before repository preparation. Any closed or
-attempted irreversible gate causes refusal.
-
-For a skipped `merge-release`, independently verify the exact PR is merged at the
-recorded feature HEAD and canonical `main` is the recorded merge commit:
-
-```text
-strand merge-queue repair RUN_ID --kind skipped-release --by-identity OPERATOR --reason "Pre-guard release was skipped after verified merge" --evidence '{"root-id":"ROOT_ID","gate-id":"RELEASE_GATE_ID","entry-id":"ENTRY_ID","lock-id":"LOCK_ID","pr-number":42,"pr-state":"MERGED","base-branch":"main","pr-head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge-commit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","canonical-main":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}'
-```
-
-Mismatched IDs, evidence, queue ownership, PR state, or canonical `main` refuse
-without partial settlement. Exact repeated repairs are idempotent.
+Repair quiesces and retires outside the queue lock, checks the exact reservation
+and irreversible-work evidence, consumes the positive retirement receipt, and
+requests one explicit retry. It preserves FIFO position. Unknown settlement
+keeps the run fenced; a possibly started irreversible merge requires operator
+reconciliation, not withdrawal or remote-success inference.
 
 ## Repository quality and cleanup hooks
 

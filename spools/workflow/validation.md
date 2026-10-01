@@ -72,9 +72,9 @@ unsupported, not permission to adopt new semantics.
 ## Inspector boundary
 
 The trusted read-only callback receives `(inspect runtime request)` where request
-has exactly `:stage` (`:retry`, `:launch`, `:complete`), `:run-id`, `:gate` (current
-row), `:params` (frozen, string-keyed data), `:expected-revision` and
-`:previous-attempt` (receipt or nil). It must not mutate gates, reserve retries,
+has exactly `:stage` (`:retry`, `:launch`, `:complete`), `:run-id`, `:gate` (captured
+input row), `:params` (frozen, string-keyed data), `:expected-revision` and
+`:previous-attempt` (common result envelope or nil). It must not mutate gates, reserve retries,
 launch work, or assert executor success. This is a trusted callback contract,
 not a sandbox for hostile code.
 
@@ -101,55 +101,34 @@ is a nonblank external episode/action reference. Actor is attribution, never an
 executor-success claim or substitute for a consumer's ownership checks. An
 automatic consumer reserves its budget before invoking this operation.
 
-Results use string `:state`:
+The retained command delegates directly to common attempt authorization; it is
+not a parallel Shell lifecycle. Results retain string `:state` (`eligible`,
+`accepted`, `replayed`, `refused`) and use the common `:action`. The action records
+`:request`, `:attempt-id`, `:previous-attempt`, `:previous-result` and
+`:frozen-request`. A refusal includes `:reasons`. Dry-run writes nothing. Accepted
+is authorization, never validation success. Exact run-scoped request replay
+returns the original action; a conflicting payload refuses.
 
-- `eligible` / `refused`: plan includes `:old-attempt`, `:recipe`, `:revision`,
-  `:frontier`, and `:reasons`. Dry-run performs no writes or acknowledgement.
-- `accepted`: `:action` identifies the authorization, original request, old
-  terminal receipt, old error, recipe and inspection evidence. **Not success.**
-- `replayed`: the same run-scoped key and payload return the original action,
-  even after a newer failure or completion. Different payload under that key
-  returns `refused` with the original action and a conflict reason.
+Inspect with `workflow execution RUN --step GATE`. The common result records
+`:validation-revision`, outcome, settlement, value and acknowledgement. Shell
+value contains exit code and bounded output. When policy rejects a zero exit,
+original backend output is retained in result evidence `backend-result`.
+Old attempts/actions are independent durable rows, not growing gate histories.
+No old running/attempt/custody aliases or `validation/receipt` remain.
 
-Accepted actions are separate retained rows indexed by
-`validation/action-run-id` and `validation/action-request-id`, holding
-`validation/action`; the gate also appends `validation/actions`. Action fields
-are string-keyed on the wire: `id`, `request`, `old-attempt`, `error`, `recipe`,
-`evidence`. Reconcile an ambiguous response using the **same key and payload**;
-never select a new key or refund an unknown effect. Replay is supported while
-records remain, not promised after data loss or deletion.
+## Settlement and authority
 
-Malformed boundaries and unsupported registrations throw `ExceptionInfo` with
-`:reason` values `:workflow/validation-request`, `-config`, `-result`,
-`-unsupported` (each with the `workflow/validation` prefix). Fencing/protection
-errors use `:workflow/validation-stale`, `-frozen`, `-executor-owned`;
-launch refusal uses `:workflow/validation-launch-refused`. Core wraps hook errors
-as `hook/failed`, retaining the original exception data. Unknown roots/gates or
-unavailable custody reads remain ordinary loud Core errors, not eligible plans.
+Common execution owns identity, intent, result delivery and retry. Shell only
+launches/observes/stops/acknowledges Mill custody. Terminal delivery commits
+before external acknowledgement. Known settlement with lost acknowledgement
+confirmation permits explicit retry, preserving `unknown` on the old attempt.
+Missing handles, ambiguous launch or cancellation never prove settlement.
 
-## Custody, history and permitted loss
+Retry takes the execution monitor then the Workflow guard and fences the exact
+root/gate/prior attempt in its transaction. The common completion scope protects
+success, including launch and completion revision inspections. Frozen recipe,
+configuration, params and request cannot be replaced. Launch validation failure
+is an inspectable never-accepted settled failure with an attempt token.
 
-Shell owns attempt identity, Mill custody, output and completion. An opted-in
-terminal attempt retains `validation/receipt` before acknowledgement: string
-keys `attempt-id`, `custody-handle`, `terminal-observed`, `settled`,
-`acknowledgement`, `revision`, `recipe`, `exit`, `output`, `error`. Output is the
-normal bounded 16 KiB combined tail. Acknowledgement starts as `unknown` and is
-marked `confirmed` only after the actual acknowledgement returns. Nil active
-custody fields do **not** prove acknowledgement.
-
-Known settled terminal observation plus missing acknowledgement confirmation
-permits an explicitly authorized retry, while retaining `unknown` in its old
-receipt. Actual running, uncertain cancellation, mismatched or unknown current
-custody refuses. A missing receipt or source token also refuses. Interrupted
-bookkeeping can lose history or leave orphaned retained Mill evidence. This is
-best-effort resumability, **not crash-proof receipt storage or exactly-once
-execution**; no Core tombstone service is required.
-
-Retry holds the shell scan/terminal monitor, then the Workflow run guard (the
-same order as terminal completion). It re-reads the gate, active root, readiness,
-recipe and custody; batch precommit compares exact root/gate before-images.
-The action append and clearing of the eligible active error/outcome/custody
-projection commit together. Old receipt becomes `validation/previous-attempt`;
-`validation/revision` reserves the next revision. Normal scanning owns the new
-launch. Retained old observers cannot stamp a new attempt. Queue hooks still
-run, and no labels such as `auto-run-failure` or `human-attention` are cleared.
+This is best-effort coordination, not complete-process durability or exactly-once
+execution. No queue, human checkpoint, budget or custody policy is bypassed.

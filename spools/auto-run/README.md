@@ -39,13 +39,14 @@ Repository delivery workflows can use `validation-failure-policy` for implementa
 and pre-review quality/CI gates: agents diagnose and repair their own scoped work,
 including assigned flaky-test repairs, while unrelated flakes, infrastructure and
 unknown failures require intervention. This is agent guidance, not an automated
-log classifier. It requires durable failure evidence, settled shell custody and
+log classifier. It requires durable failure evidence, positive execution settlement and
 fresh quality/CI at the repaired revision. `failure-policy` retains the separate
 explicit recovery boundary for handoff and landing; repair authority cannot bypass
 executor results, recipe refusals, finisher custody or queue ownership. Managed
-Code verification failures instead use the common `workflow execution` inspection
-and explicit `workflow retry` contract; Shell custody fields and error deletion
-cannot establish Code settlement or authorize its retry.
+Code and Shell failures use common `workflow execution` inspection and explicit
+`workflow retry`; missing handles and error deletion do not authorize retry.
+Recipe-marked Shell gates retain the delegated `workflow retry-validation`
+entrypoint and revision policy until its planned public command replacement.
 
 `auto-run register-worker` is coordinator-only policy for explicitly authorized
 recovery, not another launch or an authorization mechanism. It requires the
