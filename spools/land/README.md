@@ -71,7 +71,8 @@ Code and Shell gates use
 [managed Workflow execution](../workflow/execution.md). Inspect the current
 attempt with `workflow execution`, then explicitly authorize one settled failed
 attempt with `workflow retry`; deleting `gate/error` is not retry authority.
-Recipe-marked Shell gates retain the delegated `retry-validation` entrypoint.
+Recipe-marked Shell gates use the same retry command with
+`--expected-revision REVISION`.
 
 Queue gates (`merge-turn` and `merge-release`) remain scanner-owned. Repair the
 cause, then clear only that queue gate's `gate/error` to re-arm it. Managed retry

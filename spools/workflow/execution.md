@@ -46,7 +46,9 @@ and payload replay returns the original accepted action and frozen request, even
 after further edits or completion. A conflicting payload refuses. `--dry-run`
 writes nothing. Previous attempts remain retained; cleanup of their evidence
 cannot change a replacement token. Validation-marked gates cannot bypass their
-existing frozen-recipe policy through this operation.
+frozen-recipe policy: add `--expected-revision REVISION` to the same command.
+Inspection exposes `:retry-action` separately from the current `:result`; an
+accepted action is authorization, not proof of successful validation.
 
 Removing or blanking `gate/error` is **not** retry authority. Direct completion,
 raw closure and executor/actor string spoofing cannot complete a managed gate.

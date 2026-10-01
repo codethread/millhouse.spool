@@ -93,7 +93,7 @@
 
 (defn claim!
   "Atomically publish the UUID-correlated attempt, current token and retry action."
-  [rt root gate attempt action]
+  [rt root gate attempt action prior]
   (let [payload {:refs {:gate (:id gate) :root (:id root)}
                  :strands [(assoc (gate-patch attempt) :ref :gate)
                            {:ref :root :attributes {}}
@@ -104,8 +104,7 @@
                                                :attributes {"execution/action-run" (:run-id attempt)
                                                             "execution/action-key" (get-in action [:request :request-id])
                                                             "execution/action" (data/encode action)}}))]
-    (let [prior (attempt-row rt (attr-get gate :execution/current))
-          before (cond-> {(:id root) root (:id gate) gate}
+    (let [before (cond-> {(:id root) root (:id gate) gate}
                    prior (assoc (:id prior) prior))]
       (apply-plan! rt before payload
                    {:creates (into {} (keep (fn [patch]

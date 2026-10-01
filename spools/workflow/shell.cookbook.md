@@ -81,5 +81,5 @@ strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id repa
 ```
 
 Require a positively settled failed attempt. Removing `gate/error` is not retry
-permission. Recipe-marked gates still use the delegated `retry-validation`
-entrypoint with an expected revision until its planned public CLI replacement.
+permission. Recipe-marked gates use the same `workflow retry` command with
+`--expected-revision REVISION`; their frozen recipe and request cannot be replaced.

@@ -47,10 +47,13 @@
                   (refuse! "Retry request-id payload conflict"))
                 (let [gate (select-gate rt request)
                       root (roots/nearest-root rt gate)
-                      prior (store/current-attempt rt gate)
+                      prior-row (store/attempt-row rt (attr-get gate :execution/current))
+                      prior (store/record prior-row)
                       view (when prior (store/model prior))
+                      validation? (or (attr-get gate :validation/recipe)
+                                      (attr-get (get-in prior [:input :gate]) :validation/recipe))
                       descriptor (get (state/selected rt) (attr-get gate :execution/owner))]
-                  (if (attr-get gate :validation/recipe)
+                  (if validation?
                     (when-not (data/nonblank? (:expected-revision request))
                       (refuse! "Validation-marked gates require an expected revision"))
                     (when (contains? request :expected-revision)
@@ -64,18 +67,19 @@
                                  (not= :succeeded (get-in prior [:result :outcome])))
                     (refuse! "Retry requires the current settled failed attempt on an active unfrozen gate"))
                   (query/resolve-ready-step rt run-id {:step step})
-                  (let [inspection (when (attr-get gate :validation/recipe)
-                                     (validation/inspect rt :retry run-id gate (:expected-revision request) (:result prior)))
+                  (let [inspection (when validation?
+                                     (validation/check-retry rt run-id gate (:expected-revision request) prior))
                         _ (when (and inspection (not= :allow (:decision inspection)))
                             (refuse! (:reason inspection)))
-                        attempt (cond-> (store/prepare-attempt rt descriptor root gate)
+                        attempt (cond-> (assoc (store/prepare-attempt rt descriptor root gate)
+                                               :retry-request-id request-id)
                                   inspection (assoc :validation-revision (:revision inspection)
                                                     :previous-result (:result prior)))
                         action {:request payload :attempt-id (:attempt-id attempt)
                                 :previous-attempt expected-attempt :previous-result (:result prior) :frozen-request (:request attempt)}]
                     (if dry-run
                       {:status :eligible :action action}
-                      (do (store/claim! rt root gate attempt action)
+                      (do (store/claim! rt root gate attempt action prior-row)
                           {:status :accepted :action action}))))))))))))
 
 (defn managed-gates [rt root]
@@ -175,26 +179,3 @@
                                {:refs {:root (:id root)}
                                 :strands [{:ref :root :attributes {"execution/freeze" nil "execution/retirement" nil}}]} {})
             {:status :resumed :root-id (:id root)}))))))
-
-(defn retry-validation!
-  "Translate the retained recipe retry request into the common attempt path."
-  [rt {:keys [run-id request-id] :as request}]
-  (when-not (and (every? #{:run-id :step :request-id :expected-revision :reason :by-identity :dry-run :episode-ref} (keys request))
-                 (every? #(data/nonblank? (get request %)) [:run-id :step :request-id :expected-revision :reason :by-identity])
-                 (or (not (contains? request :episode-ref)) (data/nonblank? (:episode-ref request)))
-                 (or (not (contains? request :dry-run)) (boolean? (:dry-run request))))
-    (refuse! "Invalid validation retry request"))
-  (try
-    (let [prior-action (some-> (first (weaver/list rt
-                                                   [:and [:= [:attr "execution/action-run"] run-id]
-                                                    [:= [:attr "execution/action-key"] request-id]] {}))
-                               (attr-get :execution/action) data/decode)
-          gate (select-gate rt request)]
-      (when-not (attr-get gate :validation/recipe)
-        (refuse! "Gate did not opt into a validation recipe"))
-      (let [result (retry! rt (assoc request :expected-attempt
-                                     (or (get-in prior-action [:request :expected-attempt])
-                                         (attr-get gate :execution/current))))]
-        (assoc result :state (name (:status result)))))
-    (catch clojure.lang.ExceptionInfo error
-      {:state "refused" :reasons [(ex-message error)]})))

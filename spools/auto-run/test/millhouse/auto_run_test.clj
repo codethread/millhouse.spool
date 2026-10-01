@@ -754,8 +754,11 @@
     (is (thrown? clojure.lang.ExceptionInfo (worktree/ready-result text "auto/abc")))))
 
 (deftest failure-guidance-uses-common-code-and-shell-attempts
-  (let [guidance (autonomous/failure-policy "card")]
-    (is (re-find #"workflow execution RUN --step GATE" guidance))
-    (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN" guidance))
-    (is (re-find #"ordinary Shell and Code gates" guidance))
+  (doseq [guidance [(autonomous/failure-policy "card")
+                    (autonomous/validation-failure-policy "card")]]
+    (is (re-find #"workflow execution\s+RUN --step GATE" guidance))
+    (is (re-find #"workflow retry" guidance))
+    (is (re-find #"expected-attempt" guidance))
+    (is (re-find #"--expected-revision REVISION" guidance))
+    (is (not (re-find #"retry-validation" guidance)))
     (is (not (re-find #"shell/(running|attempt-id|custody-handle)" guidance)))))

@@ -85,7 +85,9 @@
   "Return one gate's normalized execution view using {:run-id run :step gate}.
 
   Includes frozen request/deadline, current attempt, result, attention and actual
-  settlement. An unstarted managed gate remains visible after descriptor removal."
+  settlement. :retry-action retains accepted authorization and previous failure,
+  separately from the current :result. Acceptance is not validation success.
+  An unstarted managed gate remains visible after descriptor removal."
   [rt selector]
   (view/gate-view rt (operations/select-gate rt selector)))
 
@@ -112,14 +114,12 @@
   Require :run-id, :step, :expected-attempt, :request-id, :reason and
   :by-identity. :dry-run writes nothing. Corrected current input is captured
   once; exact request replay returns its original action even after later edits.
-  Conflicting key reuse, unsettled work and validation-policy bypass refuse."
+  Validation-marked gates require :expected-revision and retain their frozen
+  recipe/request; they cannot capture replacement inputs. Optional :episode-ref
+  records an external action reference. Conflicting key reuse, unsettled work
+  and validation-policy bypass refuse."
   [rt request]
   (current/with-runtime rt (operations/retry! rt request)))
-
-(defn retry-validation!
-  "Delegate the retained validation entrypoint to common retry authorization."
-  [rt request]
-  (current/with-runtime rt (operations/retry-validation! rt request)))
 
 (defn quiesce-run!
   "Freeze the current root and request stop; return an exact quiescence receipt.

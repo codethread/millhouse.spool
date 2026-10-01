@@ -45,8 +45,8 @@ explicit recovery boundary for handoff and landing; repair authority cannot bypa
 executor results, recipe refusals, finisher custody or queue ownership. Managed
 Code and Shell failures use common `workflow execution` inspection and explicit
 `workflow retry`; missing handles and error deletion do not authorize retry.
-Recipe-marked Shell gates retain the delegated `workflow retry-validation`
-entrypoint and revision policy until its planned public command replacement.
+Recipe-marked Shell gates use `workflow retry` with
+`--expected-revision REVISION`; acceptance never substitutes for executor validation.
 
 `auto-run register-worker` is coordinator-only policy for explicitly authorized
 recovery, not another launch or an authorization mechanism. It requires the

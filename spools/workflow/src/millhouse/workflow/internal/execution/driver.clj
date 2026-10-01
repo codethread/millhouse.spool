@@ -160,7 +160,7 @@
                          (if (and claim? (not (attr-get root :execution/freeze))
                                   (not (attr-get gate :execution/current))
                                   (some #(= (:id gate) (:id %)) (query/ready-with-rt rt run-id {})))
-                           (store/claim! rt root gate (store/prepare-attempt rt descriptor root gate) nil)
+                           (store/claim! rt root gate (store/prepare-attempt rt descriptor root gate) nil nil)
                            (when-not (attr-get gate :execution/owner)
                              (store/apply-plan!
                               rt {(:id root) root (:id gate) gate}

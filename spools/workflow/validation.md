@@ -88,33 +88,39 @@ an inspection exception remains a failed validation, not success.
 
 ## Request and results
 
-```text
-strand workflow retry-validation RUN --step GATE --request-id KEY \
-  --expected-revision TOKEN --reason TEXT --by-identity ACTOR --dry-run
+```nu
+strand workflow execution RUN --step GATE
+strand workflow retry RUN --step GATE --expected-attempt ATTEMPT --request-id KEY --expected-revision REVISION --reason TEXT --by-identity ACTOR --dry-run
 ```
 
-Remove `--dry-run` for **one explicitly authorized attempt**. The Clojure API is
-`workflow/retry-validation!` with the corresponding closed request map:
-`:run-id`, `:step`, `:request-id`, `:expected-revision`, `:reason`, `:by-identity`
-are required nonblank strings; optional `:dry-run` is boolean and `:episode-ref`
-is a nonblank external episode/action reference. Actor is attribution, never an
-executor-success claim or substitute for a consumer's ownership checks. An
-automatic consumer reserves its budget before invoking this operation.
+Inspect the recorded failed attempt, repair the candidate, and remove `--dry-run`
+for **one explicitly authorized attempt**. Both ordinary managed gates and marked
+validation gates use this command and `execution/retry! runtime request` from
+`millhouse.workflow.execution`. The closed request requires nonblank `:run-id`,
+`:step`, `:expected-attempt`, `:request-id`, `:reason` and `:by-identity`.
+Marked gates additionally require `:expected-revision`; the ordinary form cannot
+bypass this policy. Optional `:dry-run` is boolean; `:episode-ref` is an API-only
+external action reference. Actor is attribution, not success authority or a
+substitute for consumer ownership checks. Consumers own any retry budget.
 
-The retained command delegates directly to common attempt authorization; it is
-not a parallel Shell lifecycle. Results retain string `:state` (`eligible`,
-`accepted`, `replayed`, `refused`) and use the common `:action`. The action records
-`:request`, `:attempt-id`, `:previous-attempt`, `:previous-result` and
-`:frozen-request`. A refusal includes `:reasons`. Dry-run writes nothing. Accepted
-is authorization, never validation success. Exact run-scoped request replay
-returns the original action; a conflicting payload refuses.
+The CLI returns string `:status` (`eligible`, `accepted`, `replayed`); the API
+returns the corresponding keyword. Refusals raise an explicit error and write
+no authorization. The `:action` records `:request`, `:attempt-id`,
+`:previous-attempt`, `:previous-result` and `:frozen-request`. Dry-run writes
+nothing, and execution rechecks eligibility, revision and transactional
+before-images rather than trusting the plan. Its proposed attempt is not reserved.
+Accepted is authorization, **never validation success**. Exact run-scoped
+request-key/payload replay returns the original action even after later progress;
+a conflicting payload refuses. Replaying an accepted action does not reinspect
+or authorize more work.
 
-Inspect with `workflow execution RUN --step GATE`. The common result records
-`:validation-revision`, outcome, settlement, value and acknowledgement. Shell
-value contains exit code and bounded output. When policy rejects a zero exit,
-original backend output is retained in result evidence `backend-result`.
-Old attempts/actions are independent durable rows, not growing gate histories.
-No old running/attempt/custody aliases or `validation/receipt` remain.
+Inspection separates `:retry-action` (including the recorded previous failure)
+from the current `:result`. Only the executor can publish successful validation.
+The common result records `:validation-revision`, outcome, settlement, value and
+acknowledgement. Shell value contains exit code and bounded output. When policy
+rejects a zero exit, original backend output remains in result evidence
+`backend-result`. Old attempts/actions are independent durable rows, not growing
+gate histories. No backend-specific running/attempt/custody aliases are needed.
 
 ## Settlement and authority
 

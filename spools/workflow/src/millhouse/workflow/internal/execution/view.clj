@@ -12,6 +12,11 @@
                   (some-> (first (weaver/list rt [:and [:= [:attr "kind"] "workflow-execution"]
                                                   [:= [:attr "execution/token"] token]] {}))
                           (attr-get :execution/data) data/decode))
+        action (when-let [key (:retry-request-id attempt)]
+                 (some-> (first (weaver/list rt
+                                             [:and [:= [:attr "execution/action-run"] (:run-id attempt)]
+                                              [:= [:attr "execution/action-key"] key]] {}))
+                         (attr-get :execution/action) data/decode))
         view (when attempt (chart/view (:snapshot attempt)))
         selected (get (state/selected rt) (attr-get gate :execution/owner))]
     {:gate-id (:id gate) :owner (attr-get gate :execution/owner)
@@ -19,6 +24,7 @@
      :reference (:reference view) :deadline (:deadline attempt) :phase (or (:phase view) :unstarted)
      :accepted? (:accepted? view) :dispatch-uncertain? (:uncertain? view)
      :stop-reason (:stop-reason view) :result (:result attempt)
+     :retry-action action :validation-revision (:validation-revision attempt)
      :cleanup {:acknowledgement (:acknowledgement view)
                :root-finalization-pending? (boolean (:finalization-pending? attempt))}
      :attention (or (:attention attempt) (:attention view)

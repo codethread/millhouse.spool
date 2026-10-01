@@ -94,9 +94,9 @@ the diagnosis and exact requested intervention. Do not rerun unchanged failures
 hoping for green, weaken assertions or raise production limits to hide failure.
 
 Inspect the failed gate with `workflow execution RUN --step GATE`. Require a
-positively settled failed attempt. For an opted-in `validation/recipe`, use the
-retained `workflow retry-validation` entrypoint with its expected revision;
-never bypass a refusal. Ordinary Shell and Code gates use:
+positively settled failed attempt. Both ordinary Shell/Code and opted-in
+`validation/recipe` gates use the same command. Marked gates additionally require `--expected-revision REVISION`;
+never bypass a refusal:
 
 ```nu
 strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR

@@ -78,8 +78,8 @@
      strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
      ```
 
-     Use a fresh request key. For recipe-marked validation, use workflow
-     retry-validation with the expected candidate revision instead. Never clear
+     Use a fresh request key. For recipe-marked validation, add
+     --expected-revision REVISION to the same retry command. Never clear
      gate/error to re-arm managed Shell work or manually assert success.
 
      Keep this run's existing FIFO turn and merge lock; do not requeue at the back.

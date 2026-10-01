@@ -5,7 +5,6 @@
   never relaunches missing custody; only the common driver delivers and retries."
   (:require [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
-            [millstrand.api.current.alpha :as current]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.process.alpha :as process]
             [millstrand.api.spool.alpha :refer [attr-get]]
@@ -157,11 +156,6 @@
    :request 'millhouse.executors.shell/request :request-spec ::request :result-spec ::result
    :start 'millhouse.executors.shell/start! :observe 'millhouse.executors.shell/observe!
    :stop 'millhouse.executors.shell/stop! :acknowledge 'millhouse.executors.shell/acknowledge!})
-
-(defn retry-validation!
-  "Delegate the existing validation retry entrypoint to the common attempt path."
-  [request]
-  (execution/retry-validation! (current/runtime) request))
 
 (defn open-shell-engine!
   "Select Shell after refusing unresolved legacy execution evidence."

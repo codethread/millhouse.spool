@@ -154,6 +154,9 @@
         (is (nil? (workflow/current-root "forged")))
         (testing "ordinary unregistered external gates retain manual completion"
           (workflow/start! "external" (workflow/workflow "External" (workflow/gate :wait "Wait" :external)) {})
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (execution/retry! rt (request "external" (:id (first (workflow/ready "external")))
+                                                     "fabricated" "manual-retry"))))
           (is (:done (workflow/complete! "external" {:by-identity "test-worker"}))))
         (testing "failed claim writes no token, attempt row or retry action"
           (let [started (workflow/start! "claim" (workflow/workflow "Claim" (gate :check "invalid")) {})
