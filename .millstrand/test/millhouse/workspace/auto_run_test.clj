@@ -191,7 +191,13 @@
                 "The automatic gate uses the same single lock owner as Land")
             (is (= ["millhouse.land.card-actions/review-card!"]
                    (keep #(attr-get % :code/fn) strands)))
-            (is (nil? (role-step strands "finisher")))))
+            (is (nil? (role-step strands "finisher")))
+            (doseq [gate (filter #(= "shell" (attr-get % :workflow/gate)) strands)
+                    :let [instruction (attr-get gate :workflow/instruction)]]
+              (is (re-find #"workflow execution RUN --step GATE" instruction))
+              (is (re-find #"workflow retry RUN --step GATE --expected-attempt TOKEN" instruction))
+              (is (re-find #"--expected-revision REVISION" instruction))
+              (is (not (re-find #"retry-validation|shell/(running|attempt-id|custody-handle)" instruction))))))
         (let [full-run "test-auto-full-land"
               _ (workflow/start! full-run :auto-full-land
                                  {:card "fixture-card" :feature "Disposable feature"

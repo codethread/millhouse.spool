@@ -296,9 +296,9 @@
                   apply-batch batch/apply!]
               ;; Background acknowledgement may progress; the dry-run may not write.
               (with-redefs [batch/apply! (fn [& args]
-                                          (when (= caller (Thread/currentThread))
-                                            (throw (ex-info "Dry-run attempted a write" {})))
-                                          (apply apply-batch args))]
+                                           (when (= caller (Thread/currentThread))
+                                             (throw (ex-info "Dry-run attempted a write" {})))
+                                           (apply apply-batch args))]
                 (is (= "eligible" (:status (retry-command rt (assoc request :dry-run true)))))))
             ;; Actual authorization must recheck after a successful read-only plan.
             (spit candidate "drifted-after-plan")
