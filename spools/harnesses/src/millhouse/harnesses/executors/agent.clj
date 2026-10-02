@@ -91,7 +91,7 @@
       (life/terminal? run)
       (let [success? (and (life/accepted? run) (= "stopped" status)
                           (= "completed" (life/substatus run))
-                          (= 0 (attr-get run :harness/exit-code)) (nonblank? result))
+                          (zero? (attr-get run :harness/exit-code)) (nonblank? result))
             outcome (cond success? :succeeded
                           (and (= "stopped" status) (= "requested" (life/substatus run))) :cancelled
                           :else :failed)]
