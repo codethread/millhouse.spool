@@ -520,7 +520,7 @@ Return true when run-id has no active workflow root, or every workflow work
 
 
 Protect persisted managed gates for the lifetime of this runtime.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L2496-L2499">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L2485-L2488">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/executor-catalog">`executor-catalog`</a>
 ``` clojure
@@ -747,22 +747,7 @@ Register a workflow definition under a stable keyword `name`.
 Function.
 
 Return the live resolved registered workflow definition for `name`.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1461-L1464">Source</a></sub></p>
-
-## <a name="millhouse.workflow/retry-validation!">`retry-validation!`</a>
-``` clojure
-(retry-validation! request)
-```
-Function.
-
-Reserve one guarded shell validation attempt; acceptance is not success.
-
-  Request requires :run-id, :step, :request-id, :expected-revision, :reason and
-  :by-identity nonblank strings. Optional :dry-run is boolean; :episode-ref is
-  a nonblank external action reference. Returns accepted/eligible/refused/replayed
-  state with retained action or plan evidence. Only future opted-in shell gates
-  qualify. The shell provider owns custody checks, locking and execution.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1229-L1238">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1450-L1453">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-await">`run-await`</a>
 ``` clojure
@@ -779,7 +764,7 @@ Block until `request`'s run is done or needs a worker, and return the result.
   never returned, because a run whose whole frontier is executor-owned and
   healthy is exactly what this call waits through. `::await-request` owns the
   request shape and `::attention-result` the answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1445-L1459">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1434-L1448">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-choices">`run-choices`</a>
 ``` clojure
@@ -798,7 +783,7 @@ Return the ready checkpoint's choice explanations with live input contracts.
   multiple ready checkpoints, and without it exactly one checkpoint must be
   ready. `::choices-request` owns the request shape and `::choices-result` the
   answer.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1274-L1297">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1263-L1286">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-choose!">`run-choose!`</a>
 ``` clojure
@@ -814,7 +799,7 @@ Record `request`'s choice on the ready checkpoint and return the run result.
   `json->params` first — and a routed choice pours its continuation in the same
   mutation, so the returned frontier is already the continuation's.
   `::choose-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1347-L1368">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1336-L1357">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-complete!">`run-complete!`</a>
 ``` clojure
@@ -845,7 +830,7 @@ Close the ready ordinary step of `request`'s run and return the run result.
   its executor and is never stored as identity attribution. These fields record
   evidence only: they do not bypass lifecycle hooks or authorize protected
   queue gates. `::complete-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1299-L1345">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1288-L1334">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-defer!">`run-defer!`</a>
 ``` clojure
@@ -862,7 +847,7 @@ Fill the ready defer of `request`'s run and return the run result.
   current root and the run resumes when it finishes, so the returned frontier is
   the expansion's — or, for a target that materializes nothing, whatever the
   declaring workflow does next. `::defer-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1421-L1443">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1410-L1432">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-history">`run-history`</a>
 ``` clojure
@@ -905,7 +890,7 @@ Advance the ready ordinary step, checkpoint, or explicitly selected gate and
   A defer is not advanceable because selecting its target and params is a
   different request; failures direct the worker to `workflow defer`.
   `::next-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1370-L1419">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1359-L1408">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-ready">`run-ready`</a>
 ``` clojure
@@ -921,7 +906,7 @@ Return the run result for `request`'s run without touching it.
   complete current frontier — every ready item of every role, in definition and
   loop order — because a worker filtering for its own role can do so, while one
   that never saw a sibling item cannot. `::ready-request` owns the request shape.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1240-L1252">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow.clj#L1229-L1241">Source</a></sub></p>
 
 ## <a name="millhouse.workflow/run-start!">`run-start!`</a>
 ``` clojure
@@ -1233,8 +1218,10 @@ Function.
 Return one gate's normalized execution view using {:run-id run :step gate}.
 
   Includes frozen request/deadline, current attempt, result, attention and actual
-  settlement. An unstarted managed gate remains visible after descriptor removal.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L84-L90">Source</a></sub></p>
+  settlement. :retry-action retains accepted authorization and previous failure,
+  separately from the current :result. Acceptance is not validation success.
+  An unstarted managed gate remains visible after descriptor removal.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L84-L92">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/open!">`open!`</a>
 ``` clojure
@@ -1268,7 +1255,7 @@ Freeze the current root and request stop; return an exact quiescence receipt.
 Function.
 
 Observe/deliver the exact current attempt; never authorize another attempt.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L101-L107">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L103-L109">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/resume-run!">`resume-run!`</a>
 ``` clojure
@@ -1299,17 +1286,11 @@ Authorize one new attempt on a settled failed ready gate.
   Require :run-id, :step, :expected-attempt, :request-id, :reason and
   :by-identity. :dry-run writes nothing. Corrected current input is captured
   once; exact request replay returns its original action even after later edits.
-  Conflicting key reuse, unsettled work and validation-policy bypass refuse.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L109-L117">Source</a></sub></p>
-
-## <a name="millhouse.workflow.execution/retry-validation!">`retry-validation!`</a>
-``` clojure
-(retry-validation! rt request)
-```
-Function.
-
-Delegate the retained validation entrypoint to common retry authorization.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L119-L122">Source</a></sub></p>
+  Validation-marked gates require :expected-revision and retain their frozen
+  recipe/request; they cannot capture replacement inputs. Optional :episode-ref
+  records an external action reference. Conflicting key reuse, unsettled work
+  and validation-policy bypass refuse.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L111-L122">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.execution/run-view">`run-view`</a>
 ``` clojure
@@ -1321,7 +1302,7 @@ Return the current root image, freeze and retirement for conditional domain writ
 
   The :root is an exact public batch before-image, not an execution lock.
   Domain transactions must fence it in their final batch, not only preflight.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L92-L99">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/execution.clj#L94-L101">Source</a></sub></p>
 
 -----
 # <a name="millhouse.workflow.validation">millhouse.workflow.validation</a>
@@ -1350,6 +1331,18 @@ Function.
 Inspect the frozen validation input at launch or commit; normalize refusal.
 
   The revision is retained on the attempt, never in backend-specific gate fields.
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/validation.clj#L160-L171">Source</a></sub></p>
+
+## <a name="millhouse.workflow.validation/check-retry">`check-retry`</a>
+``` clojure
+(check-retry rt run-id gate expected prior)
+```
+Function.
+
+Inspect retry against the prior attempt's frozen recipe, never replacement data.
+
+  Retained input remains authoritative even if recipe configuration was removed
+  and its mutation hook was absent while gate attributes changed.
 <p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/src/millhouse/workflow/validation.clj#L147-L158">Source</a></sub></p>
 
 ## <a name="millhouse.workflow.validation/close!">`close!`</a>

@@ -26,7 +26,24 @@
   (let [failure-instruction
         (if autonomous?
           (fn [{:keys [card]}] (autonomous/validation-failure-policy card))
-          "Await this executor-owned gate. Inspect failures, repair the cause, then explicitly clear gate/error to retry. Never manually assert a passing result.")]
+          (format/prose
+           "
+             Await this executor-owned gate. Inspect a failure with:
+
+             ```nu
+             strand workflow execution RUN --step GATE
+             ```
+
+             Repair the cause, then retry the positively settled failed attempt:
+
+             ```nu
+             strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
+             ```
+
+             For validation/recipe gates also supply --expected-revision REVISION.
+             Never bypass a refusal, clear gate/error, infer settlement from missing
+             handles, or manually assert a passing result. Acceptance is not success.
+           " {}))]
     (apply
      workflow/workflow
      (if autonomous? "Deliver automatically" "Prepare for human review")

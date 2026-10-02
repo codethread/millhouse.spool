@@ -33,7 +33,11 @@ Observation recording fences the complete attempt image and exact current gate
 token, merging only its phase projection. Unrelated gate/root metadata edits do
 not discard a known busy response or rewrite frozen input. Claims, dispatch
 intent, stop/control changes and terminal delivery retain their full-image
-fences. Recording an observation is not completion authority.
+fences. Recording an observation is not completion authority. Reconciliation
+continues while custody or acknowledgement is unknown, but unchanged uncertainty
+does not generate new database writes or graph events. Returning to a known
+observation clears the warning even when that observation matches the last known
+one before custody was lost.
 
 ```nu
 strand workflow execution RUN --step GATE
@@ -46,7 +50,9 @@ and payload replay returns the original accepted action and frozen request, even
 after further edits or completion. A conflicting payload refuses. `--dry-run`
 writes nothing. Previous attempts remain retained; cleanup of their evidence
 cannot change a replacement token. Validation-marked gates cannot bypass their
-existing frozen-recipe policy through this operation.
+frozen-recipe policy: add `--expected-revision REVISION` to the same command.
+Inspection exposes `:retry-action` separately from the current `:result`; an
+accepted action is authorization, not proof of successful validation.
 
 Removing or blanking `gate/error` is **not** retry authority. Direct completion,
 raw closure and executor/actor string spoofing cannot complete a managed gate.
@@ -137,6 +143,9 @@ Module removal instead records stop intent, retaining unknown work.
   refresh/removal/readoption, ordinary manual gates, protected unstarted work,
   forged creation/burn refusal, routed retirement and
   bounded domain-patch cutover with replacement definition/family identity.
+- `workflow-execution-observation-test`: a disposable file-backed runtime proves
+  repeated unknown observations and acknowledgement failures produce no new
+  attempt writes, while changed evidence and recovery still persist.
 - `executors.code-test`: public JSON/nil success, thrown/interrupted/non-JSON and
   malformed-input failure, corrected explicit retry/replay/conflict; real
   eight-worker saturation, never-accepted stop, frozen deadline and stubborn

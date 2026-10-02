@@ -27,9 +27,10 @@
      The independent finisher owns scoped rebase conflicts and defects caused
      by the candidate. Record the failure, repair it, obtain focused review for
      material changes, push, then inspect workflow execution RUN --step GATE.
-     Require the current failed attempt to be positively settled. For a
-     validation/recipe gate, use workflow retry-validation with its expected
-     revision; never bypass a refusal. For ordinary Shell and Code gates:
+     Require the current failed attempt to be positively settled. Use the same
+     workflow retry command for ordinary Shell/Code and validation/recipe gates.
+     Marked gates additionally require --expected-revision REVISION; never bypass
+     a refusal:
 
      ```nu
      strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR
@@ -96,10 +97,9 @@
      Re-read the existing workflow frontier and inspect workflow execution
      RUN --step GATE. Require pre-review validation, no accepted review or
      finisher, and a positively settled failed attempt. Never infer settlement
-     from missing handles. For a validation/recipe gate, use workflow
-     retry-validation with the expected revision; never bypass its refusal.
-     For an ordinary Shell or Code gate, use workflow retry with the exact
-     expected-attempt, fresh request-id, reason and by-identity. Never clear
+     from missing handles. Use workflow retry with the exact expected-attempt,
+     fresh request-id, reason and by-identity. For validation/recipe gates also
+     supply --expected-revision REVISION; never bypass a refusal. Never clear
      gate/error. The executor must run the check again; never complete a gate
      manually, reopen passed steps or replace the workflow.
 

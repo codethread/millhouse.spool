@@ -41,10 +41,16 @@
        :reason (data/error "execution/adapter" error)})))
 
 (defn- update-observation! [rt row attempt observation]
-  (when-not (= observation (:observation (store/model attempt)))
-    (store/save-observation! rt row (store/advance rt attempt
-                                                   (if (= :busy (:status observation)) :busy :observed)
-                                                   {:observation observation}))))
+  (let [view (store/model attempt)
+        ;; Unknown evidence lives in attention, preserving the last known
+        ;; observation. Returning to that observation must clear attention.
+        unchanged? (if (= :unknown (:status observation))
+                     (= (:reason observation) (:attention view))
+                     (and (nil? (:attention view)) (= observation (:observation view))))]
+    (when-not unchanged?
+      (store/save-observation! rt row (store/advance rt attempt
+                                                     (if (= :busy (:status observation)) :busy :observed)
+                                                     {:observation observation})))))
 
 (defn stop-attempt! [rt row reason]
   (let [attempt (store/record row)]
@@ -65,15 +71,18 @@
         expired? (and deadline (not (.isBefore (Instant/parse (store/now rt)) (Instant/parse deadline))))
         effect (fn [operation candidate image]
                  {:operation operation :attempt candidate :row image :descriptor descriptor})]
+    ;; Detaching a descriptor joins dispatch without authorizing cancellation.
+    ;; Ordinary removal records its own stop intent; runtime shutdown preserves
+    ;; external custody for the next generation.
     (when (and descriptor (= (:revision descriptor) (:executor-revision attempt))
+               (not (contains? @(:draining (state/state rt)) (name (:executor attempt))))
                (not (:attention attempt)))
       (cond
         (and (not= :done (:phase view)) (nil? (:stop-reason view))
-             (or expired? (attr-get root :execution/freeze) (not active?)
-                 (contains? @(:draining (state/state rt)) (name (:executor attempt)))))
+             (or expired? (attr-get root :execution/freeze) (not active?)))
         (do (stop-attempt! rt row (if expired?
                                     (stop-reason :timed-out "Execution deadline expired")
-                                    (stop-reason :cancelled "Execution root is frozen, inactive or its executor is draining"))) nil)
+                                    (stop-reason :cancelled "Execution root is frozen or inactive"))) nil)
 
         (= :committing (:phase view))
         (do (store/deliver! rt row attempt) nil)
@@ -135,9 +144,15 @@
               rt run-id
               (fn []
                 (if (= :acknowledge operation)
-                  (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
-                    (store/save-cleanup! rt row
-                                         (assoc updated :result (store/result-envelope updated (store/model updated)))))
+                  (let [view (store/model attempt)]
+                    ;; Keep trying acknowledgement, but do not turn the same
+                    ;; retained failure into another graph mutation each tick.
+                    (when-not (and (= :ack-unknown (:name response))
+                                   (= :unknown (:acknowledgement view))
+                                   (= (:error response) (:attention view)))
+                      (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
+                        (store/save-cleanup! rt row
+                                             (assoc updated :result (store/result-envelope updated (store/model updated)))))))
                   (update-observation! rt row attempt response))))))))
     (swap! (:errors (state/state rt)) dissoc [:attempt (attr-get row :execution/token)])
     nil))
@@ -160,7 +175,7 @@
                          (if (and claim? (not (attr-get root :execution/freeze))
                                   (not (attr-get gate :execution/current))
                                   (some #(= (:id gate) (:id %)) (query/ready-with-rt rt run-id {})))
-                           (store/claim! rt root gate (store/prepare-attempt rt descriptor root gate) nil)
+                           (store/claim! rt root gate (store/prepare-attempt rt descriptor root gate) nil nil)
                            (when-not (attr-get gate :execution/owner)
                              (store/apply-plan!
                               rt {(:id root) root (:id gate) gate}

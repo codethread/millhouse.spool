@@ -144,6 +144,19 @@
         (assoc result :decision :refuse :reason "Validation revision changed")
         result))))
 
+(defn check-retry
+  "Inspect retry against the prior attempt's frozen recipe, never replacement data.
+
+  Retained input remains authoritative even if recipe configuration was removed
+  and its mutation hook was absent while gate attributes changed."
+  [rt run-id gate expected prior]
+  (let [original (get-in prior [:input :gate])]
+    (when-not (= (mapv #(wire-data (attr-get original %)) frozen-keys)
+                 (mapv #(wire-data (attr-get gate %)) frozen-keys))
+      (fail! "Validation recipe and request differ from the prior attempt"
+             {:reason :workflow/validation-frozen :gate (:id gate)}))
+    (inspect rt :retry run-id gate expected (:result prior))))
+
 (defn check-attempt
   "Inspect the frozen validation input at launch or commit; normalize refusal.
 

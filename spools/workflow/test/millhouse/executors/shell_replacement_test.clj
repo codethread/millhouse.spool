@@ -234,7 +234,14 @@
                                   [:attempt-id :reference])
                      (select-keys (:execution adopted)
                                   [:attempt-id :reference])))
-              (spit release-fifo "release\n")
+              (is (nil? (get-in adopted [:execution :stop-reason]))
+                  "detaching the old observer must not cancel retained work")
+              ;; A lost reader is a failure, not an unbounded FIFO-open hang.
+              (run-command!
+               ["python3" "-c"
+                "import os,sys; f=os.open(sys.argv[1],os.O_WRONLY|os.O_NONBLOCK); os.write(f,b'release\\n'); os.close(f)"
+                (.getCanonicalPath release-fifo)]
+               nil {} nil)
               (let [after
                     (test-support/poll-until
                      #(let [probe (weaver-repl! mill source state-home workspace-path

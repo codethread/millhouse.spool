@@ -267,22 +267,11 @@
              :positionals [run-id-positional]
              :flags {:step (assoc step-flag :required? true)
                      :by-identity (assoc by-identity-flag :required? true)
-                     :request-id {:type :string :required? true :doc "Immutable retry request key."}
+                     :request-id {:type :string :required? true :doc "Run-scoped immutable retry request key."}
                      :expected-attempt {:type :string :required? true :doc "Exact failed attempt UUID."}
-                     :expected-revision {:type :string :doc "Frozen validation revision, when required."}
+                     :expected-revision {:type :string :doc "Required for validation-marked gates; exact candidate revision."}
                      :reason {:type :string :required? true :doc "Explicit retry reason."}
                      :dry-run {:type :boolean :doc "Inspect eligibility without writing."}}}
-    "retry-validation" {:doc "Reserve one opted-in failed shell validation attempt, never assert success."
-                        :hook-class :mutating
-                        :deadline-class :standard
-                        :positionals [run-id-positional]
-                        :flags {:step (assoc step-flag :required? true)
-                                :by-identity (assoc by-identity-flag :required? true)
-                                :request-id {:type :string :required? true :doc "Immutable request key."}
-                                :expected-revision {:type :string :required? true :doc "Exact recipe revision token."}
-                                :reason {:type :string :required? true :doc "Explicit retry reason."}
-                                :episode-ref {:type :string :doc "External recovery episode/action reference."}
-                                :dry-run {:type :boolean :doc "Read-only eligibility inspection."}}}
     "complete" {:doc "Close the ready ordinary step of a run."
                 :hook-class :mutating
                 :deadline-class :standard
@@ -478,9 +467,8 @@
                           ;; are owned by the engine's ::choices-result spec
                           ;; and the millstrand.api.spec.alpha node grammar.
                           :choices :json}}
-    "execution" {:type :map :required {:gate-id :string} :extra :json}
-    "retry" {:type :map :required {:status :string} :extra :json}
-    "retry-validation" {:type :map :required {:state :string} :extra :json}
+    "execution" {:type :map :required {:gate-id :string :result :json :retry-action :json} :extra :json}
+    "retry" {:type :map :required {:status :string :action :json} :extra :json}
     "complete" run-result-return
     "choose" run-result-return
     "next" run-result-return
@@ -603,9 +591,6 @@
                        (select-keys args [:run-id :step :expected-attempt :request-id
                                           :expected-revision :reason :by-identity :dry-run]))
                       :status name)
-      "retry-validation" (workflow/retry-validation!
-                          (select-keys args [:run-id :step :request-id :expected-revision
-                                             :reason :by-identity :episode-ref :dry-run]))
       "complete" (workflow/run-complete!
                   (-> (with-attributes (run-request args) args argv)
                       (with-json-object args :context :context)))
@@ -624,7 +609,7 @@
       (throw (ex-info "Unsupported workflow subcommand"
                       {:subcommand subcommand
                        :allowed ["list" "show" "executors" "start" "ready" "choices"
-                                 "complete" "choose" "next" "defer" "await" "execution" "retry" "retry-validation"]})))))
+                                 "complete" "choose" "next" "defer" "await" "execution" "retry"]})))))
 
 (defn seed-workflow-glossary!
   "Seed the Workflow CLI's process-lifetime failure glossary."

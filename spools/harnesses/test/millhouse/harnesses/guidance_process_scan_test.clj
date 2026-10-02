@@ -381,32 +381,75 @@
             (stop! unrelated)))))))
 
 (deftest delayed-scanner-liveness-cannot-block-revocation-or-signal-late
+  ;; Exercise scanner retirement directly, without private-group bootstrap.
+  ;; Return stale liveness after cancellation: no supplementary signal may escape
+  ;; its revoked authority, even though direct custody has already reaped it.
   (with-scanner-profile
     :stalled
     (fn [{:keys [root profile]}]
       (let [original-live? identity/live?
-            delayed? (atom false)
-            {:keys [error elapsed-millis]}
-            (with-redefs [identity/live?
-                          (fn [retained]
-                            (when (and (contains? #{"direct-ownership-scanner"
-                                                    "ownership-scanner"}
-                                                  (:role retained))
-                                       (compare-and-set! delayed? false true))
-                              (try
-                                (Thread/sleep 3100)
-                                (catch InterruptedException _ nil)))
-                            (original-live? retained))]
-              (run-profile profile))
-            anchor-pid (pid-from (io/file root "anchor.pid"))
-            helper-pid (pid-from (io/file root "helper.pid"))]
-        (is @delayed?)
-        (is (re-find #"scan timed out" (ex-message error)))
-        (is (< elapsed-millis 3000.0))
-        (is (not (alive-pid? anchor-pid)))
-        (is (not (alive-pid? helper-pid)))
-        (is (false? (process-for-root? root)))
-        (is (zero? (thread-count "guidance-admission-worker")))))))
+            original-retain identity/retain
+            original-direct identity/retain-direct
+            entered (CountDownLatch. 1)
+            release (CountDownLatch. 1)
+            interrupted (promise)
+            late-signals (atom 0)
+            scanner (atom nil)
+            unrelated (start-sleep!)
+            before-scanner (thread-count "guidance-preflight-scan-io")]
+        (try
+          (with-redefs
+           [identity/retain-direct
+            (fn [& args]
+              (let [retained (apply original-direct args)]
+                (reset! scanner retained)
+                retained))
+            identity/retain
+            (fn [handle role]
+              (let [retained (original-retain handle role)]
+                (assoc retained :destroy!
+                       #(do (swap! late-signals inc)
+                            ((:destroy! retained))))))
+            identity/live?
+            (fn [retained]
+              (if (= "ownership-scanner" (:role retained))
+                (do
+                  (.countDown entered)
+                  (try (.await release)
+                       (catch InterruptedException _ (deliver interrupted true)))
+                  true)
+                (original-live? retained)))]
+            (let [result
+                  (future
+                    (try
+                      (scan/scan! (dissoc profile :effective-environment)
+                                  (:effective-environment profile) root
+                                  (str (io/file root "scanner.sh"))
+                                  (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 3))
+                                  #(- % (System/nanoTime)))
+                      nil
+                      (catch Throwable error error)))]
+              (try
+                (is (.await entered 5 TimeUnit/SECONDS))
+                (let [error (deref result 5000 ::timeout)]
+                  (is (instance? Throwable error))
+                  (is (re-find #"scan timed out" (ex-message error))))
+                (is (true? (deref interrupted 1000 false)))
+                (finally
+                  (.countDown release)
+                  (is (not= ::timeout (deref result 5000 ::timeout)))))))
+          (is (zero? @late-signals))
+          (is @scanner)
+          (is (not (identity/live? @scanner)))
+          (is (.isAlive unrelated))
+          (is (false? (process-for-root? root)))
+          (is (= before-scanner (thread-count "guidance-preflight-scan-io")))
+          (is (workers-retired?))
+          (finally
+            (.countDown release)
+            (when-let [retained @scanner]
+              ((:destroy! retained)))
+            (stop! unrelated)))))))
 
 (deftest scanner-failures-remain-bounded-and-clean-retained-identities
   ;; Exercise scanner failures directly, without racing the outer preflight

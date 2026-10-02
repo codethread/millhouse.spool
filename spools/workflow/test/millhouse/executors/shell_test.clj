@@ -5,6 +5,8 @@
             [clojure.test :refer [deftest is use-fixtures]]
             [millhouse.executors.shell :as shell]
             [millhouse.workflow :as workflow]
+            [millhouse.workflow.cli :as cli]
+            [millstrand.api.cli.alpha :as cli-alpha]
             [millhouse.workflow.execution :as execution]
             [millhouse.workflow.validation :as validation]
             [millhouse.test-support :as test-support :refer [with-embedded-runtime]]
@@ -130,11 +132,15 @@
           (is (= (if (zero? code) :succeeded :failed) (:outcome result)))
           (is (= :settled (:settlement result)))))
       (is (= ["After"] (mapv :title (workflow/ready "success"))))
-      (let [result (workflow/retry-validation! {:run-id "failure" :step (:gate-id (view rt "failure"))
-                                                :request-id "unmarked" :expected-revision "candidate"
-                                                :reason "Not opted in" :by-identity "fixture-owner"})]
-        (is (= "refused" (:state result)))
-        (is (seq (:reasons result)))))))
+      (let [prior (view rt "failure")
+            request {:run-id "failure" :step (:gate-id prior)
+                     :expected-attempt (:attempt-id prior) :request-id "ordinary"
+                     :reason "Corrected command" :by-identity "fixture-owner"}]
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (execution/retry! rt (assoc request :expected-revision "candidate"))))
+        (weaver/update! rt (:gate-id prior) {:attributes {"shell/argv" ["true"]}})
+        (is (= :accepted (:status (execution/retry! rt request))))
+        (await-eventually #(= :succeeded (get-in (view rt "failure") [:result :outcome])))))))
 
 (deftest adapter-request-correlation-output-and-exact-stop
   (let [stdout (temp-file ".stdout")
@@ -201,6 +207,15 @@
           (is (= 1 (count (filter :may-have-started? (:attempts receipt)))))
           (is (= :resumed (:status (execution/resume-run! rt "stop" receipt)))))))))
 
+(defn- retry-command [rt request]
+  (let [argv (into ["retry" (:run-id request)]
+                   (mapcat (fn [[k v]]
+                             (if (= k :dry-run) (when v ["--dry-run"])
+                                 [(str "--" (name k)) v])))
+                   (dissoc request :run-id))
+        spec (:arg-spec (weaver/resolve-op rt 'workflow))]
+    (cli/workflow {:op/args (cli-alpha/parse spec argv {}) :op/argv argv})))
+
 (defn inspect-disposable-validation
   "Inspect an independent disposable candidate, with no Land or Git policy."
   [_rt {:keys [params]}]
@@ -210,6 +225,8 @@
 (deftest revision-bound-retry-and-acknowledgement-loss
   (with-shell-world
     (fn [rt]
+      (test-support/activate-spool! rt :millhouse/workflow-cli 'millhouse.test-modules.workflow-cli
+                                    :after [:millhouse/workflow])
       (let [candidate (temp-file ".candidate")
             launches (temp-file ".launches")
             config (validation/open! rt {:recipes {:disposable/check-v1
@@ -230,17 +247,41 @@
           (let [prior (view rt "validation")
                 gate-id (:gate-id prior)
                 request {:run-id "validation" :step gate-id :request-id "repair"
+                         :expected-attempt (:attempt-id prior)
                          :expected-revision "repaired" :reason "Repair candidate" :by-identity "fixture-owner"}]
             (is (= :settled (get-in prior [:result :settlement])))
             (is (= "broken" (get-in prior [:result :validation-revision])))
             (is (thrown? clojure.lang.ExceptionInfo
                          (execution/retry! rt (-> request (dissoc :expected-revision)
                                                   (assoc :expected-attempt (:attempt-id prior))))))
-            (spit candidate "repaired")
             (is (thrown? clojure.lang.ExceptionInfo
-                         (weaver/update! rt gate-id {:attributes {"validation/params" {"candidate" "replacement"}}})))
+                         (retry-command rt (assoc request :dry-run true))))
+            (spit candidate "repaired")
+            (validation/close! rt config)
+            ;; Removal cannot turn retained validation into an ordinary retry.
+            (weaver/update! rt gate-id {:attributes {"validation/recipe" nil}})
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (retry-command rt (dissoc request :expected-revision))))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"differ from the prior attempt"
+                                  (retry-command rt request)))
+            (weaver/update! rt gate-id {:attributes {"validation/recipe" "disposable/check-v1"}})
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not registered"
+                                  (retry-command rt request)))
+            (let [changed (validation/open! rt {:recipes {:disposable/check-v1
+                                                          {:inspect 'clojure.core/identity}}})]
+              (try
+                (is (thrown-with-msg? clojure.lang.ExceptionInfo #"registration or shell request changed"
+                                      (retry-command rt request)))
+                (finally (validation/close! rt changed))))
+            (validation/open! rt (:config config))
+            (doseq [[key value] {"validation/params" {"candidate" "replacement"}
+                                 "validation/recipe" "disposable/replacement-v1"
+                                 "validation/config" {"inspect" "clojure.core/identity"}
+                                 "validation/request" {"shell/argv" ["true"]}}]
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (weaver/update! rt gate-id {:attributes {key value}}))))
             (weaver/update! rt gate-id {:attributes {"shell/argv" ["true"]}})
-            (is (= "refused" (:state (workflow/retry-validation! request))))
+            (is (thrown? clojure.lang.ExceptionInfo (retry-command rt request)))
             (weaver/update! rt gate-id {:attributes {"shell/argv" (get-in prior [:request :shell/argv])}})
             (let [apply-batch batch/apply!]
               (with-redefs [batch/apply! (fn [runtime payload & args]
@@ -248,19 +289,37 @@
                                                        (:strands payload))
                                              (weaver/update! runtime gate-id {:attributes {"test/concurrent-edit" true}}))
                                            (apply apply-batch runtime payload args))]
-                (is (= "refused" (:state (workflow/retry-validation! request)))))
+                (is (thrown? clojure.lang.ExceptionInfo (retry-command rt request))))
               (is (= (:attempt-id prior) (:attempt-id (view rt "validation"))))
               (is (empty? (weaver/list rt [:= [:attr "execution/action-key"] "repair"] {}))))
-            (is (= "eligible" (:state (workflow/retry-validation! (assoc request :dry-run true)))))
-            (let [accepted (workflow/retry-validation! request)]
-              (is (= "accepted" (:state accepted)))
+            (let [caller (Thread/currentThread)
+                  apply-batch batch/apply!]
+              ;; Background acknowledgement may progress; the dry-run may not write.
+              (with-redefs [batch/apply! (fn [& args]
+                                           (when (= caller (Thread/currentThread))
+                                             (throw (ex-info "Dry-run attempted a write" {})))
+                                           (apply apply-batch args))]
+                (is (= "eligible" (:status (retry-command rt (assoc request :dry-run true)))))))
+            ;; Actual authorization must recheck after a successful read-only plan.
+            (spit candidate "drifted-after-plan")
+            (is (thrown? clojure.lang.ExceptionInfo (retry-command rt request)))
+            (spit candidate "repaired")
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (retry-command rt (assoc request :expected-attempt "stale"))))
+            (let [accepted (retry-command rt request)]
+              (is (= "accepted" (:status accepted)))
               (is (= :unknown (get-in accepted [:action :previous-result :acknowledgement]))))
             (await-eventually #(= :confirmed (get-in (view rt "validation") [:cleanup :acknowledgement])))
-            (is (= "replayed" (:state (workflow/retry-validation! request))))
-            (is (= "refused" (:state (workflow/retry-validation! (assoc request :reason "conflict")))))
+            (let [replayed (retry-command rt request)]
+              (is (= "replayed" (:status replayed)))
+              (is (= (:action replayed) (:retry-action (view rt "validation"))))
+              (is (= :failed (get-in replayed [:action :previous-result :outcome]))))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (retry-command rt (assoc request :reason "conflict"))))
             (is (= 2 (count (str/split-lines (slurp launches)))))
             (is (= :succeeded (get-in (view rt "validation") [:result :outcome])))
-            (is (= "closed" (:state (weaver/show rt gate-id)))))
+            (is (= "closed" (:state (weaver/show rt gate-id))))
+            (is (= 1 (count (weaver/list rt [:= [:attr "execution/token"] (:attempt-id prior)] {})))))
           (finally (validation/close! rt config)))))))
 
 (deftest validation-completion-drift-and-never-accepted-failure
