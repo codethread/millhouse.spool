@@ -6,6 +6,7 @@
             [millhouse.test-support :as support]
             [millhouse.workflow :as workflow]
             [millhouse.workflow.execution :as execution]
+            [millhouse.workflow.internal.execution.driver :as driver]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.graph.alpha :as graph]
@@ -121,6 +122,42 @@
 (defn- request [run-id gate-id token key]
   {:run-id run-id :step gate-id :expected-attempt token
    :request-id key :reason "Repair input" :by-identity "test-worker"})
+
+(deftest runtime-detach-preserves-attempts-while-removal-records-stop-intent
+  (doseq [phase [:runtime-stop :remove]]
+    (testing phase
+      (support/with-embedded-runtime
+        (fn [rt _]
+          (support/activate-spool! rt :workflow 'millhouse.workflow)
+          (let [resource (execution/open! rt busy-descriptor)]
+            (try
+              (let [started (workflow/start! "detach"
+                                             (workflow/workflow
+                                              "Detach"
+                                              (workflow/gate :check "Check" :busy-proof)) {})
+                    id (:id (first (:ready started)))
+                    before (support/poll-until
+                            #(let [v (inspect rt "detach" id)]
+                               (when (and (:attempt-id v)
+                                          (false? (:dispatch-uncertain? v))) v)))
+                    retain driver/retain-ownership!]
+                ;; Force reconciliation between draining publication and removal.
+                ;; Assertions stay on public close/inspection behavior; this seam
+                ;; schedules the race without sleeps or a second executor model.
+                (with-redefs [driver/retain-ownership!
+                              (fn [runtime descriptor]
+                                (dotimes [_ 3]
+                                  (execution/reconcile! runtime {:run-id "detach" :step id}))
+                                (retain runtime descriptor))]
+                  (execution/close! rt resource phase))
+                (let [after (inspect rt "detach" id)]
+                  (is (= (:attempt-id before) (:attempt-id after)))
+                  (is (nil? (:result after)))
+                  (if (= :runtime-stop phase)
+                    (is (= (select-keys before [:phase :stop-reason :request :deadline])
+                           (select-keys after [:phase :stop-reason :request :deadline])))
+                    (is (= "Executor removed" (get-in after [:stop-reason :error :message]))))))
+              (finally (execution/close! rt resource)))))))))
 
 (deftest conditional-public-store-lifecycle-and-retired-routing
   (support/with-runtime

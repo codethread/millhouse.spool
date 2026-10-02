@@ -65,15 +65,18 @@
         expired? (and deadline (not (.isBefore (Instant/parse (store/now rt)) (Instant/parse deadline))))
         effect (fn [operation candidate image]
                  {:operation operation :attempt candidate :row image :descriptor descriptor})]
+    ;; Detaching a descriptor joins dispatch without authorizing cancellation.
+    ;; Ordinary removal records its own stop intent; runtime shutdown preserves
+    ;; external custody for the next generation.
     (when (and descriptor (= (:revision descriptor) (:executor-revision attempt))
+               (not (contains? @(:draining (state/state rt)) (name (:executor attempt))))
                (not (:attention attempt)))
       (cond
         (and (not= :done (:phase view)) (nil? (:stop-reason view))
-             (or expired? (attr-get root :execution/freeze) (not active?)
-                 (contains? @(:draining (state/state rt)) (name (:executor attempt)))))
+             (or expired? (attr-get root :execution/freeze) (not active?)))
         (do (stop-attempt! rt row (if expired?
                                     (stop-reason :timed-out "Execution deadline expired")
-                                    (stop-reason :cancelled "Execution root is frozen, inactive or its executor is draining"))) nil)
+                                    (stop-reason :cancelled "Execution root is frozen or inactive"))) nil)
 
         (= :committing (:phase view))
         (do (store/deliver! rt row attempt) nil)
