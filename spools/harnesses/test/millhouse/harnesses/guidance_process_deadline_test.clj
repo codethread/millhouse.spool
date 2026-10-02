@@ -10,7 +10,7 @@
             [millhouse.harnesses.internal.guidance-process-identity :as identity]
             [millhouse.harnesses.internal.guidance-process-retirement
              :as retirement])
-  (:import [java.util.concurrent TimeUnit]))
+  (:import [java.util.concurrent CountDownLatch TimeUnit]))
 
 (defn- with-profile [operation]
   ((deref
@@ -68,101 +68,86 @@
                           identity)))]
     (assoc result :direct-supervisor @direct-supervisor)))
 
-(deftest timed-out-owned-operation-cannot-signal-after-cancellation
-  (let [now (System/nanoTime)
-        budget {:started-at now
-                :work-deadline (+ now 80000000)
-                :deadline (+ now 300000000)}
-        entered (promise)
-        signals (atom 0)
-        retained {:pid 81
-                  :direct? true
-                  :alive?
-                  #(do
-                     (deliver entered true)
-                     (try
-                       (Thread/sleep 1000)
-                       (catch InterruptedException _ nil))
-                     true)
-                  :destroy! #(do (swap! signals inc) true)}
-        {error :failure elapsed-ms :elapsed-ms}
-        (timed-failure
-         #(deadline/owned!
-           budget "late-signal"
-           (fn [operation-authority]
-             (identity/signal! retained operation-authority))))]
-    (is (deref entered 100 false))
-    (is (re-find #"Guidance preflight timed out" (ex-message error)))
-    (is (< elapsed-ms 300.0))
-    (is (zero? @signals))
-    (is (workers-retired? "guidance-admission-worker"))))
+(defn- cancel-during! [operation]
+  ;; Cancellation and timeout share owned!'s revocation path. Interrupt only
+  ;; after entry, then release work only after revocation. Unexpired authority
+  ;; makes this a revocation proof, not an accidental clock-expiry proof.
+  (let [entered (CountDownLatch. 1)
+        release (CountDownLatch. 1)
+        result (promise)
+        block! (fn []
+                 (.countDown entered)
+                 (loop []
+                   (when-not (try (.await release) true
+                                  (catch InterruptedException _ false))
+                     (recur))))
+        runner (doto
+                (Thread.
+                 (fn []
+                   (let [now (System/nanoTime)
+                         budget {:work-deadline (+ now (.toNanos TimeUnit/SECONDS 30))
+                                 :deadline (+ now (.toNanos TimeUnit/SECONDS 31))
+                                 :on-revoked #(.countDown release)}]
+                     (deliver result
+                              (try
+                                (deadline/owned! budget "cancel-after-entry"
+                                                 #(operation % block!))
+                                nil
+                                (catch Throwable error error)))))
+                 "guidance-cancellation-test")
+                 (.setDaemon true)
+                 (.start))]
+    (try
+      (is (.await entered 5 TimeUnit/SECONDS))
+      (.interrupt runner)
+      (let [error (deref result 5000 ::timeout)]
+        (is (instance? Throwable error))
+        (is (re-find #"Guidance preflight was interrupted" (ex-message error))))
+      (finally
+        (.countDown release)
+        (.interrupt runner)
+        (.join runner 5000)
+        (is (not (.isAlive runner)))
+        (is (workers-retired? "guidance-admission-worker"))))))
+
+(deftest cancelled-owned-operation-cannot-signal-after-liveness-returns
+  (let [signals (atom 0)]
+    (cancel-during!
+     (fn [operation-authority block!]
+       (identity/signal! {:pid 81 :direct? true
+                          :alive? #(do (block!) true)
+                          :destroy! #(do (swap! signals inc) true)}
+                         operation-authority)))
+    (is (zero? @signals))))
 
 (deftest direct-retirement-rechecks-authority-after-delayed-liveness
   (let [process (.start (ProcessBuilder.
-                         ^java.util.List ["/bin/sleep" "30"]))
-        now (System/nanoTime)
-        budget {:started-at now
-                :work-deadline (+ now 80000000)
-                :deadline (+ now 300000000)}
-        entered (promise)
-        survived? (atom nil)
-        result
-        (try
-          (let [result
-                (with-redefs-fn
-                  {(ns-resolve
-                    'millhouse.harnesses.internal.guidance-process-retirement
-                    'process-live?)
-                   (fn [_]
-                     (deliver entered true)
-                     (try
-                       (Thread/sleep 1000)
-                       (catch InterruptedException _ nil))
-                     true)}
-                  #(timed-failure
-                    (fn []
-                      (deadline/owned!
-                       budget "direct-retirement"
-                       (fn [operation-authority]
-                         (retirement/release-process!
-                          process operation-authority (:work-deadline budget)
-                          deadline/remaining-nanos))))))]
-            (reset! survived? (.isAlive process))
-            result)
-          (finally
-            (when (.isAlive process)
-              (.destroyForcibly process))))]
-    (is (deref entered 100 false))
-    (is (re-find #"Guidance preflight timed out"
-                 (ex-message (:failure result))))
-    (is (< (:elapsed-ms result) 300.0))
-    (is (true? @survived?))
-    (is (.waitFor process 2 TimeUnit/SECONDS))
-    (is (workers-retired? "guidance-admission-worker"))))
+                         ^java.util.List ["/bin/sleep" "30"]))]
+    (try
+      (cancel-during!
+       (fn [operation-authority block!]
+         (with-redefs-fn
+           {(ns-resolve
+             'millhouse.harnesses.internal.guidance-process-retirement
+             'process-live?)
+            (fn [_] (block!) true)}
+           #(retirement/release-process!
+             process operation-authority (:deadline operation-authority)
+             deadline/remaining-nanos))))
+      (is (.isAlive process))
+      (finally
+        (when (.isAlive process)
+          (.destroyForcibly process))
+        (is (.waitFor process 5 TimeUnit/SECONDS))))))
 
 (deftest cancelled-birth-probe-cannot-promote-authority
-  (let [now (System/nanoTime)
-        budget {:started-at now
-                :work-deadline (+ now 80000000)
-                :deadline (+ now 300000000)}
-        entered (promise)
-        promotions (atom 0)
-        {error :failure elapsed-ms :elapsed-ms}
-        (timed-failure
-         #(deadline/owned!
-           budget "late-promotion"
-           (fn [operation-authority]
-             (deliver entered true)
-             (try
-               (Thread/sleep 1000)
-               (catch InterruptedException _ nil))
-             (authority/run! operation-authority "late-promotion"
-                             (fn [] (swap! promotions inc))))))]
-    (is (deref entered 100 false))
-    (is (re-find #"Guidance preflight timed out" (ex-message error)))
-    (is (< elapsed-ms 300.0))
-    (is (zero? @promotions))
-    (is (workers-retired? "guidance-admission-worker"))))
+  (let [promotions (atom 0)]
+    (cancel-during!
+     (fn [operation-authority block!]
+       (block!)
+       (authority/run! operation-authority "late-promotion"
+                       #(swap! promotions inc))))
+    (is (zero? @promotions))))
 
 (deftest proven-launch-children-survive-later-acquisition-failure
   (with-profile
