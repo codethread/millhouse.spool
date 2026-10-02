@@ -166,7 +166,7 @@
 
 (defn result-envelope [attempt view]
   (merge (select-keys attempt [:executor :executor-revision :run-id :root-id :gate-id :attempt-id :validation-revision])
-         (select-keys (:terminal view) [:outcome :value :error :evidence :settlement])
+         (select-keys (:terminal view) [:outcome :value :error :evidence :settlement :executor-run-id])
          (select-keys view [:created-at :committed-at :acknowledgement])
          (when (and (= :terminal (get-in view [:observation :status]))
                     (not= (get-in view [:terminal :outcome]) (get-in view [:observation :outcome])))
@@ -201,8 +201,10 @@
             (throw (ex-info "Inactive attempt cannot publish success" {:attempt-id (:attempt-id attempt)})))
         payload (if success?
                   (:batch (completion/plan rt (:run-id attempt)
-                                           {:step (:id gate) :executor (name (:executor attempt))
-                                            :attributes (:attributes (gate-patch committed))} nil))
+                                           (cond-> {:step (:id gate) :executor (name (:executor attempt))
+                                                    :attributes (:attributes (gate-patch committed))}
+                                             (contains? (:result committed) :executor-run-id)
+                                             (assoc :executor-run-id (get-in committed [:result :executor-run-id]))) nil))
                   (if (and current? (= "active" (:state gate)))
                     {:refs {:gate (:id gate)}
                      :strands [(assoc (gate-patch committed) :ref :gate)]}

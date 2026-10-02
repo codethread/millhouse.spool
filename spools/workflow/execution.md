@@ -1,7 +1,8 @@
 # Managed gate execution
 
-Code and Shell use the Workflow-owned execution lifecycle. Agent and queue waiters
-remain on their existing drivers until their respective conversions. Requiring a
+Code, Shell and the optional downstream Harnesses Agent adapter use the
+Workflow-owned execution lifecycle. Queue waiters retain their existing driver
+until their conversion. Requiring a
 provider is inert; select only its lifecycle resource:
 
 ```clojure
@@ -110,8 +111,8 @@ Land withdraws only after this retirement, outside its queue lock. It then
 revalidates and atomically releases its exact reservation/lock and abandons into
 abort. May-have-started irreversible work refuses even after local cancellation.
 Legacy queue join/grant/release transactions fence this public root image before
-their separate adapter conversion. Agent remains on its own driver; source
-cutover is not permission to abandon unknown legacy execution.
+their separate adapter conversion. Source cutover is not permission to abandon
+unknown legacy execution.
 
 ## Retained Shell processes
 
@@ -130,6 +131,31 @@ without relabeling old cleanup as confirmed; old attempts own their own cleanup.
 Planned runtime shutdown detaches observation without stopping Mill commands.
 Module removal instead records stop intent, retaining unknown work.
 
+## Agent runs and opaque provenance
+
+The optional Harnesses adapter freezes its complete request at attempt creation,
+including explicit prompt or instruction/description/title fallback and every
+gate overlay. Malformed explicit prompts become inspectable never-started
+failures. Corrected ordinary retry captures a new image and publishes a new
+request-bound run; it never retries the old run in place. Direct gate-owned
+Harnesses retry/resume refuses. Harnesses remains independently usable without
+selecting this adapter, and Workflow has no Harnesses dependency.
+
+Terminal observations may carry `:executor-run-id`, an explicit opaque nonblank
+string. Absence is valid; nil, blank and nonstring values are invalid. No other
+observation variant permits it. The common result retains it through failure,
+stop overrides and acknowledgement recomputation. Successful delivery supplies
+that committed result field to the existing completion planner in the same
+conditional result/gate/join batch. Transaction refusal writes no partial
+provenance, result or close; retained evidence can be redelivered.
+
+The kernel never derives this ID from backend reference/value, resolves it to an
+actor, or uses it as authorization. Executor identity still comes from the
+managed descriptor. The Agent value is `{:run-id ID :result FINDINGS}` and agrees
+with the exact Harnesses ID in provenance. Success requires actual settlement,
+successful completion and nonblank findings. Failed/stopped/unknown runs keep
+the gate blocked. Findings do not approve the next review decision.
+
 ## Proof ownership
 
 - `workflow-execution-chart-test`: pure real-library success/failure, busy,
@@ -139,7 +165,7 @@ Module removal instead records stop intent, retaining unknown work.
   completion and abandonment before-image refusal/no partial write, observation
   persistence across independent gate/root metadata writes, postcommit
   root-finalization recovery without callback replay, cascading
-  joins, nearest-root authority (including a separate edge-only writer), unchanged
+  joins, optional opaque provenance without actor attribution, nearest-root authority (including a separate edge-only writer), unchanged
   refresh/removal/readoption, ordinary manual gates, protected unstarted work,
   forged creation/burn refusal, routed retirement and
   bounded domain-patch cutover with replacement definition/family identity.
@@ -154,6 +180,9 @@ Module removal instead records stop intent, retaining unknown work.
   mapping, lost launch response, commit-before-ack, unknown stop and revision policy.
 - `executors.shell-replacement-test`: a built disposable Mill and actual Weaver
   replacement retain the same attempt/handle and reach the next frontier.
+- Harnesses `executors.agent-test`: pure request projection plus nonexecuting
+  provider publication/adoption, frozen-input repair with a new correlated run,
+  exact stop, settlement mapping and an unapproved subsequent checkpoint.
 - `land.merge-queue-test` and `land.withdrawal-test`: FIFO/domain protection,
   retirement/abort, deterministic freeze-versus-grant and no partial stale cutover.
 
