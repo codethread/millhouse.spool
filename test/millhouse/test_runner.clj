@@ -19,6 +19,7 @@
     millhouse.executor-discovery-test
     millhouse.workflow-execution-test
     millhouse.workflow-execution-chart-test
+    millhouse.workflow-execution-observation-test
     millhouse.workflow-test
     millhouse.workflow-authoring-test
     millhouse.workflow-spec-test

@@ -41,10 +41,16 @@
        :reason (data/error "execution/adapter" error)})))
 
 (defn- update-observation! [rt row attempt observation]
-  (when-not (= observation (:observation (store/model attempt)))
-    (store/save-observation! rt row (store/advance rt attempt
-                                                   (if (= :busy (:status observation)) :busy :observed)
-                                                   {:observation observation}))))
+  (let [view (store/model attempt)
+        ;; Unknown evidence lives in attention, preserving the last known
+        ;; observation. Returning to that observation must clear attention.
+        unchanged? (if (= :unknown (:status observation))
+                     (= (:reason observation) (:attention view))
+                     (and (nil? (:attention view)) (= observation (:observation view))))]
+    (when-not unchanged?
+      (store/save-observation! rt row (store/advance rt attempt
+                                                     (if (= :busy (:status observation)) :busy :observed)
+                                                     {:observation observation})))))
 
 (defn stop-attempt! [rt row reason]
   (let [attempt (store/record row)]
@@ -138,9 +144,15 @@
               rt run-id
               (fn []
                 (if (= :acknowledge operation)
-                  (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
-                    (store/save-cleanup! rt row
-                                         (assoc updated :result (store/result-envelope updated (store/model updated)))))
+                  (let [view (store/model attempt)]
+                    ;; Keep trying acknowledgement, but do not turn the same
+                    ;; retained failure into another graph mutation each tick.
+                    (when-not (and (= :ack-unknown (:name response))
+                                   (= :unknown (:acknowledgement view))
+                                   (= (:error response) (:attention view)))
+                      (let [updated (store/advance rt attempt (:name response) (dissoc response :name))]
+                        (store/save-cleanup! rt row
+                                             (assoc updated :result (store/result-envelope updated (store/model updated)))))))
                   (update-observation! rt row attempt response))))))))
     (swap! (:errors (state/state rt)) dissoc [:attempt (attr-get row :execution/token)])
     nil))
