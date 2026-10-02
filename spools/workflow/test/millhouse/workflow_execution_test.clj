@@ -100,6 +100,18 @@
    :stop 'millhouse.workflow-execution-test/busy-observe
    :acknowledge 'millhouse.workflow-execution-test/busy-acknowledge})
 
+(defn provenance-start
+  "Return opaque provenance at the public adapter boundary for the store witness."
+  [_ _]
+  (swap! calls inc)
+  {:status :terminal :outcome :succeeded :settlement :settled :value "value"
+   :executor-run-id "opaque-backend-run" :evidence {"retained" true}})
+
+(def provenance-descriptor
+  "Exercise the common transaction seam without a backend-specific lifecycle."
+  (assoc busy-descriptor :waiter :provenance-proof
+         :start 'millhouse.workflow-execution-test/provenance-start))
+
 (def replacement
   "Continuation for the atomic routed-choice witness."
   (workflow/workflow "Replacement" {:entrypoints #{:continue}}
@@ -228,14 +240,15 @@
                              (batch/apply! rt {:refs {:action action-id} :burn [:action]})))
                 (is (= :replayed (:status (execution/retry! rt retry))))))))
         (testing "failed completion retains the terminal attempt and closes no gate or join"
-          (let [definition (workflow/workflow "Completion"
+          (let [resource (execution/open! rt provenance-descriptor)
+                definition (workflow/workflow "Completion"
                                               (workflow/step :prepare "Prepare" :self)
                                               (workflow/call :join
-                                                             (workflow/workflow "Nested" (gate :check "millhouse.workflow-execution-test/callback"))
+                                                             (workflow/workflow "Nested" (workflow/gate :check "Check" :provenance-proof))
                                                              {} :depends-on [:prepare])
                                               (workflow/step :next "Next" :self :depends-on [:join]))]
             (workflow/start! "completion" definition {})
-            (let [id (:id (first (weaver/list rt [:and [:= [:attr "workflow/gate"] "code"]
+            (let [id (:id (first (weaver/list rt [:and [:= [:attr "workflow/gate"] "provenance-proof"]
                                                   [:= :state "active"]] {})))
                   before @calls]
               (reset! trap {:mode :completion :id id})
@@ -249,12 +262,22 @@
               (is (= "active" (:state (weaver/show rt id))))
               (is (= :committing (:phase (inspect rt "completion" id))))
               (is (nil? (:result (inspect rt "completion" id))))
+              (is (nil? (attr-get (weaver/show rt id) :workflow/executor-run-id)))
+              (is (nil? (attr-get (weaver/show rt id) :workflow/outcome-by)))
               (is (= [id] (mapv :id (workflow/ready "completion"))))
               (reset! trap nil)
               (execution/reconcile! rt {:run-id "completion" :step id})
-              (is (= :succeeded (get-in (await-done rt "completion" id) [:result :outcome])))
+              (let [result (:result (await-done rt "completion" id))
+                    gate (weaver/show rt id)]
+                (is (= :succeeded (:outcome result)))
+                (is (= "opaque-backend-run" (:executor-run-id result)
+                       (attr-get gate :workflow/executor-run-id)))
+                (is (= {"retained" true} (:evidence result)))
+                (is (= "provenance-proof" (attr-get gate :workflow/executor)))
+                (is (nil? (attr-get gate :workflow/outcome-by))))
               (is (= (inc before) @calls))
-              (is (= "Next" (:title (first (workflow/ready "completion"))))))))
+              (is (= "Next" (:title (first (workflow/ready "completion")))))
+              (execution/close! rt resource))))
         (testing "observation facts do not depend on mutable request-source metadata"
           (let [resource (execution/open! rt busy-descriptor)]
             (try

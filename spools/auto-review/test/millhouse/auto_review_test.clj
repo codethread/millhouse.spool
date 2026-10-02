@@ -16,6 +16,7 @@
             [millhouse.auto-run :as auto-run]
             [millhouse.cron :as cron]
             [millhouse.workflow :as workflow]
+            [millhouse.workflow.execution :as execution]
             [millhouse.test-support :as support]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.runtime.alpha :as runtime]
@@ -37,14 +38,12 @@
   "(ns auto-review.fixture
      (:require [millhouse.harnesses :as harnesses]
                [millhouse.harnesses.assignment :as assignment]
-               [millhouse.harnesses.executors.agent :as agent]
                [millhouse.auto-review :as review]
                [millhouse.auto-review.workflow :as reviews]
                [millhouse.workflow :as workflow]
                [millstrand.api.lifecycle.alpha :as lifecycle]
                [millstrand.api.spool.alpha :refer [attr-get]]))
    (lifecycle/use-resource! harnesses/harness-core-runtime assignment/assignment-runtime)
-   (workflow/use-executor! agent/agent-stalled?)
    (workflow/use-workflow! reviews/review-request)
    (defn poll [_ {:keys [config]}] (:revisions config))
    (defn prepare! [_ {:keys [card]}]
@@ -273,7 +272,8 @@
                                     :prepare 'auto-review.fixture/prepare!
                                     :start-params 'auto-review.fixture/start-params
                                     :enabled? true :max-running 1 :interval-ms 3600000})
-           (let [{:keys [card run workflow-run-id]} (first (:dispatched (auto-run/scan! rt)))]
+           (let [resource (execution/open! rt agent/executor)
+                 {:keys [card run workflow-run-id]} (first (:dispatched (auto-run/scan! rt)))]
              (is (= (:id (first cards)) card) "Requested card wins Auto-run priority")
              (is (empty? (:dispatched (auto-run/scan! rt))) "No requested execution bypass")
              (current/with-runtime rt
@@ -285,18 +285,19 @@
                  (is (= cwd (:cwd (review-workflow/inspect-workspace! (attr-get gate :code/params)))))
                  ;; Trusted disposable executor completion after running the actual check.
                  (workflow/run-complete! {:run-id workflow-run-id :step (:id inspect) :executor "code"})
-                 (agent/scan!)
                  (let [review-gate (first (workflow/ready workflow-run-id))
-                       reviewer (first (weaver/list rt [:edge/out "serves" [:= :id (:id review-gate)]] {}))]
+                       selector {:run-id workflow-run-id :step (:id review-gate)}
+                       reviewer (support/poll-until
+                                 #(first (weaver/list rt [:edge/out "serves" [:= :id (:id review-gate)]] {})))]
                    (is (some? reviewer))
                    (is (= cwd (attr-get reviewer :harness/cwd)))
                    (is (str/includes? (attr-get reviewer :harness/prompt) (:head revision)))
                    (is (str/includes? (attr-get reviewer :harness/prompt) "Do not publish remote"))
-                   (agent/scan!)
+                   (execution/reconcile! rt selector)
                    (is (= "Review the frozen request" (:title (first (workflow/ready workflow-run-id)))))
                    (harnesses/finish! rt (:id reviewer)
                                       {:status :done :exit-code 0 :result "Fake review evidence: no findings"})
-                   (agent/scan!)
+                   (support/poll-until #(= :done (:phase (execution/reconcile! rt selector))))
                    (is (= "Record findings for local decision" (:title (first (workflow/ready workflow-run-id)))))
                    (is (= (:id reviewer) (attr-get (weaver/show rt (:id review-gate)) :workflow/executor-run-id)))
                    (workflow/complete! workflow-run-id {:by-identity "fixture-driver"})
@@ -306,7 +307,8 @@
                    (is (empty? (:admitted (poll! rt config [revision])))))))
              (harnesses/finish! rt run {:status :done :exit-code 0 :result "Waiting for human decision"})
              (is (= 1 (count (:dispatched (auto-run/scan! rt)))) "Execution slot released independently")
-             (auto-run/stop! rt))))))))
+             (auto-run/stop! rt)
+             (execution/close! rt resource))))))))
 
 (defn cron-poll [rt]
   (review/poll! rt {:repo "/tmp" :poll 'auto-review.fixture/poll

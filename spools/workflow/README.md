@@ -133,20 +133,17 @@ This matches Kanban note authorship and deliberately differs from Kanban claim
 ownership (`--owner ID`) and native-session references (`--identity` and
 `--parent-identity`). Executor-owned completions instead record
 `workflow/executor` plus an optional opaque `workflow/executor-run-id`; these
-fields are provenance, never actor identity or authorization. The downstream
-Harnesses agent adapter contract is:
+fields are provenance, never actor identity or authorization. Managed adapters
+return an optional nonblank-string `:executor-run-id` on **terminal observations
+only**. The kernel retains that explicit opaque ID in the normalized result and
+conditionally passes it to the existing completion planner on successful
+atomic delivery. Pending, unknown and busy observations cannot carry it.
 
-```clojure
-(workflow/run-complete! {:run-id workflow-run-id
-                         :step gate-id
-                         :executor "agent"
-                         :executor-run-id harnesses-run-id
-                         :attributes outcome-attributes})
-```
-
-`:step` is mandatory for gates; `:attributes` and `:context` are optional. The
-adapter must not send its run ID as `:by-identity`. Provenance does not bypass
-protected-gate lifecycle hooks. Read `strand help workflow <verb>` for each
+The kernel never infers this ID from `:reference` or `:value`, resolves backend
+identities, or treats it as authority. Failure, stop/cancellation and
+acknowledgement recomputation retain the ID without closing a failed gate.
+Adapters cannot call `run-complete!` to bypass managed completion ownership and
+must not send a run ID as `:by-identity`. Existing no-ID executors remain valid. Read `strand help workflow <verb>` for each
 action's supported flags.
 
 See the focused documentation above for graph composition, routing, run driving,

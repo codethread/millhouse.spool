@@ -9,6 +9,7 @@
             [millhouse.harnesses.internal.managed-startup :as managed]
             [millhouse.harnesses.internal.registry :as registry]
             [millhouse.harnesses.internal.runs :as runs]
+            [millstrand.api.format.alpha :as format-alpha]
             [millstrand.api.spool.alpha :refer [attr-get fail!]])
   (:import [java.util UUID]))
 
@@ -16,6 +17,26 @@
   (if (s/valid? spec value)
     value
     (fail! message {:explain (s/explain-data spec value)})))
+
+(defn- workflow-retry-guidance [run]
+  (let [context (attr-get run :harness/context)
+        value #(or (get context %) (get context (keyword %)))]
+    (when (value "workflow/attempt-id")
+      (format-alpha/prose
+       "
+         Kernel-owned Agent runs cannot retry or resume directly. Inspect with:
+
+         workflow execution {run-id} --step {gate-id}
+
+         Use workflow retry with its current --expected-attempt, a fresh
+         --request-id, --reason and --by-identity after settled failure.
+         Further review after success requires a new review task.
+         "
+       {:run-id (value "workflow/run-id") :gate-id (value "workflow/gate-id")}))))
+
+(defn- refuse-workflow-continuation! [run]
+  (when-let [message (workflow-retry-guidance run)]
+    (fail! message {:id (:id run)})))
 
 (defn- validate-native-retry-settings!
   [run request]
@@ -84,6 +105,7 @@
   #_{:splint/disable [lint/locking-object]}
   (locking (catalog/publication-lock rt)
     (let [run (runs/require-run rt id)
+          _ (refuse-workflow-continuation! run)
           _ (when-not (= "failed" (life/status run))
               (fail! "Only a failed harness run may be retried"
                      {:id id :status (life/status run)}))
@@ -219,6 +241,9 @@
                   (remove #(= id (:id %))
                           (runs/reserving-session-writers rt session-id)))
         result (cond
+                 (workflow-retry-guidance run)
+                 {:eligible? false :reason (workflow-retry-guidance run)}
+
                  (not (life/accepted? run))
                  {:eligible? false :reason "run publication was not accepted"}
 
@@ -317,6 +342,7 @@
   (require-valid! :millhouse.harnesses/id id "resume! requires a predecessor run id")
   (require-valid! :millhouse.harnesses/resume-request request "resume! requires valid continuation options")
   (let [run (runs/require-run rt id)
+        _ (refuse-workflow-continuation! run)
         _ (validate-resume-settings! run request)
         target (attr-get run :harness/target)
         root-targets (attr-get run :harness/root-targets)

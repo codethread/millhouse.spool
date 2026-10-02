@@ -201,7 +201,8 @@ named by a durable ready gate must already resolve.
 
 The workflow selector publishes the workflow CLI/providers and their ordinary
 executor resources. The shared executor registration publishes the Workflow
-`:agent` executor and its event resource without changing the Harnesses engine.
+`:agent` descriptor on the common Workflow execution driver without changing
+or implicitly selecting it in the base Harnesses engine.
 
 Use waiter `:agent` for a gate fulfilled by a headless tracked run:
 
@@ -225,22 +226,44 @@ remains the main prompt; workflow context and completion guidance are appended
 to the system prompt after any supplied system prompts. Interactive mode is not
 supported because it has no automatic workflow-completion contract.
 
-Before creating a run, the adapter records `agent-executor/spawn-attempt` and a
-private `agent-executor/spawn-session-id` claim on the gate. It then creates the
-run through the unchanged Harnesses API and adds `workflow/run-id` plus a
-`serves` edge itself. After a Weaver interruption, the next scan adopts an
-unlinked run carrying the claimed session ID or resumes creation at the next
-attempt. Three unsuccessful attempts stamp `gate/error`; a successful link
-removes the private session claim and retains the attempt count for audit.
+The common kernel captures the complete gate image once per attempt. The pure
+Agent projection freezes prompt fallback, cwd, alias, target/title, system
+instructions and overlays. An explicit malformed prompt is invalid; it never
+falls through to the instruction. Invalid input becomes a settled never-started
+failure with an inspectable attempt token, not an error-only dead end.
 
-A successful non-blank `harness/result` closes the gate through the Workflow
-`run-complete!` executor boundary. The gate records `workflow/executor=agent`
-and the Harness run ID in `workflow/executor-run-id`; it does not mislabel that
-opaque run ID as a domain actor. The result is copied onto the gate. A failed
-run remains active and stalls the gate; retry it
-with `strand agent retry <run-id>`. `stalled-agent-gates` reports failed runs and
-gates carrying `gate/error`. After fixing a spawn request, remove `gate/error`
-to start a fresh bounded attempt series.
+Start publishes a headless run through Harnesses with the stable common request
+ID `execution/ATTEMPT/start`. Harnesses owns publication, target reservations,
+identity, native continuation and provider custody. Observation adopts retained
+request/run evidence after a lost publication response, without spawning again.
+Missing publication or unknown settlement remains unknown. There are no private
+session claims, immediate creation retries or delivery flags. Stop uses the public
+Harnesses exact-run operation; its acknowledgement alone is not settlement.
+
+Only a positively settled, successfully completed, exit-zero run with nonblank
+findings succeeds. The common result contains `{:run-id ID :result FINDINGS}`;
+read it with `workflow execution`. Atomic kernel delivery records
+`workflow/executor=agent` and the exact opaque `workflow/executor-run-id`, never
+an actor identity. A completed review supplies findings but does not approve the
+subsequent decision checkpoint.
+
+Inspect a failure, repair ordinary gate inputs if needed, then explicitly retry:
+
+```nu
+strand workflow execution RUN --step GATE
+strand workflow retry RUN --step GATE --expected-attempt TOKEN --request-id NEW_KEY --reason 'Corrected input' --by-identity ACTOR
+```
+
+Retry captures the corrected image and publishes one new request-bound Harnesses
+run, preserving the previous attempt and run. Old completion cannot finish its
+replacement. Removing `gate/error` is not authorization. Direct `agent retry` or
+native `agent resume` of a kernel-owned run refuses and points to `workflow retry`;
+request-bound runs cannot retry in place. Further review after success needs a
+new active review task. Unrelated ad-hoc/non-gate Harnesses commands are unchanged.
+
+The optional selector owns only the common descriptor resource: no second Workflow
+scanner or `stalled-agent-gates` query. Select Harnesses, aliases and workflow
+modules before initial managed admission; requiring the adapter is inert.
 
 ## Development
 

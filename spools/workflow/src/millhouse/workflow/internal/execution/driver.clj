@@ -198,7 +198,7 @@
       (swap! (:errors (state/state rt)) assoc gate-id (data/error "execution/driver" error)))))
 
 (defn scan!
-  "Drive selected waiters only; legacy Agent/queue remain source-owned."
+  "Drive selected waiters only; legacy queue waiters remain source-owned."
   [rt]
   (current/with-runtime rt
     (when (compare-and-set! (:dirty (state/state rt)) true false)

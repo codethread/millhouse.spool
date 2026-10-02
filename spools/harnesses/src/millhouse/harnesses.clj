@@ -467,7 +467,10 @@
   :ret ::strand)
 
 (defn retry!
-  "Reset one settled failed ad-hoc run with validated replacement options."
+  "Reset one settled failed ad-hoc run with validated replacement options.
+
+  Kernel-owned Agent runs refuse: use Workflow's explicit new-attempt retry,
+  not in-place mutation of a request-bound run."
   [rt id request]
   (require-valid! ::runtime rt "retry! requires a Weaver runtime")
   (require-valid! ::id id "retry! requires a run id")
@@ -500,7 +503,10 @@
   :ret ::strand)
 
 (defn resume!
-  "Create a new run continuing one predecessor's exact native session."
+  "Create a new run continuing one predecessor's exact native session.
+
+  Kernel-owned Agent runs refuse and direct callers to workflow retry after
+  settled failure. Further review after success requires a new review task."
   [rt id request]
   (require-valid! ::runtime rt "resume! requires a Weaver runtime")
   (require-valid! ::id id "resume! requires a predecessor run id")
