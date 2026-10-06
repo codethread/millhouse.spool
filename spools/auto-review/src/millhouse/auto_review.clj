@@ -77,6 +77,7 @@
        (cond-> {:kanban/card "true" :kanban/type "feature" :kanban/lane "pending"
                 :kanban/priority (if (:requested? revision) "p1" "p3")
                 :kanban.label/auto-run "true"
+                :kanban.label/auto-review "true"
                 :auto-run/workflow (:workflow config)
                 :auto-review/key (revision-key revision)
                 :auto-review/repo (:repo config)

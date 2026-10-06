@@ -37,7 +37,7 @@ Poll a provider and atomically publish each unseen passing revision as a card.
   graph add; a lost response is reconciled by the next scan's durable query, not
   by retrying a side effect. The Weaver is the single writer. Exceptions propagate
   to the caller (Cron records failures); there is no automatic local recovery.
-<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review.clj#L94-L149">Source</a></sub></p>
+<p><sub><a href="https://github.com/codethread/millhouse.spool/blob/main/spools/auto-review/src/millhouse/auto_review.clj#L95-L150">Source</a></sub></p>
 
 ## <a name="millhouse.auto-review/request">`request`</a>
 ``` clojure
