@@ -98,7 +98,7 @@
           old-concrete (attr-get run :harness/harness)
           resumed? (some? (attr-get run :harness/resumes))
           managed-native-resume?
-          (and resumed? (managed/managed-harness? old-concrete))
+          (and resumed? (managed/native-run? run))
           {:keys [requested resolved overrides cwd]}
           (if managed-native-resume?
             (native-retry-plan rt run request)
@@ -222,9 +222,10 @@
                  (not (life/accepted? run))
                  {:eligible? false :reason "run publication was not accepted"}
 
-                 (and (= "codex" (attr-get run :harness/harness))
+                 (and (managed/run-reference-harness? (attr-get run :harness/harness))
+                      (managed/native-run? run)
                       (not= "native-startup" (attr-get run :harness/native-attachment-source)))
-                 {:eligible? false :reason "Codex native startup has not registered this run"}
+                 {:eligible? false :reason "Native startup has not registered this run"}
 
                  :else
                  (life/resume-eligibility run (count writers)))]

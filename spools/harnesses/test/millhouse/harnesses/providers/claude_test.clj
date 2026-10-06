@@ -26,19 +26,17 @@
            attributes)}))
 
 (deftest prepare-builds-new-and-resumed-launch-specifications
-  (testing "new headless runs separate system identity from prompt stdin"
+  (testing "new headless runs leave identity to native startup and prompt to stdin"
     (is (= {:argv ["claude" "--print" "--output-format" "json"
                    "--session-id" "provisional"
-                   "--append-system-prompt" "You are agent tidy-brave-swan."
                    "--append-system-prompt" "Review changes only."
                    "--append-system-prompt" "Do not edit files."
                    "--model" "sonnet" "--effort" "adaptive"
                    "--dangerously-skip-permissions"]
             :stdin "Do the work\n"}
            (claude/prepare runtime definition (run "headless")))))
-  (testing "interactive resumes select the session and reapply pinned guidance"
+  (testing "interactive resumes select the session and reapply pinned policy guidance"
     (is (= {:argv ["claude" "--resume" "provisional"
-                   "--append-system-prompt" "You are agent tidy-brave-swan."
                    "--append-system-prompt" "Review changes only."
                    "--append-system-prompt" "Do not edit files."
                    "--model" "sonnet"

@@ -611,12 +611,23 @@
                        :allowed ["list" "show" "executors" "start" "ready" "choices"
                                  "complete" "choose" "next" "defer" "await" "execution" "retry"]})))))
 
+(defn- register-workflow-glossary-outcome!
+  [runtime outcome]
+  (let [outcome (assoc outcome :owner 'millhouse.workflow.cli)
+        existing (some #(when (= (:name %) (:name outcome)) %)
+                       (glossary/glossary-outcomes runtime))]
+    (if (= outcome existing)
+      outcome
+      (glossary/register-glossary-outcome! runtime outcome))))
+
 (defn seed-workflow-glossary!
-  "Seed the Workflow CLI's process-lifetime failure glossary."
+  "Seed the Workflow CLI's process-lifetime failure glossary.
+
+  Repeated application is harmless when this spool already owns the exact
+  outcomes. A conflicting owner or definition still fails loudly."
   [{:keys [runtime]}]
   (doseq [outcome workflow-glossary]
-    (glossary/register-glossary-outcome!
-     runtime (assoc outcome :owner 'millhouse.workflow.cli)))
+    (register-workflow-glossary-outcome! runtime outcome))
   {:seeded :workflow-cli-glossary})
 
 (lifecycle/defseed workflow-glossary-seed

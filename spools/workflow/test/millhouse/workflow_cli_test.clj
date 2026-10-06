@@ -9,6 +9,7 @@
             [millstrand.api.cli.alpha :as cli-alpha]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
+            [millstrand.api.runtime.glossary.alpha :as glossary]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.test-support :as test-support]
             [millhouse.workflow :as workflow]
@@ -194,6 +195,29 @@
                          "strand workflow start <run-id> --workflow intake --params '{...}'"))
       (doseq [field ["params.contract" "params.template" "params.example"]]
         (is (str/includes? prime field))))))
+
+(deftest workflow-glossary-seed-is-repeatable
+  (with-cli-runtime
+    (fn [rt _]
+      (is (= {:seeded :workflow-cli-glossary}
+             (cli/seed-workflow-glossary! {:runtime rt})))
+      (is (= {:seeded :workflow-cli-glossary}
+             (cli/seed-workflow-glossary! {:runtime rt})))
+      (is (= #{"workflow/ready-next-absent"
+               "workflow/ready-next-ambiguous"
+               "workflow/ready-next-incompatible"
+               "workflow/next-input-without-checkpoint"
+               "workflow/next-choice-required"
+               "workflow/next-choice-incompatible"
+               "workflow/ready-defer-absent"
+               "workflow/ready-defer-ambiguous"
+               "workflow/ready-defer-incompatible"
+               "workflow/defer-target-not-allowed"
+               "workflow/defer-cyclic"
+               "workflow/step-not-defer"}
+             (->> (glossary/glossary-outcomes rt)
+                  (map :name)
+                  set))))))
 
 ;; --- list: deterministic filtering ------------------------------------------
 

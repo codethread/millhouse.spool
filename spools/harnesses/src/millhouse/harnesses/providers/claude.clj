@@ -116,7 +116,6 @@
    :session-id (attribute run :harness/session-id)
    :model (attribute run :harness/model)
    :effort (attribute run :harness/effort)
-   :identity-prompt (attribute run :identity/prompt)
    :appended-system-prompts
    (or (attribute run :harness/appended-system-prompts) [])
    :prompt (attribute run :harness/prompt)
@@ -138,7 +137,7 @@
            {:extra-argv extra})))
 
 (defn- claude-command
-  [{:keys [mode resumes session-id model effort identity-prompt
+  [{:keys [mode resumes session-id model effort
            appended-system-prompts prompt extra]}]
   (vec
    (concat
@@ -146,10 +145,8 @@
     (when (= "headless" mode) ["--print" "--output-format" "json"])
     (if resumes ["--resume" session-id] ["--session-id" session-id])
     ;; Claude rebuilds the system prompt from flags on every launch, including
-    ;; --resume, so pinned identity and policy guidance must be reapplied or a
-    ;; resumed run silently loses it.
-    (when-not (str/blank? identity-prompt)
-      ["--append-system-prompt" identity-prompt])
+    ;; --resume, so policy guidance must be reapplied or a resumed run silently
+    ;; loses it. Identity comes from the native SessionStart hook.
     (mapcat #(vector "--append-system-prompt" %) appended-system-prompts)
     (when model ["--model" model])
     (when effort ["--effort" effort])

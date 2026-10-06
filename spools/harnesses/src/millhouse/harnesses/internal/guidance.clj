@@ -32,7 +32,7 @@
 
 (def ^:private native-identity-harnesses
   "Providers whose identity and run registration come from native startup."
-  #{"codex" "pi"})
+  #{"claude" "codex" "pi"})
 
 (defn parse-transport
   "Parse an explicit transport name, failing on unsupported values."
