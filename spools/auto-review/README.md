@@ -3,6 +3,8 @@
 Auto-review polls remote review requests into **ordinary Kanban feature cards**.
 It does not run reviewers. Compose it with Cron for cadence, Auto-run for worker
 admission, and Workflow's code/agent executors for frozen review evidence.
+New cards carry both `auto-run` and `auto-review` Kanban labels, so board filters
+can distinguish reviews from other automatically dispatched work.
 
 The initial provider is `millhouse.auto-review.glab`. The core contract has
 no GitLab fields and accepts other providers without core changes. Requiring any

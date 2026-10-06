@@ -107,6 +107,7 @@
             cards (mapv #(weaver/show rt %) (:admitted result))]
         (is (= ["3" "2"] (mapv #(-> % review/request :request) cards)))
         (is (= ["p1" "p3"] (mapv #(attr-get % :kanban/priority) cards)))
+        (is (= ["true" "true"] (mapv #(attr-get % :kanban.label/auto-review) cards)))
         (let [card (first cards)]
           (is (= "feature" (attr-get card :kanban/type)))
           (is (= "pending" (attr-get card :kanban/lane)))
