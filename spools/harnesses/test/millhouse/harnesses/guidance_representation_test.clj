@@ -116,6 +116,22 @@
               :harness/native-attachment-invocation "invocation-1"
               :harness/session-id session-id))))
 
+(deftest managed-context-renders-without-workspace-routing
+  (let [document {"schema" context/schema
+                  "identity-instruction" "Use fixture-identity."
+                  "appended-system-prompts" ["First guidance." "Second guidance."]}
+        rendered (context/rendered "fixture-run" document)]
+    (is (str/starts-with?
+         rendered
+         "Use fixture-identity.\n\nFirst guidance.\n\nSecond guidance.\n\nCurrent Millstrand run: fixture-run."))
+    (is (str/includes?
+         rendered
+         "This is the current managed guidance; earlier run guidance is historical."))
+    (is (not (str/includes? rendered "--workspace")))
+    (testing "workspace still binds bundle integrity, not rendered guidance"
+      (is (not= (context/bundle-sha256 "fixture-run" "/one/.millstrand" document)
+                (context/bundle-sha256 "fixture-run" "/two/.millstrand" document))))))
+
 (deftest complete-shared-discriminator-accepts-only-valid-representations
   (testing "wholly absent historical metadata remains legacy"
     (is (= {:versioned? false :transport "legacy" :attempts []}

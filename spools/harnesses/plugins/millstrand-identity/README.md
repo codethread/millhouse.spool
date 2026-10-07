@@ -9,6 +9,11 @@ directory at the Git common root. Without Git, Millstrand is inert—even when
 managed run references never bypass this gate. A linked worktree uses its main
 repository's workspace, not a worktree-local `.millstrand`.
 
+Adapters route registration explicitly to that workspace. Identity prompts carry
+only the canonical identity instruction, not workspace-routing directions; agents
+use Strand's normal workspace discovery unless a task explicitly targets another
+workspace.
+
 ## Pi
 
 Install the Millhouse `spools/harnesses` package, not the monorepo root; see
@@ -129,8 +134,8 @@ before this contract keep their launch-bound identity and settle as before;
 resuming one recovers the same identity through native startup.
 
 Claude omits the model from some SessionStart payloads; the hook then records
-`harness/observed-model=unknown`. The canonical instruction and workspace are
-returned as `additionalContext` on every startup, resume, clear and compact.
+`harness/observed-model=unknown`. The canonical identity instruction is returned
+as `additionalContext` on every startup, resume, clear and compact.
 
 Claude's SessionStart hook supports context only and cannot block the session.
 Registration failures therefore return the same explicit unbound warning as

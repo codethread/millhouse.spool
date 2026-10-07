@@ -91,8 +91,5 @@ if ! context=$(jq -er '
 	exit 0
 fi
 
-workspace_json=$(jq -Rnr --arg workspace "$workspace" '$workspace | @json')
-context+=" Millstrand workspace: $workspace_json. Pass \`--workspace\` with that exact path on Strand commands."
-
 jq -cn --arg context "$context" \
 	'{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $context}}'

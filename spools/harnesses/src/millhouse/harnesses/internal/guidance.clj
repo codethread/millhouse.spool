@@ -100,7 +100,7 @@
                     template run-id identity-id))
           workspace (workspace rt)
           digest (guidance-context/bundle-sha256 run-id workspace context)
-          rendered (guidance-context/rendered run-id workspace context)
+          rendered (guidance-context/rendered run-id context)
           transport (:transport selection)]
       (when (= "native-v1" transport)
         (let [maximum (get-in selection [:capability "max-context-bytes"])

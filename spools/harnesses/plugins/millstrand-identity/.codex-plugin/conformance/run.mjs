@@ -692,7 +692,7 @@ async function checkPayloadReplay() {
       );
     }
 
-    assert.match(
+    assert.doesNotMatch(
       output.hookSpecificOutput.additionalContext,
       /Millstrand workspace:/,
     );
@@ -729,13 +729,9 @@ async function checkPayloadReplay() {
       .workspace,
     realpathSync(join(JSON.parse(payloadText).cwd, ".millstrand")),
   );
-  assert.match(
+  assert.doesNotMatch(
     explicitOutput.hookSpecificOutput.additionalContext,
-    /Millstrand workspace/,
-  );
-  assert.match(
-    explicitOutput.hookSpecificOutput.additionalContext,
-    /`--workspace`/,
+    /Millstrand workspace|`--workspace`/,
   );
 
   const managedDirectory = temporaryDirectory("codex-native-managed-");

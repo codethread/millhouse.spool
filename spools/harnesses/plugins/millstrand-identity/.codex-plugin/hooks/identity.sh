@@ -319,13 +319,6 @@ else
 fi
 
 context=$(jq -ers '.[0].instruction' "$last_stdout")
-if [[ -n "$workspace" ]]; then
-	workspace_json=$(jq -Rnr --arg workspace "$workspace" '$workspace | @json')
-	context+=" Millstrand workspace: $workspace_json. Pass \`--workspace\` with that exact path on Strand commands."
-else
-	context+=" Run Strand from the Codex session working directory so workspace discovery is preserved."
-fi
-
 context_bytes=$(LC_ALL=C printf '%s' "$context" | wc -c | tr -d ' ')
 if ((context_bytes > context_max_bytes)); then
 	managed_failure "Millstrand identity context exceeds its reviewed byte budget; required context was not injected and this session is unbound."
