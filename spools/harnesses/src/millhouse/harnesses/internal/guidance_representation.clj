@@ -249,7 +249,7 @@
       (spool/fail! "Guidance representation transport is invalid" {}))))
 
 (defn- validate-native!
-  [run representation present workspace context-document]
+  [run representation present context-document]
   (when-not (and (contains? present :harness/guidance-capability)
                  (contains? present :harness/guidance-capability-sha256))
     (spool/fail! "Native guidance capability representation is incomplete" {}))
@@ -258,7 +258,7 @@
         (capability/validate-document!
          (:harness/guidance-capability representation) harness)
         digest (:harness/guidance-capability-sha256 representation)
-        rendered (context/rendered (:id run) workspace context-document)]
+        rendered (context/rendered (:id run) context-document)]
     (when-not (= digest (strict-json/canonical-sha256 capability-document))
       (spool/fail! "Native guidance capability digest does not match" {}))
     (when-not (= (get provider-context-limits harness)
@@ -382,7 +382,7 @@
                              {}))
               nil)
             "native-v1"
-            (validate-native! run representation present workspace context))]
+            (validate-native! run representation present context))]
       (validate-current! run representation attempts)
       {:versioned? true
        :transport transport

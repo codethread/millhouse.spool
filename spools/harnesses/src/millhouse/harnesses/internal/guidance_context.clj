@@ -60,20 +60,19 @@
     {:template template :context context}))
 
 (defn footer
-  "Return the authoritative workspace routing footer for one run."
-  [run-id workspace]
+  "Return the current-run footer for one run."
+  [run-id]
   (str "Current Millstrand run: " run-id
-       ". Pass --workspace " (strict-json/canonical-json workspace)
-       " on Strand commands. This is the current managed guidance; earlier "
+       ". This is the current managed guidance; earlier "
        "run guidance is historical."))
 
 (defn rendered
-  "Render one validated managed context with its workspace footer."
-  [run-id workspace context]
+  "Render one validated managed context with its current-run footer."
+  [run-id context]
   (str/join "\n\n"
             (concat [(get context "identity-instruction")]
                     (get context "appended-system-prompts")
-                    [(footer run-id workspace)])))
+                    [(footer run-id)])))
 
 (defn bundle-sha256
   "Return the canonical digest binding run, workspace, and context."

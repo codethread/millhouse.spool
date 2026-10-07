@@ -351,7 +351,7 @@ export async function failManagedGuidance(
 }
 
 export function renderManagedGuidance(bundle: ManagedGuidanceBundle): string {
-  const footer = `Current Millstrand run: ${bundle["run-id"]}. Pass --workspace ${JSON.stringify(bundle.workspace)} on Strand commands. This is the current managed guidance; earlier run guidance is historical.`;
+  const footer = `Current Millstrand run: ${bundle["run-id"]}. This is the current managed guidance; earlier run guidance is historical.`;
   const text = [
     bundle.context["identity-instruction"],
     ...bundle.context["appended-system-prompts"],
