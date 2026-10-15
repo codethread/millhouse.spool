@@ -365,9 +365,12 @@ Each name includes aliases that currently resolve through it, so hiding
 strand agent list --by-identity gentle-cool-puma
 ```
 
-An unresolved or ambiguous `list --by-identity` returns an empty listing rather
-than silently falling back to the unfiltered registry. `show`, `runs`,
-`resumable`, and `reviewers` accept caller context without writing mutation
+A uniquely registered direct native caller whose latest performed run is external
+sees the full catalog, with ordinary listing limited to available entries and
+`--full` including unavailable entries. Managed callers retain alias filtering.
+
+An unresolved or ambiguous `list --by-identity`, or a caller with no performed
+run, returns an empty listing. `show`, `runs`, `resumable`, and `reviewers` accept caller context without writing mutation
 history.
 
 `run`, `assign`, `review`, and `resume` store `identity/by-identity` on each
@@ -479,8 +482,9 @@ separately, and never consumes inherited root run correlation.
   unless an authoritative managed selection supplies it. Consumers display
   **Unknown**. This metadata is separate from `harness/effort`, the provider
   option; the unknown marker is never passed as a reasoning-effort setting.
-- Alias visibility policy is unchanged. An external run without an alias does
-  not acquire unrestricted delegation visibility.
+- A uniquely registered direct native caller sees every registered agent with
+  `agent list --full`; ordinary `agent list` shows only available entries.
+  Managed callers retain their alias's allow/deny visibility policy.
 
 Same-session callbacks recover the identity and direct registration. Managed
 resume keeps its true lineage but waits for its own native callback to record

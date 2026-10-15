@@ -459,6 +459,8 @@
           (is (= {:allow ["oracle" "reviewer"]
                   :deny-targets #{}
                   :deny-keeps-pi true
+                  :direct-list true
+                  :direct-full true
                   :unknown []
                   :ambiguous []
                   :read-count-stable true
@@ -499,6 +501,18 @@
                               ["list" "--by-identity" friendly-id])))
                          allowed (listing :allow-seat)
                          denied (listing :deny-seat)
+                         direct (harnesses/register-native-session!
+                                 rt {:harness "codex"
+                                     :native-session-id "direct-list-session"
+                                     :model "gpt-6.1-sol"
+                                     :cwd "/tmp"})
+                         direct-list
+                         (weaver/op! rt 'agent
+                                     ["list" "--by-identity" (:identity direct)])
+                         direct-full
+                         (weaver/op! rt 'agent
+                                     ["list" "--full" "--by-identity"
+                                      (:identity direct)])
                          _ (doseq [native ["duplicate-a" "duplicate-b"]]
                              (weaver/add!
                               rt
@@ -525,6 +539,8 @@
                             (map :name denied))
                       :deny-keeps-pi
                       (contains? (set (map :name denied)) "pi")
+                      :direct-list (= (weaver/op! rt 'agent ["list"]) direct-list)
+                      :direct-full (= (harnesses/harnesses rt) direct-full)
                       :unknown unknown-list
                       :ambiguous ambiguous-list
                       :read-count-stable (= before-read-count after-read-count)

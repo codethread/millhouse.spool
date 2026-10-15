@@ -54,8 +54,10 @@ or settlement evidence. Harnesses cannot stop that external process.
 `harness/observed-effort` holds actual thinking level, the authoritative managed
 selection when the host supplies none, or the explicit string `unknown`.
 Consumers display that marker as **Unknown**. It is not `harness/effort` and is
-never sent as a provider reasoning option. Registration does not broaden alias
-visibility for direct sessions.
+never sent as a provider reasoning option. A uniquely registered direct native
+caller sees all registered agents with `agent list --full`; ordinary listing
+shows only available entries. Managed callers retain alias allow/deny filtering.
+Unknown or ambiguous callers receive an empty attributed listing.
 
 Same-session resume/reload retains identity. A fresh session has a distinct key.
 Native fork parent headers supply `--parent-native-session-id`; child helpers use
