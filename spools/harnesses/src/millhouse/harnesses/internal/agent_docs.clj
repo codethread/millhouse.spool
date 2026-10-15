@@ -240,10 +240,11 @@
      supplied actor on an immutable action note.
 
      On `list`, a uniquely resolved caller's latest performed run selects the
-     alias whose `:allow` or `:deny` visibility policy applies. An unknown,
-     ambiguous, or locally resolved caller with no performed run receives an
-     empty listing rather than an unfiltered one. Other reads accept caller
-     context but write no attribution history.
+     alias whose `:allow` or `:deny` visibility policy applies. A direct native
+     caller with an external run sees every registered agent with `--full`;
+     ordinary listing shows only available entries. An unknown, ambiguous, or
+     locally resolved caller with no performed run receives an empty listing.
+     Other reads accept caller context but write no attribution history.
 
      Runtime flags are process-local and affect availability immediately:
 
