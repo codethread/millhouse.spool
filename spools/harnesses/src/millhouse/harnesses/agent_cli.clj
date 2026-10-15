@@ -20,7 +20,7 @@
 (declare ^:private op-run
          ^:private op-assign
          ^:private agent-list
-         ^:private identity-alias
+         ^:private identity-run
          ^:private op-retry
          ^:private op-resume
          ^:private op-show
@@ -159,12 +159,16 @@
                              runtime (:run-id args) (:invocation args)
                              (:exit-code args)))
      ["list"] (let [attributed? (contains? args :by-identity)
-                    requesting-alias
+                    requesting-run
                     (when attributed?
-                      (identity-alias runtime (:by-identity args)))
+                      (identity-run runtime (:by-identity args)))
+                    requesting-alias (attr-get requesting-run :harness/alias)
                     registry (cond
                                requesting-alias
                                (harness/harnesses runtime requesting-alias)
+
+                               (= "external" (attr-get requesting-run :harness/ownership))
+                               (harness/harnesses runtime)
 
                                attributed?
                                []
@@ -236,7 +240,7 @@
          (filter :available)
          (mapv #(concise-agent-entry rt entries %)))))
 
-(defn- identity-alias [rt friendly-id]
+(defn- identity-run [rt friendly-id]
   (let [matches (filterv #(and (identity/identity? %)
                                (= friendly-id (attr-get % :identity/id)))
                          (weaver/list rt))]
@@ -248,7 +252,7 @@
                             (map #(weaver/show rt %))
                             (sort-by (juxt :updated_at :id) #(compare %2 %1))
                             first)]
-        (some-> latest-run (attr-get :harness/alias))))))
+        latest-run))))
 
 (defn- full-run [rt id]
   (or (weaver/show rt id) (fail! "Agent run not found" {:id id})))
