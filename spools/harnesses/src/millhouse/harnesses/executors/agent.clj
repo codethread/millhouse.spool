@@ -1,276 +1,23 @@
 (ns millhouse.harnesses.executors.agent
-  "Fulfil workflow `:agent` gates with tracked headless harness runs.
-
-  This adapter owns only the workflow boundary. Harness execution remains in
-  `millhouse.harnesses.execution`, while Workflow remains unaware of harness
-  run semantics."
+  "Adapt headless Harnesses runs to the common Workflow attempt contract."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.harnesses :as harnesses]
             [millhouse.harnesses.internal.lifecycle :as life]
-            [millhouse.workflow :as workflow]
-            [millstrand.api.current.alpha :as current]
+            [millhouse.workflow.execution :as execution]
             [millstrand.api.events.alpha :as events]
             [millstrand.api.format.alpha :as format-alpha]
-            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.lifecycle.alpha :as lifecycle]
-            [millstrand.api.millstrand.alpha :as millstrand]
-            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]
-            [millstrand.api.weaver.alpha :as weaver])
-  (:import [java.util UUID]))
+            [millstrand.api.weaver.alpha :as weaver]))
 
-(def ^:private event-types
-  #{:strand/added :strand/updated :batch/applied :strand/burned
-    :strand/superseded})
-
-(def ^:private ^:dynamic *runtime* nil)
-
-(defn- rt []
-  (or *runtime* (current/runtime)))
-
-(def ^:private state-version 1)
-
-(defn- new-state []
-  {:scan-monitor (Object.)})
-
-(defn- state []
-  (runtime/spool-state (rt) ::state {:version state-version} new-state))
-
-(defn- scan-monitor []
-  (:scan-monitor (state)))
-
-(defn- non-blank-string? [value]
+(defn- nonblank? [value]
   (and (string? value) (not (str/blank? value))))
 
-(defn- non-blank [value]
-  (when (non-blank-string? value)
-    value))
-
-(s/def :harness/alias non-blank-string?)
-(s/def :harness/prompt non-blank-string?)
-(s/def :harness/cwd non-blank-string?)
-(s/def ::request
-  (s/keys :req [:harness/alias]
-          :opt [:harness/prompt :harness/cwd]))
-(s/def ::id non-blank-string?)
-(s/def ::gate-view (s/keys :req-un [::id]))
-(s/def ::gate non-blank-string?)
-(s/def ::run non-blank-string?)
-(s/def ::status #{"failed"})
-(s/def ::error any?)
-(s/def ::stall-detail
-  (s/nilable
-   (s/or :gate-error (s/keys :req-un [::gate ::error])
-         :run-error (s/keys :req-un [::gate ::run ::status]
-                            :opt-un [::error]))))
-
-(def ^:private stalled-gates-query
-  "Select active `:agent` gates with a spawn error or failed serving run."
-  [:and [:= :state "active"]
-   [:= [:attr "workflow/gate"] "agent"]
-   [:or
-    [:exists [:attr "gate/error"]]
-    [:edge/in "serves"
-     [:and [:= [:attr "harness/run"] "true"]
-      [:= [:attr "harness/status"] "failed"]]]]])
-
-(declare ^:private attr deliver-run! finished-undelivered-runs serving-run
-         spawn-ready-gates!)
-
-(defn scan!
-  "Deliver completed harness runs and spawn ready workflow `:agent` gates."
-  []
-  (let [runtime (rt)]
-    (binding [*runtime* runtime]
-      #_{:clj-kondo/ignore [:locking-suspicious-lock]}
-      #_{:splint/disable [lint/locking-object]}
-      (locking (scan-monitor)
-        (doseq [run (finished-undelivered-runs)]
-          (deliver-run! run))
-        (spawn-ready-gates!)
-        {:scanned true}))))
-
-(defn on-event
-  "Scan agent workflow work after a graph mutation."
-  [_event]
-  (scan!))
-
-(workflow/defexecutor agent
-  "Return durable stall detail for a ready `:agent` gate, or nil."
-  {:request-spec ::request}
-  [gate-view]
-  (require-valid! ::gate-view gate-view "Invalid agent gate view")
-  (let [gate (weaver/show (rt) (:id gate-view))
-        run (serving-run (:id gate))
-        result (cond
-                 (some? (attr gate :gate/error))
-                 {:gate (:id gate) :error (attr gate :gate/error)}
-
-                 (= "failed" (life/status run))
-                 {:gate (:id gate)
-                  :run (:id run)
-                  :status "failed"
-                  :error (attr run :harness/error)})]
-    (require-valid! ::stall-detail result "Invalid agent gate stall detail")))
-
-(millstrand/defquery stalled-agent-gates
-  "Select active agent gates with a spawn error or failed serving run."
-  {}
-  stalled-gates-query)
-
-(defn open-agent-engine!
-  "Register the agent executor event handler and reconcile ready gates."
-  [{:keys [runtime]}]
-  (current/with-runtime runtime
-    (binding [*runtime* runtime]
-      (let [handlers (events/handlers runtime)
-            execution-handler?
-            (some #(and (= :on-event (:key %))
-                        (= "harnesses" (get-in % [:metadata :spool])))
-                  handlers)]
-        (when-not execution-handler?
-          (fail! "Agent executor requires harness execution to be installed first"
-                 {:handlers (mapv :key handlers)})))
-      (events/register-handler! runtime :agent/engine event-types
-                                'millhouse.harnesses.executors.agent/on-event
-                                {:spool "harnesses-agent-executor"})
-      (try
-        (scan!)
-        {:opened :agent/engine}
-        (catch Throwable throwable
-          (events/unregister-handler! runtime :agent/engine)
-          (throw throwable))))))
-
-(defn close-agent-engine!
-  "Unregister the agent executor event handler."
-  [{:keys [runtime]}]
-  (events/unregister-handler! runtime :agent/engine)
-  {:closed :agent/engine})
-
-(lifecycle/defresource agent-engine
-  "Own the workflow `:agent` executor event handler."
-  {:open 'millhouse.harnesses.executors.agent/open-agent-engine!
-   :close 'millhouse.harnesses.executors.agent/close-agent-engine!})
-
-(defn- attr [strand key]
-  (attr-get strand key))
-
-(defn- stamp! [id attributes]
-  (weaver/update! (rt) id {:attributes attributes}))
-
-(defn- error-detail [throwable]
-  (str (or (ex-message throwable) (.getName (class throwable)))
-       (some->> (ex-data throwable) (str " "))))
-
-(defn- serving-runs [gate-id]
-  (weaver/list
-   (rt)
-   [:and
-    [:= [:attr "harness/run"] "true"]
-    [:edge/out "serves" [:= :id gate-id]]]
-   {}))
-
-(defn- serving-run [gate-id]
-  (let [runs (serving-runs gate-id)
-        reserving (filterv life/reserving? runs)]
-    (case (count reserving)
-      0 (->> runs
-             (sort-by (juxt :created_at :id) #(compare %2 %1))
-             first)
-      1 (first reserving)
-      (fail! "Agent gate has multiple reserving harness runs"
-             {:gate gate-id :runs (mapv :id reserving)}))))
-
-(defn- served-gate-id [run-id]
-  (let [gate-ids (mapv :to_strand_id
-                       (graph/outgoing-edges (rt) [run-id] "serves"))]
-    (case (count gate-ids)
-      0 nil
-      1 (first gate-ids)
-      (fail! "Harness run serves multiple workflow gates"
-             {:run run-id :gates gate-ids}))))
-
-(defn- ready-gate? [workflow-run-id gate-id]
-  (some #(= gate-id (:id %)) (workflow/ready workflow-run-id)))
-
-(defn- finished-undelivered-runs []
-  (weaver/list
-   (rt)
-   [:and
-    [:= :state "closed"]
-    [:= [:attr "harness/run"] "true"]
-    [:= [:attr "harness/status"] "stopped"]
-    [:= [:attr "harness/substatus"] "completed"]
-    [:edge/out "serves" [:= [:attr "workflow/gate"] "agent"]]
-    [:missing [:attr "gate/delivered"]]]
-   {}))
-
-(defn- deliver-gate! [run gate]
-  (let [run-id (:id run)
-        gate-id (:id gate)
-        workflow-run-id (attr run :workflow/run-id)]
-    (cond
-      (= "closed" (:state gate))
-      (stamp! run-id {"gate/delivered" "gate-closed"})
-
-      (some? (attr gate :gate/error))
-      nil
-
-      (ready-gate? workflow-run-id gate-id)
-      (try
-        (let [result (attr run :harness/result)]
-          (require-valid! non-blank-string? result
-                          "Completed agent run requires a non-blank result")
-          (workflow/run-complete!
-           {:run-id workflow-run-id
-            :step gate-id
-            :executor "agent"
-            :executor-run-id run-id
-            :attributes {"harness/result" result}})
-          (stamp! run-id {"gate/delivered" "true"}))
-        (catch Throwable throwable
-          ;; Leave the run undelivered. Clearing this durable gate error after
-          ;; repairing the data makes the next scan retry the same delivery.
-          (stamp! gate-id {"gate/error" (error-detail throwable)})))
-
-      :else
-      (when-not (attr run :gate/delivery-blocked)
-        (stamp! run-id
-                {"gate/delivery-blocked"
-                 (str "gate " gate-id " is active but not ready")})))))
-
-(defn- deliver-run! [run]
-  (let [run-id (:id run)]
-    (try
-      (let [gate-id (or (served-gate-id run-id)
-                        (fail! "Completed harness run has no served gate"
-                               {:run run-id}))]
-        (if-let [gate (weaver/show (rt) gate-id)]
-          (deliver-gate! run gate)
-          (stamp! run-id {"gate/delivered" "error: gate not found"})))
-      (catch Throwable throwable
-        (stamp! run-id {"gate/delivered"
-                        (str "error: " (error-detail throwable))})))))
-
-(defn- gate-prompt [gate]
-  (or (non-blank (attr gate :harness/prompt))
-      (non-blank (attr gate :workflow/instruction))
-      (non-blank (attr gate :description))
-      (non-blank (:title gate))))
-
-(defn- agent-system-prompt [gate workflow-run-id]
-  (format-alpha/prose
-   "
-     This run fulfils workflow gate {gate-id} ({gate-title}) in workflow run
-     {workflow-run-id}.
-
-     Your final message is recorded as the gate result. Do not close or mutate
-     strands in this workflow.
-     "
-   {:gate-id (:id gate)
-    :gate-title (:title gate)
-    :workflow-run-id workflow-run-id}))
+(s/def ::request :millhouse.harnesses/create-request)
+(s/def ::run-id nonblank?)
+(s/def ::result nonblank?)
+(s/def ::value (s/keys :req-un [::run-id ::result]))
 
 (defn- attribute-name [key]
   (if (keyword? key)
@@ -282,158 +29,143 @@
 (defn- overlay-key? [key]
   (let [key (attribute-name key)]
     (or (contains? #{"harness/model" "harness/effort"
-                     "harness/extra-argv" "harness/appended-system-prompts"}
-                   key)
+                     "harness/extra-argv" "harness/appended-system-prompts"} key)
         (str/starts-with? key "harness."))))
 
-(defn- gate-overrides [gate]
-  (into {}
-        (filter (fn [[key _value]] (overlay-key? key)))
-        (:attributes gate)))
+(defn request
+  "Freeze the effective prompt and all gate overlays from the captured image.
 
-(def ^:private max-spawn-attempts 3)
-
-(def ^:private spawn-attempt-attribute :agent-executor/spawn-attempt)
-(def ^:private spawn-session-attribute :agent-executor/spawn-session-id)
-
-(defn- clear-spawn-claim! [gate-id]
-  (stamp! gate-id {spawn-session-attribute nil}))
-
-(defn- claimed-runs [session-id]
-  (weaver/list
-   (rt)
-   [:and
-    [:= [:attr "harness/run"] "true"]
-    [:= [:attr "harness/session-id"] session-id]]
-   {}))
-
-(defn- claimed-run [gate-id session-id]
-  (let [runs (claimed-runs session-id)]
-    (case (count runs)
-      0 nil
-      1 (let [run (first runs)]
-          (when-let [served-gate (served-gate-id (:id run))]
-            (fail! "Agent spawn claim identifies a run serving another gate"
-                   {:gate gate-id
-                    :session-id session-id
-                    :run (:id run)
-                    :served-gate served-gate}))
-          run)
-      (fail! "Agent spawn claim identifies multiple harness runs"
-             {:gate gate-id
-              :session-id session-id
-              :runs (mapv :id runs)}))))
-
-(defn- link-run! [workflow-run-id gate-id run]
-  (weaver/update!
-   (rt)
-   (:id run)
-   (cond-> {:attributes {"workflow/run-id" workflow-run-id}}
-     (nil? (served-gate-id (:id run)))
-     (assoc :edges [{:type "serves" :to gate-id}])))
-  (clear-spawn-claim! gate-id)
-  run)
-
-(defn- validated-request [workflow-run-id gate session-id]
-  (let [alias (attr gate :harness/alias)
-        requested-mode (attr gate :harness/mode)
-        requested-prompt (attr gate :harness/prompt)
-        prompt (gate-prompt gate)]
-    (require-valid! :harness/alias alias
-                    "Agent gate requires harness/alias")
-    (when (some? requested-mode)
-      (fail! "Agent workflow gates support headless runs only"
-             {:gate (:id gate) :harness/mode requested-mode}))
-    (when (some? requested-prompt)
-      (require-valid! :harness/prompt requested-prompt
-                      "Agent gate harness/prompt must be a non-blank string"))
-    (require-valid! non-blank-string? prompt
-                    "Agent gate requires harness/prompt or a derivable instruction")
-    (when (some? (attr gate :harness/cwd))
-      (require-valid! :harness/cwd (attr gate :harness/cwd)
-                      "Agent gate harness/cwd must be a non-blank string"))
-    (let [resolved (harnesses/resolve-harness (rt) alias)]
-      (when-not (contains? (get-in resolved [:definition :modes]) :headless)
-        (fail! "Agent gate harness does not support headless runs"
-               {:gate (:id gate) :harness alias})))
-    (cond-> {:harness alias
+  Explicit malformed input is invalid, not an invitation to fall back. Alias
+  resolution remains Harnesses-owned; dispatch never rereads gate attributes."
+  [{:keys [gate run-id attempt-id]}]
+  (let [attributes (into {} (map (fn [[k v]] [(attribute-name k) v])) (:attributes gate))
+        prompt (if (contains? attributes "harness/prompt")
+                 (get attributes "harness/prompt")
+                 (some #(when (nonblank? %) %)
+                       [(attr-get gate :workflow/instruction)
+                        (attr-get gate :description) (:title gate)]))]
+    (require-valid! nonblank? (attr-get gate :harness/alias) "Agent gate requires harness/alias")
+    (require-valid! nonblank? prompt "Agent gate requires a nonblank prompt")
+    (when (contains? attributes "harness/mode")
+      (fail! "Agent workflow gates support headless runs only" {:gate (:id gate)}))
+    (cond-> {:harness (attr-get gate :harness/alias)
+             :mode :headless
              :prompt prompt
-             :append-system-prompt (agent-system-prompt gate workflow-run-id)
-             :attributes (gate-overrides gate)
-             :session-id session-id
              :target (:id gate)
-             :context {:workflow/run-id workflow-run-id
-                       :workflow/gate-id (:id gate)}
-             :title (str "Agent: " (:title gate))}
-      (some? (attr gate :harness/cwd))
-      (assoc :cwd (attr gate :harness/cwd)))))
+             :title (str "Agent: " (:title gate))
+             :context {"workflow/run-id" run-id "workflow/gate-id" (:id gate)
+                       "workflow/attempt-id" attempt-id}
+             :attributes (into {} (filter (fn [[k _]] (overlay-key? k))) attributes)
+             :append-system-prompt
+             (format-alpha/prose
+              "
+                This run fulfils workflow gate {gate-id} ({gate-title}) in workflow
+                run {run-id}.
 
-(defn- fail-spawn! [gate-id session-id throwable]
-  (stamp! gate-id
-          {spawn-session-attribute nil
-           "gate/error"
-           (str "agent spawn failed after " max-spawn-attempts
-                " attempts for session " session-id ": "
-                (error-detail throwable))}))
+                Your final message is recorded as the gate result. Do not close or
+                mutate strands in this workflow.
+                "
+              {:gate-id (:id gate) :gate-title (:title gate) :run-id run-id})}
+      (contains? attributes "harness/cwd")
+      (assoc :cwd (require-valid! nonblank? (get attributes "harness/cwd")
+                                  "Agent gate cwd must be a nonblank string")))))
 
-(defn- attempt-spawn [gate-id request session-id]
-  (try
-    {:run (or (claimed-run gate-id session-id)
-              (harnesses/create! (rt) request))}
-    (catch Throwable throwable
-      ;; `create!` may commit the run before a later identity operation fails.
-      ;; Adopt that run before consuming another attempt.
-      {:run (claimed-run gate-id session-id)
-       :error throwable})))
+(defn- unknown [reference message]
+  {:status :unknown :reference reference
+   :reason {:code "agent/unknown" :message message :data {}}})
 
-(defn- spawn-with-retries! [workflow-run-id gate request session-id first-attempt]
-  (let [gate-id (:id gate)]
-    (loop [attempt first-attempt]
-      (if (> attempt max-spawn-attempts)
-        (fail-spawn! gate-id session-id
-                     (ex-info "incomplete spawn claim has no harness run"
-                              {:gate gate-id :session-id session-id}))
-        (do
-          (stamp! gate-id {spawn-attempt-attribute attempt
-                           spawn-session-attribute session-id})
-          (let [{:keys [run error]} (attempt-spawn gate-id request session-id)]
-            (cond
-              run (link-run! workflow-run-id gate-id run)
-              (< attempt max-spawn-attempts) (recur (inc attempt))
-              :else (fail-spawn! gate-id session-id error))))))))
+(defn- failure-message [run]
+  (let [error (attr-get run :harness/error)
+        message (if (nonblank? error) error
+                    "Agent did not complete successfully with nonblank findings")]
+    (subs message 0 (min 2048 (count message)))))
 
-(defn- reconcile-spawn! [workflow-run-id gate]
-  (let [gate-id (:id gate)
-        existing-session-id (attr gate spawn-session-attribute)
-        session-id (or existing-session-id (str (UUID/randomUUID)))
-        previous-attempt (if existing-session-id
-                           (or (attr gate spawn-attempt-attribute) 0)
-                           0)]
-    (require-valid! nat-int? previous-attempt
-                    "Agent gate spawn attempt must be a natural integer")
-    (if-let [run (claimed-run gate-id session-id)]
-      (link-run! workflow-run-id gate-id run)
-      (let [request (validated-request workflow-run-id gate session-id)]
-        (spawn-with-retries! workflow-run-id gate request session-id
-                             (inc previous-attempt))))))
+(defn- observation [run]
+  (let [id (:id run)
+        result (attr-get run :harness/result)
+        status (life/status run)]
+    (cond
+      (and (life/terminal? run) (not (life/settled? run)))
+      (unknown id "Harnesses run settlement is unknown")
 
-(defn- spawn-for-gate! [workflow-run-id gate-view]
-  (let [gate-id (:id gate-view)]
-    (try
-      (let [gate (weaver/show (rt) gate-id)]
-        (when (and (= "active" (:state gate))
-                   (ready-gate? workflow-run-id gate-id)
-                   (not (some? (attr gate :gate/error))))
-          (if (serving-run gate-id)
-            (when (some? (attr gate spawn-session-attribute))
-              (clear-spawn-claim! gate-id))
-            (reconcile-spawn! workflow-run-id gate))))
-      (catch Throwable throwable
-        (stamp! gate-id {"gate/error" (error-detail throwable)})))))
+      (life/terminal? run)
+      (let [success? (and (life/accepted? run) (= "stopped" status)
+                          (= "completed" (life/substatus run))
+                          (zero? (attr-get run :harness/exit-code)) (nonblank? result))
+            outcome (cond success? :succeeded
+                          (and (= "stopped" status) (= "requested" (life/substatus run))) :cancelled
+                          :else :failed)]
+        {:status :terminal :outcome outcome :settlement :settled
+         :reference id :executor-run-id id
+         :value (when success? {:run-id id :result result})
+         :error (when-not success?
+                  {:code (str "agent/" (name outcome))
+                   :message (failure-message run)
+                   :data {}})
+         :evidence {"run-id" id "settlement" (attr-get run :harness/settlement)}})
 
-(defn- spawn-ready-gates! []
-  (doseq [root (workflow/active-runs)
-          :let [workflow-run-id (attr root :workflow/run-id)]
-          gate (workflow/ready workflow-run-id)
-          :when (= "agent" (:gate gate))]
-    (spawn-for-gate! workflow-run-id gate)))
+      (not (life/accepted? run))
+      (unknown id "Harnesses publication is not accepted")
+
+      :else
+      {:status :pending :reference id
+       :phase (cond (life/stop-requested? run) :stopping
+                    (= "ready" status) :waiting :else :running)})))
+
+(defn- correlated-run [rt {:keys [request-id reference]}]
+  (let [run (first (weaver/list rt [:and [:= [:attr "harness/run"] "true"]
+                                    [:= [:attr "harness/request-id"] request-id]] {}))]
+    (when (and reference (not= reference (:id run)))
+      (fail! "Agent request/run correlation changed" {:request-id request-id :reference reference}))
+    (when run (harnesses/run rt (:id run)))))
+
+(defn start!
+  "Publish exactly one request-bound Harnesses run for this common attempt."
+  [rt {:keys [request request-id]}]
+  (observation (harnesses/create! rt (assoc request :request-id request-id))))
+
+(defn observe!
+  "Adopt retained request evidence after lost publication response, never respawn."
+  [rt {:keys [reference] :as context}]
+  (if-let [run (correlated-run rt context)]
+    (observation run)
+    (unknown reference "No retained Harnesses request; publication is unknown")))
+
+(defn stop!
+  "Request stop through the public exact-run operation and observe settlement."
+  [rt {:keys [reference] :as context}]
+  (if-let [run (correlated-run rt context)]
+    (observation (harnesses/stop! rt (:id run) {:reason "Workflow attempt stopped"}))
+    (unknown reference "No retained Harnesses request; stop settlement is unknown")))
+
+(defn acknowledge!
+  "Retain Harnesses history; no backend evidence needs releasing."
+  [_ _]
+  {:status :acknowledged})
+
+(def executor
+  "Inert Agent descriptor; select agent-engine only after Harnesses and aliases."
+  {:waiter :agent :revision "agent-v1"
+   :request 'millhouse.harnesses.executors.agent/request :request-spec ::request :result-spec ::value
+   :start 'millhouse.harnesses.executors.agent/start!
+   :observe 'millhouse.harnesses.executors.agent/observe!
+   :stop 'millhouse.harnesses.executors.agent/stop!
+   :acknowledge 'millhouse.harnesses.executors.agent/acknowledge!})
+
+(defn open-agent-engine!
+  "Admit managed Agent work only after Harnesses execution is installed."
+  [{:keys [runtime]}]
+  (when-not (some #(and (= :on-event (:key %)) (= "harnesses" (get-in % [:metadata :spool])))
+                  (events/handlers runtime))
+    (fail! "Agent executor requires harness execution to be installed first" {}))
+  (execution/open! runtime executor))
+
+(defn close-agent-engine!
+  "Remove Agent admission without inventing provider settlement."
+  [{:keys [runtime resource] :as context}]
+  (execution/close! runtime resource (:effect/phase context)))
+
+(lifecycle/defresource agent-engine
+  "Select the common Agent driver; Harnesses owns provider process custody."
+  {:open 'millhouse.harnesses.executors.agent/open-agent-engine!
+   :close 'millhouse.harnesses.executors.agent/close-agent-engine!})

@@ -4,7 +4,8 @@
             [com.fulcrologic.statecharts :as sc]
             [com.fulcrologic.statecharts.protocols :as protocols]
             [millhouse.workflow.internal.execution.chart :as chart]
-            [millhouse.workflow.internal.execution.data :as data]))
+            [millhouse.workflow.internal.execution.data :as data]
+            [millhouse.workflow.internal.execution.store :as store]))
 
 (defn- step [snapshot event & [attributes]]
   ;; A fresh environment on every step is stronger than reusing a process-local
@@ -100,3 +101,28 @@
       (is (= error (data/decode (data/encode error))))))
   (is (false? (data/json? (->JsonRecord "plain field"))))
   (is (data/json? nil)))
+
+(deftest opaque-provenance-is-terminal-only-and-survives-result-recomputation
+  (is (data/observation? terminal))
+  (is (not (contains? (store/result-envelope {} {:terminal terminal}) :executor-run-id)))
+  (doseq [id [nil "" "  " 1 :run]]
+    (is (not (data/observation? (assoc terminal :executor-run-id id)))))
+  (doseq [observation [{:status :busy}
+                       {:status :pending :phase :running}
+                       {:status :unknown :reason (data/error "test/unknown" nil)}]]
+    (is (not (data/observation? (assoc observation :executor-run-id "opaque")))))
+  (let [observation (assoc terminal :executor-run-id "opaque")
+        accepted (:snapshot (step (:snapshot (step (initial) :dispatch))
+                                  :observed {:observation observation}))]
+    (is (data/observation? observation))
+    (doseq [outcome [:succeeded :cancelled :failed]]
+      (let [ready (if (= :succeeded outcome) accepted
+                      (:snapshot (step accepted :stop {:reason (assoc stop :outcome outcome)})))
+            committed (:snapshot (step ready :commit))
+            uncertain (:snapshot (step committed :ack-unknown
+                                       {:error (data/error "test/ack" nil)}))
+            acknowledged (:snapshot (step uncertain :acknowledged))]
+        (doseq [snapshot [ready committed uncertain acknowledged]]
+          (let [result (store/result-envelope {} (chart/view snapshot))]
+            (is (= "opaque" (:executor-run-id result)))
+            (is (= outcome (:outcome result)))))))))

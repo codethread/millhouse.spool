@@ -19,7 +19,9 @@
 
 (defn- world-options []
   (let [deps (:deps (edn/read-string (slurp "deps.edn")))]
-    {:storage :sqlite-memory
+    ;; Selected execution and event resources are concurrent database actors.
+    ;; File storage avoids sharing one in-memory JDBC connection across them.
+    {:storage :sqlite-file
      :deps-edn (pr-str
                 {:deps (update-vals deps
                                     #(if-let [root (:local/root %)]

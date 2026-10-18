@@ -143,7 +143,7 @@
      :positionals [{:name :run-id
                     :type :string
                     :doc "Optional exact interactive run ID."}]}
-    "retry" {:doc "Retry one failed agent run in place."
+    "retry" {:doc "Retry a settled failed ad-hoc run. Kernel-owned Agent gates require workflow retry."
              :hook-class :mutating
              :deadline-class :standard
              :flags (merge by-identity-flag
@@ -167,7 +167,7 @@
                  :deadline-class :standard
                  :flags by-identity-flag}
     "resume"
-    {:doc "Continue a settled native session, or replay one exact accepted request."
+    {:doc "Continue a settled native session or replay its request. Kernel-owned Agent gates require workflow retry."
      :hook-class :mutating
      :deadline-class :standard
      :flags (merge by-identity-flag
