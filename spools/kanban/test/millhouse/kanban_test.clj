@@ -1,9 +1,11 @@
 (ns millhouse.kanban-test
   "Tests for the kanban board spool against a disposable weaver runtime."
-  (:require [clojure.string :as str]
+  (:require [clojure.data.json :as json]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.peers.alpha :as peers]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
@@ -11,7 +13,9 @@
             [millhouse.kanban :as kanban]
             [millhouse.test-support :as support]
             [millstrand.test.alpha :as t])
-  (:import [java.time Duration Instant]))
+  (:import [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute]
+           [java.time Duration Instant]))
 
 (defn- public-value [var-sym]
   (some-> (ns-resolve 'millhouse.kanban var-sym) var-get))
@@ -278,7 +282,7 @@
         (let [detail (weaver/op! rt 'help ["kanban"])
               children (get-in detail [:node :children])
               verbs (mapv :name children)]
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "ref" "reopen" "task"] verbs))
+          (is (= ["add" "board" "card" "claim" "finish" "label" "link" "next" "note" "priority" "ref" "reopen" "task"] verbs))
           (is (not-any? #(contains? #{"about" "prime"} (:name %)) children))))
       (testing "simple transition wrappers are no longer accepted"
         (doseq [verb ["promote" "review" "production" "rework"]]
@@ -305,7 +309,7 @@
                                             (op! rt "bogus")))]
           (is (= :missing-subcommand (:reason (ex-data missing))))
           (is (= :unknown-subcommand (:reason (ex-data unknown))))
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "ref" "reopen" "task"]
+          (is (= ["add" "board" "card" "claim" "finish" "label" "link" "next" "note" "priority" "ref" "reopen" "task"]
                  (:available (ex-data missing))))
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
@@ -1469,3 +1473,101 @@
   [& _args]
   (let [summary (clojure.test/run-tests 'millhouse.kanban-test)]
     (System/exit (if (pos? (+ (:fail summary) (:error summary))) 1 0))))
+
+(defn- with-linked-boards
+  "Run f with coordinator and destination Kanban runtimes joined by a peer stub.
+
+  `peers/call!` dispatches to the destination runtime when it is `:up`, through
+  a JSON round-trip like the real transport, and fails like an absent peer
+  otherwise."
+  [f]
+  (with-kanban
+    (fn [coordinator]
+      (with-kanban
+        (fn [destination]
+          (let [workspace (.getCanonicalPath
+                           (.toFile (Files/createTempDirectory "kanban-link" (make-array FileAttribute 0))))
+                peer (atom :up)]
+            (with-redefs [peers/call! (fn [target op {:keys [argv]}]
+                                        (is (= workspace target))
+                                        (is (= "kanban" op))
+                                        (when-not (= :up @peer)
+                                          (throw (ex-info "No matching peer weaver" {:code :peer/not-found})))
+                                        (json/read-str (json/write-str (weaver/op! destination 'kanban argv)
+                                                                       :key-fn #(subs (str %) 1))))]
+              (f coordinator destination workspace peer))))))))
+
+(defn- board-card [board id]
+  (some #(when (= id (:id %)) %)
+        (mapcat board [:refinement :pending :claimed :in_review :in_production])))
+
+(deftest linked-card-mirrors-the-authoritative-downstream-card
+  (with-linked-boards
+    (fn [coordinator destination workspace peer]
+      (let [created (op! coordinator "link" "add" "Ship" "the" "parser" "--to" workspace
+                         "--body" "Downstream context" "--priority" "p2" "--label" "portfolio")
+            mirror-id (get-in created [:card :id])
+            downstream-id (get-in created [:link :card])]
+        (testing "the authoritative card is created downstream and mirrored locally"
+          (is (= {:workspace workspace :card downstream-id} (:link created)))
+          (is (= "Downstream context"
+                 (get-in (op! destination "card" downstream-id) [:card :attributes :body])))
+          (is (= "p2" (get-in (op! destination "card" downstream-id) [:card :attributes :kanban/priority])))
+          (is (= {:title "Ship the parser" :lane "pending" :labels ["portfolio"]}
+                 (select-keys (board-card (kanban/board coordinator) mirror-id) [:title :lane :labels]))))
+        (testing "agents work only downstream; the mirror is read-only"
+          (is (nil? (:next (op! coordinator "next"))))
+          (doseq [attempt [#(op! coordinator "claim" mirror-id "--owner" "agent" "--branch" "b")
+                           #(op! coordinator "finish" mirror-id)
+                           #(op! coordinator "task" "add" mirror-id "Step")
+                           #(weaver/update! coordinator mirror-id {:attributes {:kanban/lane "in_review"}})]]
+            (is (= "kanban/linked-card-read-only"
+                   (:code (ex-data (try (attempt) (catch Exception e (or (ex-cause e) e)))))))))
+        (testing "downstream claim and edits read live on the coordinator board and card"
+          (op! destination "claim" downstream-id "--owner" "worker" "--branch" "feat")
+          (weaver/update! destination downstream-id {:title "Ship the new parser"})
+          (let [entry (board-card (kanban/board coordinator) mirror-id)]
+            (is (= {:title "Ship the new parser" :lane "claimed" :owner "worker"}
+                   (select-keys entry [:title :lane :owner])))
+            (is (= "live" (get-in entry [:link :status]))))
+          (is (= {:status "live" :lane "claimed" :owner "worker" :branch "feat"}
+                 (-> (op! coordinator "card" mirror-id) :link
+                     (as-> v (assoc (select-keys (:downstream v) [:lane :owner :branch])
+                                    :status (:status v)))))))
+        (testing "refresh persists the snapshot; an unavailable source is not shown as live"
+          (is (= ["refreshed"] (mapv :status (:results (op! coordinator "link" "refresh")))))
+          (reset! peer :down)
+          (let [entry (board-card (kanban/board coordinator) mirror-id)]
+            (is (= "claimed" (:lane entry)))
+            (is (= {:status "unavailable" :lane "claimed" :owner "worker"}
+                   {:status (get-in entry [:link :status])
+                    :lane (get-in entry [:link :snapshot :lane])
+                    :owner (:owner entry)}))
+            (is (string? (get-in entry [:link :snapshot :observed-at]))))
+          (is (= ["unavailable"] (mapv :status (:results (op! coordinator "link" "refresh")))))
+          (reset! peer :up))
+        (testing "a finished downstream card leaves the lanes and refresh closes the mirror"
+          (op! destination "finish" downstream-id)
+          (is (nil? (board-card (kanban/board coordinator) mirror-id)))
+          (op! coordinator "link" "refresh" mirror-id)
+          (is (= {:state "closed" :outcome "done"}
+                 (let [card (weaver/show coordinator mirror-id)]
+                   {:state (:state card) :outcome (get-in card [:attributes :kanban/outcome])}))))))))
+
+(deftest linking-rejects-duplicates-closed-sources-and-unknown-workspaces
+  (with-linked-boards
+    (fn [coordinator destination workspace _peer]
+      (let [downstream-id (get-in (op! destination "add" "Existing") [:card :id])
+            attached (op! coordinator "link" "attach" downstream-id "--to" workspace)]
+        (is (= "Existing" (get-in attached [:card :title])))
+        (is (thrown-with-msg? Exception #"already linked"
+                              (op! coordinator "link" "attach" downstream-id "--to" workspace)))
+        (op! destination "claim" downstream-id "--owner" "w" "--branch" "b")
+        (op! destination "finish" downstream-id)
+        (let [closed-id (get-in (op! destination "add" "Closed") [:card :id])]
+          (op! destination "claim" closed-id "--owner" "w" "--branch" "b")
+          (op! destination "finish" closed-id)
+          (is (thrown-with-msg? Exception #"Only an active downstream card"
+                                (op! coordinator "link" "attach" closed-id "--to" workspace))))
+        (is (thrown-with-msg? Exception #"existing workspace"
+                              (op! coordinator "link" "add" "Lost" "--to" (str workspace "/missing"))))))))

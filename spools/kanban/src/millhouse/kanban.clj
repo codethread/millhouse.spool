@@ -25,11 +25,14 @@
   A cold agent self-discovers in-flight work with
   `kanban board` -> `kanban card <id>` -> the doing-task and its
   `latest-note`."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [millhouse.identity :as identity]
             [millstrand.api.batch.alpha :as batch]
             [millstrand.api.notes.alpha :as notes]
+            [millstrand.api.peers.alpha :as peers]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.hooks.alpha :as hooks]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -53,6 +56,11 @@
 (def ^:private restore-lane-attr :kanban/abandon-restore-lane)
 (def ^:private reporter-attr :kanban/reporter)
 (def ^:private external-refs-attr :kanban/external-refs)
+(def ^:private link-attr :kanban/link)
+(def ^:private link-snapshot-attr :kanban/link-snapshot)
+
+;; Only `kanban link refresh` may rewrite a linked card's mirrored fields.
+(def ^:dynamic ^:private *link-refresh* false)
 
 ;; Fence read/modify/write of the native array against the transaction pre-image.
 (def ^:dynamic ^:private *external-refs-before* nil)
@@ -263,6 +271,101 @@
   [rt target-id]
   (peek (ownership-history rt target-id)))
 
+;; ---------------------------------------------------------------------------
+;; linked cards: read-only coordinator mirrors of authoritative downstream cards
+;; ---------------------------------------------------------------------------
+
+(def ^:private mirrored-keys
+  "Strand fields and attributes a linked card copies from its downstream card."
+  {:fields [:title :state]
+   :attributes [lane-attr outcome-attr link-attr link-snapshot-attr]})
+
+(defn- card-link
+  "Return a card's `{:workspace :card}` link, or nil for an ordinary card.
+
+  The link is written only by this namespace; a malformed value is drift and
+  fails loudly rather than reading as an unlinked, locally editable card."
+  [strand]
+  (when-let [link (attr-value strand link-attr)]
+    (when-not (and (map? link)
+                   (non-blank-string? (:workspace link))
+                   (non-blank-string? (:card link)))
+      (throw (ex-info "kanban/link must be an object with workspace and card"
+                      {:id (:id strand) :value link})))
+    (select-keys link [:workspace :card])))
+
+(defn- require-local-card!
+  "Return strand unless it is a linked mirror, whose work belongs downstream."
+  [strand op]
+  (when-let [link (card-link strand)]
+    (throw (ex-info (str "Linked card is a read-only mirror; " op
+                         " the authoritative card in its workspace")
+                    {:code "kanban/linked-card-read-only"
+                     :id (:id strand)
+                     :link link
+                     :hint (str "strand --workspace " (:workspace link)
+                                " kanban card " (:card link))})))
+  strand)
+
+(defn- downstream-snapshot
+  "Project a downstream `kanban card` or `kanban add` result into a snapshot.
+
+  Peer results arrive as string-keyed JSON and are keywordized here, at the
+  transport boundary."
+  [result observed-at]
+  (let [{:keys [card ownership]} (walk/keywordize-keys result)
+        attrs (:attributes card)]
+    (cond-> {:title (:title card)
+             :state (:state card)
+             :observed-at observed-at}
+      (:kanban/lane attrs) (assoc :lane (:kanban/lane attrs))
+      (:kanban/outcome attrs) (assoc :outcome (:kanban/outcome attrs))
+      (get-in ownership [:current :owner]) (assoc :owner (get-in ownership [:current :owner]))
+      (get-in ownership [:current :branch]) (assoc :branch (get-in ownership [:current :branch])))))
+
+(defn- fetch-downstream
+  "Read a link's authoritative card from its running Weaver.
+
+  Transport, missing-peer and domain failures propagate from `peers/call!`
+  without retry."
+  [{:keys [workspace card]}]
+  (downstream-snapshot (peers/call! workspace "kanban" {:argv ["card" card]})
+                       (str (Instant/now))))
+
+(defn- link-view
+  "Return a linked card's live downstream view, or its last snapshot marked unavailable.
+
+  An unreachable source is reported honestly: the stored snapshot carries its
+  `:observed-at` and is never presented as live."
+  [strand]
+  (let [link (card-link strand)]
+    (try
+      (assoc link :status "live" :downstream (fetch-downstream link))
+      (catch Exception e
+        (assoc link
+               :status "unavailable"
+               :error (ex-message e)
+               :snapshot (attr-value strand link-snapshot-attr))))))
+
+(defn- mirrored
+  "Return the downstream fields a link view shows: live data, else the last snapshot."
+  [view]
+  (or (:downstream view) (:snapshot view)))
+
+(defn- with-link-view
+  "Overlay a linked card's live downstream title, state and lane for board reads.
+
+  Ordinary cards pass through. An unavailable source keeps the stored mirror
+  and carries the view's `unavailable` status instead of pretending to be live."
+  [strand]
+  (if (card-link strand)
+    (let [view (link-view strand)
+          live (:downstream view)]
+      (cond-> (assoc strand ::link-view view)
+        live (-> (assoc :title (:title live) :state (:state live))
+                 (assoc-in [:attributes lane-attr] (:lane live)))))
+    strand))
+
 (defn- compact-card
   "Return the compact card shape used in board/next output."
   [rt strand]
@@ -283,7 +386,9 @@
       reporter-view (assoc :reporter reporter-view)
       (attr-value strand :kanban/source) (assoc :source (attr-value strand :kanban/source))
       (attr-value strand :kanban/outcome) (assoc :outcome (attr-value strand :kanban/outcome))
-      (seq (card-labels strand)) (assoc :labels (card-labels strand)))))
+      (seq (card-labels strand)) (assoc :labels (card-labels strand))
+      (::link-view strand) (assoc :link (::link-view strand))
+      (some-> (::link-view strand) mirrored :owner) (assoc :owner (:owner (mirrored (::link-view strand)))))))
 
 (defn- card-strand
   "Return id's kanban card strand, failing loudly if it is absent or not a card."
@@ -313,6 +418,8 @@
       (throw (ex-info "Strand is not a feature card" {:id id :type (card-type strand)})))
     strand))
 
+(declare add-card!)
+
 (defn add!
   "Create a kanban card in the pending (or refinement) lane.
 
@@ -328,13 +435,18 @@
 
   A refinement card stays out of `next` until explicitly moved to pending with `strand update`."
   [runtime title flags]
+  (add-card! runtime title flags {}))
+
+(defn- add-card!
+  "Create a card from `kanban add` flags plus `extra` attributes."
+  [runtime title flags extra]
   (let [title (require-non-blank! :title title)
         epic-id (get flags "--epic")]
     (when (and epic-id (= "epic" (get flags "--type")))
       (throw (ex-info "kanban epics cannot nest under other epics" {:epic epic-id})))
     (let [epic (when epic-id (epic-strand runtime epic-id))
           strand (weaver/add! runtime {:title title
-                                       :attributes (card-attributes flags)})]
+                                       :attributes (merge (card-attributes flags) extra)})]
       (when epic
         (weaver/update! runtime (:id epic) {:edges [{:type "parent-of" :to (:id strand)}]}))
       (cond-> {:operation "kanban add"
@@ -559,6 +671,112 @@
       {:operation "kanban ref rm" :card (entity-projection strand) :refs refs}
       (write-refs! runtime strand "kanban ref rm" remaining))))
 
+(declare cards)
+
+(defn- link-workspace
+  "Return the canonical `.millstrand` path of another workspace named by `--to`."
+  [runtime to]
+  (let [dir (io/file (require-non-blank! :to to))]
+    (when-not (.isDirectory dir)
+      (throw (ex-info "kanban link --to must be an existing workspace .millstrand directory"
+                      {:to to})))
+    (let [path (.getCanonicalPath dir)]
+      (when (= path (some-> (get-in runtime [:metadata :config-dir]) io/file .getCanonicalPath))
+        (throw (ex-info "kanban link --to must name another workspace" {:to to})))
+      path)))
+
+(defn- add-mirror!
+  "Create the coordinator's read-only mirror of an authoritative downstream card."
+  [runtime link snapshot flags]
+  (when-let [existing (some #(when (= link (card-link %)) %) (cards runtime))]
+    (throw (ex-info "Downstream card is already linked on this board"
+                    {:code "kanban/duplicate-link" :id (:id existing) :link link})))
+  (let [local-flags (select-keys flags ["--priority" "--label" "--by-identity" "--epic"])]
+    (add-card! runtime (:title snapshot) local-flags
+               {link-attr link
+                link-snapshot-attr snapshot
+                lane-attr (:lane snapshot)})))
+
+(defn link-add!
+  "Create the authoritative card on another workspace's board and mirror it here.
+
+  The downstream `kanban add` runs through the peer Weaver, so agents claim and
+  work the returned card there. `--priority`, `--label` and `--epic` order and
+  group the local mirror; `--body`, `--source`, `--lane`, `--priority`,
+  `--by-identity` and `--reported-by` pass to the downstream card. If the local
+  mirror cannot be written after the downstream card exists, the error carries
+  the downstream id for `kanban link attach`."
+  [runtime title flags]
+  (let [title (require-non-blank! :title title)
+        workspace (link-workspace runtime (require-flag! "kanban link add" flags "--to"))
+        argv (into ["add" title]
+                   (mapcat (fn [flag] (when-let [v (get flags flag)] [flag v])))
+                   ["--body" "--source" "--lane" "--priority" "--by-identity" "--reported-by"])
+        created (peers/call! workspace "kanban" {:argv argv})
+        snapshot (downstream-snapshot created (str (Instant/now)))
+        link {:workspace workspace :card (get-in created ["card" "id"])}]
+    (try
+      (assoc (add-mirror! runtime link snapshot flags)
+             :operation "kanban link add"
+             :link link)
+      (catch Exception e
+        (throw (ex-info "Downstream card created but the local link failed; attach it with kanban link attach"
+                        {:code "kanban/link-mirror-failed" :link link}
+                        e))))))
+
+(defn link-attach!
+  "Mirror an existing active downstream card on this coordinator board."
+  [runtime id flags]
+  (let [link {:workspace (link-workspace runtime (require-flag! "kanban link attach" flags "--to"))
+              :card (require-non-blank! :id id)}
+        snapshot (fetch-downstream link)]
+    (when-not (= "active" (:state snapshot))
+      (throw (ex-info "Only an active downstream card can be linked"
+                      {:link link :state (:state snapshot)})))
+    (assoc (add-mirror! runtime link snapshot flags)
+           :operation "kanban link attach"
+           :link link)))
+
+(defn- refresh-link!
+  "Persist one mirror's downstream snapshot; a closed source closes the mirror."
+  [runtime strand]
+  (let [link (card-link strand)
+        snapshot (try (fetch-downstream link)
+                      (catch Exception e
+                        {::unavailable (ex-message e)}))]
+    (if-let [error (::unavailable snapshot)]
+      {:id (:id strand) :link link :status "unavailable" :error error}
+      (let [closed? (= "closed" (:state snapshot))
+            updated (binding [*link-refresh* true]
+                      (weaver/update! runtime (:id strand)
+                                      (cond-> {:title (:title snapshot)
+                                               :attributes {link-snapshot-attr snapshot
+                                                            lane-attr (when-not closed? (:lane snapshot))
+                                                            outcome-attr (when closed? (:outcome snapshot))}}
+                                        closed? (assoc :state "closed"))))]
+        {:id (:id strand) :link link :status "refreshed" :card (entity-projection updated)}))))
+
+(defn link-refresh!
+  "Persist downstream state on one active linked card, or every active one.
+
+  Board and card reads already show live downstream state; refresh stores it so
+  offline readers and other views see the latest observed snapshot. A sweep
+  reports each unreachable source as `unavailable` and still refreshes the rest."
+  [runtime id]
+  (let [targets (if id
+                  (let [strand (card-strand runtime (require-non-blank! :id id))]
+                    (when-not (card-link strand)
+                      (throw (ex-info "Card is not linked" {:id id})))
+                    (when-not (= "active" (:state strand))
+                      (throw (ex-info "Linked card must be active to refresh"
+                                      {:id id :state (:state strand)})))
+                    [strand])
+                  (->> (cards runtime)
+                       (filter #(and (= "active" (:state %)) (card-link %)))
+                       (sort-by :id)))]
+    {:operation "kanban link refresh"
+     :results (mapv #(refresh-link! runtime %) targets)}))
+
 (defn- claim-run-id
   "Return the run id to stamp at claim, or nil when `--run-id` is absent."
   [flags]
@@ -577,6 +795,7 @@
       (= "true" (attr-value target task-attr)) target
       (= "true" (attr-value target card-attr))
       (do
+        (require-local-card! target "claim")
         (when (= "epic" (card-type target))
           (throw (ex-info "Kanban epics cannot be claimed; claim a feature under the epic"
                           {:id id})))
@@ -812,7 +1031,7 @@
       (throw (ex-info "Kanban card must be active to finish" {:id id :state (:state strand)})))
     (if (= "epic" (card-type strand))
       (finish-epic! runtime id strand outcome)
-      (finish-feature! runtime id strand outcome))))
+      (finish-feature! runtime id (require-local-card! strand "finish") outcome))))
 
 (defn- validated-restore-lane
   "Return card's stored `kanban/abandon-restore-lane`, failing loudly on a bad marker.
@@ -1039,7 +1258,8 @@
   strand kanban task add abc12 \"Document the parser\" --depends-on task01
   ```"
   [runtime feature-id title flags]
-  (let [feature (feature-strand runtime (require-non-blank! :feature feature-id))
+  (let [feature (require-local-card! (feature-strand runtime (require-non-blank! :feature feature-id))
+                                     "add tasks to")
         title (require-non-blank! :title title)
         deps (get flags "--depends-on")
         task (weaver/add! runtime {:title title
@@ -1260,7 +1480,8 @@
      :notes (mapv compact-note notes)
      :active-work (mapv summarize-strand active-work)
      :ready ready
-     :related (card-relations runtime (:id card))}))
+     :related (card-relations runtime (:id card))
+     :link (when (card-link card) (link-view card))}))
 
 ;; ---------------------------------------------------------------------------
 ;; board
@@ -1394,6 +1615,7 @@
               (filter #(and (= "active" (:state %))
                             (= "pending" (attr-value % lane-attr))
                             (= "feature" (card-type %))
+                            (not (card-link %))
                             (labelled? %)
                             (member? %)))
               by-priority
@@ -1454,7 +1676,12 @@
   annotation.
 
   `all?` adds `:cards`, a compact all-state card collection with direct epic
-  membership. The ordinary grouped active snapshot remains unchanged."
+  membership. The ordinary grouped active snapshot remains unchanged.
+
+  Linked mirrors read their downstream card live: they sit in the downstream
+  lane with its title and owner and carry `:link`; a downstream card that has
+  closed leaves the lanes. An unreachable source keeps the stored mirror and
+  marks `:link :status` `unavailable` with its last snapshot."
   ([runtime] (board runtime nil false))
   ([runtime labels] (board runtime labels false))
   ([runtime labels all?]
@@ -1462,7 +1689,10 @@
          active (filter #(= "active" (:state %)) all)
          epics (filterv #(= "epic" (card-type %)) active)
          all-epics (filterv #(= "epic" (card-type %)) all)
-         features (remove #(= "epic" (card-type %)) active)
+         features (->> active
+                       (remove #(= "epic" (card-type %)))
+                       (map with-link-view)
+                       (filterv #(= "active" (:state %))))
          claimed-features (filter #(= "claimed" (attr-value % lane-attr)) features)
          review-features (filter #(= "in_review" (attr-value % lane-attr)) features)
          membership (epic-membership runtime epics)
@@ -1866,6 +2096,31 @@
             "list" {:doc "List this card's references in insertion order."
                     :positionals [{:name :id :required? true :doc "Kanban card id."}]
                     :hook-class :read :deadline-class :standard}}}
+    "link" {:doc "Mirror authoritative cards that live on another workspace's board."
+            :subcommands
+            {"add" {:doc "Create the card on another workspace's board and mirror it here, read-only."
+                    :flags {:to {:doc "Destination workspace .millstrand path (required)."}
+                            :body {:doc "Longer card context, stored downstream."}
+                            :source {:doc "Path or URL for design context, stored downstream."}
+                            :lane {:doc "Downstream initial lane: pending or refinement."}
+                            :priority {:doc "Priority p1|p2|p3|p4 for both cards; defaults to p3."}
+                            :by-identity {:doc "Optional creator actor on both cards."}
+                            :reported-by {:doc "Optional downstream reporter distinct from the creator."}
+                            :epic {:doc "Local epic card id to group the mirror under."}
+                            :label {:repeat? true :doc "Local label for the mirror (repeatable)."}}
+                    :positionals [{:name :title :required? true :variadic? true :doc "Card title words."}]
+                    :hook-class :mutating :deadline-class :standard}
+             "attach" {:doc "Mirror an existing active card from another workspace's board."
+                       :flags {:to {:doc "Source workspace .millstrand path (required)."}
+                               :priority {:doc "Local mirror priority p1|p2|p3|p4."}
+                               :by-identity {:doc "Optional acting identity on the mirror."}
+                               :epic {:doc "Local epic card id to group the mirror under."}
+                               :label {:repeat? true :doc "Local label for the mirror (repeatable)."}}
+                       :positionals [{:name :id :required? true :doc "Card id in the source workspace."}]
+                       :hook-class :mutating :deadline-class :standard}
+             "refresh" {:doc "Store live downstream state on one or every active linked card."
+                        :positionals [{:name :id :doc "Linked card id; omit to refresh all."}]
+                        :hook-class :mutating :deadline-class :standard}}}
     "priority" {:doc "Set an active card's priority (p1 immediate blocker .. p4 someday)."
                 :positionals [{:name :id :required? true :doc "Kanban card id."}
                               {:name :priority :required? true :doc "Priority: p1, p2, p3, or p4."}]
@@ -1940,6 +2195,9 @@
       ["ref" "add"] (ref-add! runtime (:id args) (:url args) flags)
       ["ref" "rm"] (ref-rm! runtime (:id args) (:url args))
       ["ref" "list"] (ref-list runtime (:id args))
+      ["link" "add"] (link-add! runtime (str/join " " (:title args)) flags)
+      ["link" "attach"] (link-attach! runtime (:id args) flags)
+      ["link" "refresh"] (link-refresh! runtime (:id args))
       ["claim"] (claim! runtime (:id args) flags)
       ["task" "add"] (task-op runtime args flags)
       ["task" "list"] (task-op runtime args flags)
@@ -2140,6 +2398,23 @@
           (throw (ex-info "External references changed; read the card and retry"
                           {:code "kanban/stale-external-refs" :id id})))))))
 
+(defn linked-card-guard!
+  "Reject local edits to a linked mirror's downstream-owned fields outside refresh."
+  [ctx]
+  (when-not *link-refresh*
+    (doseq [{:keys [before after]} (or (:batch/updated ctx)
+                                       (when (:strand/before ctx)
+                                         [{:before (:strand/before ctx) :after (:strand/after ctx)}]))
+            :when (card-link before)]
+      (when (or (not= (select-keys before (:fields mirrored-keys))
+                      (select-keys after (:fields mirrored-keys)))
+                (not= (map #(attr-value before %) (:attributes mirrored-keys))
+                      (map #(attr-value after %) (:attributes mirrored-keys))))
+        (throw (ex-info "Linked card is a read-only mirror; change the authoritative card and run kanban link refresh"
+                        {:code "kanban/linked-card-read-only"
+                         :id (:id before)
+                         :link (card-link before)}))))))
+
 (defn open-kanban!
   "Materialize Kanban state and register mutation-boundary guards."
   [{:keys [runtime]}]
@@ -2153,6 +2428,11 @@
    #{:strand/add-before-commit :strand/update-before-commit :batch/apply-before-commit}
    'millhouse.kanban/external-refs-guard!
    {:doc "Validate native external references and reject stale ref operations."})
+  (hooks/register-hook!
+   runtime :kanban/linked-cards
+   #{:strand/update-before-commit :batch/apply-before-commit}
+   'millhouse.kanban/linked-card-guard!
+   {:doc "Keep linked mirror cards read-only outside kanban link refresh."})
   {:opened :kanban})
 
 (defn close-kanban!
@@ -2160,6 +2440,7 @@
   [{:keys [runtime]}]
   (hooks/unregister-hook! runtime :kanban/immutable-ownership-records)
   (hooks/unregister-hook! runtime :kanban/external-refs)
+  (hooks/unregister-hook! runtime :kanban/linked-cards)
   {:closed :kanban})
 
 (lifecycle/defresource! kanban-runtime
