@@ -242,15 +242,18 @@ Millstrand peer routing, never by writing its database, then creates the mirror.
 `--reported-by` go to the downstream card; `--priority`, `--label` and `--epic`
 order and group the mirror locally. If the mirror write fails after the
 downstream card exists, the error carries the downstream ID to `link attach`.
-`link attach` mirrors an existing active card; each downstream card can be
-linked once per board.
+`link attach` mirrors an existing active card. Both commands refuse a
+downstream card already linked on the board; the check is not transactional, so
+two simultaneous links of one card can both succeed and leave a visible
+duplicate mirror.
 
 The mirror stores `kanban/link` (`{workspace, card}`) and
 `kanban/link-snapshot` (title, state, lane, outcome, owner, branch and
 `observed-at`). Board and card reads call the downstream Weaver live:
 `kanban board` places the mirror in the downstream lane with its title and
 owner, drops it from the lanes once the downstream card closes, and adds
-`link: {status: "live", ...}`; `kanban card` adds the same `link` view. When
+`link: {status: "live", ...}`; `kanban card` shows the live title, state and
+lane on `card` and adds the same `link` view. When
 the source is unreachable, reads keep the stored mirror and report
 `status: "unavailable"` with the error and last `snapshot`, never presenting it
 as live.

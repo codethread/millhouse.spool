@@ -1530,6 +1530,9 @@
             (is (= {:title "Ship the new parser" :lane "claimed" :owner "worker"}
                    (select-keys entry [:title :lane :owner])))
             (is (= "live" (get-in entry [:link :status]))))
+          (is (= {:title "Ship the new parser" :kanban/lane "claimed"}
+                 (let [card (:card (op! coordinator "card" mirror-id))]
+                   {:title (:title card) :kanban/lane (get-in card [:attributes :kanban/lane])})))
           (is (= {:status "live" :lane "claimed" :owner "worker" :branch "feat"}
                  (-> (op! coordinator "card" mirror-id) :link
                      (as-> v (assoc (select-keys (:downstream v) [:lane :owner :branch])

@@ -1459,7 +1459,9 @@
 
   This is the resume entry point: everything an agent needs to continue a
   card lives here. `:tasks` projects the feature card's child tasks with the
-  four derived statuses (empty for cards that carry no task tier).
+  four derived statuses (empty for cards that carry no task tier). A linked
+  mirror's `:card` carries the live downstream title, state and lane, and
+  `:link` holds the downstream view (owner included) or its unavailable snapshot.
 
   ```clojure
   (card-view runtime \"abc12\")
@@ -1467,7 +1469,7 @@
   ;;     :ready ..., :related ...}
   ```"
   [runtime id]
-  (let [card (card-strand runtime (require-non-blank! :id id))
+  (let [card (with-link-view (card-strand runtime (require-non-blank! :id id)))
         {:keys [notes work]} (card-subtree runtime card)
         active-work (filterv #(= "active" (:state %)) work)
         ready (ready-work runtime active-work)]
@@ -1481,7 +1483,7 @@
      :active-work (mapv summarize-strand active-work)
      :ready ready
      :related (card-relations runtime (:id card))
-     :link (when (card-link card) (link-view card))}))
+     :link (::link-view card)}))
 
 ;; ---------------------------------------------------------------------------
 ;; board
