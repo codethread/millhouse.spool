@@ -1515,8 +1515,9 @@
 
     Create a feature with `strand kanban add TITLE --body BODY`; add
     `--lane refinement` for an uncertain idea, `--type epic` for a grouping card,
-    or `--epic EPIC_ID` for a child feature. Before execution, create tasks with
-    `strand kanban task add CARD_ID TITLE --body BODY`.
+    or `--epic EPIC_ID` for a child feature. Tasks are optional slices beneath a
+    feature: add them with `strand kanban task add CARD_ID TITLE --body BODY`
+    when work splits into separately ownable, parallel or resumable steps.
 
     Edges point from parent to child and from dependent to prerequisite:
 
@@ -1525,8 +1526,9 @@
     strand update DEPENDENT_ID --edge depends-on:PREREQUISITE_ID
     ```
 
-    Children inherit graph context through parent-of; depends-on defines the
-    concurrency DAG. Avoid cycles. For code-delivery features, prerequisites
+    parent-of records hierarchy; depends-on defines the concurrency DAG. Card
+    and show reads return a strand's own fields without expanding ancestor or
+    related prose, so name any other card a reader must read. Avoid cycles. For code-delivery features, prerequisites
     mean code is landed, not merely that a worker returned. Do not close a
     feature early to release dependents.
 
@@ -1647,10 +1649,11 @@
     record --worktree when one exists. Half-formed ideas stay in refinement until
     explicit promotion with `strand update CARD_ID --attr kanban/lane=pending`.
 
-    Before execution, decompose the feature into tasks. Tasks are the driveable slices;
-    the card remains the audit root, and depends-on edges define the concurrency DAG.
-    Put other execution work beneath the card with Batteries add and update, and relate
-    blockers with depends-on. Complete each task as you go with
+    Tasks are optional driveable slices: add them when the feature splits into
+    separately ownable, parallel or resumable steps, and keep small work on the
+    feature alone. The card remains the audit root, and depends-on edges define the
+    concurrency DAG. Put other execution work beneath the card with Batteries add and
+    update, and relate blockers with depends-on. Complete each task as you go with
     `strand update TASK_ID --state closed`; do not leave completed tasks open until
     the feature finishes. Finish cascades mark remaining open tasks as unactioned,
     not completed work.
@@ -1663,7 +1666,7 @@
     review outcomes, and handovers there; keep the detailed devlog on the task.
     Every branch has exactly one active work root with an explicit current ownership
     claim (and worktree when it exists); tasks inherit feature ownership until directly
-    claimed. Children inherit graph context through parent-of.
+    claimed. Reads do not expand parent or related prose; name what must be read.
 
     Every board must reflect current work:
 
