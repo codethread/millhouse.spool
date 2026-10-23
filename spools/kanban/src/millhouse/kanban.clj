@@ -38,7 +38,8 @@
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.spool.alpha :refer [attr-get entity-projection]])
-  (:import [java.time Instant]))
+  (:import [java.net URI URISyntaxException]
+           [java.time Instant]))
 
 (def ^:private card-attr :kanban/card)
 (def ^:private lane-attr :kanban/lane)
@@ -51,6 +52,10 @@
 (def ^:private closed-by-attr :kanban/closed-by)
 (def ^:private restore-lane-attr :kanban/abandon-restore-lane)
 (def ^:private reporter-attr :kanban/reporter)
+(def ^:private external-refs-attr :kanban/external-refs)
+
+;; Fence read/modify/write of the native array against the transaction pre-image.
+(def ^:dynamic ^:private *external-refs-before* nil)
 (def ^:private ownership-claim-attr :kanban/ownership-claim)
 (def ^:private owner-attr :kanban/owner)
 (def ^:private claimed-at-attr :kanban/claimed-at)
@@ -469,6 +474,90 @@
   repeat without first reading the card."
   [runtime id labels]
   (write-labels! runtime "kanban label rm" id labels nil))
+
+(defn- require-ref-url!
+  "Return an absolute HTTP(S) URL unchanged, failing loudly for unsafe or malformed links."
+  [url]
+  (require-non-blank! :url url)
+  (let [^URI uri (try (URI. url)
+                      (catch URISyntaxException _ nil))]
+    (when-not (and uri
+                   (contains? #{"http" "https"} (some-> (.getScheme uri) str/lower-case))
+                   (some? (.getHost uri)))
+      (throw (ex-info "External reference url must be an absolute HTTP(S) URL"
+                      {:url url}))))
+  url)
+
+(defn- require-external-refs!
+  "Validate the native array at the storage boundary; never decode stringified JSON."
+  [refs]
+  (when-not (vector? refs)
+    (throw (ex-info "kanban/external-refs must be a native JSON array" {:value refs})))
+  (doseq [ref refs]
+    (when-not (and (map? ref) (known-keys? #{:url :label} ref))
+      (throw (ex-info "External reference must be an object with url and optional label"
+                      {:value ref})))
+    (require-ref-url! (:url ref))
+    (when (and (contains? ref :label) (not (string? (:label ref))))
+      (throw (ex-info "External reference label must be a string" {:value ref}))))
+  (when-let [url (duplicate-item (map :url refs))]
+    (throw (ex-info "External reference URLs must be unique" {:url url})))
+  refs)
+
+(defn- card-refs
+  "Read validated references, with absence meaning no references."
+  [strand]
+  (if (contains? (:attributes strand) external-refs-attr)
+    (require-external-refs! (attr-value strand external-refs-attr))
+    []))
+
+(defn ref-list
+  "List a card's external references in insertion order. An absent array reads as empty."
+  [runtime id]
+  (let [strand (card-strand runtime (require-non-blank! :id id))]
+    {:operation "kanban ref list" :card (:id strand) :refs (card-refs strand)}))
+
+(defn- write-refs!
+  "Patch only the references, rejecting a stale array in the transaction guard."
+  [runtime strand op refs]
+  (let [updated (binding [*external-refs-before* {:id (:id strand)
+                                                  :value (attr-value strand external-refs-attr)}]
+                  (update-card! runtime strand {external-refs-attr refs} nil))]
+    {:operation op :card (entity-projection updated) :refs (card-refs updated)}))
+
+(defn ref-add!
+  "Append one URL and optional label to a card without replacing other references.
+
+  An exact repeat is idempotent. Reusing a URL with a different label fails;
+  remove it explicitly before adding the replacement. Requires active Kanban
+  for transaction-boundary validation and stale-array fencing."
+  [runtime id url flags]
+  (let [strand (card-strand runtime (require-non-blank! :id id))
+        ref (cond-> {:url url}
+              (contains? flags "--label") (assoc :label (get flags "--label")))
+        _ (require-external-refs! [ref])
+        refs (card-refs strand)
+        existing (some #(when (= url (:url %)) %) refs)]
+    (when (and existing (not= existing ref))
+      (throw (ex-info "External reference URL already exists with a different label; remove it first"
+                      {:id id :url url :existing existing})))
+    (if existing
+      {:operation "kanban ref add" :card (entity-projection strand) :refs refs}
+      (write-refs! runtime strand "kanban ref add" (conj refs ref)))))
+
+(defn ref-rm!
+  "Remove one exact URL, preserving all other references and their order.
+
+  Removing an absent URL is idempotent. The final removal stores an empty array.
+  Requires active Kanban for transaction-boundary validation and stale-array fencing."
+  [runtime id url]
+  (let [strand (card-strand runtime (require-non-blank! :id id))
+        url (require-ref-url! url)
+        refs (card-refs strand)
+        remaining (filterv #(not= url (:url %)) refs)]
+    (if (= refs remaining)
+      {:operation "kanban ref rm" :card (entity-projection strand) :refs refs}
+      (write-refs! runtime strand "kanban ref rm" remaining))))
 
 (defn- claim-run-id
   "Return the run id to stamp at claim, or nil when `--run-id` is absent."
@@ -1547,6 +1636,15 @@
     compact all-state cards and direct epic membership. Labels are open
     kanban.label/<slug>=true markers; repeated --label flags are AND filters.
 
+    External references live in kanban/external-refs as a native JSON array of
+    objects with required url and optional label strings, never CSV or JSON in a
+    string. Use `strand kanban ref add CARD_ID URL --label LABEL`, `ref list
+    CARD_ID`, and `ref rm CARD_ID URL`. Multiple tickets and pull requests can
+    coexist; add appends and an exact repeat is idempotent. URLs must be absolute
+    HTTP(S). A duplicate URL with a different label fails rather than overwriting
+    it; remove then add to relabel. Concurrent changes fail loudly for retry
+    rather than silently replacing another writer's references.
+
     Priority p1 is an immediate blocker, p2 is high value, p3 is the default,
     and p4 is someday work. `kanban next` selects the highest-priority pending
     feature, oldest first within its priority. Discover readiness queries with
@@ -1754,6 +1852,20 @@
                     :hook-class :mutating :deadline-class :standard}
               "list" {:doc "List every label in use on active cards with its card count."
                       :hook-class :read :deadline-class :standard}}}
+    "ref" {:doc "Manage a card's external links (tickets, pull requests, or other URLs)."
+           :subcommands
+           {"add" {:doc "Append a URL with an optional label; exact repeats are idempotent."
+                   :flags {:label {:doc "Optional display/accessible label, preserved verbatim."}}
+                   :positionals [{:name :id :required? true :doc "Kanban card id."}
+                                 {:name :url :required? true :doc "Absolute HTTP(S) URL."}]
+                   :hook-class :mutating :deadline-class :standard}
+            "rm" {:doc "Remove an exact URL; an absent URL is a no-op."
+                  :positionals [{:name :id :required? true :doc "Kanban card id."}
+                                {:name :url :required? true :doc "Exact URL to remove."}]
+                  :hook-class :mutating :deadline-class :standard}
+            "list" {:doc "List this card's references in insertion order."
+                    :positionals [{:name :id :required? true :doc "Kanban card id."}]
+                    :hook-class :read :deadline-class :standard}}}
     "priority" {:doc "Set an active card's priority (p1 immediate blocker .. p4 someday)."
                 :positionals [{:name :id :required? true :doc "Kanban card id."}
                               {:name :priority :required? true :doc "Priority: p1, p2, p3, or p4."}]
@@ -1805,7 +1917,7 @@
         (keep (fn [[k v]]
                 (when (and (not= k :subcommand)
                            (some? v)
-                           (not (contains? #{:id :title :text :feature :labels} k)))
+                           (not (contains? #{:id :title :text :feature :labels :url} k)))
                   [(str "--" (name k)) v])))
         args))
 
@@ -1825,6 +1937,9 @@
       ["label" "add"] (label-add! runtime (:id args) (:labels args))
       ["label" "rm"] (label-rm! runtime (:id args) (:labels args))
       ["label" "list"] (label-list runtime)
+      ["ref" "add"] (ref-add! runtime (:id args) (:url args) flags)
+      ["ref" "rm"] (ref-rm! runtime (:id args) (:url args))
+      ["ref" "list"] (ref-list runtime (:id args))
       ["claim"] (claim! runtime (:id args) flags)
       ["task" "add"] (task-op runtime args flags)
       ["task" "list"] (task-op runtime args flags)
@@ -2007,20 +2122,44 @@
                        :claim-id (:id record)
                        :operation (:mutation/operation ctx)})))))
 
+(defn external-refs-guard!
+  "Validate native reference arrays on all create/update paths and fence stale ref ops."
+  [ctx]
+  (let [updates (or (:batch/updated ctx)
+                    (when (:strand/before ctx)
+                      [{:before (:strand/before ctx) :after (:strand/after ctx)}]))
+        created (or (:batch/created ctx)
+                    (when (and (nil? (:strand/before ctx)) (:strand/after ctx))
+                      [(:strand/after ctx)]))]
+    (doseq [strand (concat created (map :after updates))]
+      (when (contains? (:attributes strand) external-refs-attr)
+        (require-external-refs! (attr-value strand external-refs-attr))))
+    (when-let [{:keys [id value]} *external-refs-before*]
+      (let [before (some #(when (= id (get-in % [:before :id])) (:before %)) updates)]
+        (when-not (and before (= value (attr-value before external-refs-attr)))
+          (throw (ex-info "External references changed; read the card and retry"
+                          {:code "kanban/stale-external-refs" :id id})))))))
+
 (defn open-kanban!
-  "Materialize Kanban state and protect immutable ownership source records."
+  "Materialize Kanban state and register mutation-boundary guards."
   [{:keys [runtime]}]
   (runtime/spool-state runtime ::state {:version state-version} new-state)
   (hooks/register-hook!
    runtime :kanban/immutable-ownership-records ownership-mutation-hook-types
    'millhouse.kanban/immutable-ownership-record-guard!
    {:doc "Keep Kanban ownership claim source records immutable."})
+  (hooks/register-hook!
+   runtime :kanban/external-refs
+   #{:strand/add-before-commit :strand/update-before-commit :batch/apply-before-commit}
+   'millhouse.kanban/external-refs-guard!
+   {:doc "Validate native external references and reject stale ref operations."})
   {:opened :kanban})
 
 (defn close-kanban!
-  "Remove Kanban's ownership guard without retracting durable graph state."
+  "Remove Kanban's mutation guards without retracting durable graph state."
   [{:keys [runtime]}]
   (hooks/unregister-hook! runtime :kanban/immutable-ownership-records)
+  (hooks/unregister-hook! runtime :kanban/external-refs)
   {:closed :kanban})
 
 (lifecycle/defresource! kanban-runtime

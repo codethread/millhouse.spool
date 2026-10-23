@@ -152,7 +152,7 @@ The declared command tree is available through `strand help kanban`; its main
 flow is:
 
 ```text
-add · board · card · next · priority · label · claim · note · task · finish · reopen
+add · board · card · next · priority · label · ref · claim · note · task · finish · reopen
 ```
 
 Use `board` for the grouped lanes, epics, closed count, and cross-card
@@ -176,6 +176,52 @@ returns the card's complete `parent-of` subtree, including closed strands, and
 the internal `parent-of` and `depends-on` edges. The Bun consumer under
 `scripts/kanban-export` turns that payload into a self-contained HTML progress
 view.
+
+### External references
+
+A card can link to multiple tickets and pull requests together; there is no
+provider-specific hierarchy or status synchronization. Manage links with:
+
+```sh
+strand kanban ref add CARD_ID https://team.atlassian.net/browse/ABC-1 --label ABC-1
+strand kanban ref add CARD_ID https://team.atlassian.net/browse/ABC-2
+strand kanban ref add CARD_ID https://gitlab.example.com/team/repo/-/merge_requests/12 --label "Backend MR"
+strand kanban ref add CARD_ID https://github.com/team/repo/pull/34 --label "UI PR"
+strand kanban ref list CARD_ID
+strand kanban ref rm CARD_ID https://team.atlassian.net/browse/ABC-1
+```
+
+`attributes["kanban/external-refs"]` is a **native JSON array**, never CSV or
+JSON encoded inside a string:
+
+```json
+[
+  {"url": "https://team.atlassian.net/browse/ABC-1", "label": "ABC-1"},
+  {"url": "https://team.atlassian.net/browse/ABC-2"},
+  {"url": "https://gitlab.example.com/team/repo/-/merge_requests/12", "label": "Backend MR"},
+  {"url": "https://github.com/team/repo/pull/34", "label": "UI PR"}
+]
+```
+
+Each object has a required absolute HTTP(S) `url` string and an optional `label`
+string (no other fields). Values are preserved verbatim, including URL query
+strings and fragments. References keep insertion order and are unique by exact
+URL; provider, case or trailing slash variants are not normalized. `list` returns
+`{operation, card: CARD_ID, refs: [...]}`; mutations return the projected card and
+`refs`. An absent attribute lists as `[]`; removing the last link stores `[]`.
+These commands work on features and epics, including closed cards.
+
+Adding an exact URL/label pair again or removing an absent URL is idempotent.
+Adding an existing URL with a different label fails without changing anything;
+remove then add to relabel. Each mutation patches only the references attribute,
+preserving unrelated card data. A concurrent array edit detected inside the write
+transaction rejects the stale command: read the references and retry explicitly,
+rather than silently overwriting another writer's links.
+
+Active Kanban validates this contract for generic strand add/update and batch
+writes too; malformed arrays roll back the entire mutation. Consumers read the
+native attribute directly. The UI chooses provider icons from the URLs; storage
+does not infer providers. No Millstrand core changes are required.
 
 ## 5. Ownership projection contract
 
@@ -233,6 +279,6 @@ tasks are required.
 | Identity work query | `kanban-identity-work` from `defquery` | Selects direct feature/task claim targets and reported cards from durable raw identity evidence; it never reads scalar `owner`. |
 | Identity work helper | `identity-work` | Expands direct history to inherited tasks and containing epics and returns exact `identity`, `cards`, `tasks`, and `claims` keys across all states. |
 | Ownership helpers | `ownership-history`, `current-ownership`, `task-ownership` | Return ordered claim maps (`id`, `owner`, `claimed-at`, `order`, `owner-identity-strand-ids`, optional actor/context) and direct/inherited task ownership. |
-| Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, task markers, reporter, and abandon restore state. Claim records own ownership/run context. |
+| Card state | `kanban/*` attributes | Stores card type, lane, outcome, priority, source, external references, task markers, reporter, and abandon restore state. Claim records own ownership/run context. |
 | Label state | `kanban.label/<slug>` attributes | Stores one independent `"true"` marker per normalized free-form label. |
 | Lifecycle resource | `kanban-runtime` | Declares the Kanban vocabularies and owns process-lifetime runtime state. |
