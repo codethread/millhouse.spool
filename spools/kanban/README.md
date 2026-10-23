@@ -223,6 +223,53 @@ writes too; malformed arrays roll back the entire mutation. Consumers read the
 native attribute directly. The UI chooses provider icons from the URLs; storage
 does not infer providers. No Millstrand core changes are required.
 
+### Linked cards across boards
+
+A coordinator board (for example a portfolio workspace) can track work whose
+authoritative card lives on another workspace's board. The downstream card is
+the single source of truth: agents claim, note and finish it in its own
+workspace. The coordinator holds a read-only mirror.
+
+```sh
+strand kanban link add "Ship the parser" --to /path/to/repo/.millstrand --body "..." --priority p2
+strand kanban link attach DOWNSTREAM_ID --to /path/to/repo/.millstrand
+strand kanban link refresh [MIRROR_ID]
+```
+
+`link add` runs `kanban add` on the destination's running Weaver through
+Millstrand peer routing, never by writing its database, then creates the mirror.
+`--body`, `--source`, `--lane`, `--priority`, `--by-identity` and
+`--reported-by` go to the downstream card; `--priority`, `--label` and `--epic`
+order and group the mirror locally. If the mirror write fails after the
+downstream card exists, the error carries the downstream ID to `link attach`.
+`link attach` mirrors an existing active card. Both commands refuse a
+downstream card already linked on the board; the check is not transactional, so
+two simultaneous links of one card can both succeed and leave a visible
+duplicate mirror.
+
+The mirror stores `kanban/link` (`{workspace, card}`) and
+`kanban/link-snapshot` (title, state, lane, outcome, owner, branch and
+`observed-at`). Board and card reads call the downstream Weaver live:
+`kanban board` places the mirror in the downstream lane with its title and
+owner, drops it from the lanes once the downstream card closes, and adds
+`link: {status: "live", ...}`; `kanban card` shows the live title, state and
+lane on `card` and adds the same `link` view. When
+the source is unreachable, reads keep the stored mirror and report
+`status: "unavailable"` with the error and last `snapshot`, never presenting it
+as live.
+
+`link refresh` stores the latest snapshot on one or every active mirror, and
+closes a mirror with the downstream outcome once its source has closed. A sweep
+reports unreachable sources as `unavailable` and refreshes the rest. There is
+no background synchronization: run refresh when other views need the stored
+state current.
+
+Mirrors are excluded from `kanban next`. `claim`, `finish` and `task add` reject
+them, and Kanban rejects any other write to their title, state, lane, outcome or
+link fields outside refresh. Notes, labels and priority stay local coordinator
+annotations. Finishing an epic that cascades over an open mirror fails for the
+same reason; finish or refresh the downstream work first.
+
 ## 5. Ownership projection contract
 
 Identity reconciliation uses these explicit directions:
