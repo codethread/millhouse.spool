@@ -2,12 +2,14 @@
   "Tests for the kanban board spool against a disposable weaver runtime."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [millstrand.api.batch.alpha :as batch]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.patterns.alpha :as patterns]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver]
             [millhouse.identity :as identity]
             [millhouse.kanban :as kanban]
+            [millhouse.test-support :as support]
             [millstrand.test.alpha :as t])
   (:import [java.time Duration Instant]))
 
@@ -276,7 +278,7 @@
         (let [detail (weaver/op! rt 'help ["kanban"])
               children (get-in detail [:node :children])
               verbs (mapv :name children)]
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "reopen" "task"] verbs))
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "ref" "reopen" "task"] verbs))
           (is (not-any? #(contains? #{"about" "prime"} (:name %)) children))))
       (testing "simple transition wrappers are no longer accepted"
         (doseq [verb ["promote" "review" "production" "rework"]]
@@ -303,7 +305,7 @@
                                             (op! rt "bogus")))]
           (is (= :missing-subcommand (:reason (ex-data missing))))
           (is (= :unknown-subcommand (:reason (ex-data unknown))))
-          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "reopen" "task"]
+          (is (= ["add" "board" "card" "claim" "finish" "label" "next" "note" "priority" "ref" "reopen" "task"]
                  (:available (ex-data missing))))
           (is (= (:available (ex-data missing))
                  (:available (ex-data unknown)))))))))
@@ -573,6 +575,130 @@
                                                    :kanban/type "feature"}})]
           (is (= [] (:labels (op! rt "label" "list"))))
           (is (= [(:id legacy)] (mapv :id (:pending (op! rt "board"))))))))))
+
+(deftest kanban-external-refs-command-roundtrip-survives-durable-reopen
+  (let [root (support/temp-dir "kanban-refs")
+        card-id (atom nil)
+        refs [{:url "https://team.atlassian.net/browse/ABC-1" :label "ABC-1: café"}
+              {:url "https://team.atlassian.net/browse/ABC-2"}
+              {:url "https://gitlab.example.com/team/repo/-/merge_requests/12" :label "Backend MR"}
+              {:url "https://github.com/team/repo/pull/34?diff=split#discussion" :label "UI PR"}
+              {:url "https://example.com/design?a=1&b=2" :label "Design notes"}]]
+    (try
+      (t/run-with-weaver-world
+       {:root root}
+       (fn [{rt :runtime}]
+         (activate-kanban! rt)
+         (let [id (get-in (op! rt "add" "Mixed references" "--body" "Keep this context"
+                               "--label" "infra") [:card :id])]
+           (reset! card-id id)
+           (is (= {:operation "kanban ref list" :card id :refs []}
+                  (op! rt "ref" "list" id)))
+           (doseq [ref refs]
+             (let [result (apply op! rt "ref" "add" id (:url ref)
+                                 (when (contains? ref :label) ["--label" (:label ref)]))]
+               (is (= "kanban ref add" (:operation result)))))
+           (testing "multiple tickets, PRs and other URLs share one native array"
+             (is (= refs (:refs (op! rt "ref" "list" id))))
+             (is (= refs (get-in (op! rt "card" id) [:card :attributes :kanban/external-refs])))
+             (is (= refs (get-in (weaver/show rt id) [:attributes :kanban/external-refs]))))
+           (testing "an exact repeat is idempotent, a changed label is not an overwrite"
+             (is (= refs (:refs (op! rt "ref" "add" id (:url (first refs))
+                                     "--label" (:label (first refs))))))
+             (is (thrown-with-msg? clojure.lang.ExceptionInfo #"different label"
+                                   (op! rt "ref" "add" id (:url (first refs)) "--label" "Oops")))
+             (is (= refs (:refs (op! rt "ref" "list" id)))))
+           (testing "ref help exposes the mutating leaves and read-only list"
+             (doseq [[verb hook-class] [["add" "mutating"] ["rm" "mutating"] ["list" "read"]]]
+               (is (= hook-class (:hook-class (:node (weaver/op! rt 'help ["kanban" "ref" verb])))))))
+           (testing "missing URL and non-card targets fail at the command boundary"
+             (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Missing required argument url"
+                                   (op! rt "ref" "add" id)))
+             (let [plain (weaver/add! rt {:title "Not a card"})]
+               (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not a kanban card"
+                                     (op! rt "ref" "list" (:id plain)))))))))
+      (t/run-with-weaver-world
+       {:root root}
+       (fn [{rt :runtime}]
+         (activate-kanban! rt)
+         (let [id @card-id]
+           (is (= refs (:refs (op! rt "ref" "list" id))) "the array survives file-backed reopen")
+           (let [remaining (vec (concat (take 1 refs) (drop 2 refs)))
+                 result (op! rt "ref" "rm" id (:url (second refs)))]
+             (is (= "kanban ref rm" (:operation result)))
+             (is (= remaining (:refs result)))
+             (is (= remaining (:refs (op! rt "ref" "rm" id "https://example.com/absent")))))
+           (doseq [ref refs] (op! rt "ref" "rm" id (:url ref)))
+           (is (= [] (:refs (op! rt "ref" "list" id))))
+           (let [attrs (:attributes (weaver/show rt id))]
+             (is (= [] (:kanban/external-refs attrs)))
+             (is (= "Keep this context" (:body attrs)))
+             (is (= "true" (:kanban.label/infra attrs)))
+             (is (= "pending" (:kanban/lane attrs)))))))
+      (finally (support/delete-tree! root)))))
+
+(deftest kanban-external-refs-validate-all-mutation-paths-with-rollback
+  (with-kanban
+    (fn [rt]
+      (let [id (get-in (op! rt "add" "Validated references") [:card :id])
+            valid [{:url "https://example.com/one" :label "One"}]]
+        (weaver/update! rt id {:attributes {:kanban/external-refs valid}})
+        (doseq [url ["" "relative/path" "javascript:alert(1)" "file:///tmp/a"
+                     "https://" "https://exa mple.com"]]
+          (is (thrown? clojure.lang.ExceptionInfo (op! rt "ref" "add" id url))))
+        (doseq [invalid ["[{\"url\":\"https://example.com\"}]"
+                         {:url "https://example.com"}
+                         ["https://example.com"] [{}] [{:url 42}]
+                         [{:url "javascript:alert(1)"}] [{:url "/relative"}]
+                         [{:url "https://example.com" :label nil}]
+                         [{:url "https://example.com" :label 42}]
+                         [{:url "https://example.com" :typo "not a label"}]
+                         [{:url "https://example.com"} {:url "https://example.com"}]]]
+          (testing (str "invalid native contract: " (pr-str invalid))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/add! rt {:title "Invalid refs"
+                                          :attributes {:kanban/card "true" :kanban/external-refs invalid}})))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/update! rt id {:attributes {:kanban/external-refs invalid}})))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (batch/apply! rt {:refs {:card id}
+                                           :strands [{:ref :new :title "Must roll back"}
+                                                     {:ref :card :attributes {:kanban/external-refs invalid}}]})))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (batch/apply! rt {:strands [{:ref :new :title "Invalid batch refs"
+                                                      :attributes {:kanban/external-refs invalid}}]})))
+            (is (= valid (:refs (op! rt "ref" "list" id))))))
+        (is (= [id] (mapv :id (weaver/list rt))) "failed writes leave no partial strands")
+        (testing "generic updates preserve native arrays and can explicitly clear them"
+          (weaver/update! rt id {:attributes {:kanban/external-refs [{"url" "https://example.com/two"
+                                                                      "label" ""}]}})
+          (is (= [{:url "https://example.com/two" :label ""}] (:refs (op! rt "ref" "list" id))))
+          (weaver/update! rt id {:attributes {:kanban/external-refs nil}})
+          (is (= [] (:refs (op! rt "ref" "list" id)))))))))
+
+(deftest kanban-external-ref-ops-reject-stale-arrays-without-losing-another-write
+  (with-kanban
+    (fn [rt]
+      (let [id (get-in (op! rt "add" "Concurrent references") [:card :id])
+            first-url "https://example.com/first"
+            added-url "https://example.com/other-writer"
+            original-update weaver/update!]
+        (doseq [verb ["add" "rm"]]
+          (original-update rt id {:attributes {:kanban/external-refs [{:url first-url}]}})
+          ;; Inject a committed competing edit after the ref op's read but before
+          ;; its write. No scheduling/sleeps: the transaction must reject its stale array.
+          (with-redefs [weaver/update!
+                        (fn [runtime target patch & args]
+                          (original-update runtime target
+                                           {:attributes {:kanban/external-refs [{:url first-url} {:url added-url}]
+                                                         :body "Other writer's context"}} (or (first args) {}))
+                          (original-update runtime target patch (or (first args) {})))]
+            (let [error (try (op! rt "ref" verb id (if (= verb "add") "https://example.com/mine" first-url))
+                             nil
+                             (catch clojure.lang.ExceptionInfo ex ex))]
+              (is (= "kanban/stale-external-refs" (:hook/cause-code (ex-data error))))))
+          (is (= [{:url first-url} {:url added-url}] (:refs (op! rt "ref" "list" id))))
+          (is (= "Other writer's context" (get-in (weaver/show rt id) [:attributes :body]))))))))
 
 (deftest kanban-epics-group-features
   (with-kanban
