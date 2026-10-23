@@ -668,6 +668,14 @@
                          (batch/apply! rt {:strands [{:ref :new :title "Invalid batch refs"
                                                       :attributes {:kanban/external-refs invalid}}]})))
             (is (= valid (:refs (op! rt "ref" "list" id))))))
+        (testing "explicit null is not an absent attribute on generic or batch creation"
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (weaver/add! rt {:title "Null refs"
+                                        :attributes {:kanban/card "true" :kanban/external-refs nil}})))
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (batch/apply! rt {:strands [{:ref :new :title "Null batch refs"
+                                                    :attributes {:kanban/external-refs nil}}]})))
+          (is (= valid (:refs (op! rt "ref" "list" id)))))
         (is (= [id] (mapv :id (weaver/list rt))) "failed writes leave no partial strands")
         (testing "generic updates preserve native arrays and can explicitly clear them"
           (weaver/update! rt id {:attributes {:kanban/external-refs [{"url" "https://example.com/two"

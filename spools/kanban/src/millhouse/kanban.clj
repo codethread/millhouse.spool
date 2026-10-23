@@ -507,8 +507,8 @@
 (defn- card-refs
   "Read validated references, with absence meaning no references."
   [strand]
-  (if-some [refs (attr-value strand external-refs-attr)]
-    (require-external-refs! refs)
+  (if (contains? (:attributes strand) external-refs-attr)
+    (require-external-refs! (attr-value strand external-refs-attr))
     []))
 
 (defn ref-list
@@ -2132,8 +2132,8 @@
                     (when (and (nil? (:strand/before ctx)) (:strand/after ctx))
                       [(:strand/after ctx)]))]
     (doseq [strand (concat created (map :after updates))]
-      (when-some [refs (attr-value strand external-refs-attr)]
-        (require-external-refs! refs)))
+      (when (contains? (:attributes strand) external-refs-attr)
+        (require-external-refs! (attr-value strand external-refs-attr))))
     (when-let [{:keys [id value]} *external-refs-before*]
       (let [before (some #(when (= id (get-in % [:before :id])) (:before %)) updates)]
         (when-not (and before (= value (attr-value before external-refs-attr)))
