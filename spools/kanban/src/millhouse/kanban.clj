@@ -479,8 +479,8 @@
   "Return an absolute HTTP(S) URL unchanged, failing loudly for unsafe or malformed links."
   [url]
   (require-non-blank! :url url)
-  (let [uri (try (URI. url)
-                 (catch URISyntaxException _ nil))]
+  (let [^URI uri (try (URI. url)
+                      (catch URISyntaxException _ nil))]
     (when-not (and uri
                    (contains? #{"http" "https"} (some-> (.getScheme uri) str/lower-case))
                    (some? (.getHost uri)))
@@ -533,7 +533,7 @@
   for transaction-boundary validation and stale-array fencing."
   [runtime id url flags]
   (let [strand (card-strand runtime (require-non-blank! :id id))
-        ref (cond-> {:url (require-ref-url! url)}
+        ref (cond-> {:url url}
               (contains? flags "--label") (assoc :label (get flags "--label")))
         _ (require-external-refs! [ref])
         refs (card-refs strand)
