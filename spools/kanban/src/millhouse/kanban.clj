@@ -1526,9 +1526,10 @@
     strand update DEPENDENT_ID --edge depends-on:PREREQUISITE_ID
     ```
 
-    parent-of records hierarchy; depends-on defines the concurrency DAG. Card
-    and show reads return a strand's own fields without expanding ancestor or
-    related prose, so name any other card a reader must read. Avoid cycles. For code-delivery features, prerequisites
+    parent-of records hierarchy; depends-on defines the concurrency DAG. A
+    feature card read includes its own notes, task and dependency summaries;
+    `strand show` returns one strand. Neither expands ancestor or related-card
+    prose, so name any other card a reader must read. Avoid cycles. For code-delivery features, prerequisites
     mean code is landed, not merely that a worker returned. Do not close a
     feature early to release dependents.
 
@@ -1666,7 +1667,7 @@
     review outcomes, and handovers there; keep the detailed devlog on the task.
     Every branch has exactly one active work root with an explicit current ownership
     claim (and worktree when it exists); tasks inherit feature ownership until directly
-    claimed. Reads do not expand parent or related prose; name what must be read.
+    claimed. Card reads never expand ancestor or related-card prose; name what must be read.
 
     Every board must reflect current work:
 

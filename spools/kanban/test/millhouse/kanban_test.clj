@@ -176,7 +176,7 @@
           (is (str/includes? prime "strand help kanban"))
           (is (str/includes? prime "Every agent doing direct user work"))
           (is (str/includes? prime "Tasks are optional driveable slices"))
-          (is (str/includes? about "without expanding ancestor"))
+          (is (str/includes? about "Neither expands ancestor or related-card"))
           (doseq [lane ["pending" "in_review" "claimed" "in_production"]]
             (is (str/includes? prime
                                (str "strand update CARD_ID --attr kanban/lane=" lane))))
