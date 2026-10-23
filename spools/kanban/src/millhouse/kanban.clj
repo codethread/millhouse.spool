@@ -20,7 +20,8 @@
   with `parent-of` edges — the kanban spool complements the engines that produce
   them, it does not replace them. Notes are closed note strands on cards and
   tasks; important user-visible notes
-  belong on the epic or feature, while task notes are the development log.
+  belong on the epic or feature, while the development log lives on tasks when
+  they exist and on the feature otherwise.
   A cold agent self-discovers in-flight work with
   `kanban board` -> `kanban card <id>` -> the doing-task and its
   `latest-note`."
@@ -988,7 +989,8 @@
   "Return id's kanban card or task strand, failing loudly for anything else.
 
   Notes target the work tier only: user-visible notes belong on an epic or
-  feature, while task notes carry the development log and resume read.
+  feature, while task notes carry the development log and resume read when
+  tasks exist; a feature without tasks carries its own.
   Any other strand is a wrong target."
   [runtime id]
   (let [strand (or (weaver/show runtime id)
@@ -1010,8 +1012,8 @@
   The note rides the shared `notes` edge (`millstrand.api.notes.alpha/note!`) with
   optional canonical `identity/by-identity` attribution and the kanban-owned
   `note/kind` view hint, so concurrent agents never race a read-merge-write cycle.
-  Every note keeps its own timestamp and attribution. Note the doing-task as you
-  go — that is what `kanban card <id>` surfaces as each task's `:latest-note` —
+  Every note keeps its own timestamp and attribution. Note the doing-task (or
+  the feature when it has no tasks) as you go — that is what `kanban card <id>` surfaces as each task's `:latest-note` —
   and keep important user-visible notes on the epic or feature, not only in the
   task's development log. `--kind` stamps the open `note/kind` view hint (blessed
   values: activity, decision, review-dump, summary). A task note reports its
@@ -1660,11 +1662,12 @@
     not completed work.
 
     Use `strand kanban note ID TEXT --by-identity ACTOR` to record progress.
-    Use task notes as a development log for implementation details, command output,
-    detailed review findings, and gotchas; the latest note is the resume read.
-    Important user-visible notes must always be on the epic or feature, not only
-    on a task users will rarely see. Summarize decisions, milestones, blockers,
-    review outcomes, and handovers there; keep the detailed devlog on the task.
+    Keep a development log of implementation details, command output, detailed
+    review findings, and gotchas on the task you drive, or on the feature when it
+    has no tasks; the latest note is the resume read. Important user-visible notes
+    must always be on the epic or feature, not only on a task users will rarely see.
+    Summarize decisions, milestones, blockers, review outcomes, and handovers there;
+    when tasks exist, keep the detailed devlog on the task.
     Every branch has exactly one active work root with an explicit current ownership
     claim (and worktree when it exists); tasks inherit feature ownership until directly
     claimed. Card reads never expand ancestor or related-card prose; name what must be read.

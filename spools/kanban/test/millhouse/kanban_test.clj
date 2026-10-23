@@ -183,7 +183,7 @@
           (is (str/includes? prime "strand update TASK_ID --state closed"))
           (is (str/includes? prime
                              "Important user-visible notes must always be on the epic or feature"))
-          (is (str/includes? prime "Use task notes as a development log"))
+          (is (str/includes? prime "Keep a development log"))
           (is (str/includes? prime "latest note is the resume read"))
           (is (str/includes? prime "exactly one active work root"))
           (is (str/includes? prime
