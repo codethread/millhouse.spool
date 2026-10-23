@@ -74,7 +74,6 @@ Record decisions, rejected approaches, blockers, validation and handoffs on the 
 
 These projects should be updated after changes to millstrand/millhouse apis and config
 
-| Name   | Investigate here                         |
-| ------ | ---------------------------------------- |
-| notes  | personal notes repo and home automations |
-| agents | agent tooling and skills repo            |
+| Name  | Investigate here                         |
+| ----- | ---------------------------------------- |
+| notes | personal notes repo and home automations |
